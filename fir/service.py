@@ -56,6 +56,8 @@ class AnalystFindingService:
         if not case_id or not case_id.strip():
             raise ValueError("case_id is required to query analyst findings.")
 
+        self.fir_repo._hydrate_from_postgres(case_id, tenant_id)
+
         case_findings = [
             f for f in self.fir_repo.findings.values()
             if f.case_id == case_id and f.tenant_id == tenant_id

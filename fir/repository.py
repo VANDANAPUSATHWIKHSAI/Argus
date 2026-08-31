@@ -177,12 +177,67 @@ class FIRRepository:
             return finding
         return None
 
+    def _hydrate_from_postgres(self, case_id: str, tenant_id: str) -> None:
+        """Hydrates findings from PostgreSQL 'fir_findings' table if not present in memory."""
+        if any(f.case_id == case_id and f.tenant_id == tenant_id for f in self.findings.values()):
+            return
+        try:
+            import psycopg2
+            from config.settings import settings
+            conn = psycopg2.connect(
+                host=settings.postgres_host,
+                port=settings.postgres_port,
+                database=settings.postgres_db,
+                user=settings.postgres_user,
+                password=settings.postgres_password,
+                connect_timeout=3
+            )
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT finding_id, case_id, tenant_id, fact, sanitized_fact, confidence, severity, mitre_mapping,
+                       evidence_reference, source_artifact_id, finding_fingerprint, review_status, reviewed_by,
+                       injection_flagged, injection_score, layer, timestamp
+                FROM fir_findings
+                WHERE case_id = %s AND tenant_id = %s
+                """,
+                (case_id, tenant_id)
+            )
+            rows = cur.fetchall()
+            for r in rows:
+                f_id, c_id, t_id, fact, s_fact, conf, sev, mitre, evid_ref, src_art, fp, st_val, rev_by, inj_flg, inj_sc, lyr, ts = r
+                if f_id not in self.findings:
+                    fnd = FIRFinding(
+                        finding_id=f_id,
+                        case_id=c_id,
+                        tenant_id=t_id,
+                        fact=fact,
+                        sanitized_fact=s_fact or fact,
+                        confidence=float(conf),
+                        severity=sev,
+                        mitre_mapping=mitre,
+                        evidence_reference=list(evid_ref) if isinstance(evid_ref, (list, tuple)) else [],
+                        source_artifact_id=src_art or f_id,
+                        finding_fingerprint=fp or "",
+                        review_status=ReviewStatus(st_val) if st_val in ReviewStatus.__members__.values() or any(st_val == member.value for member in ReviewStatus) else ReviewStatus.PENDING_REVIEW,
+                        reviewed_by=rev_by,
+                        injection_flagged=bool(inj_flg),
+                        injection_score=float(inj_sc or 0.0),
+                        layer=lyr or "unknown",
+                        timestamp=ts
+                    )
+                    self.findings[f_id] = fnd
+            conn.close()
+        except Exception as e:
+            logger.debug("Postgres hydration skipped: %s", e)
+
     def get_by_case(self, tenant_id: str, case_id: str) -> List[FIRFinding]:
         """
         Gets all findings for a given case, enforcing tenant isolation.
         """
         if not tenant_id:
             raise ValueError("tenant_id is required to query findings.")
+        self._hydrate_from_postgres(case_id, tenant_id)
         return [f for f in self.findings.values() if f.case_id == case_id and f.tenant_id == tenant_id]
 
     def mark_reviewed(

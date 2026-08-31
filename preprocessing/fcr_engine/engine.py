@@ -348,11 +348,41 @@ class FCREngine:
         return records
 
     def _get_host(self, art: Artifact) -> Optional[str]:
-        """Extract clean host string from Artifact host_id or normalized_fields.host."""
+        """
+        Extract clean host string following priority rules:
+        1. Explicit Artifact.host_id
+        2. normalized_fields.host
+        3. raw_fields host/computer/hostname fields
+        4. evidence_metadata host
+        5. case_metadata host
+        6. Otherwise None (Never derive host from filename, hash, or non-host ID)
+        """
         if art.host_id and art.host_id.strip():
             return art.host_id.strip().lower()
+
         if art.normalized_fields and art.normalized_fields.host and art.normalized_fields.host.strip():
             return art.normalized_fields.host.strip().lower()
+
+        if art.raw_fields:
+            for k in ("host", "computer", "hostname", "computer_name", "host_name"):
+                v = art.raw_fields.get(k)
+                if isinstance(v, str) and v.strip():
+                    return v.strip().lower()
+
+            ev_meta = art.raw_fields.get("evidence_metadata")
+            if isinstance(ev_meta, dict):
+                for k in ("host", "computer", "hostname", "host_id"):
+                    v = ev_meta.get(k)
+                    if isinstance(v, str) and v.strip():
+                        return v.strip().lower()
+
+            case_meta = art.raw_fields.get("case_metadata")
+            if isinstance(case_meta, dict):
+                for k in ("host", "computer", "hostname", "host_id"):
+                    v = case_meta.get(k)
+                    if isinstance(v, str) and v.strip():
+                        return v.strip().lower()
+
         return None
 
     def _generate_corr_id(self, case_id: str, relationship_types: list[str], artifact_ids: list[str], extra: str = "") -> str:
@@ -363,15 +393,14 @@ class FCREngine:
         art_str = ",".join(sorted(artifact_ids))
         seed = f"{case_id}:{rel_str}:{art_str}:{extra}"
         digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
-        # Convert first 8 hex characters to integer modulo 1000000 to get a 6-digit integer string
         num_val = int(digest[:8], 16) % 1000000
         return f"CORR-{num_val:06d}"
 
     def _deduplicate(self, records: list[CorrelationRecord], art_lookup: dict[str, Artifact]) -> list[CorrelationRecord]:
         """
         Deduplicate correlation records based on:
-        (case_id, tuple(sorted(artifact_ids)), tuple(sorted(relationship_type)), host, shared_value)
-        If duplicates overlap across strategies, merge relationship_type.
+        (case_id, tuple(sorted(artifact_ids)), host, shared_value)
+        If duplicates overlap across strategies, merge relationship_type and strategy_params.
         """
         unique_map: dict[tuple, CorrelationRecord] = {}
 
@@ -387,6 +416,16 @@ class FCREngine:
                 # Merge relationship types cleanly
                 merged_rels = list(dict.fromkeys(existing.relationship_type + rec.relationship_type))
                 existing.relationship_type = merged_rels
+
+                # Merge strategy parameters cleanly
+                merged_params = dict(existing.strategy_params)
+                for k, v in rec.strategy_params.items():
+                    if k not in merged_params:
+                        merged_params[k] = v
+                    elif merged_params[k] != v:
+                        merged_params[f"{k}_alt"] = v
+                existing.strategy_params = merged_params
+
                 # Re-verify matching artifacts
                 matched = [art_lookup[aid] for aid in existing.artifact_ids if aid in art_lookup]
                 if matched:

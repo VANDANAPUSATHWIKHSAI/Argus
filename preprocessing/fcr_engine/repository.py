@@ -117,3 +117,87 @@ class FCRRepository:
             self._by_host.clear()
             self._by_artifact.clear()
             self._by_rel.clear()
+
+    def persist_to_postgres(self, db_conn: Any = None) -> int:
+        """
+        Optional SQL persistence method.
+        Persists in-memory FCR records to PostgreSQL table fcr_records using parameterized queries.
+        Returns count of new records inserted. If PostgreSQL is unavailable or fails, returns 0 cleanly.
+        """
+        with self._lock:
+            if not self._by_id:
+                return 0
+
+            records_to_save = list(self._by_id.values())
+
+        inserted_count = 0
+        try:
+            conn = db_conn
+            close_conn = False
+
+            if conn is None:
+                try:
+                    import psycopg2
+                    from config.settings import settings
+                    conn = psycopg2.connect(
+                        host=settings.postgres_host,
+                        port=settings.postgres_port,
+                        dbname=settings.postgres_db,
+                        user=settings.postgres_user,
+                        password=settings.postgres_password,
+                        connect_timeout=2
+                    )
+                    close_conn = True
+                except Exception as e:
+                    logger.debug("PostgreSQL not reachable for FCR persistence: %s", e)
+                    return 0
+
+            with conn.cursor() as cur:
+                # Ensure table exists
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS fcr_records (
+                        correlation_id VARCHAR(128) PRIMARY KEY,
+                        case_id VARCHAR(128) NOT NULL,
+                        relationship_type TEXT[] NOT NULL,
+                        artifact_ids TEXT[] NOT NULL,
+                        confidence DOUBLE PRECISION NOT NULL,
+                        host VARCHAR(256),
+                        shared_value TEXT,
+                        strategy_params JSONB,
+                        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS idx_fcr_case_id ON fcr_records(case_id);
+                    CREATE INDEX IF NOT EXISTS idx_fcr_host ON fcr_records(host);
+                """)
+                
+                import json
+                for rec in records_to_save:
+                    cur.execute("""
+                        INSERT INTO fcr_records (
+                            correlation_id, case_id, relationship_type, artifact_ids,
+                            confidence, host, shared_value, strategy_params, created_at
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (correlation_id) DO NOTHING;
+                    """, (
+                        rec.correlation_id,
+                        rec.case_id,
+                        rec.relationship_type,
+                        rec.artifact_ids,
+                        rec.confidence,
+                        rec.host,
+                        rec.shared_value,
+                        json.dumps(rec.strategy_params),
+                        rec.created_at
+                    ))
+                    if cur.rowcount > 0:
+                        inserted_count += 1
+
+            if close_conn:
+                conn.commit()
+                conn.close()
+
+        except Exception as e:
+            logger.debug("FCR SQL persistence skipped or failed: %s", e)
+            return 0
+
+        return inserted_count

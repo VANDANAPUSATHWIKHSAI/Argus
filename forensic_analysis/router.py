@@ -141,6 +141,11 @@ ARTIFACT_TYPE_TO_ENGINE: Dict[str, str] = {
     "browser_download":     "endpoint",
     "browser_cookie":       "endpoint",
     "browser_formhistory":  "endpoint",
+
+    # ── Derived Artifact Domain (ArtifactExtractor Stage-2 outputs) ──────────
+    "extracted_ioc":        "endpoint",
+    "extracted_entity":     "endpoint",
+    "text_record":          "endpoint",
 }
 
 
@@ -171,17 +176,32 @@ def route_fcr(
             continue
 
         art_type = artifact.artifact_type
-        engine = ARTIFACT_TYPE_TO_ENGINE.get(art_type)
-
-        if engine is not None:
-            target_engines.add(engine)
-            # Special volatility3 memory routing for generic artifact types
-            if getattr(artifact, "source_tool", None) == "volatility3" and art_type in ("network_connection", "process_event", "dll_load"):
-                target_engines.add("memory")
+        
+        # Dynamic routing for derived extracted observables
+        if art_type == "extracted_ioc":
+            ioc_type = (artifact.raw_fields.get("ioc_type") or "").lower()
+            if ioc_type in ("ipv4", "ipv6", "domain", "url"):
+                target_engines.add("network")
+            else:
+                target_engines.add("endpoint")
+        elif art_type == "extracted_entity":
+            entity_type = (artifact.raw_fields.get("entity_type") or "").lower()
+            if entity_type in ("command-line", "indicator"):
+                target_engines.add("log")
+            else:
+                target_engines.add("endpoint")
         else:
-            logger.warning(
-                "Router: Unmatched artifact_type '%s' for artifact_id '%s' in FCR '%s'. Excluding from routing.",
-                art_type, art_id, getattr(fcr, "correlation_id", "UNKNOWN")
-            )
+            engine = ARTIFACT_TYPE_TO_ENGINE.get(art_type)
+
+            if engine is not None:
+                target_engines.add(engine)
+                # Special volatility3 memory routing for generic artifact types
+                if getattr(artifact, "source_tool", None) == "volatility3" and art_type in ("network_connection", "process_event", "dll_load"):
+                    target_engines.add("memory")
+            else:
+                logger.warning(
+                    "Router: Unmatched artifact_type '%s' for artifact_id '%s' in FCR '%s'. Excluding from routing.",
+                    art_type, art_id, getattr(fcr, "correlation_id", "UNKNOWN")
+                )
 
     return sorted(list(target_engines))

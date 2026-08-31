@@ -355,6 +355,16 @@ class ParserRouter:
                     detection_method="signature", status="ROUTED", parser_instance=MemoryParser()
                 )
 
+            # AFF 1.0 Image Container
+            if magic.startswith(b"AFF10") or magic.startswith(b"AFF\x00"):
+                return RoutingResult(
+                    evidence_id=evidence_id, case_id=case_id,
+                    target_parser="FilesystemParser", evidence_type="AFF 1.0 Image Container",
+                    detection_method="signature", status="BLOCKED",
+                    reason="BLOCKED_MISSING_LIBAFF: Sleuth Kit binaries (fls.exe) compiled without libaff support",
+                    parser_instance=None
+                )
+
             # Filesystem E01: "LVF"
             if magic.startswith(b"LVF"):
                 return RoutingResult(
@@ -666,6 +676,15 @@ class ParserRouter:
                 detection_method="extension", status="ROUTED", parser_instance=PcapParser()
             )
 
+        if ext == ".aff":
+            return RoutingResult(
+                evidence_id=evidence_id, case_id=case_id,
+                target_parser="FilesystemParser", evidence_type="AFF 1.0 Image Container",
+                detection_method="extension", status="BLOCKED",
+                reason="BLOCKED_MISSING_LIBAFF: Sleuth Kit binaries (fls.exe) compiled without libaff support",
+                parser_instance=None
+            )
+
         if ext == ".xml":
             if file_path and os.path.exists(file_path):
                 try:
@@ -677,8 +696,21 @@ class ParserRouter:
                             target_parser="ScheduledTaskParser", evidence_type="Scheduled Tasks",
                             detection_method="signature", status="ROUTED", parser_instance=ScheduledTaskParser()
                         )
+                    if "<dfxml" in hdr or "<volume" in hdr or "fiwalk" in hdr:
+                        return RoutingResult(
+                            evidence_id=evidence_id, case_id=case_id,
+                            target_parser="FilesystemParser", evidence_type="DFXML 1.0 Metadata Catalog",
+                            detection_method="signature", status="ROUTED", parser_instance=FilesystemParser()
+                        )
                 except Exception:
                     pass
+
+        if ext == ".txt" or fn_lower == "narrative.txt":
+            return RoutingResult(
+                evidence_id=evidence_id, case_id=case_id,
+                target_parser="FilesystemParser", evidence_type="Case Narrative / Text File",
+                detection_method="extension", status="ROUTED", parser_instance=FilesystemParser()
+            )
 
         if ext == ".reg":
             return RoutingResult(

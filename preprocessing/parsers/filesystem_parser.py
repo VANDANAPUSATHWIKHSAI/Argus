@@ -67,6 +67,14 @@ class FilesystemParser:
 
         self._tool_version = get_tool_version("tsk")
 
+        # ── Handle Text Case Narrative Files ──────────────────────────────
+        if src.suffix.lower() == ".txt" or src.name.lower() == "narrative.txt":
+            return self._parse_text_file(src, evidence_id)
+
+        # ── Handle DFXML Forensic XML Catalogs ───────────────────────────
+        if src.suffix.lower() == ".xml":
+            return self._parse_dfxml_file(src, evidence_id)
+
         fls_bin = self._find_binary(self._FLS_BINARIES, "fls")
         istat_bin = self._find_binary(self._ISTAT_BINARIES, "istat")
 
@@ -242,6 +250,75 @@ class FilesystemParser:
         if result.returncode != 0:
             raise TSKExecutionError(f"TSK istat failed with code {result.returncode}: {result.stderr}")
         return result.stdout
+
+    def _parse_text_file(self, src: Path, evidence_id: str) -> list[Artifact]:
+        """Parse text file or narrative record."""
+        content = src.read_text(encoding="utf-8", errors="ignore")
+        ver = getattr(self, "_tool_version", get_tool_version("tsk"))
+        return [
+            Artifact(
+                evidence_id=evidence_id,
+                source_tool="narrative_text",
+                artifact_type="text_record",
+                timestamp=datetime.now(timezone.utc),
+                timestamp_type="ingest",
+                event_summary=f"Text Evidence Narrative: {src.name} ({len(content)} bytes)",
+                parser_version=ver,
+                raw_fields={"content": content, "size_bytes": len(content), "filename": src.name},
+                normalized_fields=NormalizedFields(
+                    file_path=src.name,
+                    file_name=src.name,
+                    rule_name="text_record",
+                )
+            )
+        ]
+
+    def _parse_dfxml_file(self, src: Path, evidence_id: str) -> list[Artifact]:
+        """Parse DFXML (Digital Forensics XML) metadata catalog."""
+        import xml.etree.ElementTree as ET
+        artifacts: list[Artifact] = []
+        ver = getattr(self, "_tool_version", get_tool_version("tsk"))
+
+        import re
+        content = src.read_text(encoding="utf-8", errors="ignore")
+        fileobjs = re.findall(r'<fileobject>(.*?)</fileobject>', content, re.DOTALL)
+        for fo in fileobjs:
+            fn_m = re.search(r'<filename>(.*?)</filename>', fo)
+            fs_m = re.search(r'<filesize>(.*?)</filesize>', fo)
+            mt_m = re.search(r'<mtime>(.*?)</mtime>', fo)
+            h_m = re.search(r'<hashdigest type="sha256">(.*?)</hashdigest>', fo) or re.search(r'<hashdigest type="md5">(.*?)</hashdigest>', fo)
+            
+            fname = fn_m.group(1).strip() if fn_m else None
+            fsize = int(fs_m.group(1).strip()) if (fs_m and fs_m.group(1).strip().isdigit()) else None
+            mtime_str = mt_m.group(1).strip() if mt_m else None
+            hash_val = h_m.group(1).strip() if h_m else None
+
+            if fname:
+                artifacts.append(
+                    Artifact(
+                        evidence_id=evidence_id,
+                        source_tool="dfxml_fiwalk",
+                        artifact_type="file_record",
+                        timestamp=datetime.now(timezone.utc),
+                        timestamp_type="recorded",
+                        event_summary=f"DFXML Catalog Record: {fname} ({fsize or 0} bytes)",
+                        parser_version=ver,
+                        raw_fields={"filename": fname, "filesize": fsize, "mtime": mtime_str, "hash": hash_val},
+                        normalized_fields=NormalizedFields(
+                            file_path=fname,
+                            file_name=Path(fname).name,
+                            hash=hash_val,
+                            mtime=mtime_str,
+                            rule_name="dfxml_file_record",
+                        )
+                    )
+                )
+
+        if not artifacts:
+            # Fallback text record if XML structure differs
+            artifacts = self._parse_text_file(src, evidence_id)
+
+        return artifacts
 
 
 # ---------------------------------------------------------------------------

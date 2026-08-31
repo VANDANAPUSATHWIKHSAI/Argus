@@ -1,0 +1,142 @@
+{
+  "python_packages": {
+    "python-dotenv": {
+      "ok": true,
+      "detail": "Installed (unknown version)"
+    },
+    "pydantic": {
+      "ok": true,
+      "detail": "2.12.5"
+    },
+    "fastapi": {
+      "ok": true,
+      "detail": "0.135.1"
+    },
+    "uvicorn": {
+      "ok": true,
+      "detail": "0.41.0"
+    },
+    "requests": {
+      "ok": true,
+      "detail": "2.32.5"
+    },
+    "httpx": {
+      "ok": true,
+      "detail": "0.28.1"
+    },
+    "cryptography": {
+      "ok": true,
+      "detail": "46.0.5"
+    },
+    "minio": {
+      "ok": true,
+      "detail": "7.2.20"
+    },
+    "psycopg2": {
+      "ok": true,
+      "detail": "2.9.12 (dt dec pq3 ext lo64)"
+    },
+    "asyncpg": {
+      "ok": true,
+      "detail": "0.31.0"
+    },
+    "docker": {
+      "ok": true,
+      "detail": "7.2.0"
+    },
+    "pyclamd": {
+      "ok": true,
+      "detail": "0.4.0"
+    },
+    "google-re2": {
+      "ok": true,
+      "detail": "Installed (unknown version)"
+    },
+    "torch": {
+      "ok": true,
+      "detail": "2.13.0+cpu"
+    },
+    "transformers": {
+      "ok": true,
+      "detail": "5.13.1"
+    },
+    "gliner": {
+      "ok": true,
+      "detail": "0.2.28"
+    },
+    "rfc3161ng": {
+      "ok": false,
+      "detail": "Not Found"
+    }
+  },
+  "binaries": {
+    "hayabusa": {
+      "ok": true,
+      "detail": "D:\\Hayabusa\\hayabusa.EXE",
+      "description": "Hayabusa EVTX parser"
+    },
+    "zeek": {
+      "ok": true,
+      "detail": ".\\zeek.BAT",
+      "description": "Zeek traffic analyzer"
+    },
+    "suricata": {
+      "ok": true,
+      "detail": ".\\suricata.BAT",
+      "description": "Suricata IDS"
+    },
+    "perl": {
+      "ok": false,
+      "detail": "Not Found on PATH",
+      "description": "Perl runtime"
+    },
+    "rip.pl": {
+      "ok": false,
+      "detail": "Not Found on PATH",
+      "description": "RegRipper script"
+    },
+    "fls": {
+      "ok": false,
+      "detail": "Not Found on PATH",
+      "description": "TSK file listing"
+    },
+    "istat": {
+      "ok": false,
+      "detail": "Not Found on PATH",
+      "description": "TSK inode status"
+    }
+  },
+  "services": {
+    "PostgreSQL": {
+      "ok": false,
+      "port": 5433
+    },
+    "MinIO": {
+      "ok": false,
+      "port": 9000
+    },
+    "Neo4j": {
+      "ok": false,
+      "port": 7687
+    },
+    "Qdrant": {
+      "ok": false,
+      "port": 6333
+    },
+    "ClamAV": {
+      "ok": false,
+      "port": 3310
+    }
+  },
+  "models": {
+    "gliner-community/gliner_medium-v2.5": {
+      "ok": false,
+      "detail": "Not Found in local HF cache"
+    },
+    "protectai/deberta-v3-base-prompt-injection-v2": {
+      "ok": true,
+      "detail": "Cached at C:\\Users\\Sudeep\\.cache\\huggingface\\hub\\models--protectai--deberta-v3-base-prompt-injection-v2"
+    }
+  },
+  "healthy": false
+}

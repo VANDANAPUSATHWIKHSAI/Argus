@@ -1,0 +1,6 @@
+﻿# Drift Monitoring — catches silent degradation (e.g. a model update
+# quietly raising hallucination rate) before it affects real cases.
+# Includes injection red-team suite against the Sanitization Gateway.
+class DriftMonitor:
+    def check_drift(self, metric_name: str, current: float, baseline: float) -> bool: ...
+    def run_injection_redteam(self) -> dict: ...

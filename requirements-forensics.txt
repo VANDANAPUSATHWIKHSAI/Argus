@@ -1,0 +1,4 @@
+# Argus Forensics Specific Python Dependencies
+volatility3
+extract-msg
+pyhindsight

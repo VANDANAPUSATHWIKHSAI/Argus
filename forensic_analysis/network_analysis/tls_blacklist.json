@@ -1,0 +1,29 @@
+{
+  "snapshot_version": "2026.08.01",
+  "snapshot_date": "2026-08-01T00:00:00Z",
+  "description": "Cached local snapshot fixture of abuse.ch SSL/TLS JA3/JA3S fingerprint blacklist.",
+  "blacklisted_ja3": {
+    "e7ed34562155a33760c7b6e073db067e": {
+      "malware_family": "TrickBot C2",
+      "severity": "critical",
+      "mitre_mapping": "T1573.002"
+    },
+    "51c64c77e60f3980eea863b4b0e9b008": {
+      "malware_family": "AsyncRAT",
+      "severity": "high",
+      "mitre_mapping": "T1573.002"
+    },
+    "67346d8e9251740c35d42c71ab132565": {
+      "malware_family": "Cobalt Strike Beacon",
+      "severity": "critical",
+      "mitre_mapping": "T1071.001"
+    }
+  },
+  "blacklisted_ja3s": {
+    "ec74a5c5112605986e326863d36320a6": {
+      "malware_family": "Cobalt Strike C2 Server Response",
+      "severity": "critical",
+      "mitre_mapping": "T1573.002"
+    }
+  }
+}

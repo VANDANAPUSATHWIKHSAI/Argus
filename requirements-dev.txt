@@ -1,0 +1,6 @@
+# Argus Development and Testing Python Dependencies
+pytest
+pytest-asyncio
+anyio
+deepeval
+ragas

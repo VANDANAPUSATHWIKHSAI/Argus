@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Argus — Reference Architecture</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f3f5f2;
+    --surface:#ffffff;
+    --surface-alt:#eef1ec;
+    --ink:#12181a;
+    --muted:#5c6b66;
+    --faint:#8a9793;
+    --line:#d7ddd6;
+    --line-strong:#b9c3ba;
+    --teal:#1f6f6b;
+    --teal-soft:#e4f0ee;
+    --violet:#6250c4;
+    --violet-soft:#eeecfb;
+    --amber:#b86a1f;
+    --amber-soft:#faeee0;
+    --red:#a83b30;
+    --red-soft:#f7e8e5;
+    --mono:'IBM Plex Mono', ui-monospace, monospace;
+    --sans:'IBM Plex Sans', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size:28px 28px;
+    background-position:-1px -1px;
+    color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+    padding:36px 18px 80px;
+  }
+  .wrap{max-width:960px; margin:0 auto;}
+
+  /* ---------- Header ---------- */
+  .masthead{
+    background:var(--ink);
+    color:#f3f5f2;
+    padding:26px 30px;
+    border:1px solid var(--ink);
+    position:relative;
+    overflow:hidden;
+  }
+  .masthead::after{
+    content:"";
+    position:absolute; inset:0;
+    background:repeating-linear-gradient(135deg, rgba(255,255,255,.035) 0 2px, transparent 2px 10px);
+    pointer-events:none;
+  }
+  .masthead-top{
+    display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap;
+  }
+  .kicker{
+    font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase;
+    color:#9fb3ae; margin:0 0 8px;
+  }
+  .masthead h1{
+    font-family:var(--mono); font-weight:700; font-size:28px; margin:0; letter-spacing:-.01em;
+  }
+  .masthead h1.title-full{
+    font-size:19px; line-height:1.4; max-width:760px; letter-spacing:0; text-transform:none;
+  }
+  .masthead p{
+    font-size:13.5px; color:#c7d1ce; max-width:560px; margin:10px 0 0; line-height:1.55;
+  }
+  .case-tag{
+    font-family:var(--mono); font-size:10.5px; text-align:right; color:#8fa39d; line-height:1.7;
+    white-space:nowrap;
+    border-left:1px solid #3a4644; padding-left:14px;
+  }
+  .case-tag b{color:#e7ece9; font-weight:600;}
+
+  .legend{
+    display:flex; gap:18px; flex-wrap:wrap; margin-top:18px; padding-top:16px;
+    border-top:1px dashed #3a4644; position:relative; z-index:1;
+  }
+  .legend-item{display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:10.5px; color:#c7d1ce;}
+  .swatch{width:10px; height:10px; border-radius:2px; flex:none;}
+
+  /* ---------- Rail / flow ---------- */
+  .flow{ position:relative; padding-left:34px; margin-top:0;}
+  .rail{
+    position:absolute; left:14px; top:6px; bottom:60px; width:2px;
+    background:repeating-linear-gradient(var(--line-strong) 0 6px, transparent 6px 11px);
+  }
+
+  .stage{ position:relative; margin-top:34px; }
+  .stage:first-child{ margin-top:34px; }
+  .stage-dot{
+    position:absolute; left:-34px; top:0px; width:29px; height:29px;
+    background:var(--surface); border:2px solid var(--ink); border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--mono); font-weight:700; font-size:12px;
+    z-index:2;
+  }
+  .stage.accent-teal .stage-dot{border-color:var(--teal); color:var(--teal);}
+  .stage.accent-violet .stage-dot{border-color:var(--violet); color:var(--violet);}
+  .stage.accent-ink .stage-dot{border-color:var(--ink); color:var(--ink);}
+
+  .stage-card{
+    background:var(--surface);
+    border:1px solid var(--line-strong);
+    box-shadow:3px 3px 0 rgba(18,24,26,.05);
+  }
+  .stage-head{
+    display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;
+    padding:14px 18px 12px; border-bottom:1px solid var(--line);
+  }
+  .stage-head h2{
+    font-family:var(--mono); font-size:14.5px; margin:0; letter-spacing:.01em; text-transform:uppercase;
+  }
+  .stage-note{
+    font-family:var(--mono); font-size:10.5px; color:var(--muted); text-align:right;
+  }
+  .accent-teal .stage-head{ background:var(--teal-soft); }
+  .accent-teal .stage-head h2{ color:var(--teal); }
+  .accent-violet .stage-head{ background:var(--violet-soft); }
+  .accent-violet .stage-head h2{ color:var(--violet); }
+  .accent-ink .stage-head{ background:var(--surface-alt); }
+
+  .stage-body{ padding:16px 18px 18px; }
+  .sub{ font-size:12px; color:var(--muted); margin:0 0 12px; line-height:1.5; }
+
+  .grid{ display:grid; gap:10px; }
+  .grid.cols-2{ grid-template-columns:repeat(2,1fr); }
+  .grid.cols-3{ grid-template-columns:repeat(3,1fr); }
+  .grid.cols-4{ grid-template-columns:repeat(4,1fr); }
+
+  .cell{
+    border:1px solid var(--line); background:var(--surface-alt);
+    padding:9px 11px; font-size:12px; line-height:1.4;
+  }
+  .cell b{ display:block; font-family:var(--mono); font-size:11px; font-weight:600; margin-bottom:2px; }
+  .cell.plain{ background:var(--surface); }
+
+  .format-strip{ display:flex; flex-wrap:wrap; gap:7px; margin:2px 0 14px; }
+  .chip{
+    font-family:var(--mono); font-size:10.5px; border:1px solid var(--line-strong);
+    background:var(--surface); padding:4px 9px; color:var(--ink);
+  }
+
+  .io-row{
+    display:flex; align-items:center; gap:10px; margin-top:14px; flex-wrap:wrap;
+  }
+  .io-pill{
+    font-family:var(--mono); font-size:10.5px; padding:4px 10px; border:1px solid;
+    white-space:nowrap;
+  }
+  .io-pill.in{ border-color:var(--faint); color:var(--muted); }
+  .io-pill.out{ border-color:var(--ink); color:var(--ink); font-weight:600; }
+  .io-arrow{ color:var(--faint); font-size:13px; }
+
+  /* connector between stages */
+  .connector{
+    margin:10px 0 0 -34px; padding-left:34px; position:relative; height:34px;
+    display:flex; align-items:center;
+  }
+  .connector .payload{
+    margin-left:0; font-family:var(--mono); font-size:10.5px; color:var(--muted);
+    background:var(--bg); padding:3px 8px; border:1px dashed var(--line-strong);
+  }
+  .connector .arrow-down{
+    position:absolute; left:9px; top:-4px; color:var(--line-strong); font-size:16px;
+  }
+
+  /* agents */
+  .agent-list{ display:flex; flex-direction:column; gap:8px; }
+  .agent{
+    display:grid; grid-template-columns:34px 1fr; gap:12px; align-items:start;
+    border:1px solid var(--line); padding:10px 12px; background:var(--surface-alt);
+  }
+  .agent-num{
+    font-family:var(--mono); font-weight:700; color:var(--violet); font-size:13px;
+    border-right:1px solid var(--line-strong); padding-right:8px;
+  }
+  .agent-name{ font-family:var(--mono); font-size:12px; font-weight:600; margin:0 0 3px; }
+  .agent-desc{ font-size:11.5px; color:var(--muted); margin:0; line-height:1.45; }
+  .agent.supervisor{ background:#f4f1fc; border-color:#c9c1ef; }
+  .agent.supervisor .agent-num{ color:var(--ink); }
+
+  .subcall{
+    margin-top:8px; padding:8px 10px; background:var(--surface); border:1px solid var(--line);
+    font-size:11px; color:var(--muted); line-height:1.5;
+  }
+  .subcall b{ color:var(--ink); font-family:var(--mono); font-size:10.5px; }
+
+  .gateway-band{
+    display:flex; align-items:center; gap:10px; padding:10px 12px;
+    background:var(--red-soft); border:1px solid #e0b6ae; margin-bottom:12px;
+    font-size:11.5px; color:#7a2c22; line-height:1.5;
+  }
+  .gateway-band b{ font-family:var(--mono); }
+
+  .gate{
+    display:flex; gap:12px; margin-top:14px; flex-wrap:wrap;
+  }
+  .gate-branch{
+    flex:1; min-width:200px; border:1px solid var(--line-strong); padding:10px 12px;
+  }
+  .gate-branch.yes{ background:var(--teal-soft); border-color:var(--teal); }
+  .gate-branch.no{ background:var(--amber-soft); border-color:var(--amber); }
+  .gate-branch .tag{ font-family:var(--mono); font-size:10px; font-weight:700; text-transform:uppercase; }
+  .gate-branch.yes .tag{ color:var(--teal); }
+  .gate-branch.no .tag{ color:var(--amber); }
+  .gate-branch p{ margin:5px 0 0; font-size:11.5px; color:var(--ink); line-height:1.4; }
+
+  /* review row */
+  .review-flow{ display:flex; gap:10px; align-items:stretch; flex-wrap:wrap; margin-top:10px; }
+  .review-flow .cell{ flex:1; min-width:200px; }
+  .split{ display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px; }
+  .split .branch{ border:1px solid var(--line-strong); padding:10px 12px; font-size:11.5px; line-height:1.45; }
+  .split .branch.approve{ background:var(--teal-soft); }
+  .split .branch.revise{ background:var(--amber-soft); }
+  .split .tag{ font-family:var(--mono); font-size:10px; font-weight:700; text-transform:uppercase; }
+  .split .approve .tag{ color:var(--teal); }
+  .split .revise .tag{ color:var(--amber); }
+
+  .loop-note{
+    margin-top:10px; font-family:var(--mono); font-size:10.5px; color:var(--muted);
+    display:flex; align-items:center; gap:6px;
+  }
+
+  /* bottom belt */
+  .belt{ display:grid; grid-template-columns:1fr; gap:16px; margin-top:38px; }
+  .belt .panel{ background:var(--surface); border:1px solid var(--line-strong); padding:16px 18px; }
+  .belt h3{ font-family:var(--mono); font-size:12px; text-transform:uppercase; letter-spacing:.06em; margin:0 0 10px; color:var(--ink); }
+  .belt .panel.monitor{ border-color:var(--teal); }
+  .belt .panel.monitor h3{ color:var(--teal); }
+  .belt .panel.orchestration{ border-color:var(--amber); }
+  .belt .panel.orchestration h3{ color:var(--amber); }
+  .belt ul{ margin:0; padding-left:16px; font-size:11.5px; color:var(--muted); line-height:1.7; }
+  .belt li b{ color:var(--ink); font-weight:600; }
+
+  footer{
+    margin-top:30px; text-align:center; font-family:var(--mono); font-size:10.5px; color:var(--faint);
+  }
+
+  @media (max-width:640px){
+    .grid.cols-2,.grid.cols-3,.grid.cols-4{ grid-template-columns:1fr; }
+    .masthead-top{ flex-direction:column; }
+    .case-tag{ border-left:none; padding-left:0; text-align:left; }
+    .agent{ grid-template-columns:26px 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <div class="masthead-top">
+      <div>
+        <h1 class="title-full">Argus: A Multi-Agent AI Platform for Evidence-Centric Digital Forensic Investigation and Automated Crime Scene Reconstruction</h1>
+      </div>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="swatch" style="background:var(--ink)"></span>Evidence &amp; infra — deterministic</div>
+      <div class="legend-item"><span class="swatch" style="background:var(--teal)"></span>Forensic analysis — deterministic, no LLM</div>
+      <div class="legend-item"><span class="swatch" style="background:var(--violet)"></span>AI investigation — every claim cited</div>
+      <div class="legend-item"><span class="swatch" style="background:var(--amber)"></span>Human review / gate</div>
+    </div>
+  </div>
+
+  <div class="flow">
+    <div class="rail"></div>
+
+    <!-- STAGE 1 -->
+    <div class="stage accent-ink">
+      <div class="stage-dot">1</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h2>Evidence Upload</h2>
+          <span class="stage-note">manual upload</span>
+        </div>
+        <div class="stage-body">
+          <div class="cell plain"><b>Manual Upload</b>Analyst submits evidence files directly into the case</div>
+          <div class="io-row">
+            <span class="io-pill in">in — evidence file</span>
+            <span class="io-arrow">&#8594;</span>
+            <span class="io-pill out" style="background:var(--amber-soft)">out — raw evidence</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><span class="arrow-down">&#8595;</span><span class="payload">raw evidence</span></div>
+
+    <!-- STAGE 2 -->
+    <div class="stage accent-ink">
+      <div class="stage-dot">2</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h2>Infrastructure Layer</h2>
+          <span class="stage-note">custody &amp; integrity</span>
+        </div>
+        <div class="stage-body">
+          <div class="grid cols-3">
+            <div class="cell"><b>Sandboxed Intake Validation</b>Isolated, sealed microVM — nothing touches production before validation passes</div>
+            <div class="cell"><b>SHA&#8209;256 Hash + Encrypt</b>Integrity-seals evidence, only after sandbox validation passes</div>
+            <div class="cell"><b>Metadata Extraction</b>Pulls file &amp; source metadata</div>
+            <div class="cell"><b>Chain&#8209;of&#8209;Custody Log</b>Immutable handling record</div>
+            <div class="cell"><b>Case ID + Session Setup</b>Establishes the case workspace</div>
+            <div class="cell"><b>Audit Logging</b>Every action logged, tenant-scoped</div>
+            <div class="cell plain"><b>Original Evidence Repository</b>Untouched source copy retained</div>
+          </div>
+          <div class="io-row">
+            <span class="io-pill in">in — raw evidence</span>
+            <span class="io-arrow">&#8594;</span>
+            <span class="io-pill out" style="background:var(--amber-soft)">out — verified evidence</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><span class="arrow-down">&#8595;</span><span class="payload">verified evidence</span></div>
+
+    <!-- STAGE 3 -->
+    <div class="stage accent-ink">
+      <div class="stage-dot">3</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h2>Evidence Preprocessing</h2>
+          <span class="stage-note">purpose-built parsers, one per format — no reasoning here</span>
+        </div>
+        <div class="stage-body">
+          <p class="sub">Each format below is parsed by a dedicated, non-reasoning parser:</p>
+          <div class="format-strip">
+            <span class="chip">Windows Event Log</span>
+            <span class="chip">Registry</span>
+            <span class="chip">PCAP</span>
+            <span class="chip">Browser Artifact</span>
+            <span class="chip">Email</span>
+            <span class="chip">Memory Dump</span>
+            <span class="chip">USB Artifact</span>
+            <span class="chip">File System</span>
+          </div>
+          <div class="grid cols-2">
+            <div class="cell"><b>JSON Normalization</b>One consistent schema across every format</div>
+            <div class="cell"><b>Artifact Extraction <span style="color:var(--teal)">NEW</span></b>IOCs · hashes · IPs · registry keys · email headers · command lines — extracted as atomic, citable records</div>
+          </div>
+          <div class="cell plain" style="margin-top:10px"><b>FCR Engine</b>Forensic Correlation Record engine — links related artifacts (e.g. a log entry, a registry change, and a network connection tied to the same event) using the atomic records from Artifact Extraction</div>
+          <div class="io-row">
+            <span class="io-pill in">in — verified evidence</span>
+            <span class="io-arrow">&#8594;</span>
+            <span class="io-pill out" style="background:var(--amber-soft)">out — FCR objects</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><span class="arrow-down">&#8595;</span><span class="payload">FCR objects</span></div>
+
+    <!-- STAGE 4 -->
+    <div class="stage accent-teal">
+      <div class="stage-dot">4</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h2>Forensic Analysis</h2>
+          <span class="stage-note">deterministic · no LLM · no hallucination risk</span>
+        </div>
+        <div class="stage-body">
+          <div class="grid cols-3">
+            <div class="cell"><b>Log Analysis</b></div>
+            <div class="cell"><b>Network Analysis</b></div>
+            <div class="cell"><b>Memory Analysis</b></div>
+            <div class="cell"><b>Endpoint Analysis</b></div>
+            <div class="cell"><b>Email Analysis</b></div>
+          </div>
+          <div class="cell plain" style="margin-top:10px"><b>Unified Evidence Store</b>Central store all analysis modules read from and write to</div>
+          <div class="io-row">
+            <span class="io-pill in">in — FCR objects</span>
+            <span class="io-arrow">&#8594;</span>
+            <span class="io-pill out" style="border-color:var(--teal); color:var(--teal); background:var(--teal-soft)">out — verified findings</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><span class="arrow-down">&#8595;</span><span class="payload">verified findings</span></div>
+
+    <!-- FIR — hub, styled distinctly -->
+    <div class="stage accent-teal">
+      <div class="stage-dot" style="border-radius:4px;">FIR</div>
+      <div class="stage-card" style="border-color:var(--teal); border-width:1.5px;">
+        <div class="stage-head" style="background:var(--teal); ">
+          <h2 style="color:#fff;">Forensic Intelligence Repository — the single source of truth</h2>
+        </div>
+        <div class="stage-body">
+          <p class="sub" style="margin-bottom:0;">Stores the analyzed <b style="color:var(--ink)">FCR (Forensic Correlation Record) objects</b> from preprocessing plus every Layer 4 finding, each with its <b style="color:var(--ink)">confidence score</b> and <b style="color:var(--ink)">evidence reference</b>. Nothing enters the AI layer that isn't traceable back to a record here.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><span class="arrow-down">&#8595;</span><span class="payload">FIR facts</span></div>
+
+    <!-- SANITIZATION GATEWAY — own stage, hub styled like FIR -->
+    <div class="stage accent-violet">
+      <div class="stage-dot" style="border-radius:4px; border-color:var(--red); color:var(--red);">SG</div>
+      <div class="stage-card" style="border-color:var(--red); border-width:1.5px;">
+        <div class="stage-head" style="background:var(--red-soft);">
+          <h2 style="color:#7a2c22;">Evidence Sanitization Gateway</h2>
+          <span class="stage-note">shared trust boundary — FIR &#8594; AI layer</span>
+        </div>
+        <div class="stage-body">
+          <p class="sub" style="margin-bottom:0;">Cleans evidence text before <b style="color:var(--ink)">any</b> agent reads it — wraps free text in strict delimiters and strips or flags injection attempts (e.g. &#8220;ignore previous instructions&#8221;) before it ever reaches an LLM prompt. One shared implementation used by every agent below, not duplicated per-agent. Agent 7's Call 2 (Independent Verification) is the backstop for anything that slips past this gateway.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><span class="arrow-down">&#8595;</span><span class="payload">sanitized text</span></div>
+
+    <!-- STAGE 5 -->
+    <div class="stage accent-violet">
+      <div class="stage-dot">5</div>
+      <div class="stage-card">
+        <div class="stage-head">
+          <h2>AI Investigation Layer</h2>
+          <span class="stage-note">every claim must cite a fact in the FIR &middot; agents 3&#8211;5 run in parallel</span>
+        </div>
+        <div class="stage-body">
+          <svg width="100%" viewBox="0 0 860 690" style="display:block; margin:0 0 6px;">
+            <defs>
+              <marker id="af" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                <path d="M1 1L8 5L1 9" fill="none" stroke="#8a9793" stroke-width="1.6"/>
+              </marker>
+            </defs>
+
+            <line x1="430" y1="64" x2="430" y2="90" stroke="#8a9793" stroke-width="1.4" marker-end="url(#af)"/>
+            <path d="M430,148 L430,180 L135,180 L135,210" fill="none" stroke="#8a9793" stroke-width="1.4" marker-end="url(#af)"/>
+            <path d="M430,148 L430,210" fill="none" stroke="#8a9793" stroke-width="1.4" marker-end="url(#af)"/>
+            <path d="M430,148 L430,180 L705,180 L705,210" fill="none" stroke="#8a9793" stroke-width="1.4" marker-end="url(#af)"/>
+            <path d="M135,274 L135,306 L290,306 L290,334" fill="none" stroke="#8a9793" stroke-width="1.4" marker-end="url(#af)"/>
+            <path d="M430,274 L430,334" fill="none" stroke="#8a9793" stroke-width="1.4" marker-end="url(#af)"/>
+            <path d="M705,298 L705,318 L570,318 L570,334" fill="none" stroke="#8a9793" stroke-width="1.4" marker-end="url(#af)"/>
+            <line x1="430" y1="398" x2="430" y2="494" stroke="#8a9793" stroke-width="1.4" marker-end="url(#af)"/>
+            <line x1="430" y1="556" x2="430" y2="562" stroke="#8a9793" stroke-width="1.4" marker-end="url(#af)"/>
+
+            <rect x="290" y="10" width="280" height="54" rx="8" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.3"/>
+            <text x="430" y="32" text-anchor="middle" style="font-family:var(--mono); font-size:12.5px; font-weight:700; fill:var(--ink);">Agent 1 &#8212; Evidence Intelligence</text>
+            <text x="430" y="48" text-anchor="middle" style="font-family:var(--sans); font-size:11px; fill:var(--muted);">Initial structured read of the evidence</text>
+
+            <rect x="290" y="94" width="280" height="54" rx="8" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.3"/>
+            <text x="430" y="116" text-anchor="middle" style="font-family:var(--mono); font-size:12.5px; font-weight:700; fill:var(--ink);">Agent 2 &#8212; Evidence Correlation</text>
+            <text x="430" y="132" text-anchor="middle" style="font-family:var(--sans); font-size:11px; fill:var(--muted);">Links findings across sources</text>
+
+            <rect x="20" y="214" width="230" height="60" rx="8" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.3"/>
+            <text x="135" y="240" text-anchor="middle" style="font-family:var(--mono); font-size:12.5px; font-weight:700; fill:var(--ink);">Agent 3</text>
+            <text x="135" y="258" text-anchor="middle" style="font-family:var(--sans); font-size:11px; fill:var(--muted);">Attack reconstruction</text>
+
+            <rect x="315" y="214" width="230" height="60" rx="8" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.3"/>
+            <text x="430" y="240" text-anchor="middle" style="font-family:var(--mono); font-size:12.5px; font-weight:700; fill:var(--ink);">Agent 4</text>
+            <text x="430" y="258" text-anchor="middle" style="font-family:var(--sans); font-size:11px; fill:var(--muted);">Malware behavior</text>
+
+            <rect x="575" y="214" width="260" height="84" rx="8" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.3"/>
+            <text x="705" y="238" text-anchor="middle" style="font-family:var(--mono); font-size:12.5px; font-weight:700; fill:var(--ink);">Agent 5 &#8212; Threat Intel</text>
+            <text x="705" y="256" text-anchor="middle" style="font-family:var(--sans); font-size:10.5px; fill:var(--muted);">Phase 1: IOC / MITRE / CVE (parallel)</text>
+            <text x="705" y="272" text-anchor="middle" style="font-family:var(--sans); font-size:10.5px; fill:var(--muted);">Phase 2: RAG vs past cases (join)</text>
+
+            <rect x="200" y="338" width="460" height="60" rx="8" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.3"/>
+            <text x="430" y="362" text-anchor="middle" style="font-family:var(--mono); font-size:12.5px; font-weight:700; fill:var(--ink);">Agent 6 &#8212; Impact Assessment</text>
+            <text x="430" y="378" text-anchor="middle" style="font-family:var(--sans); font-size:10.5px; fill:var(--muted);">What you lost &#183; risk score</text>
+            <text x="430" y="392" text-anchor="middle" style="font-family:var(--sans); font-size:10.5px; fill:var(--muted);">action checklist (e.g. change password)</text>
+
+            <rect x="140" y="460" width="580" height="210" rx="16" fill="none" stroke="var(--violet)" stroke-width="1.2" stroke-dasharray="4 3"/>
+            <text x="160" y="484" style="font-family:var(--mono); font-size:12px; font-weight:700; fill:var(--violet);">AGENT 7 &#8212; SUPERVISOR REASONING</text>
+
+            <rect x="180" y="498" width="500" height="58" rx="8" fill="var(--violet-soft)" stroke="var(--violet)" stroke-width="1.3"/>
+            <text x="430" y="522" text-anchor="middle" style="font-family:var(--mono); font-size:12.5px; font-weight:700; fill:var(--ink);">Call 1: Synthesis</text>
+            <text x="430" y="540" text-anchor="middle" style="font-family:var(--sans); font-size:11px; fill:var(--muted);">Full context &#8594; cited claims + confidence score</text>
+
+            <rect x="180" y="566" width="500" height="86" rx="8" fill="var(--red-soft)" stroke="var(--red)" stroke-width="1.3"/>
+            <text x="430" y="588" text-anchor="middle" style="font-family:var(--mono); font-size:12.5px; font-weight:700; fill:#7a2c22;">Call 2: Independent Verification</text>
+            <text x="430" y="604" text-anchor="middle" style="font-family:var(--sans); font-size:10.5px; fill:#7a2c22;">Isolated context, lightweight model</text>
+            <text x="430" y="620" text-anchor="middle" style="font-family:var(--sans); font-size:10.5px; fill:#7a2c22;">1) citation exists in FIR &nbsp;2) finding supports claim</text>
+            <text x="430" y="636" text-anchor="middle" style="font-family:var(--sans); font-size:10.5px; fill:#7a2c22;">3) severity not inflated &nbsp;4) label-vs-narrative divergence</text>
+
+            <path d="M290,37 C 40,37 40,609 180,609" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6"/>
+            <path d="M290,121 C 65,121 65,609 180,609" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6"/>
+            <path d="M20,244 C 5,244 5,609 180,609" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6"/>
+            <path d="M200,368 C 95,368 95,609 180,609" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6"/>
+            <path d="M835,256 C 850,256 850,609 680,609" fill="none" stroke="var(--line-strong)" stroke-width="1" stroke-dasharray="2 4" opacity="0.6"/>
+          </svg>
+          <p class="sub" style="margin:2px 0 0;">Dashed lines: Call 2 reads each cited FIR record directly, isolated from Call 1's synthesis reasoning.</p>
+          <div class="cell plain" style="margin-top:10px"><b>Report generated by Agent 7, after Call 2</b>Call 1's claims are annotated with Call 2's verification results (verified / unverified per claim) before the report is produced — user-selected, court-ready format; stamped with the exact model + prompt version used</div>
+
+          <div class="gate">
+            <div class="gate-branch">
+              <span class="tag">Confidence Gate</span>
+              <p style="color:var(--muted)">Verified &amp; confident?</p>
+            </div>
+            <div class="gate-branch yes">
+              <span class="tag">Yes</span>
+              <p>Routine Analyst Review</p>
+            </div>
+            <div class="gate-branch no">
+              <span class="tag">No / not sure</span>
+              <p>Senior / Dual Review</p>
+            </div>
+          </div>
+
+          <div class="io-row">
+            <span class="io-pill in">in — sanitized text + FIR facts</span>
+            <span class="io-arrow">&#8594;</span>
+            <span class="io-pill out" style="border-color:var(--violet); color:var(--violet); background:var(--violet-soft)">out — court-ready report</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="connector"><span class="arrow-down">&#8595;</span><span class="payload">report</span></div>
+
+    <!-- STAGE 6: Analyst Review -->
+    <div class="stage accent-ink">
+      <div class="stage-dot" style="border-color:var(--amber); color:var(--amber);">R</div>
+      <div class="stage-card" style="border-color:var(--amber);">
+        <div class="stage-head" style="background:var(--amber-soft);">
+          <h2 style="color:var(--amber);">Analyst Review</h2>
+          <span class="stage-note">maker &#8209; checker</span>
+        </div>
+        <div class="stage-body">
+          <div class="cell plain">Inline citation badges shown on every claim — <b>verified</b> vs <b>unverified</b></div>
+
+          <div class="review-flow">
+            <div class="cell"><b>Maker &#8209; Checker</b>Senior sign-off required before a case closes</div>
+          </div>
+
+          <div class="split">
+            <div class="branch approve">
+              <span class="tag">Approved</span>
+              <p>&#8594; Validated Case Repository (per-tenant index) &#8594; feeds RAG retrieval for Agent 5, improving future cases</p>
+            </div>
+            <div class="branch revise">
+              <span class="tag">Revision Required</span>
+              <p>&#8594; <b>Feedback Knowledge Store</b> — stores the correction and its rationale</p>
+              <p style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--amber); display:flex; align-items:center; gap:6px;">
+                <span style="font-family:var(--mono); color:var(--amber); font-weight:700;">&#8594;&#8594;</span>
+                control shifts back to <b>Agent 1 — Evidence Intelligence</b> for re-analysis
+              </p>
+            </div>
+          </div>
+          <div class="loop-note">&#8635; approved cases feed the Validated Case Repository; revised cases hand control back into the AI Investigation Layer</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /flow -->
+
+  <div class="belt">
+    <div class="panel orchestration">
+      <h3>&#8623; Investigation State Manager — cross-cutting, spans every stage above</h3>
+      <ul>
+        <li><b>Per-case state machine</b> — pending / running / complete / failed, tracked per stage, not just per case</li>
+        <li><b>Progress</b> — per-artifact &amp; per-agent granularity (e.g. "6/8 formats parsed", "Agent 4 running")</li>
+        <li><b>Retry &amp; backoff</b> — automatic retry on transient failure, capped before escalating to manual intervention</li>
+        <li><b>Crash recovery / checkpointing</b> — resumes a case from its last-completed stage instead of restarting from Evidence Upload</li>
+        <li><b>Failure classification</b> — infra crash vs. deterministic parser error vs. AI agent failure (timeout, malformed output, failed Call 2 verification), each routed differently</li>
+        <li>Writes state transitions into the Infrastructure Layer's audit log — operational status, distinct from evidentiary chain-of-custody</li>
+      </ul>
+    </div>
+    <div class="panel monitor">
+      <h3>&#8635; Continuous Evaluation &amp; Drift Monitoring</h3>
+      <ul>
+        <li><b>Scheduled test runs</b> against known cases</li>
+        <li><b>Hallucination rate</b> tracked over time</li>
+        <li><b>Attribution precision</b> — do citations actually support claims</li>
+        <li><b>Injection red-team suite</b> — attacks the Sanitization Gateway</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer>ARGUS REFERENCE ARCHITECTURE — EVIDENCE UPLOAD &#8594; INFRASTRUCTURE &#8594; PREPROCESSING &#8594; DETERMINISTIC ANALYSIS &#8594; FIR &#8594; SANITIZATION GATEWAY &#8594; AI INVESTIGATION (REPORT) &#8594; ANALYST REVIEW</footer>
+
+</div>
+</body>
+</html>

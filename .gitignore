@@ -1,0 +1,58 @@
+# ── Python ────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Virtual environments ───────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+
+# ── Environment / secrets ─────────────────────────────────────
+.env
+*.env.local
+*.env.production
+
+# ── Database volumes (Docker) ─────────────────────────────────
+# These are local Docker-managed volumes -- never commit the actual data
+postgres_data/
+minio_data/
+neo4j_data/
+qdrant_data/
+
+# ── Evidence data (NEVER commit real evidence to git) ──────────
+/data/
+data/intake/
+data/repository/
+
+# ── Model weights (too large for git) ─────────────────────────
+models/weights/
+*.bin
+*.safetensors
+*.gguf
+*.ggml
+
+# ── IDE / OS ───────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ── Test / coverage ───────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ── Logs ──────────────────────────────────────────────────────
+*.log
+logs/

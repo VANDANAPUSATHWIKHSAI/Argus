@@ -1,0 +1,55 @@
+{
+  "snapshot_version": "2026.08.01",
+  "snapshot_date": "2026-08-01T00:00:00Z",
+  "description": "Cached local snapshot fixture of LOLBAS (Living Off The Land Binaries and Scripts) project.",
+  "lolbins": {
+    "certutil.exe": {
+      "category": "Download / Encode",
+      "mitre_mapping": "T1105"
+    },
+    "bitsadmin.exe": {
+      "category": "Download / Persistence",
+      "mitre_mapping": "T1197"
+    },
+    "mshta.exe": {
+      "category": "Execute / Bypass",
+      "mitre_mapping": "T1218.005"
+    },
+    "regsvr32.exe": {
+      "category": "Execute / Bypass",
+      "mitre_mapping": "T1218.010"
+    },
+    "rundll32.exe": {
+      "category": "Execute / Bypass",
+      "mitre_mapping": "T1218.011"
+    },
+    "wmic.exe": {
+      "category": "Execution / Recon",
+      "mitre_mapping": "T1047"
+    },
+    "powershell.exe": {
+      "category": "Execution / Interpreter",
+      "mitre_mapping": "T1059.001"
+    },
+    "cmd.exe": {
+      "category": "Execution / Interpreter",
+      "mitre_mapping": "T1059.003"
+    },
+    "wscript.exe": {
+      "category": "Execution / Interpreter",
+      "mitre_mapping": "T1059.005"
+    },
+    "cscript.exe": {
+      "category": "Execution / Interpreter",
+      "mitre_mapping": "T1059.005"
+    },
+    "psexec.exe": {
+      "category": "Lateral Movement",
+      "mitre_mapping": "T1570"
+    },
+    "schtasks.exe": {
+      "category": "Persistence",
+      "mitre_mapping": "T1053.005"
+    }
+  }
+}

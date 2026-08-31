@@ -1,0 +1,182 @@
+================================================================================
+  ARGUS — COMPLETE SETUP, INSTALLATION & DEPENDENCY GUIDE FOR CONTRIBUTORS
+================================================================================
+  This document provides step-by-step instructions for installing all required
+  components, Python libraries, Docker microservices, and external forensic
+  binaries needed to run and develop the ARGUS Digital Forensics Platform.
+================================================================================
+
+--------------------------------------------------------------------------------
+ ⚡ QUICK START (TL;DR FOR WINDOWS & LINUX)
+--------------------------------------------------------------------------------
+1. Open Terminal in the project root (`Argus` directory).
+2. Create & Activate Virtual Environment:
+     python -m venv venv
+     # Windows (PowerShell / CMD):
+     .\venv\Scripts\activate
+     # Linux / macOS:
+     source venv/bin/activate
+3. Install All Python Requirements:
+     pip install -r REQUIREMENTS_ALL.txt
+4. Copy Environment Settings:
+     copy .env.example .env   (Windows)
+     cp .env.example .env     (Linux / macOS)
+5. Start Docker Services:
+     docker compose up -d
+6. Initialize Databases & Storage Buckets:
+     python setup_databases.py
+7. Run Automated System Health Check:
+     python verify_dependencies.py
+
+
+--------------------------------------------------------------------------------
+ 1. SYSTEM PREREQUISITES
+--------------------------------------------------------------------------------
+Ensure the following base tools are installed on your system before setup:
+- Python 3.10+ (Python 3.11 or 3.12 recommended)
+- Git
+- Docker Desktop (Windows / macOS) or Docker Engine + Docker Compose (Linux)
+- Strawberry Perl (Windows only — required if using RegRipper perl script `rip.pl`)
+- Windows Subsystem for Linux (WSL2) (Optional — recommended for running Zeek/Suricata on Windows)
+
+
+--------------------------------------------------------------------------------
+ 2. PYTHON DEPENDENCIES INSTALLATION
+--------------------------------------------------------------------------------
+The project contains modular requirement files as well as a consolidated master file.
+
+Option A (Recommended — All-in-One Installation):
+  pip install -r REQUIREMENTS_ALL.txt
+
+Option B (Modular Installation):
+  pip install -r requirements.txt            # Core API, LangGraph, LLM, Databases
+  pip install -r requirements-forensics.txt  # Volatility 3, PyHindsight, extract-msg
+  pip install -r requirements-runtime.txt    # Ingestion & Sanitization utilities
+  pip install -r requirements-dev.txt        # Pytest, DeepEval, Ragas testing tools
+
+
+--------------------------------------------------------------------------------
+ 3. DOCKER MICROSERVICES SETUP
+--------------------------------------------------------------------------------
+ARGUS relies on 5 backend services managed via `docker-compose.yml`:
+
+  Service      Port Mapping   Purpose / Description
+  ──────────   ────────────   ─────────────────────────────────────────────────
+  PostgreSQL   5433:5432      FIR findings, case sessions, audit logs, metadata
+  MinIO        9000 (API)     Raw evidence & encrypted artifact S3 storage
+               9001 (Console) MinIO Web Management Console
+  Neo4j        7474 (HTTP)    Graph Database for evidence correlation & kill-chain
+               7687 (Bolt)    Neo4j Graph Bolt Protocol
+  Qdrant       6333 (REST)    Vector DB for RAG search against cases & reports
+               6334 (gRPC)    Vector DB gRPC API
+  ClamAV       3310           Malware scanner daemon
+
+Commands to manage Docker services:
+  - Start all services in background : docker compose up -d
+  - Check container status            : docker compose ps
+  - View service logs                 : docker compose logs -f
+  - Stop all services                 : docker compose down
+
+
+--------------------------------------------------------------------------------
+ 4. INITIALIZING DATABASES & STORAGE BUCKETS
+--------------------------------------------------------------------------------
+Once Docker containers are running, execute:
+  python setup_databases.py
+
+This automated script will:
+  1. Verify PostgreSQL connection and confirm database schemas exist.
+  2. Create MinIO buckets (`argus-raw-evidence` and `argus-encrypted-evidence`).
+  3. Verify connection to Qdrant Vector Database.
+  4. Verify connection to Neo4j Graph Database.
+
+
+--------------------------------------------------------------------------------
+ 5. EXTERNAL FORENSIC TOOL BINARIES (NON-PIP DEPENDENCIES)
+--------------------------------------------------------------------------------
+Certain specialized forensic parsers require external standalone binary tools.
+These tools should be placed either:
+  a) Inside the project's `external_tools/` folder, OR
+  b) Added to your system PATH, OR
+  c) Specified via the `ARGUS_FORENSICS_TOOLS` environment variable.
+
+REQUIRED EXTERNAL TOOLS & SOURCES:
+────────────────────────────────────────────────────────────────────────────────
+1. Hayabusa (EVTX Threat Hunter)
+   - Executable: `hayabusa.exe` (Windows) or `hayabusa` (Linux)
+   - Download  : https://github.com/Yamato-Security/hayabusa
+   - Notes     : Place the official `rules/` folder in the same directory.
+
+2. RegRipper 3.0 (Registry Parser)
+   - Executable: `rip.exe` or `rip.pl`
+   - Download  : https://github.com/keydet89/RegRipper3.0
+   - Notes     : Place `plugins/` folder in the same directory. Requires Perl runtime.
+
+3. Eric Zimmerman Forensic Tools
+   - Executables: EvtxECmd.exe, MFTECmd.exe, PECmd.exe, LECmd.exe, JLECmd.exe,
+                  RBCmd.exe, AmcacheParser.exe, SrumECmd.exe, AppCompatCacheParser.exe, SBECmd.exe
+   - Download   : https://ericzimmerman.github.io/
+
+4. Network Traffic Analyzers (PCAP)
+   - Zeek     : `zeek.exe` / `zeek` (https://zeek.org/)
+   - Suricata : `suricata.exe` / `suricata` (https://suricata.io/)
+
+5. Sleuth Kit (Disk Image Analysis)
+   - Pre-bundled inside the repository at `argus/tsk/sleuthkit-4.15.0-win32/bin`.
+     (No separate download needed).
+
+
+--------------------------------------------------------------------------------
+ 6. PRE-TRAINED AI / MACHINE LEARNING MODELS
+--------------------------------------------------------------------------------
+ARGUS automatically downloads required HuggingFace models on first execution.
+To pre-fetch and verify model weights locally, run:
+  python verify_models.py
+
+Models cached automatically to `~/.cache/huggingface/hub/`:
+- `gliner-community/gliner_medium-v2.5` (Zero-shot forensic entity extraction)
+- `protectai/deberta-v3-base-prompt-injection-v2` (Sanitization guardrails)
+
+
+--------------------------------------------------------------------------------
+ 7. VERIFYING YOUR COMPLETE SYSTEM INSTALLATION
+--------------------------------------------------------------------------------
+You can run automated diagnostic scripts at any time to verify that Python packages,
+external binaries, Docker containers, and model weights are ready:
+
+Windows Batch Automated Script:
+  .\setup_tools.bat
+
+Python Verification Script (Cross-Platform):
+  python verify_dependencies.py
+
+External Tools Discovery Check:
+  python tools/check_external_forensics_tools.py
+
+
+--------------------------------------------------------------------------------
+ 8. RUNNING ARGUS
+--------------------------------------------------------------------------------
+1. Run Evidence Pipeline CLI:
+     python -m infrastructure.pipeline
+
+2. Start Web API Service (FastAPI):
+     uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+   - Swagger API Docs will be available at: http://localhost:8000/docs
+
+
+--------------------------------------------------------------------------------
+ 🛠️ TROUBLESHOOTING & COMMON ISSUES
+--------------------------------------------------------------------------------
+- Issue: "PostgreSQL is unreachable" or port conflict on 5433
+  Fix  : Check `docker compose ps`. Ensure no existing Postgres service is using 5433.
+         Restart Docker container: `docker compose restart postgres`
+
+- Issue: "rip.pl failed to execute"
+  Fix  : Install Strawberry Perl on Windows and ensure `perl.exe` is in your PATH.
+
+- Issue: "Hayabusa / EvtxECmd Not Found"
+  Fix  : Place executables in `external_tools/` directory inside the repository or
+         set `ARGUS_FORENSICS_TOOLS="C:\path\to\your\tools"`.
+
+================================================================================

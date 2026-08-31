@@ -1,0 +1,79 @@
+# ══════════════════════════════════════════════════════════════════════════════
+# ARGUS — Consolidated Master Python Dependencies File
+# ══════════════════════════════════════════════════════════════════════════════
+# Run: pip install -r REQUIREMENTS_ALL.txt
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Core & API Web Framework ─────────────────────────────────────────────────
+python-dotenv
+pydantic>=2.0
+pydantic-settings
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+requests
+
+# ── Orchestration & AI Framework ─────────────────────────────────────────────
+langgraph
+
+# ── LLM, Embeddings & Quantization (HuggingFace / PyTorch) ────────────────────
+torch
+transformers>=4.40
+bitsandbytes
+accelerate
+sentence-transformers
+
+# ── Databases & Drivers ───────────────────────────────────────────────────────
+# PostgreSQL
+asyncpg
+psycopg2-binary
+alembic
+
+# MinIO (S3 Object Storage)
+minio
+
+# Neo4j (Graph Database)
+neo4j
+
+# Qdrant (Vector Database)
+qdrant-client
+
+# ── Forensic Parsers & Extractors ─────────────────────────────────────────────
+volatility3           # Memory dump analysis
+extract-msg           # Outlook .msg email parser
+pyhindsight           # Chrome / Chromium web history & cookie parser
+
+# ── Zero-Shot NER & Machine Learning Classifiers ──────────────────────────────
+gliner                # Zero-shot entity extraction
+google-re2            # Fast regular expressions
+
+# ── Threat Intelligence & Malware Analysis ────────────────────────────────────
+stix2                 # STIX 2.1 threat intelligence bundles
+taxii2-client         # TAXII feed consumer client
+yara-python           # YARA malware rule matching
+pyclamd               # ClamAV daemon Python client
+
+# ── Security, Encryption & Integrity ──────────────────────────────────────────
+cryptography          # Fernet payload encryption
+rfc3161ng             # RFC 3161 TSA timestamp verification
+
+# ── Report Generation & Templating ────────────────────────────────────────────
+jinja2
+reportlab             # PDF document generation engine
+weasyprint            # HTML to PDF conversion engine
+
+# ── Data Processing & Utilities ───────────────────────────────────────────────
+pandas
+numpy
+tldextract            # Domain & URL parsing
+docker                # Python Docker SDK for container checks
+
+# ── System Evaluation & Benchmark Frameworks ─────────────────────────────────
+ragas
+deepeval
+
+# ── Development, Async & Testing Tools ────────────────────────────────────────
+pytest
+pytest-asyncio
+anyio

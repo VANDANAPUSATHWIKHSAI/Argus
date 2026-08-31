@@ -1,0 +1,32 @@
+# Never commit actual database contents -- push docker-compose.yml and
+# seed/ scripts instead, so everyone builds their own local copy identically.
+
+# Docker volume data if it ever gets bind-mounted locally instead of named volumes
+data/
+minio_data/
+postgres_data/
+qdrant_data/
+neo4j_data/
+
+# Real evidence files -- test/synthetic evidence used for dev should live
+# outside the repo (or be fetched by a script), never committed directly
+/data/intake/
+/data/repository/
+*.pcap
+*.dd
+*.mem
+*.evtx
+
+# Secrets -- use a local .env file (never committed), see .env.example
+.env
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# OS/editor cruft
+.DS_Store
+.vscode/

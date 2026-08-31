@@ -1,0 +1,21 @@
+# Argus Ingestion & Extraction Runtime Python Dependencies
+python-dotenv
+pydantic>=2.0
+pydantic-settings
+fastapi
+uvicorn[standard]
+python-multipart
+requests
+httpx
+cryptography
+minio
+psycopg2-binary
+asyncpg
+docker
+pyclamd
+google-re2
+torch
+transformers>=4.40
+gliner
+tldextract
+rfc3161ng

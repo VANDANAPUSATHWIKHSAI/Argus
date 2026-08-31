@@ -1,0 +1,162 @@
+Evidence Parser Workflow
+File Upload to Parser-Specific Output — Agent 1 (Evidence Intelligence)
+1. Purpose and Scope
+This document describes, stage by stage, how raw forensic evidence submitted by a user moves through the system until it becomes tool-specific parsed output, ready for normalization into the unified event schema used by the rest of the DFIR pipeline (Agents 2–7). It covers evidence-type detection, parser dispatch, execution per evidence category, and the raw output each parser produces.
+This workflow corresponds to Agent 1 (Evidence Intelligence) in the overall Forensic Intelligence Repository (FIR) architecture.
+2. High-Level Workflow
+The workflow has six sequential stages. Every piece of evidence — regardless of type — passes through all six stages before it becomes usable by downstream agents.
+File Upload — user submits raw evidence through the application (memory dump, PCAP, EVTX, registry hive, browser profile, .eml file, disk image, etc.).
+Evidence Type Detection — the system identifies what kind of evidence was uploaded, either from file extension, file signature (magic bytes), or explicit user selection.
+Parser Dispatch — based on the detected type, the correct forensic tool/parser is selected and invoked.
+Parser Execution — the selected tool runs against the uploaded file and produces its own tool-specific raw output.
+Raw Output Capture — the parser's output (JSON, JSONL, EVE JSON, plain text, or TSV) is captured and stored temporarily for the next stage.
+Handoff to Normalization (FCR) — the raw, tool-specific output is passed to the Field/Format Conversion & Reconciliation step, which maps it into the unified Event schema before chunking, embedding, and storage.
+Stages 1–5 are the subject of this document. Stage 6 (normalization) is covered separately, since each tool's mapping logic is distinct.
+3. Stage 1 — File Upload
+The user uploads one or more evidence files through the application interface. At upload time, the system records:
+Case ID — which investigation this evidence belongs to
+Original filename and file size
+Upload timestamp and uploading user
+A storage path/reference where the raw file is kept, separate from any parsed output
+The raw uploaded file is retained as-is (unmodified) so that the original evidence can always be re-parsed or independently verified later — this preserves forensic integrity of the source data.
+4. Stage 2 — Evidence Type Detection
+Before any parser can run, the system must determine what category of evidence was uploaded. Detection uses a combination of:
+File extension (e.g., .evtx, .pcap, .eml, .dd/.E01)
+File signature / magic bytes, for cases where the extension is missing or unreliable
+Manual override — the user can explicitly select the evidence type if automatic detection is ambiguous (e.g., a raw memory image with no distinguishing extension)
+The detected type determines which entry in the Parser Dispatch table (Section 5) is used.
+5. Stage 3 — Parser Dispatch Table
+Each evidence type is mapped to exactly one designated parser/tool. This mapping is the core routing table for Agent 1:
+#
+Evidence Type
+Tool / Parser
+Raw Output Format
+1
+Memory Dump
+Volatility 3
+JSON / JSONL
+2
+PCAP / Network Traffic
+Zeek
+JSON (multiple log files)
+3
+Network Security / IDS
+Suricata
+EVE JSON (JSONL)
+4
+Windows Event Logs (EVTX)
+Hayabusa
+JSON / JSONL
+5
+Windows Registry
+RegRipper
+Plain text (per plugin)
+6
+Browser Artifacts
+Hindsight
+JSONL
+7
+Email (.eml)
+Python email library
+Python objects (in-memory)
+8
+USB Artifacts
+RegRipper + Registry artifacts
+Plain text / structured
+9
+File System / Disk Image
+The Sleuth Kit (TSK)
+Structured / TSV
+6. Stage 4 — Parser Execution (per evidence type)
+This section describes what each parser does when executed, and the raw content it returns before normalization.
+6.1 Memory Dump → Volatility 3
+Volatility 3 runs one or more analysis plugins against the memory image. Each plugin targets a different aspect of memory:
+pslist — running/terminated processes: name, PID, parent PID, thread count, create/exit time
+netscan — network connections held in memory: local/remote IP and port, owning process, connection state
+dlllist / modules — loaded libraries per process
+cmdline — command line used to launch each process
+malware-indicator plugins — hidden or unlinked processes, code injection artifacts
+Each plugin produces its own JSON/JSONL result; a single memory dump is typically processed with several plugins in sequence.
+6.2 PCAP / Network Traffic → Zeek
+Zeek processes the packet capture and writes multiple protocol-specific log files, each in JSON:
+conn.log — every network connection (source/destination IP and port, protocol, duration, bytes transferred)
+dns.log — every DNS query and its response
+http.log — HTTP requests: URL, method, user-agent, response code, host
+files.log — files transferred over the network, with hashes
+ssl.log — TLS/SSL handshake and certificate details
+Records across these files share a common uid field, allowing related entries (e.g., a DNS lookup and the connection it triggered) to be linked.
+6.3 Network Security / IDS → Suricata
+Suricata produces a single EVE JSON file (eve.json), a JSONL stream mixing several event types, distinguished by an event_type field:
+alert — signature name, severity, category, source/destination IP and port
+flow — connection summary: bytes, packets, duration
+http / dns / tls — protocol-level detail, similar to Zeek but from an IDS detection perspective
+fileinfo — files observed in traffic, with hashes
+6.4 Windows Event Logs (EVTX) → Hayabusa
+Hayabusa parses .evtx files and outputs one record per event log entry, in JSON/JSONL:
+Event ID, timestamp, channel (Security, System, Application), computer name, level
+A human-readable 'Details' field generated by Hayabusa's interpretation of the raw event data
+A matched rule/detection name where the event matches a built-in Sigma detection rule
+This output aligns closely with the Windows Event Log schema already used in the paper's original knowledge base structure.
+6.5 Windows Registry → RegRipper
+RegRipper produces plain, human-readable report text, organized plugin by plugin against a supplied registry hive:
+userassist — programs run by the user, run count, last-run time
+run / runmru — startup and autorun program entries
+usbstor — USB devices connected historically, with serial numbers and first/last connection times
+shimcache — evidence of historical program execution
+Because this output is unstructured text (headers and key-value lines per plugin), it requires explicit parsing logic during normalization rather than a direct JSON mapping.
+6.6 Browser Artifacts → Hindsight
+Hindsight outputs one JSON object per browser artifact record, in JSONL, each tagged with a type field:
+Browsing history — URL, page title, visit time, visit count
+Downloads — filename, source URL, download time, saved path
+Cookies — domain, name, creation/expiry time
+Autofill data — saved form entries
+Cache entries
+6.7 Email (.eml) → Python email library
+The .eml file is parsed in-memory using Python's built-in email library. The result is a Python object, not a file, containing:
+Headers — From, To, Subject, Date, Reply-To, Message-ID
+Body — plain text and/or HTML content
+Attachments — filename, content-type, size
+Raw header chain (Received, SPF/DKIM results where present) — useful for spoofing/phishing detection
+6.8 USB Artifacts → RegRipper + Windows Registry artifacts
+Uses the same RegRipper mechanism as Section 6.5, scoped to USB-relevant registry keys. Output is plain text/structured, covering:
+Device description — manufacturer, product ID, serial number
+First-connected and last-connected timestamps
+Assigned drive letter and volume name
+The user account logged in at time of connection
+6.9 File System / Disk Image → The Sleuth Kit (TSK)
+TSK's fls and mactime utilities produce tab-separated (TSV) output, one row per file system entry:
+File name and full path, inode number
+MAC(B) timestamps — Modified, Accessed, Changed, (Birth/created)
+File size, file type (regular file, directory, etc.)
+Deleted flag — whether the file was deleted but is still recoverable
+This produces a raw filesystem timeline used to reconstruct file creation, modification, and deletion activity.
+7. Stage 5 — Raw Output Capture
+Regardless of format, every parser's raw output is captured and staged before normalization. Three output categories exist at this point:
+Output category
+Applies to
+Handling before normalization
+Native JSON / JSONL
+Zeek, Suricata, Hayabusa, Hindsight, Volatility
+Field-mapped directly into the unified event schema
+Plain text (unstructured)
+RegRipper (registry, USB)
+Requires custom text-parsing logic to extract key-value data per plugin
+TSV / structured text
+The Sleuth Kit
+Requires column-based parsing into structured fields
+In-memory objects
+Python email library
+Directly mapped from object attributes, no file parsing needed
+Each raw output is tagged with: case ID, evidence type, source tool name, and the original uploaded file reference — this traceability is what later allows any generated report finding to be linked back to the exact original evidence file (chain of custody).
+8. Stage 6 — Handoff to Normalization (FCR)
+Once raw output is captured, it is handed to the Field/Format Conversion & Reconciliation (FCR) step, which maps every tool's distinct output structure into one common Event schema:
+Event ID
+Details
+Level
+Date and Time
+Source
+Task Category
+This unified schema is what allows Agents 2 through 7 to operate identically regardless of which forensic tool or evidence type originally produced the data. The normalization logic itself (field-by-field mapping per tool) is documented separately, since each tool's raw structure requires its own mapping rules.
+9. Summary Diagram (Textual)
+Upload → Type Detection → Parser Dispatch → Parser Execution (tool-specific) → Raw Output Capture (JSON / JSONL / Text / TSV) → Normalization (FCR) → Unified Event Schema → Chunking → Embedding → Storage (PostgreSQL + pgvector)
+Everything to the left of 'Normalization' is evidence-type-specific and handled by Agent 1. Everything to the right is evidence-type-agnostic and shared by all downstream agents.

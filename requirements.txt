@@ -1,0 +1,80 @@
+# ══════════════════════════════════════════════════
+# Argus — Python Dependencies
+# ══════════════════════════════════════════════════
+
+# ── Core ─────────────────────────────────────────
+python-dotenv
+pydantic>=2.0
+pydantic-settings
+fastapi
+uvicorn[standard]
+
+# ── Orchestration ─────────────────────────────────
+langgraph
+
+# ── LLM / Embeddings (HuggingFace) ───────────────
+transformers>=4.40
+torch
+bitsandbytes          # 4-bit quantization (nf4 / double quant)
+accelerate
+sentence-transformers
+
+# ── Databases ────────────────────────────────────
+# PostgreSQL — structured data
+asyncpg               # async PostgreSQL driver
+psycopg2-binary       # sync driver (migrations / admin scripts)
+alembic               # schema migrations
+
+# MinIO — raw evidence object storage (S3-compatible)
+minio                 # official MinIO Python SDK
+
+# Neo4j — graph DB (Agent 2 correlation, Agent 3 kill-chain)
+neo4j
+
+# Qdrant — vector DB (Agent 5b RAG)
+qdrant-client
+
+# NOTE: Forensic parsers require external (non-pip) binary dependencies
+# at runtime. Pip install alone is NOT sufficient. Refer to setup_tools.sh
+# for the installation of these external binaries:
+#   - Hayabusa (Windows Event Logs)
+#   - Zeek, Suricata (PCAP / network traffic)
+#   - RegRipper3.0 + Perl (Registry hives)
+
+# ── Forensic Parsers ──────────────────────────────
+volatility3           # Memory forensics
+
+# ── NER / Classifiers ─────────────────────────────
+gliner                # Zero-shot NER (Artifact Extraction)
+# RoBERTa phishing classifier loaded via transformers
+
+# ── Threat Intelligence ───────────────────────────
+stix2                 # STIX bundle parsing
+taxii2-client         # TAXII feed client
+requests              # CVE/NVD + CISA KEV HTTP calls
+
+# ── Malware / YARA ────────────────────────────────
+yara-python           # YARA rule matching (Agent 4)
+
+# ── Sanitization / Guardrails ─────────────────────
+# DeBERTa prompt-injection classifier via transformers
+# DeBERTa-v3-large-MNLI entailment via transformers
+
+# ── Report Generation ─────────────────────────────
+jinja2
+reportlab             # PDF generation
+weasyprint            # HTML → PDF fallback
+
+# ── Evaluation ────────────────────────────────────
+ragas
+deepeval
+
+# ── Utilities ─────────────────────────────────────
+pandas
+numpy
+tldextract            # Domain parsing for URL/Host artifact extraction
+cryptography          # Evidence encryption (Fernet)
+python-multipart      # FastAPI file uploads
+httpx                 # Async HTTP client
+rfc3161ng             # RFC 3161 timestamping support
+

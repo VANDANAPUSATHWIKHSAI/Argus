@@ -61,9 +61,17 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
         f"<evidence>\n{evidence_str}\n</evidence>"
     )
 
-    # 5. Query the LLM model
-    llm = OllamaWrapper(model_name="qwen3-14b", base_url="http://localhost:11434")
-    response_text = llm.generate(prompt)
+    # 5. Query the LLM model with graceful offline fallback
+    try:
+        llm = OllamaWrapper(model_name="qwen3-14b", base_url="http://localhost:11434")
+        response_text = llm.generate(prompt)
+    except Exception as e:
+        logger.warning(f"Ollama LLM connection failed: {e}. Falling back to structured evidence summary.")
+        response_text = (
+            f"[SYSTEM NOTICE: Local Ollama LLM service is offline/unavailable ({e}).]\n\n"
+            f"Sanitized Evidence Context for Query '{req.query}':\n"
+            f"{evidence_str if evidence_str else 'No evidence findings recorded for this case.'}"
+        )
 
     return QueryResponse(
         response=response_text,

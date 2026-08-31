@@ -35,7 +35,9 @@ class TestPhaseA4FindingsHardening(unittest.TestCase):
         self.case_id = "CASE-PHASE-A4-TEST"
         self.tenant_id = "tenant-a4"
         self.fir_repo = FIRRepository()
+        self.fir_repo.clear()
         self.unified_store = UnifiedEvidenceStore()
+        self.unified_store.clear()
         self.timeline_builder = UnifiedTimelineBuilder()
         self.service = AnalystFindingService(
             fir_repo=self.fir_repo,

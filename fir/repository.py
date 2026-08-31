@@ -15,12 +15,21 @@ class FIRRepository:
     """
     FIRRepository stores and retrieves FIRFinding records.
     Automatically applies write-time PII redaction and injection checks.
+    Uses class-level shared in-memory state as single source of truth across service instances.
     """
+    _shared_findings: Dict[str, FIRFinding] = {}
+    _shared_fingerprints: Dict[str, Dict[str, str]] = {}
+
     def __init__(self):
-        self.findings: Dict[str, FIRFinding] = {}
-        self._fingerprints: Dict[str, Dict[str, str]] = {}  # case_id -> fingerprint -> finding_id
+        self.findings = FIRRepository._shared_findings
+        self._fingerprints = FIRRepository._shared_fingerprints
         self.pii_redactor = PIIRedactor()
         self.injection_gate = InjectionGate()
+
+    def clear(self) -> None:
+        """Clears in-memory repository store (primarily for unit test isolation)."""
+        self.findings.clear()
+        self._fingerprints.clear()
 
     def insert(self, finding: FIRFinding) -> FIRFinding:
         """

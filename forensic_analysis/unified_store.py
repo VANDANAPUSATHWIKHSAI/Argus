@@ -29,6 +29,11 @@ class UnifiedEvidenceStore:
         # Fingerprint index for semantic deduplication: dict[case_id, dict[fingerprint, finding_id]]
         self._fingerprints: Dict[str, Dict[str, str]] = {}
 
+    def clear(self) -> None:
+        """Clears in-memory store (primarily for unit test isolation)."""
+        self._memory_store.clear()
+        self._fingerprints.clear()
+
     def write_finding(self, finding: Union[Finding, dict]) -> None:
         """
         Persist a single Finding (or finding dict) to the store with fingerprint deduplication.

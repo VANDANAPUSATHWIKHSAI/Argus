@@ -20,6 +20,7 @@ SUPPORTED_RELATIONSHIP_TYPES = {
     "shared_ioc",
     "process_tree",
     "network_process",
+    "single_artifact",
 }
 
 
@@ -68,14 +69,16 @@ class CorrelationRecord(BaseModel):
 
     @field_validator("artifact_ids")
     @classmethod
-    def _validate_artifact_ids(cls, v: list[str]) -> list[str]:
-        if not isinstance(v, list) or len(v) < 2:
-            raise ValueError("artifact_ids must contain at least 2 artifact IDs.")
+    def _validate_artifact_ids(cls, v: list[str], info: Any) -> list[str]:
+        if not isinstance(v, list) or len(v) < 1:
+            raise ValueError("artifact_ids must contain at least 1 artifact ID.")
         cleaned = [str(x).strip() for x in v if str(x).strip()]
         if len(set(cleaned)) != len(cleaned):
             raise ValueError("artifact_ids must contain unique artifact IDs (duplicates detected).")
-        if len(cleaned) < 2:
-            raise ValueError("artifact_ids must contain at least 2 non-empty unique artifact IDs.")
+        rel_types = getattr(info, "data", {}).get("relationship_type", [])
+        if "single_artifact" not in rel_types:
+            if len(cleaned) < 2:
+                raise ValueError("artifact_ids must contain at least 2 non-empty unique artifact IDs.")
         return cleaned
 
     @field_validator("relationship_type")

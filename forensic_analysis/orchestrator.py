@@ -80,8 +80,9 @@ def process_fcr_batch(
                     target_store.write_finding(finding)
 
                     # Adapt & Insert into FIR Repository
-                    fir_finding = finding_to_fir(finding)
-                    fir_repo.insert(fir_finding)
+                    if fir_repo is not None:
+                        fir_finding = finding_to_fir(finding)
+                        fir_repo.insert(fir_finding)
 
             except Exception as e:
                 logger.error(

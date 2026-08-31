@@ -244,3 +244,31 @@ class TestApiAndReportGeneration:
         # allow_unreviewed = True -> Should return both
         exported_all = self.service.export_report(case_id, tenant_id=tenant_id, allow_unreviewed=True)
         assert len(exported_all) == 2
+
+    def test_get_report_pdf_graceful_handling(self):
+        """Test GET /reports/{case_id}/report?format=pdf handles missing native PDF engines gracefully."""
+        case_id = "CASE-PDF-TEST"
+        tenant_id = "tenant-pdf"
+
+        finding = FIRFinding(
+            finding_id="fnd-pdf-1",
+            case_id=case_id,
+            tenant_id=tenant_id,
+            fact="PDF test finding",
+            sanitized_fact="PDF test finding",
+            confidence=0.9,
+            severity="medium",
+            layer="endpoint",
+            timestamp=datetime.now(timezone.utc),
+            evidence_reference=["CORR-PDF"]
+        )
+        self.fir_repo.insert(finding)
+
+        response = client.get(
+            f"/reports/{case_id}/report?format=pdf&allow_unreviewed=true",
+            headers={"X-Tenant-ID": tenant_id}
+        )
+        # Must return either 200 (if PDF library present & works) or 400 (if missing/unconfigured); NEVER 500
+        assert response.status_code in (200, 400)
+        if response.status_code == 400:
+            assert "pdf" in response.json()["detail"].lower()

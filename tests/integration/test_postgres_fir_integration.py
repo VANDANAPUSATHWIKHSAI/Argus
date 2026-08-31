@@ -140,6 +140,8 @@ class TestPostgresFirIntegration(unittest.TestCase):
         conn = self._get_pg_conn()
         from psycopg2.extras import RealDictCursor
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("DELETE FROM fir_findings WHERE case_id = 'CASE-PG-IDEM';")
+        conn.commit()
 
         raw_fnd1 = Finding(
             case_id="CASE-PG-IDEM",

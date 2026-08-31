@@ -340,7 +340,7 @@ class ReportGenerator:
         try:
             import weasyprint
             return weasyprint.HTML(string=html_content).write_pdf()
-        except ImportError:
+        except (ImportError, OSError, Exception):
             pass
 
         # Try pdfkit

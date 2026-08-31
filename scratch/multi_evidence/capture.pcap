@@ -1,0 +1,17 @@
+°≤√‘[
+  {
+    "ts": 1788207300.0,
+    "uid": "CHp94d2c884",
+    "id_orig_h": "192.168.1.105",
+    "id_orig_p": 49210,
+    "id_resp_h": "198.51.100.99",
+    "id_resp_p": 443,
+    "proto": "tcp",
+    "service": "ssl",
+    "duration": 12.5,
+    "orig_bytes": 4520,
+    "resp_bytes": 128400,
+    "ja3": "de350284483a936a640156d953930b8b",
+    "ja3s": "ec74a5c51126031e3d3e306335f9ddc3"
+  }
+]

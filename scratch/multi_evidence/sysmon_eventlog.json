@@ -1,0 +1,23 @@
+[
+  {
+    "EventId": 4688,
+    "Channel": "Security",
+    "Computer": "WORKSTATION-01",
+    "TimeCreated": "2026-08-31T20:15:00.000000Z",
+    "NewProcessName": "C:\\Windows\\System32\\cmd.exe",
+    "ParentProcessName": "C:\\Windows\\explorer.exe",
+    "CommandLine": "cmd.exe /c powershell -EncodedCommand JABzAD0ATgBlAHcALQBPAGIAagBlAGMAdAA=",
+    "SubjectUserName": "Administrator",
+    "SubjectDomainName": "CORP"
+  },
+  {
+    "EventId": 4624,
+    "Channel": "Security",
+    "Computer": "WORKSTATION-01",
+    "TimeCreated": "2026-08-31T20:14:55.000000Z",
+    "TargetUserName": "admin_user",
+    "TargetDomainName": "CORP",
+    "IpAddress": "198.51.100.44",
+    "LogonType": 10
+  }
+]

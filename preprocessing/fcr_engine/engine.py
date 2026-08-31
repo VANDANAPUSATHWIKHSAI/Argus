@@ -48,7 +48,7 @@ class FCREngine:
         Returns:
             List of validated, deduplicated CorrelationRecord objects.
         """
-        if not artifacts or len(artifacts) < 2:
+        if not artifacts:
             return []
 
         # 1. Filter valid artifacts and group by case_id for strict case isolation
@@ -73,20 +73,21 @@ class FCREngine:
 
         # 2. Process each case independently
         for case_id, case_arts in by_case.items():
-            if len(case_arts) < 2:
-                continue
+            if len(case_arts) >= 2:
+                # Strategy A: Temporal Proximity Correlation
+                raw_records.extend(self._correlate_temporal(case_id, case_arts, window_seconds))
 
-            # Strategy A: Temporal Proximity Correlation
-            raw_records.extend(self._correlate_temporal(case_id, case_arts, window_seconds))
+                # Strategy B: Shared IOC Correlation
+                raw_records.extend(self._correlate_shared_ioc(case_id, case_arts, entities_by_artifact))
 
-            # Strategy B: Shared IOC Correlation
-            raw_records.extend(self._correlate_shared_ioc(case_id, case_arts, entities_by_artifact))
+                # Strategy C: Process Tree Correlation
+                raw_records.extend(self._correlate_process_tree(case_id, case_arts))
 
-            # Strategy C: Process Tree Correlation
-            raw_records.extend(self._correlate_process_tree(case_id, case_arts))
+                # Strategy D: Network ↔ Process Correlation
+                raw_records.extend(self._correlate_network_process(case_id, case_arts))
 
-            # Strategy D: Network ↔ Process Correlation
-            raw_records.extend(self._correlate_network_process(case_id, case_arts))
+            # Strategy E: Single-Artifact Standalone Correlation
+            raw_records.extend(self._correlate_single_artifact(case_id, case_arts))
 
         # 3. Deduplicate correlation records
         return self._deduplicate(raw_records, art_lookup)
@@ -186,6 +187,8 @@ class FCREngine:
                 ("url", nf.url),
                 ("registry_key", nf.registry_key),
                 ("usb_serial_number", nf.usb_serial_number),
+                ("sender", nf.sender),
+                ("recipients", nf.recipients),
             ]
             for key_name, val in candidates:
                 if val and str(val).strip():
@@ -344,6 +347,30 @@ class FCREngine:
                             records.append(rec)
                         except ValueError as e:
                             logger.debug("Failed to create network_process CorrelationRecord: %s", e)
+
+        return records
+
+    def _correlate_single_artifact(self, case_id: str, artifacts: list[Artifact]) -> list[CorrelationRecord]:
+        """Correlate individual standalone evidence artifacts into single-artifact CorrelationRecords."""
+        records: list[CorrelationRecord] = []
+        for art in artifacts:
+            host = self._get_host(art)
+            corr_id = self._generate_corr_id(case_id, ["single_artifact"], [art.artifact_id], host)
+            try:
+                rec = CorrelationRecord(
+                    correlation_id=corr_id,
+                    case_id=case_id,
+                    artifact_ids=[art.artifact_id],
+                    relationship_type=["single_artifact"],
+                    source_count=1,
+                    distinct_artifact_types=1,
+                    confidence=0.5,
+                    host=host,
+                    strategy_params={"single_artifact": True}
+                )
+                records.append(rec)
+            except ValueError as e:
+                logger.debug("Failed to create single_artifact CorrelationRecord: %s", e)
 
         return records
 

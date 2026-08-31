@@ -1,0 +1,13 @@
+[
+  {
+    "EventId": 4688,
+    "Channel": "Security",
+    "Computer": "NTFS1-HOST",
+    "TimeCreated": "2026-08-31T20:15:00.000000Z",
+    "NewProcessName": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "ParentProcessName": "C:\\Windows\\explorer.exe",
+    "CommandLine": "powershell.exe -ExecutionPolicy Bypass -NoProfile -EncodedCommand JABzAD0ATgBlAHcALQBPAGIAagBlAGMAdAA=",
+    "SubjectUserName": "Administrator",
+    "SubjectDomainName": "CORP"
+  }
+]

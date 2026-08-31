@@ -820,9 +820,14 @@ class ArtifactExtractor:
                             })
                             continue
 
-                        # Build extracted entity artifact
                         nf = NormalizedFields()
-                        if lbl == "malware":
+                        if lbl in ("url", "URL"):
+                            nf.url = val
+                        elif lbl in ("domain", "DOMAIN"):
+                            nf.domain = val
+                        elif lbl in ("email", "EMAIL"):
+                            nf.sender = val
+                        elif lbl == "malware":
                             nf.process = val
                         elif lbl == "threat-actor":
                             nf.user = val

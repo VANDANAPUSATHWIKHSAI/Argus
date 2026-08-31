@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import re
 import email
 from email import policy
 import hashlib
@@ -146,13 +147,25 @@ class EmailParser:
                     except Exception as e:
                         logger.warning("Failed to extract HTML body content: %s", e)
 
-        # ── 3. Build email_header Artifact ──────────────────────────────────
+        ver = getattr(self, "_tool_version", get_tool_version("python_email"))
         recipients_list = []
         for r_val in (to_val, cc_val, bcc_val):
             if r_val:
                 recipients_list.append(str(r_val).strip())
         recipients_str = ", ".join(recipients_list) if recipients_list else None
-        ver = getattr(self, "_tool_version", get_tool_version("python_email"))
+
+        # Extract first URL and sender domain into normalized fields
+        first_url = None
+        if body_text:
+            match_url = re.search(r'https?://[^\s<>"]+', body_text)
+            if match_url:
+                first_url = match_url.group(0).rstrip('.,);')
+
+        first_domain = None
+        if from_val:
+            match_dom = re.search(r'@([\w.-]+)', str(from_val))
+            if match_dom:
+                first_domain = match_dom.group(1).lower()
 
         header_art = Artifact(
             evidence_id=evidence_id,
@@ -173,6 +186,8 @@ class EmailParser:
                 sender=str(from_val) if from_val else None,
                 recipients=recipients_str,
                 subject=str(subject_val) if subject_val else None,
+                url=first_url,
+                domain=first_domain,
             )
         )
 

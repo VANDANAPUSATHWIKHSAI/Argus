@@ -142,8 +142,12 @@ _IMPLEMENTED_PARSERS: dict[str, type] = {
 _SOURCE_PARSER_MAP: dict[str, tuple[str, str]] = {
     "memory_dump": ("Memory Dump", "MemoryParser"),
     "pcap": ("PCAP / Network Traffic", "PcapParser"),
+    "pcap_zeek": ("PCAP / Network Traffic — Zeek", "PcapZeekParser"),
+    "zeek_json": ("PCAP / Network Traffic — Zeek", "PcapZeekParser"),
     "ids": ("Network Security / IDS", "PcapParser"),
     "evtx_raw": ("Windows Event Logs (EVTX) — raw", "EvtxECmdParser"),
+    "evtxecmd": ("Windows Event Logs (EVTX) — raw", "EvtxECmdParser"),
+    "evtx_json": ("Windows Event Logs (EVTX) — raw", "EvtxECmdParser"),
     "evtx_hunted": ("Windows Event Logs (EVTX) — threat-hunted", "EvtxParser"),
     "registry": ("Windows Registry", "RegistryParser"),
     "chrome": ("Browser Artifacts — Chrome / Chromium", "BrowserParser"),

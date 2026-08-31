@@ -62,10 +62,11 @@ class UnifiedTimelineBuilder:
     def build_timeline(
         self,
         artifacts: Sequence[Artifact],
-        correlation_records: Optional[Sequence[CorrelationRecord]] = None
+        correlation_records: Optional[Sequence[CorrelationRecord]] = None,
+        findings: Optional[Sequence[Any]] = None
     ) -> List[TimelineEvent]:
         """
-        Construct a unified timeline from input artifacts and optional correlation records.
+        Construct a unified timeline from input artifacts, correlation records, and findings.
         """
         events: List[TimelineEvent] = []
 
@@ -137,6 +138,47 @@ class UnifiedTimelineBuilder:
                         "distinct_artifact_types": rec.distinct_artifact_types,
                         "shared_value": rec.shared_value,
                         "strategy_params": rec.strategy_params
+                    }
+                )
+                events.append(evt)
+
+        # 3. Process Finding events
+        if findings:
+            for f in findings:
+                finding_id = getattr(f, "finding_id", None)
+                if not finding_id:
+                    continue
+
+                case_id = (getattr(f, "case_id", "default_case") or "default_case").strip()
+                ts = self._normalize_dt(getattr(f, "timestamp", None))
+                sev = getattr(f, "severity", "medium").upper()
+                fact = getattr(f, "fact", "Forensic Finding")
+                layer = getattr(f, "layer", "analysis_engine")
+                host = getattr(f, "metadata", {}).get("host")
+
+                seed = f"FINDING:{case_id}:{finding_id}:{ts.isoformat() if ts else 'none'}"
+                event_id = f"TL-FND-{hashlib.sha256(seed.encode()).hexdigest()[:12]}"
+
+                ev_ref = getattr(f, "evidence_reference", None)
+                corr_ref = ", ".join(ev_ref) if isinstance(ev_ref, list) else ev_ref
+
+                evt = TimelineEvent(
+                    event_id=event_id,
+                    case_id=case_id,
+                    event_type="finding",
+                    timestamp=ts,
+                    timestamp_type="finding_time",
+                    source_tool=layer,
+                    artifact_id=getattr(f, "source_artifact_id", None),
+                    correlation_id=corr_ref,
+                    host=host,
+                    summary=f"[{sev}] {fact}",
+                    details={
+                        "finding_id": finding_id,
+                        "confidence": getattr(f, "confidence", 1.0),
+                        "severity": getattr(f, "severity", "medium"),
+                        "mitre_mapping": getattr(f, "mitre_mapping", None),
+                        "finding_fingerprint": getattr(f, "finding_fingerprint", None)
                     }
                 )
                 events.append(evt)

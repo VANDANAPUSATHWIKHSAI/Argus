@@ -175,17 +175,18 @@ def route_fcr(
             )
             continue
 
-        art_type = artifact.artifact_type
+        art_type = getattr(artifact, "artifact_type", None) or ("extracted_ioc" if hasattr(artifact, "ioc_type") else "extracted_entity")
+        raw_fields = getattr(artifact, "raw_fields", {}) or {}
         
         # Dynamic routing for derived extracted observables
         if art_type == "extracted_ioc":
-            ioc_type = (artifact.raw_fields.get("ioc_type") or "").lower()
+            ioc_type = (getattr(artifact, "ioc_type", None) or raw_fields.get("ioc_type") or "").lower()
             if ioc_type in ("ipv4", "ipv6", "domain", "url"):
                 target_engines.add("network")
             else:
                 target_engines.add("endpoint")
         elif art_type == "extracted_entity":
-            entity_type = (artifact.raw_fields.get("entity_type") or "").lower()
+            entity_type = (getattr(artifact, "entity_type", None) or raw_fields.get("entity_type") or "").lower()
             if entity_type in ("command-line", "indicator"):
                 target_engines.add("log")
             else:

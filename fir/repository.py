@@ -18,13 +18,24 @@ class FIRRepository:
     """
     def __init__(self):
         self.findings: Dict[str, FIRFinding] = {}
+        self._fingerprints: Dict[str, Dict[str, str]] = {}  # case_id -> fingerprint -> finding_id
         self.pii_redactor = PIIRedactor()
         self.injection_gate = InjectionGate()
 
     def insert(self, finding: FIRFinding) -> FIRFinding:
         """
-        Inserts a finding, performing write-time PII redaction and prompt injection validation.
+        Inserts a finding, performing write-time PII redaction and prompt injection validation with fingerprint deduplication.
         """
+        case_id = finding.case_id
+        fp = finding.finding_fingerprint
+
+        if case_id not in self._fingerprints:
+            self._fingerprints[case_id] = {}
+
+        if fp and fp in self._fingerprints[case_id]:
+            existing_id = self._fingerprints[case_id][fp]
+            finding.finding_id = existing_id
+
         # 1. Write-time PII Redaction (Unaltered fact stays untouched)
         redacted_text, redactor_ver = self.pii_redactor.redact(finding.fact)
         finding.sanitized_fact = redacted_text
@@ -37,6 +48,8 @@ class FIRRepository:
 
         # 3. Store in repository
         self.findings[finding.finding_id] = finding
+        if fp:
+            self._fingerprints[case_id][fp] = finding.finding_id
         logger.info(
             "Inserted FIRFinding %s (Sanitized: %s, Injection Flagged: %s)",
             finding.finding_id, bool(finding.sanitized_fact), finding.injection_flagged

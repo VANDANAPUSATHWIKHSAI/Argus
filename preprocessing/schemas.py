@@ -248,6 +248,8 @@ class ExtractedEntity(BaseModel):
     
     # Forensic Provenance Extension Fields
     case_id:            Optional[str] = ""     # FK -> CaseSession.case_id
+    host_id:            Optional[str] = None   # Host identifier
+    timestamp:          Optional[datetime] = None # Optional event timestamp
     byte_offset:        Optional[int] = None   # byte offset in original stream
     start_offset:       Optional[int] = None   # start offset
     end_offset:         Optional[int] = None   # end offset
@@ -255,5 +257,11 @@ class ExtractedEntity(BaseModel):
     line_number:        Optional[int] = None   # line number if available from parser
     source_tool:        Optional[str] = None   # source tool
     original_value:     Optional[str] = None   # raw un-normalized match
+    raw_fields:         dict = Field(default_factory=dict)
+    normalized_fields:  NormalizedFields = Field(default_factory=NormalizedFields)
+
+    @property
+    def artifact_type(self) -> str:
+        return "extracted_entity"
 
 

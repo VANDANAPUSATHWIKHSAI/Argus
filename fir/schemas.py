@@ -39,6 +39,8 @@ class FIRFinding(BaseModel):
     timestamp: datetime
     evidence_reference: list[str]  # links back to FCR / raw artifact(s)
     layer: str               # which analysis engine produced this
+    source_artifact_id: Optional[str] = None
+    finding_fingerprint: Optional[str] = None
 
     @field_validator("evidence_reference", mode="before")
     @classmethod

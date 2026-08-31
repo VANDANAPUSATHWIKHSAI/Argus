@@ -26,10 +26,12 @@ class UnifiedEvidenceStore:
     def __init__(self):
         # In-memory store fallback: dict[case_id, dict[finding_id, Finding]]
         self._memory_store: Dict[str, Dict[str, Finding]] = {}
+        # Fingerprint index for semantic deduplication: dict[case_id, dict[fingerprint, finding_id]]
+        self._fingerprints: Dict[str, Dict[str, str]] = {}
 
     def write_finding(self, finding: Union[Finding, dict]) -> None:
         """
-        Persist a single Finding (or finding dict) to the store.
+        Persist a single Finding (or finding dict) to the store with fingerprint deduplication.
         """
         if isinstance(finding, dict):
             finding_obj = Finding(**finding)
@@ -37,9 +39,21 @@ class UnifiedEvidenceStore:
             finding_obj = finding
 
         case_id = finding_obj.case_id
+        fp = finding_obj.finding_fingerprint
+
         if case_id not in self._memory_store:
             self._memory_store[case_id] = {}
-        self._memory_store[case_id][finding_obj.finding_id] = finding_obj
+            self._fingerprints[case_id] = {}
+
+        # Semantic Deduplication: Check if fingerprint already exists for this case
+        if fp in self._fingerprints[case_id]:
+            existing_id = self._fingerprints[case_id][fp]
+            # Update finding preserving the original finding_id
+            finding_obj.finding_id = existing_id
+            self._memory_store[case_id][existing_id] = finding_obj
+        else:
+            self._memory_store[case_id][finding_obj.finding_id] = finding_obj
+            self._fingerprints[case_id][fp] = finding_obj.finding_id
 
         # Attempt Postgres write if available
         try:

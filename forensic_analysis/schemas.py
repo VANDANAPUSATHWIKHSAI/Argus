@@ -17,6 +17,8 @@ from fir.schemas import FIRFinding, ReviewStatus
 
 logger = logging.getLogger(__name__)
 
+import hashlib
+
 VALID_SEVERITIES = {"informational", "low", "medium", "high", "critical"}
 
 
@@ -39,6 +41,25 @@ class Finding(BaseModel):
     layer:                        str
     contributing_correlation_ids: List[str]          = Field(default_factory=list)
     metadata:                     dict[str, Any]     = Field(default_factory=dict)
+
+    @property
+    def finding_fingerprint(self) -> str:
+        """
+        Deterministic canonical fingerprint for semantic deduplication and SQL idempotency.
+        Formula: SHA-256 hash of tenant_id + case_id + layer + normalized_fact + sorted_unique_sources.
+        Excludes timestamps, finding_id, mutable metadata, or random values.
+        """
+        norm_fact = self.fact.strip().lower()
+        sources = set(self.contributing_correlation_ids or [])
+        if self.evidence_reference:
+            sources.add(self.evidence_reference)
+        if self.source_artifact_id:
+            sources.add(self.source_artifact_id)
+
+        sorted_sources = "|".join(sorted(sources))
+        seed = f"{self.tenant_id}:{self.case_id}:{self.layer}:{norm_fact}:{sorted_sources}"
+        digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
+        return f"FFP-{digest[:16]}"
 
     @field_validator("case_id")
     @classmethod
@@ -120,5 +141,7 @@ def finding_to_fir(finding: Finding, tenant_id: Optional[str] = None) -> FIRFind
         timestamp=finding.timestamp,
         evidence_reference=ev_refs,
         layer=finding.layer,
+        source_artifact_id=finding.source_artifact_id,
+        finding_fingerprint=finding.finding_fingerprint,
         review_status=ReviewStatus.PENDING_REVIEW,
     )

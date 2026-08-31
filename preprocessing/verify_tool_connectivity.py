@@ -49,7 +49,7 @@ def main():
     elif rc != 0:
         hayabusa_direct = f"FOUND (exit code {rc})"
         
-    s_rc, s_out, s_err, s_exc = run_cmd("hayabusa", shell=True)
+    s_rc, s_out, s_err, s_exc = run_cmd(["hayabusa", "--version"])
     hayabusa_shell = "yes" if s_exc is None and (s_rc == 0 or "Yamato Security" in (s_out + s_err)) else "no"
     
     parser_evtx = EvtxParser()
@@ -89,7 +89,7 @@ def main():
     elif rc != 0:
         zeek_direct = f"FOUND BUT ERRORED (exit code {rc})"
         
-    s_rc, s_out, s_err, s_exc = run_cmd("zeek --version", shell=True)
+    s_rc, s_out, s_err, s_exc = run_cmd(["zeek", "--version"])
     zeek_shell = "yes" if s_exc is None and ("zeek version" in (s_out + s_err) or "problem with trace file" in (s_out + s_err)) else "no"
     
     parser_pcap = PcapParser()
@@ -128,7 +128,7 @@ def main():
     elif rc != 0:
         suricata_direct = f"FOUND BUT ERRORED (exit code {rc})"
         
-    s_rc, s_out, s_err, s_exc = run_cmd("suricata --version", shell=True)
+    s_rc, s_out, s_err, s_exc = run_cmd(["suricata", "--version"])
     suricata_shell = "yes" if s_exc is None and ("Suricata version" in (s_out + s_err) or "USAGE: suricata" in (s_out + s_err)) else "no"
     
     try:
@@ -166,7 +166,7 @@ def main():
     elif rc != 0:
         vol_direct = f"FOUND BUT ERRORED (exit code {rc})"
         
-    s_rc, s_out, s_err, s_exc = run_cmd("vol --help", shell=True)
+    s_rc, s_out, s_err, s_exc = run_cmd(["vol", "--help"])
     vol_shell = "yes" if s_exc is None and s_rc == 0 else "no"
     
     parser_mem = MemoryParser()
@@ -206,7 +206,7 @@ def main():
     elif rc != 0:
         perl_direct = f"FOUND BUT ERRORED (exit code {rc})"
         
-    s_rc, s_out, s_err, s_exc = run_cmd("perl -v", shell=True)
+    s_rc, s_out, s_err, s_exc = run_cmd(["perl", "-v"])
     perl_shell = "yes" if s_exc is None and s_rc == 0 else "no"
     
     perl_parser = "N/A"
@@ -236,7 +236,7 @@ def main():
     elif rc != 0:
         rip_direct = f"FOUND BUT ERRORED (exit code {rc})"
         
-    s_rc, s_out, s_err, s_exc = run_cmd("rip.pl -h", shell=True)
+    s_rc, s_out, s_err, s_exc = run_cmd(["rip.pl", "-h"])
     rip_shell = "yes" if s_exc is None and s_rc == 0 else "no"
     
     parser_reg = RegistryParser()
@@ -291,7 +291,7 @@ def main():
         hindsight_direct = "NOT FOUND (FileNotFoundError)"
         rc, stdout, stderr, exc = None, "", "", FileNotFoundError("hindsight.py not found on PATH")
 
-    s_rc, s_out, s_err, s_exc = run_cmd("hindsight.py --help", shell=True)
+    s_rc, s_out, s_err, s_exc = run_cmd([sys.executable, hindsight_script, "--help"] if hindsight_script else ["hindsight.py", "--help"])
     hindsight_shell = "yes" if s_exc is None and (s_rc == 0 or "hindsight.py" in (s_out + s_err)) else "no"
 
     parser_browser = BrowserParser()
@@ -338,7 +338,7 @@ def main():
         fls_bin = None
         rc, stdout, stderr, exc = None, "", "", e
 
-    s_rc, s_out, s_err, s_exc = run_cmd("fls -V", shell=True)
+    s_rc, s_out, s_err, s_exc = run_cmd([fls_bin, "-V"] if fls_bin else ["fls", "-V"])
     tsk_shell = "yes" if s_exc is None and ("Sleuth Kit" in (s_out + s_err) or s_rc == 0) else "no"
 
     try:

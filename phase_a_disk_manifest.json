@@ -1,0 +1,91 @@
+{
+  "dataset": "nps-2009-ntfs1",
+  "local_directory": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk",
+  "total_files": 7,
+  "files": [
+    {
+      "filename": "narrative.txt",
+      "absolute_path": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\narrative.txt",
+      "extension": ".txt",
+      "size_bytes": 665,
+      "modified_timestamp": "2026-08-31T13:46:33.767283+00:00",
+      "sha256": "97c52467f98aff6002595d21d46534cf1205ed7b497b69014cb5973695458241",
+      "detected_type": "text/plain",
+      "local_hash": "97c52467f98aff6002595d21d46534cf1205ed7b497b69014cb5973695458241",
+      "published_hash": "NOT_AVAILABLE",
+      "verification_result": "NOT_AVAILABLE"
+    },
+    {
+      "filename": "ntfs1-gen0.aff",
+      "absolute_path": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen0.aff",
+      "extension": ".aff",
+      "size_bytes": 277228,
+      "modified_timestamp": "2026-08-31T13:43:52.672723+00:00",
+      "sha256": "bf0291a0ee8403962f2de8ea93d908088e4265a02438dfb5b1c85efc07037b76",
+      "detected_type": "application/x-aff",
+      "local_hash": "bf0291a0ee8403962f2de8ea93d908088e4265a02438dfb5b1c85efc07037b76",
+      "published_hash": "NOT_AVAILABLE",
+      "verification_result": "NOT_AVAILABLE"
+    },
+    {
+      "filename": "ntfs1-gen0.E01",
+      "absolute_path": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen0.E01",
+      "extension": ".E01",
+      "size_bytes": 1089252,
+      "modified_timestamp": "2026-08-31T13:44:03.716029+00:00",
+      "sha256": "96e525f53d50f986461151f8e9c07588633215477a6b8a3f744b2eeebe512460",
+      "detected_type": "application/x-encase",
+      "local_hash": "96e525f53d50f986461151f8e9c07588633215477a6b8a3f744b2eeebe512460",
+      "published_hash": "NOT_AVAILABLE",
+      "verification_result": "NOT_AVAILABLE"
+    },
+    {
+      "filename": "ntfs1-gen1.aff",
+      "absolute_path": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen1.aff",
+      "extension": ".aff",
+      "size_bytes": 8481452,
+      "modified_timestamp": "2026-08-31T13:44:16.757655+00:00",
+      "sha256": "33528f2d44fed0dac1d96b90b444cf9309207413948bf4c4f685b0332da86cc5",
+      "detected_type": "application/x-aff",
+      "local_hash": "33528f2d44fed0dac1d96b90b444cf9309207413948bf4c4f685b0332da86cc5",
+      "published_hash": "NOT_AVAILABLE",
+      "verification_result": "NOT_AVAILABLE"
+    },
+    {
+      "filename": "ntfs1-gen1.E01",
+      "absolute_path": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen1.E01",
+      "extension": ".E01",
+      "size_bytes": 9332369,
+      "modified_timestamp": "2026-08-31T13:44:30.159598+00:00",
+      "sha256": "ed26b63cb37350fba5aaf18f8c871515ff787db98bfa1c5d92b179185168dd6e",
+      "detected_type": "application/x-encase",
+      "local_hash": "ed26b63cb37350fba5aaf18f8c871515ff787db98bfa1c5d92b179185168dd6e",
+      "published_hash": "NOT_AVAILABLE",
+      "verification_result": "NOT_AVAILABLE"
+    },
+    {
+      "filename": "ntfs1-gen2.E01",
+      "absolute_path": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen2.E01",
+      "extension": ".E01",
+      "size_bytes": 36083007,
+      "modified_timestamp": "2026-08-31T13:44:52.078402+00:00",
+      "sha256": "2badead91bef56c80155d7731671ad1d93c08f32cd4ce17566fdf02d5769feea",
+      "detected_type": "application/x-encase",
+      "local_hash": "2badead91bef56c80155d7731671ad1d93c08f32cd4ce17566fdf02d5769feea",
+      "published_hash": "NOT_AVAILABLE",
+      "verification_result": "NOT_AVAILABLE"
+    },
+    {
+      "filename": "ntfs1-gen2.xml",
+      "absolute_path": "C:\\Users\\Sudeep\\Downloads\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen2.xml",
+      "extension": ".xml",
+      "size_bytes": 2341489,
+      "modified_timestamp": "2026-08-31T13:46:43.220582+00:00",
+      "sha256": "efe48e07ed327d3b80f6b208c6dace55e17a0c23636d4cdf831b17a260daaab8",
+      "detected_type": "text/xml",
+      "local_hash": "efe48e07ed327d3b80f6b208c6dace55e17a0c23636d4cdf831b17a260daaab8",
+      "published_hash": "NOT_AVAILABLE",
+      "verification_result": "NOT_AVAILABLE"
+    }
+  ]
+}

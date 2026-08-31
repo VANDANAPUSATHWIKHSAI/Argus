@@ -296,9 +296,22 @@ def run_clamav_scan(file_path: str) -> list[str]:
     if pyclamd is None:
         flags.append("clamav_scan_error:pyclamd_not_installed")
         return flags
+    host = os.getenv("CLAMAV_HOST", "localhost")
+    port = int(os.getenv("CLAMAV_PORT", "3310"))
+    
+    # Fast socket pre-check to avoid blocking on offline ClamAV daemon
+    import socket
     try:
-        host = os.getenv("CLAMAV_HOST", "localhost")
-        port = int(os.getenv("CLAMAV_PORT", "3310"))
+        with socket.create_connection((host, port), timeout=0.1):
+            is_open = True
+    except Exception:
+        is_open = False
+
+    if not is_open:
+        flags.append("clamav_scan_error:ConnectionRefused:ClamAV_daemon_offline")
+        return flags
+
+    try:
         cd = pyclamd.ClamdNetworkSocket(host=host, port=port)
         if not cd.ping():
             flags.append("clamav_ping_failed")

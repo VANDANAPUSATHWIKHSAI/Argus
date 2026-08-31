@@ -55,13 +55,15 @@ def _get_encryption_key() -> bytes:
 
 # ── Chunked AES-256-GCM Helpers ───────────────────────────────────────────────
 
-def encrypt_file_gcm(input_path: str, output_path: str, key_bytes: bytes) -> None:
+def encrypt_file_gcm(input_path: str, output_path: str, key_bytes: bytes) -> str:
     """
-    Encrypts input_path into output_path in fixed-size chunks using AES-256-GCM.
+    Encrypts input_path into output_path in fixed-size chunks using AES-256-GCM,
+    simultaneously computing and returning the SHA-256 hexdigest in a single pass.
     Writes: [4-byte salt] + [Chunk 0] + [Chunk 1] ...
     Each chunk block: [4-byte ciphertext len] + [16-byte tag] + [ciphertext]
     """
     salt = os.urandom(4)
+    hasher = hashlib.sha256()
     with open(input_path, "rb") as in_f, open(output_path, "wb") as out_f:
         # Write 4-byte salt first
         out_f.write(salt)
@@ -72,6 +74,7 @@ def encrypt_file_gcm(input_path: str, output_path: str, key_bytes: bytes) -> Non
             if not chunk:
                 break
             
+            hasher.update(chunk)
             # Derive 12-byte nonce (4-byte salt + 8-byte big-endian chunk counter)
             nonce = salt + chunk_idx.to_bytes(8, byteorder="big")
             
@@ -89,6 +92,8 @@ def encrypt_file_gcm(input_path: str, output_path: str, key_bytes: bytes) -> Non
             out_f.write(tag)
             out_f.write(ciphertext)
             chunk_idx += 1
+            
+    return hasher.hexdigest()
 
 
 def verify_gcm_encrypted_file(enc_path: str, expected_sha256: str, key_bytes: bytes) -> bool:
@@ -165,12 +170,10 @@ def _rfc3161_timestamp(sha256_hex: str) -> str | None:
 
 def hash_and_encrypt(evidence: Evidence) -> Evidence:
     """
-    1. SHA-256 hash the original file using streaming (chunked update loop).
-    2. Extract basic size and format-specific metadata BEFORE encryption.
-    3. Encrypt into a SEPARATE file representation using chunked AES-256-GCM.
-       The original intake file is NEVER overwritten or replaced.
-    4. Verify encrypted representation can be decrypted back to matching SHA-256.
-    5. Set status = HASHED and append custody events.
+    1. Calculate SHA-256 and encrypt into a SEPARATE AES-256-GCM file representation in a single pass.
+    2. Extract basic size and format-specific metadata.
+    3. Verify encrypted representation can be decrypted back to matching SHA-256.
+    4. Set status = HASHED and append custody events.
     """
     raw_path = evidence.raw_file_path or evidence.file_path
     if not os.path.exists(raw_path):
@@ -179,19 +182,6 @@ def hash_and_encrypt(evidence: Evidence) -> Evidence:
 
     key_bytes = _get_encryption_key()
 
-    # ── 1. Calculate SHA-256 & extract metadata from original bytes ──
-    sha256_hash = hashlib.sha256()
-    with open(raw_path, "rb") as f:
-        while True:
-            chunk = f.read(CHUNK_SIZE)
-            if not chunk:
-                break
-            sha256_hash.update(chunk)
-            
-    sha256 = sha256_hash.hexdigest()
-    evidence.sha256_hash = sha256
-    evidence.original_file_path = raw_path
-
     ext = os.path.splitext(evidence.filename)[1].lower()
     
     # Import Stage 4's metadata parsing logic to perform it on raw file
@@ -199,18 +189,20 @@ def hash_and_encrypt(evidence: Evidence) -> Evidence:
     format_specific = _format_metadata(raw_path, ext)
     original_size = os.path.getsize(raw_path)
 
-    # Populate evidence.metadata dictionary to pass forward
-    evidence.metadata = {
-        "size_bytes": original_size,
-        "format_specific": format_specific
-    }
-
-    # ── 2. Encrypt into a separate file path ────────────────────────
+    # ── 1 & 2. Single-pass SHA-256 hashing and AES-256-GCM encryption ──────
     enc_path = f"{raw_path}.enc"
 
     try:
-        # Encrypt original file to separate enc_path
-        encrypt_file_gcm(raw_path, enc_path, key_bytes)
+        # Encrypt original file to separate enc_path while computing SHA-256
+        sha256 = encrypt_file_gcm(raw_path, enc_path, key_bytes)
+        evidence.sha256_hash = sha256
+        evidence.original_file_path = raw_path
+
+        # Populate evidence.metadata dictionary to pass forward
+        evidence.metadata = {
+            "size_bytes": original_size,
+            "format_specific": format_specific
+        }
         
         # Verify the encrypted file can be successfully decrypted and verified
         if not verify_gcm_encrypted_file(enc_path, sha256, key_bytes):

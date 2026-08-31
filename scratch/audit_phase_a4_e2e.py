@@ -11,6 +11,7 @@ Runs the complete Phase A.4 pipeline against Digital Corpora nps-2009-ntfs1:
 
 import sys
 import os
+import time
 import hashlib
 from pathlib import Path
 from datetime import datetime, timezone
@@ -46,6 +47,7 @@ def run_phase_a4_e2e():
 
     # 2. Parsing Stage
     print("\n[2] Executing Stage-1/2 Parsers...")
+    t_parse_start = time.perf_counter()
     parser = FilesystemParser()
     parsed_artifacts = []
     case_id = "CASE-NPS-2009-NTFS1"
@@ -65,22 +67,33 @@ def run_phase_a4_e2e():
             parsed_artifacts.extend(res)
             print(f"  {f.name:<20} : Parsed {len(res)} records")
 
-    print(f"\n  Total Parsed Artifacts: {len(parsed_artifacts)}")
+    t_parse_end = time.perf_counter()
+    print(f"  Total Parsed Artifacts: {len(parsed_artifacts)} (in {t_parse_end - t_parse_start:.4f}s)")
 
     # 3. Artifact Extractor Stage
     print("\n[3] Executing Stage-2.5 Artifact Extractor...")
+    t_ext_start = time.perf_counter()
     extractor = ArtifactExtractor()
     derived_observables = extractor.extract(parsed_artifacts, evidence_id="EV-REAL-NPS")
     all_artifacts = parsed_artifacts + list(derived_observables)
+    t_ext_end = time.perf_counter()
+    print(f"  First Instance Extractor Latency (Init + Hash Check + Exec): {t_ext_end - t_ext_start:.4f}s")
+    
+    # Second Instance Test to demonstrate Singleton Cache Speedup
+    t_ext2_start = time.perf_counter()
+    extractor2 = ArtifactExtractor()
+    _ = extractor2.extract(parsed_artifacts, evidence_id="EV-REAL-NPS")
+    t_ext2_end = time.perf_counter()
+    print(f"  Second Instance Extractor Latency (Cached Model Reuse)    : {t_ext2_end - t_ext2_start:.4f}s")
+    
     print(f"  Derived Observables Extracted: {len(derived_observables)}")
     print(f"  Total Artifact Store Count   : {len(all_artifacts)}")
 
     # 4. FCR Engine Correlation Stage
     print("\n[4] Executing Stage-3 FCR Correlation Engine...")
+    t_fcr_start = time.perf_counter()
     fcr_engine = FCREngine()
-    fcr_records = fcr_engine.correlate(all_artifacts)
-    print(f"  FCR Correlation Records Generated: {len(fcr_records)}")
-
+    
     # Add synthetic threat artifacts to test Finding generation & FIR lifecycle
     synth_proc = Artifact(
         case_id=case_id,
@@ -102,15 +115,14 @@ def run_phase_a4_e2e():
     )
     all_artifacts.extend([synth_proc, synth_net])
     artifacts_map = {art.artifact_id: art for art in all_artifacts}
-    artifacts_map[synth_proc.artifact_id] = synth_proc
-    artifacts_map[synth_net.artifact_id] = synth_net
 
-    # Re-run FCR Engine with threat artifacts
     fcr_records = fcr_engine.correlate(all_artifacts)
-    print(f"  FCR Correlation Records Generated: {len(fcr_records)}")
+    t_fcr_end = time.perf_counter()
+    print(f"  FCR Correlation Records Generated: {len(fcr_records)} (in {t_fcr_end - t_fcr_start:.4f}s)")
 
     # 5. Downstream Analysis & Finding Generation Stage
     print("\n[5] Executing Stage-4 Batch Orchestrator & Analysis Engines...")
+    t_ana_start = time.perf_counter()
     fir_repo = FIRRepository()
     service = AnalystFindingService(fir_repo=fir_repo)
 
@@ -120,10 +132,12 @@ def run_phase_a4_e2e():
         artifacts_by_id=artifacts_map,
         fir_repo=fir_repo
     )
-    print(f"  Total Findings Generated: {len(findings)}")
+    t_ana_end = time.perf_counter()
+    print(f"  Total Findings Generated: {len(findings)} (in {t_ana_end - t_ana_start:.4f}s)")
 
     # 6. Analyst Query Service & Deduplication
     print("\n[6] Testing AnalystFindingService Query & Timeline Integration...")
+    t_tl_start = time.perf_counter()
     fir_findings = service.list_findings(case_id=case_id, tenant_id="default")
     print(f"  FIR Findings in Repository: {len(fir_findings)}")
 
@@ -133,12 +147,25 @@ def run_phase_a4_e2e():
 
     # Build integrated timeline
     timeline = service.build_case_timeline(case_id=case_id, artifacts=all_artifacts, correlation_records=fcr_records, tenant_id="default")
-    print(f"  Unified Timeline Events Count: {len(timeline)}")
+    t_tl_end = time.perf_counter()
+    print(f"  Unified Timeline Events Count: {len(timeline)} (in {t_tl_end - t_tl_start:.4f}s)")
 
     event_types = {}
     for evt in timeline:
         event_types[evt.event_type] = event_types.get(evt.event_type, 0) + 1
     print(f"  Timeline Event Breakdown      : {event_types}")
+
+    print("\n==================================================================")
+    print("TIMING SUMMARY BREAKDOWN")
+    print("==================================================================")
+    print(f"  Parser Stage Latency          : {t_parse_end - t_parse_start:.4f}s")
+    print(f"  Stage 2.5 Extractor Latency   : {t_ext_end - t_ext_start:.4f}s")
+    print(f"  Stage 3 FCR Engine Latency    : {t_fcr_end - t_fcr_start:.4f}s")
+    print(f"  Stage 4 Analysis Latency      : {t_ana_end - t_ana_start:.4f}s")
+    print(f"  Stage 4 Timeline/Query Latency: {t_tl_end - t_tl_start:.4f}s")
+    total_pipeline = (t_parse_end - t_parse_start) + (t_ext_end - t_ext_start) + (t_fcr_end - t_fcr_start) + (t_ana_end - t_ana_start) + (t_tl_end - t_tl_start)
+    print(f"  TOTAL E2E PIPELINE RUNTIME    : {total_pipeline:.4f}s")
+    print("==================================================================")
 
     print("\n==================================================================")
     print("PHASE A.4 REAL EVIDENCE VERIFICATION COMPLETE")

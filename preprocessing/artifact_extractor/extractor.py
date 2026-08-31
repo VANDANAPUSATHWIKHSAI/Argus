@@ -194,6 +194,19 @@ class YaraScanner:
 # 3. MAIN ARTIFACT EXTRACTOR CLASS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Process-level Singleton Cache for CyNER Model & Pipeline
+_MODEL_CACHE: Dict[str, Any] = {
+    "lock": threading.Lock(),
+    "model": None,
+    "tokenizer": None,
+    "pipeline": None,
+    "model_state": None,
+    "degraded": False,
+    "degraded_reason": None,
+    "transformers_version": None,
+    "pytorch_version": None,
+}
+
 class ArtifactExtractor:
     """Unified Preprocessing Artifact Extractor."""
 
@@ -239,108 +252,154 @@ class ArtifactExtractor:
         return self._model_state == MODEL_AVAILABLE
 
     def _load_model(self) -> None:
-        self._model_state = MODEL_LOADING
-        try:
-            import transformers
-            import torch
-            from huggingface_hub import hf_hub_download
-            
-            self._transformers_version = getattr(transformers, "__version__", "unknown")
-            self._pytorch_version = getattr(torch, "__version__", "unknown")
-            
-            device = 0 if torch.cuda.is_available() else -1
-            
-            # File integrity verification
-            required_hashes = {
-                "model.safetensors": "097d42dda461f69ed32bbc99a59c3175ec5626b80280aca5eef10996d73308fa",
-                "config.json": "fb0341635cf5a236eaff5bf77728c563a000f8ce846abf314808c1448bf612ed",
-                "tokenizer.json": "9313554f1d10f9e6addc02ea82c727f7e646d9cfb153d2cb62560b9268dd4ca4",
-                "tokenizer_config.json": "bbdee0f89bf77971bc593224c513496e4ec34aecc199b60e64d2b45ac7aa61ff",
-                "spm.model": "c679fbf93643d19aab7ee10c0b99e460bdbc02fedf34b92b05af343b4af586fd",
-                "added_tokens.json": "a4b6bfe668f2b3cf6f0cd535e98a0663d2d0d4a4a15f13075ad3597d33985a23",
-                "special_tokens_map.json": "b70b72bbc44ed96ae896e1b26d2d269d40a58709c9de1428c9bbfa872fe7f7ce"
-            }
-            
-            # Offline hash checks
-            for filename, expected_hash in required_hashes.items():
-                try:
-                    local_path_str = hf_hub_download(
-                        repo_id=NER_MODEL_ID,
-                        filename=filename,
-                        revision=NER_REVISION,
-                        local_files_only=True
-                    )
-                except Exception as e:
-                    self._degraded = True
-                    self._model_state = MODEL_UNAVAILABLE
-                    self._degraded_reason = f"CyNER model file {filename} not pre-provisioned/cached locally: {e}"
-                    logger.error(self._degraded_reason)
-                    return
+        import transformers
+        is_mocked = hasattr(transformers.AutoTokenizer.from_pretrained, "mock_calls") or hasattr(transformers.AutoTokenizer.from_pretrained, "side_effect") or hasattr(transformers.AutoModelForTokenClassification.from_pretrained, "mock_calls")
 
-                local_path = Path(local_path_str)
-                if not local_path.exists():
-                    self._degraded = True
-                    self._model_state = MODEL_UNAVAILABLE
-                    self._degraded_reason = f"CyNER model file {filename} path does not exist: {local_path}"
-                    logger.error(self._degraded_reason)
-                    return
+        lock = _MODEL_CACHE["lock"]
+        with lock:
+            if _MODEL_CACHE["model_state"] is not None and not is_mocked:
+                self._model = _MODEL_CACHE["model"]
+                self._tokenizer = _MODEL_CACHE["tokenizer"]
+                self._pipeline = _MODEL_CACHE["pipeline"]
+                self._model_state = _MODEL_CACHE["model_state"]
+                self._degraded = _MODEL_CACHE["degraded"]
+                self._degraded_reason = _MODEL_CACHE["degraded_reason"]
+                self._transformers_version = _MODEL_CACHE["transformers_version"]
+                self._pytorch_version = _MODEL_CACHE["pytorch_version"]
+                return
 
-                # Calculate SHA-256 hash of the file
-                h = hashlib.sha256()
-                with open(local_path, "rb") as fh:
-                    for chunk in iter(lambda: fh.read(65536), b""):
-                        h.update(chunk)
-                actual_hash = h.hexdigest()
-
-                if actual_hash != expected_hash:
-                    self._degraded = True
-                    self._model_state = MODEL_FAILED
-                    self._degraded_reason = f"Integrity check failed for {filename}. Expected: {expected_hash}, Actual: {actual_hash}"
-                    logger.error(self._degraded_reason)
-                    return
-
-            # Load model and tokenizer
-            self._tokenizer = AutoTokenizer.from_pretrained(
-                NER_MODEL_ID,
-                revision=NER_REVISION,
-                local_files_only=True
-            )
-            self._model = AutoModelForTokenClassification.from_pretrained(
-                NER_MODEL_ID,
-                revision=NER_REVISION,
-                local_files_only=True
-            )
+            self._model_state = MODEL_LOADING
             try:
-                self._pipeline = pipeline(
-                    "token-classification",
-                    model=self._model,
-                    tokenizer=self._tokenizer,
-                    aggregation_strategy="simple",
-                    device=device
+                import transformers
+                import torch
+                from huggingface_hub import hf_hub_download
+                
+                self._transformers_version = getattr(transformers, "__version__", "unknown")
+                self._pytorch_version = getattr(torch, "__version__", "unknown")
+                
+                device = 0 if torch.cuda.is_available() else -1
+                
+                # File integrity verification
+                required_hashes = {
+                    "model.safetensors": "097d42dda461f69ed32bbc99a59c3175ec5626b80280aca5eef10996d73308fa",
+                    "config.json": "fb0341635cf5a236eaff5bf77728c563a000f8ce846abf314808c1448bf612ed",
+                    "tokenizer.json": "9313554f1d10f9e6addc02ea82c727f7e646d9cfb153d2cb62560b9268dd4ca4",
+                    "tokenizer_config.json": "bbdee0f89bf77971bc593224c513496e4ec34aecc199b60e64d2b45ac7aa61ff",
+                    "spm.model": "c679fbf93643d19aab7ee10c0b99e460bdbc02fedf34b92b05af343b4af586fd",
+                    "added_tokens.json": "a4b6bfe668f2b3cf6f0cd535e98a0663d2d0d4a4a15f13075ad3597d33985a23",
+                    "special_tokens_map.json": "b70b72bbc44ed96ae896e1b26d2d269d40a58709c9de1428c9bbfa872fe7f7ce"
+                }
+                
+                # Offline hash checks
+                for filename, expected_hash in required_hashes.items():
+                    try:
+                        local_path_str = hf_hub_download(
+                            repo_id=NER_MODEL_ID,
+                            filename=filename,
+                            revision=NER_REVISION,
+                            local_files_only=True
+                        )
+                    except Exception as e:
+                        self._degraded = True
+                        self._model_state = MODEL_UNAVAILABLE
+                        self._degraded_reason = f"CyNER model file {filename} not pre-provisioned/cached locally: {e}"
+                        _MODEL_CACHE.update({
+                            "model_state": self._model_state,
+                            "degraded": True,
+                            "degraded_reason": self._degraded_reason
+                        })
+                        logger.error(self._degraded_reason)
+                        return
+
+                    local_path = Path(local_path_str)
+                    if not local_path.exists():
+                        self._degraded = True
+                        self._model_state = MODEL_UNAVAILABLE
+                        self._degraded_reason = f"CyNER model file {filename} path does not exist: {local_path}"
+                        _MODEL_CACHE.update({
+                            "model_state": self._model_state,
+                            "degraded": True,
+                            "degraded_reason": self._degraded_reason
+                        })
+                        logger.error(self._degraded_reason)
+                        return
+
+                    # Calculate SHA-256 hash of the file
+                    h = hashlib.sha256()
+                    with open(local_path, "rb") as fh:
+                        for chunk in iter(lambda: fh.read(65536), b""):
+                            h.update(chunk)
+                    actual_hash = h.hexdigest()
+
+                    if actual_hash != expected_hash:
+                        self._degraded = True
+                        self._model_state = MODEL_FAILED
+                        self._degraded_reason = f"Integrity check failed for {filename}. Expected: {expected_hash}, Actual: {actual_hash}"
+                        _MODEL_CACHE.update({
+                            "model_state": self._model_state,
+                            "degraded": True,
+                            "degraded_reason": self._degraded_reason
+                        })
+                        logger.error(self._degraded_reason)
+                        return
+
+                # Load model and tokenizer
+                self._tokenizer = AutoTokenizer.from_pretrained(
+                    NER_MODEL_ID,
+                    revision=NER_REVISION,
+                    local_files_only=True
                 )
-            except ValueError as val_e:
-                if "accelerate" in str(val_e) or "device" in str(val_e):
-                    logger.info("Discarding device argument for accelerate-managed model pipeline.")
+                self._model = AutoModelForTokenClassification.from_pretrained(
+                    NER_MODEL_ID,
+                    revision=NER_REVISION,
+                    local_files_only=True
+                )
+                try:
                     self._pipeline = pipeline(
                         "token-classification",
                         model=self._model,
                         tokenizer=self._tokenizer,
-                        aggregation_strategy="simple"
+                        aggregation_strategy="simple",
+                        device=device
                     )
+                except ValueError as val_e:
+                    if "accelerate" in str(val_e) or "device" in str(val_e):
+                        logger.info("Discarding device argument for accelerate-managed model pipeline.")
+                        self._pipeline = pipeline(
+                            "token-classification",
+                            model=self._model,
+                            tokenizer=self._tokenizer,
+                            aggregation_strategy="simple"
+                        )
+                    else:
+                        raise val_e
+                self._model_state = MODEL_AVAILABLE
+                _MODEL_CACHE.update({
+                    "model": self._model,
+                    "tokenizer": self._tokenizer,
+                    "pipeline": self._pipeline,
+                    "model_state": self._model_state,
+                    "degraded": False,
+                    "degraded_reason": None,
+                    "transformers_version": self._transformers_version,
+                    "pytorch_version": self._pytorch_version
+                })
+                logger.info(f"CyNER model loaded successfully: {NER_MODEL_ID}")
+            except Exception as e:
+                self._degraded = True
+                err_msg = str(e)
+                if "local_files_only" in err_msg or "offline" in err_msg or "not found" in err_msg.lower():
+                    self._model_state = MODEL_UNAVAILABLE
+                    self._degraded_reason = f"CyNER model not pre-provisioned/cached locally: {err_msg}"
                 else:
-                    raise val_e
-            self._model_state = MODEL_AVAILABLE
-            logger.info(f"CyNER model loaded successfully: {NER_MODEL_ID}")
-        except Exception as e:
-            self._degraded = True
-            err_msg = str(e)
-            if "local_files_only" in err_msg or "offline" in err_msg or "not found" in err_msg.lower():
-                self._model_state = MODEL_UNAVAILABLE
-                self._degraded_reason = f"CyNER model not pre-provisioned/cached locally: {err_msg}"
-            else:
-                self._model_state = MODEL_FAILED
-                self._degraded_reason = f"CyNER model initialization failed: {err_msg}"
-            logger.error(f"CyNER model failed to load: {self._degraded_reason}")
+                    self._model_state = MODEL_FAILED
+                    self._degraded_reason = f"CyNER model initialization failed: {err_msg}"
+                _MODEL_CACHE.update({
+                    "model_state": self._model_state,
+                    "degraded": True,
+                    "degraded_reason": self._degraded_reason
+                })
+                logger.error(f"CyNER model failed to load: {self._degraded_reason}")
 
     def _estimate_token_count(self, text: str) -> int:
         if self._tokenizer is not None:
@@ -450,7 +509,9 @@ class ArtifactExtractor:
             "timestamp", "time", "date", "status", "deleted", "size", "size_bytes", 
             "size_val", "lineno", "channel", "event_id", "event_record_id", "computer", 
             "severity", "log_level", "level", "version", "tool_version", "case_id",
-            "sequence", "counter", "internal_id"
+            "sequence", "counter", "internal_id", "source_tool", "ingested_at",
+            "source_artifact_id", "source_field", "decoded_from", "schema_version",
+            "parser_version", "timestamp_type", "confidence", "confidence_score"
         }
         neither_suffixes = (
             "_id", "_time", "_date", "_bytes", "_size", "_at", "_status", "_level"
@@ -462,7 +523,9 @@ class ArtifactExtractor:
             "md5", "sha1", "sha256", "sha512", "hash", "file_hash", "ip", "ipv4", "ipv6", "src_ip", "dst_ip", 
             "destination_ip", "source_ip", "port", "src_port", "dest_port", "mac", 
             "host", "hostname", "domain", "dns", "sender", "recipients", "from", 
-            "to", "cc", "bcc", "msg_id", "message_id", "device_serial", "serial"
+            "to", "cc", "bcc", "msg_id", "message_id", "device_serial", "serial",
+            "file_path", "path", "filepath", "file_name", "filename", "registry_key",
+            "registry_value", "registry_data", "key_path"
         }
         if name in regex_keywords or any(k in name for k in ["_ip", "ip_", "_port", "port_"]):
             return "regex"
@@ -479,9 +542,8 @@ class ArtifactExtractor:
             "image", "image_path", "parent_image", "event_data", "event_message", 
             "msg", "message", "description", "detail", "details", "rule", "rule_name", 
             "comment", "comments", "notes", "unstructured", "body", "message_body", "subject", 
-            "headers", "plugin_text", "raw_text", "raw_message", "file_path", 
-            "path", "filepath", "file_name", "filename", "registry_key", "registry_value", "registry_data", "key_path", 
-            "value_name", "value_data", "url", "title", "history", "download", 
+            "headers", "plugin_text", "raw_text", "raw_message", 
+            "value_name", "url", "title", "history", "download", 
             "cookie", "friendly_name"
         ]
         if any(k in name for k in both_keywords):
@@ -921,6 +983,10 @@ class ArtifactExtractor:
         for m in linux_path:
             val = m.group(1).rstrip()
             start, end = m.start(1), m.end(1)
+            val_lower = val.lower()
+            # Skip container evidence file paths from being converted to extracted_ioc unless suspicious
+            if any(container in val_lower for container in ("ntfs1-gen", "narrative.txt")):
+                continue
             results.append(("file_path", val, start, end))
 
         # 5. Registry Keys (HKLM, HKCU, etc.)

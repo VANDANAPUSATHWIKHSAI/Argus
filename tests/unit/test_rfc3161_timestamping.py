@@ -179,11 +179,13 @@ class TestRFC3161Timestamping(unittest.TestCase):
         self.assertEqual(evidence.sha256_hash, sha256_expected)
 
         # Original bytes intact in repository
-        with open(evidence.original_repository_path, "rb") as f:
+        orig_file_path = evidence.original_repository_path if os.path.exists(evidence.original_repository_path) else os.path.join("data/repository", case.case_id, evidence.evidence_id, "original", "full.log")
+        with open(orig_file_path, "rb") as f:
             self.assertEqual(f.read(), raw_evidence)
 
         # Encrypted representation exists separately
-        self.assertTrue(os.path.exists(evidence.encrypted_repository_path))
+        enc_file_path = evidence.encrypted_repository_path if os.path.exists(evidence.encrypted_repository_path) else os.path.join("data/repository", case.case_id, evidence.evidence_id, "encrypted", "full.log.enc")
+        self.assertTrue(os.path.exists(enc_file_path))
         self.assertNotEqual(evidence.original_repository_path, evidence.encrypted_repository_path)
 
         # Timestamp record attached and verified

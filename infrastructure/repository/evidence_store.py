@@ -185,7 +185,7 @@ def store_evidence(evidence: Evidence, case: CaseSession) -> Evidence:
                 secure=settings.minio_secure
             )
             client.fput_object(
-                bucket_name=getattr(settings, "minio_bucket_original", "argus-evidence"),
+                bucket_name=getattr(settings, "minio_bucket_raw_evidence", "argus-raw-evidence"),
                 object_name=orig_minio_key,
                 file_path=raw_path,
                 content_type="application/octet-stream"

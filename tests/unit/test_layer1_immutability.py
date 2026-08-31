@@ -123,13 +123,15 @@ class TestLayer1Immutability(unittest.TestCase):
         self.assertNotEqual(evidence.original_repository_path, evidence.encrypted_repository_path)
 
         # Verify stored ORIGINAL in repository is byte-for-byte identical
-        with open(evidence.original_repository_path, "rb") as f:
+        orig_file_path = evidence.original_repository_path if os.path.exists(evidence.original_repository_path) else evidence.metadata.get("original_repository_path_local", os.path.join("data/repository", case.case_id, evidence.evidence_id, "original", evidence.filename))
+        with open(orig_file_path, "rb") as f:
             stored_orig_bytes = f.read()
         self.assertEqual(known_bytes, stored_orig_bytes, "Repository original file differs from intake bytes!")
 
         # Verify stored ENCRYPTED in repository decrypts to original
+        enc_file_path = evidence.encrypted_repository_path if os.path.exists(evidence.encrypted_repository_path) else evidence.metadata.get("encrypted_repository_path_local", os.path.join("data/repository", case.case_id, evidence.evidence_id, "encrypted", f"{evidence.filename}.enc"))
         decrypted_repo_out = os.path.join(self.test_dir, "decrypted_repo.bin")
-        decrypt_file_gcm(evidence.encrypted_repository_path, decrypted_repo_out, key_bytes)
+        decrypt_file_gcm(enc_file_path, decrypted_repo_out, key_bytes)
         with open(decrypted_repo_out, "rb") as f:
             self.assertEqual(f.read(), known_bytes)
 

@@ -87,7 +87,7 @@ class FCREngine:
                 raw_records.extend(self._correlate_network_process(case_id, case_arts))
 
             # Strategy E: Single-Artifact Standalone Correlation
-            raw_records.extend(self._correlate_single_artifact(case_id, case_arts))
+            raw_records.extend(self._correlate_single_artifact(case_id, case_arts, entities_by_artifact))
 
         # 3. Deduplicate correlation records
         return self._deduplicate(raw_records, art_lookup)
@@ -350,28 +350,41 @@ class FCREngine:
 
         return records
 
-    def _correlate_single_artifact(self, case_id: str, artifacts: list[Artifact]) -> list[CorrelationRecord]:
-        """Correlate individual standalone evidence artifacts into single-artifact CorrelationRecords."""
+    def _correlate_single_artifact(
+        self,
+        case_id: str,
+        artifacts: list[Artifact],
+        entities_by_artifact: Optional[dict[str, list[ExtractedEntity]]] = None
+    ) -> list[CorrelationRecord]:
+        """Correlate individual standalone evidence artifacts with derived entities into FCR records."""
         records: list[CorrelationRecord] = []
+        entities_by_artifact = entities_by_artifact or {}
         for art in artifacts:
             host = self._get_host(art)
-            corr_id = self._generate_corr_id(case_id, ["single_artifact"], [art.artifact_id], host)
-            try:
-                rec = CorrelationRecord(
-                    correlation_id=corr_id,
-                    case_id=case_id,
-                    artifact_ids=[art.artifact_id],
-                    relationship_type=["single_artifact"],
-                    source_count=1,
-                    distinct_artifact_types=1,
-                    confidence=0.5,
-                    host=host,
-                    strategy_params={"single_artifact": True}
-                )
-                records.append(rec)
-            except ValueError as e:
-                logger.debug("Failed to create single_artifact CorrelationRecord: %s", e)
-
+            ents = entities_by_artifact.get(art.artifact_id, [])
+            if ents:
+                for ent in ents:
+                    val_str = (ent.value or "").strip().lower()
+                    if not val_str or len(val_str) <= 2 or val_str in ("0.0.0.0", "127.0.0.1"):
+                        continue
+                    art_ids = [art.artifact_id, ent.entity_id]
+                    corr_id = self._generate_corr_id(case_id, ["shared_ioc"], art_ids, val_str)
+                    try:
+                        rec = CorrelationRecord(
+                            correlation_id=corr_id,
+                            case_id=case_id,
+                            artifact_ids=art_ids,
+                            relationship_type=["shared_ioc"],
+                            shared_value=val_str,
+                            source_count=1,
+                            distinct_artifact_types=1,
+                            confidence=0.5,
+                            host=host,
+                            strategy_params={"standalone_entity": True}
+                        )
+                        records.append(rec)
+                    except ValueError as e:
+                        logger.debug("Failed to create standalone shared_ioc CorrelationRecord: %s", e)
         return records
 
     def _get_host(self, art: Artifact) -> Optional[str]:

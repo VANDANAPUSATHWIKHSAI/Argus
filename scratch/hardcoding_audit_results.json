@@ -1,0 +1,14 @@
+[
+  {
+    "file": "c:\\Users\\Sudeep\\Downloads\\Argus\\Argus\\preprocessing\\artifact_extractor\\extractor.py",
+    "line": 993,
+    "kw": "ntfs1",
+    "content": "if any(container in val_lower for container in (\"ntfs1-gen\", \"narrative.txt\")):"
+  },
+  {
+    "file": "c:\\Users\\Sudeep\\Downloads\\Argus\\Argus\\preprocessing\\parsers\\vss_parser.py",
+    "line": 360,
+    "kw": "case-vss",
+    "content": "case_id=\"case-vss\","
+  }
+]

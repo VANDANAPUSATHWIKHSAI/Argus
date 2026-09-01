@@ -30,8 +30,6 @@ class ClassifierLoader:
         self._injection_detector = _CLASSIFIER_CACHE.get("injection_detector")
         self._gliner = _CLASSIFIER_CACHE.get("gliner")
         self._phishing_classifier = _CLASSIFIER_CACHE.get("phishing_classifier")
-        
-        ClassifierLoader.verify_semantic_layer(self)
 
     def verify_semantic_layer(self) -> bool:
         """

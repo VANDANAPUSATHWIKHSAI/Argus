@@ -79,6 +79,9 @@ class EmailAnalysisEngine:
                     if art_type == "file_record" and getattr(artifact, "source_tool", "") not in ("python_email", "extract_msg"):
                         continue
 
+                    if not getattr(artifact, "case_id", None):
+                        artifact.case_id = fcr.case_id
+
                     for analyzer in self.sub_analyzers:
                         try:
                             res = analyzer.analyze(artifact, [fcr.correlation_id])

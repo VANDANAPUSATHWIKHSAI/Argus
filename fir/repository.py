@@ -102,6 +102,7 @@ class FIRRepository:
                 );
                 ALTER TABLE fir_findings DROP CONSTRAINT IF EXISTS fir_findings_case_id_fkey;
                 ALTER TABLE fir_findings ALTER COLUMN case_id TYPE TEXT USING case_id::text;
+                ALTER TABLE fir_findings ADD COLUMN IF NOT EXISTS source_engine TEXT;
                 ALTER TABLE fir_findings ALTER COLUMN source_engine DROP NOT NULL;
                 ALTER TABLE fir_findings ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
                 ALTER TABLE fir_findings ADD COLUMN IF NOT EXISTS sanitized_fact TEXT;

@@ -18,10 +18,42 @@ from __future__ import annotations
 import os
 import re
 import logging
+import functools
+import shutil
+import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Tuple, Any
+
+@functools.lru_cache(maxsize=1)
+def check_fls_aff_support() -> bool:
+    """Dynamically check if the installed 'fls' binary supports AFF image containers."""
+    fls_bin = shutil.which("fls") or shutil.which("fls.exe")
+    if not fls_bin:
+        try:
+            project_root = Path(__file__).resolve().parents[2]
+            tsk_dir = project_root / "tsk"
+            if tsk_dir.exists():
+                for folder in tsk_dir.iterdir():
+                    if folder.is_dir() and folder.name.startswith("sleuthkit-"):
+                        bin_dir = folder / "bin"
+                        if bin_dir.exists():
+                            fls_bin = shutil.which("fls", path=str(bin_dir)) or shutil.which("fls.exe", path=str(bin_dir))
+                            if fls_bin:
+                                break
+        except Exception:
+            pass
+
+    if not fls_bin:
+        return False
+
+    try:
+        res = subprocess.run([fls_bin, "-i", "list"], capture_output=True, text=True, timeout=10)
+        output = (res.stdout + "\n" + res.stderr).lower()
+        return "aff" in output or "afflib" in output
+    except Exception:
+        return False
 
 from infrastructure.schemas import Evidence, AuditLogEntry
 from preprocessing.parsers.evtx_parser import EvtxParser
@@ -361,13 +393,21 @@ class ParserRouter:
 
             # AFF 1.0 Image Container
             if magic.startswith(b"AFF10") or magic.startswith(b"AFF\x00"):
-                return RoutingResult(
-                    evidence_id=evidence_id, case_id=case_id,
-                    target_parser="FilesystemParser", evidence_type="AFF 1.0 Image Container",
-                    detection_method="signature", status="BLOCKED",
-                    reason="BLOCKED_MISSING_LIBAFF: Sleuth Kit binaries (fls.exe) compiled without libaff support",
-                    parser_instance=None
-                )
+                if check_fls_aff_support():
+                    return RoutingResult(
+                        evidence_id=evidence_id, case_id=case_id,
+                        target_parser="FilesystemParser", evidence_type="AFF 1.0 Image Container",
+                        detection_method="signature", status="ROUTED",
+                        parser_instance=FilesystemParser()
+                    )
+                else:
+                    return RoutingResult(
+                        evidence_id=evidence_id, case_id=case_id,
+                        target_parser="FilesystemParser", evidence_type="AFF 1.0 Image Container",
+                        detection_method="signature", status="BLOCKED",
+                        reason="BLOCKED_MISSING_LIBAFF: Installed Sleuth Kit binary (fls) was compiled without libaff support",
+                        parser_instance=None
+                    )
 
             # Filesystem E01: "LVF"
             if magic.startswith(b"LVF"):
@@ -681,13 +721,21 @@ class ParserRouter:
             )
 
         if ext == ".aff":
-            return RoutingResult(
-                evidence_id=evidence_id, case_id=case_id,
-                target_parser="FilesystemParser", evidence_type="AFF 1.0 Image Container",
-                detection_method="extension", status="BLOCKED",
-                reason="BLOCKED_MISSING_LIBAFF: Sleuth Kit binaries (fls.exe) compiled without libaff support",
-                parser_instance=None
-            )
+            if check_fls_aff_support():
+                return RoutingResult(
+                    evidence_id=evidence_id, case_id=case_id,
+                    target_parser="FilesystemParser", evidence_type="AFF 1.0 Image Container",
+                    detection_method="extension", status="ROUTED",
+                    parser_instance=FilesystemParser()
+                )
+            else:
+                return RoutingResult(
+                    evidence_id=evidence_id, case_id=case_id,
+                    target_parser="FilesystemParser", evidence_type="AFF 1.0 Image Container",
+                    detection_method="extension", status="BLOCKED",
+                    reason="BLOCKED_MISSING_LIBAFF: Installed Sleuth Kit binary (fls) was compiled without libaff support",
+                    parser_instance=None
+                )
 
         if ext == ".xml":
             if file_path and os.path.exists(file_path):

@@ -108,63 +108,113 @@ async def upload_evidence(
     except Exception as e:
         logger.warning(f"Store evidence warning: {e}")
 
-    # Stage 1 / 2 Parsing
-    routing_res = _parser_router.determine_routing(evidence)
     parsed_artifacts = []
+    derived_observables = []
+    fcr_records = []
+    findings = []
     errors = []
 
-    if routing_res.status == "ROUTED" and routing_res.parser_instance:
+    # Automatic Folder Zip Archive Extraction & Recursive File Processing
+    if file.filename.lower().endswith(".zip"):
+        import zipfile
+        extract_dir = temp_dir / f"extracted_{hashlib.sha256(file.filename.encode()).hexdigest()[:8]}"
+        extract_dir.mkdir(parents=True, exist_ok=True)
+        zip_source_path = getattr(evidence, "original_repository_path", None) or getattr(evidence, "repository_path", None) or evidence.file_path or str(file_path)
         try:
-            arts = routing_res.parser_instance.parse(str(file_path), evidence.evidence_id)
-            if arts:
-                for art in arts:
-                    art.case_id = target_case_id
-                    art.host_id = host_id
-                    if art.normalized_fields:
-                        art.normalized_fields.host = host_id
-                parsed_artifacts.extend(arts)
-        except Exception as parse_e:
-            err_msg = f"Parser execution failed: {parse_e}"
+            with zipfile.ZipFile(zip_source_path, 'r') as zf:
+                zf.extractall(extract_dir)
+            
+            extracted_files = [p for p in extract_dir.rglob("*") if p.is_file() and not p.name.startswith(".") and not p.name.startswith("__MACOSX")]
+            logger.info(f"Extracted {len(extracted_files)} files from folder archive '{file.filename}'")
+            
+            for ext_file in extracted_files:
+                sub_bytes = ext_file.read_bytes()
+                sub_ev = Evidence(
+                    case_id=target_case_id,
+                    filename=ext_file.name,
+                    file_path=str(ext_file),
+                    raw_file_path=str(ext_file),
+                    uploaded_by=uploaded_by,
+                    sha256_hash=hashlib.sha256(sub_bytes).hexdigest(),
+                    metadata={"size_bytes": len(sub_bytes)}
+                )
+                r_res = _parser_router.determine_routing(sub_ev)
+                if r_res.status == "ROUTED" and r_res.parser_instance:
+                    try:
+                        sub_arts = r_res.parser_instance.parse(str(ext_file), sub_ev.evidence_id) or []
+                        for art in sub_arts:
+                            art.case_id = target_case_id
+                            art.host_id = host_id
+                            if getattr(art, "normalized_fields", None):
+                                art.normalized_fields.host = host_id
+                        parsed_artifacts.extend(sub_arts)
+                    except Exception as pe:
+                        logger.error(f"Failed parsing file '{ext_file.name}': {pe}")
+            
+            if parsed_artifacts:
+                try:
+                    derived_observables = _extractor.extract(parsed_artifacts, evidence_id=evidence.evidence_id) or []
+                except Exception as ext_e:
+                    logger.error(f"Folder extractor error: {ext_e}")
+                
+                try:
+                    fcr_records = _fcr_engine.correlate(artifacts=parsed_artifacts, extracted_entities=derived_observables, allow_single_artifact=True) or []
+                except Exception as fcr_e:
+                    logger.error(f"Folder FCR error: {fcr_e}")
+                
+                if fcr_records:
+                    try:
+                        art_map = {a.artifact_id: a for a in parsed_artifacts}
+                        findings = process_fcr_batch(case_id=target_case_id, fcr_objects=fcr_records, artifacts_by_id=art_map, fir_repo=_fir_repo, tenant_id=tenant_id) or []
+                    except Exception as batch_e:
+                        logger.error(f"Folder stage 4 error: {batch_e}")
+        except Exception as zip_e:
+            err_msg = f"Zip folder extraction error: {zip_e}"
             logger.error(err_msg)
             errors.append(err_msg)
     else:
-        err_msg = f"Parser routing failed or blocked for file '{file.filename}' (status: {routing_res.status})."
-        logger.warning(err_msg)
-        errors.append(err_msg)
+        # Single File Processing
+        routing_res = _parser_router.determine_routing(evidence)
+        if routing_res.status == "ROUTED" and routing_res.parser_instance:
+            try:
+                target_path = getattr(evidence, "original_repository_path", None) or getattr(evidence, "repository_path", None) or evidence.file_path or str(file_path)
+                arts = routing_res.parser_instance.parse(target_path, evidence.evidence_id)
+                if arts:
+                    for art in arts:
+                        art.case_id = target_case_id
+                        art.host_id = host_id
+                        if getattr(art, "normalized_fields", None):
+                            art.normalized_fields.host = host_id
+                    parsed_artifacts.extend(arts)
+            except Exception as parse_e:
+                err_msg = f"Parser execution failed: {parse_e}"
+                logger.error(err_msg)
+                errors.append(err_msg)
+        else:
+            err_msg = f"Parser routing failed or blocked for file '{file.filename}' (status: {routing_res.status})."
+            logger.warning(err_msg)
+            errors.append(err_msg)
 
-    # Stage 2.5 Extractor
-    derived_observables = []
-    if parsed_artifacts:
-        try:
-            derived_observables = _extractor.extract(parsed_artifacts, evidence_id=evidence.evidence_id)
-        except Exception as ext_e:
-            logger.error(f"Extractor execution failed: {ext_e}")
+        if parsed_artifacts:
+            try:
+                derived_observables = _extractor.extract(parsed_artifacts, evidence_id=evidence.evidence_id) or []
+            except Exception as ext_e:
+                logger.error(f"Extractor execution failed: {ext_e}")
 
-    all_artifacts = parsed_artifacts + list(derived_observables)
-    artifacts_map = {art.artifact_id: art for art in all_artifacts}
+            try:
+                fcr_records = _fcr_engine.correlate(artifacts=parsed_artifacts, extracted_entities=derived_observables, allow_single_artifact=True) or []
+            except Exception as fcr_e:
+                logger.error(f"FCR Engine correlation failed: {fcr_e}")
 
-    # Stage 3 FCR Correlation
-    fcr_records = []
-    if all_artifacts:
-        try:
-            fcr_records = _fcr_engine.correlate(all_artifacts)
-        except Exception as fcr_e:
-            logger.error(f"FCR Engine correlation failed: {fcr_e}")
-
-    # Stage 4 Analysis Engines & FIR Storage
-    findings = []
-    if fcr_records:
-        try:
-            findings = process_fcr_batch(
-                case_id=target_case_id,
-                fcr_objects=fcr_records,
-                artifacts_by_id=artifacts_map,
-                fir_repo=_fir_repo
-            )
-        except Exception as batch_e:
-            logger.error(f"Stage 4 analysis batch execution failed: {batch_e}")
+            if fcr_records:
+                try:
+                    artifacts_map = {art.artifact_id: art for art in parsed_artifacts}
+                    findings = process_fcr_batch(case_id=target_case_id, fcr_objects=fcr_records, artifacts_by_id=artifacts_map, fir_repo=_fir_repo, tenant_id=tenant_id) or []
+                except Exception as batch_e:
+                    logger.error(f"Stage 4 analysis batch execution failed: {batch_e}")
 
     # Timeline calculation
+    all_artifacts = parsed_artifacts + list(derived_observables)
     timeline = []
     try:
         timeline = _analyst_service.build_case_timeline(

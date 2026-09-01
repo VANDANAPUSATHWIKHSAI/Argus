@@ -23,6 +23,7 @@ from forensic_analysis.email_analysis.email_engine import EmailAnalysisEngine
 from preprocessing.fcr_engine.schemas import CorrelationRecord
 from preprocessing.schemas import Artifact
 from fir.repository import FIRRepository
+from sanitization.gateway import SanitizationGateway
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,8 @@ def process_fcr_batch(
     fcr_objects: List[CorrelationRecord],
     artifacts_by_id: Dict[str, Artifact],
     fir_repo: FIRRepository,
-    store: Optional[UnifiedEvidenceStore] = None
+    store: Optional[UnifiedEvidenceStore] = None,
+    tenant_id: str = "default"
 ) -> List[Finding]:
     """
     Processes a batch of FCR objects for a given case:
@@ -75,13 +77,20 @@ def process_fcr_batch(
             try:
                 findings = engine.analyze([fcr], artifacts_by_id)
                 for finding in findings:
+                    if tenant_id and tenant_id != "default":
+                        finding.tenant_id = tenant_id
                     all_findings.append(finding)
                     # Write to Unified Evidence Store
                     target_store.write_finding(finding)
 
-                    # Adapt & Insert into FIR Repository
+                    # Adapt & Insert into FIR Repository with SanitizationGateway
                     if fir_repo is not None:
+                        sanitizer = SanitizationGateway()
+                        ctx = sanitizer.sanitize_finding(finding)
                         fir_finding = finding_to_fir(finding)
+                        fir_finding.sanitized_fact = ctx.sanitized_fact
+                        fir_finding.injection_flagged = ctx.injection_flagged
+                        fir_finding.injection_score = ctx.injection_score
                         fir_repo.insert(fir_finding)
 
             except Exception as e:

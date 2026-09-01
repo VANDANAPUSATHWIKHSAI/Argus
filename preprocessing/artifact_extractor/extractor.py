@@ -990,7 +990,7 @@ class ArtifactExtractor:
             start, end = m.start(1), m.end(1)
             val_lower = val.lower()
             # Skip container evidence file paths from being converted to extracted_ioc unless suspicious
-            if any(container in val_lower for container in ("ntfs1-gen", "narrative.txt")):
+            if val_lower.endswith((".aff", ".e01", ".raw", ".dd", ".iso", ".vmdk", ".vhd")):
                 continue
             results.append(("file_path", val, start, end))
 

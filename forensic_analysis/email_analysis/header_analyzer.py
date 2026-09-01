@@ -25,7 +25,7 @@ def extract_email_address(header_val: str) -> Optional[str]:
     matches = re.findall(r'<([^>]+)>', header_val)
     if matches:
         return matches[-1].strip().lower()
-    match_simple = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', header_val)
+    match_simple = re.search(r'[\w\.\-]+@[\w\.\-]+\.\w+', header_val)
     if match_simple:
         return match_simple.group(0).strip().lower()
     return None

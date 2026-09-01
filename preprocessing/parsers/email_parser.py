@@ -75,7 +75,8 @@ class EmailParser:
         # Extract all Received headers as a list (chain) for hop tracing
         received_hops = [str(r).strip() for r in msg.get_all("Received", [])]
 
-        headers_dict = {
+        headers_dict = {k: str(v) for k, v in msg.items()}
+        headers_dict.update({
             "From": str(from_val) if from_val is not None else None,
             "To": str(to_val) if to_val is not None else None,
             "Cc": str(cc_val) if cc_val is not None else None,
@@ -83,7 +84,7 @@ class EmailParser:
             "Subject": str(subject_val) if subject_val is not None else None,
             "Date": str(date_val) if date_val is not None else None,
             "Message-ID": str(msg_id_val) if msg_id_val is not None else None,
-        }
+        })
 
         # Parse Date header to timezone-aware datetime (RFC 2822)
         ts = None
@@ -180,6 +181,7 @@ class EmailParser:
                 "received_hops": received_hops,
                 "body_text": body_text,
                 "body_html": body_html,
+                "attachments": [att.raw_fields for att in attachments if hasattr(att, "raw_fields")],
                 "tool_version": ver,
             },
             normalized_fields=NormalizedFields(

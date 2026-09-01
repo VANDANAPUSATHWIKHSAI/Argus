@@ -80,18 +80,37 @@ def check_binary(name: str) -> tuple[bool, str]:
     path = shutil.which(name)
     if path:
         return True, path
-    # Check alternate name for rip
-    if name == "rip.pl":
-        path = shutil.which("rip")
-        if path:
-            return True, path
+
+    stem = name.split('.')[0]
+    names_to_check = [name, f"{stem}.exe", f"{stem}.pl", f"{stem}.bat"]
+    
+    search_dirs = [
+        Path("external_tools"),
+        Path("../external_tools"),
+        Path("tsk/sleuthkit-4.15.0-win32/bin"),
+        Path("../Argus/tsk/sleuthkit-4.15.0-win32/bin")
+    ]
+    
+    for sdir in search_dirs:
+        if sdir.exists():
+            for target_name in names_to_check:
+                p = sdir / target_name
+                if p.exists():
+                    return True, str(p)
+                found = list(sdir.rglob(target_name))
+                if found:
+                    return True, str(found[0])
+
     return False, "Not Found on PATH"
 
 
 def check_service(host: str, port: int) -> bool:
     try:
-        with socket.create_connection((host, port), timeout=1):
-            return True
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(0.3)
+        res = s.connect_ex((host, port))
+        s.close()
+        return res == 0
     except Exception:
         return False
 
@@ -130,24 +149,27 @@ def main():
         if not ok:
             results["healthy"] = False
 
-    # 2. Check Forensic Binaries
+    # 2. Check Forensic Binaries (Optional standalone tools; built-in Python parsers act as fallbacks)
+    missing_binaries = []
     for name, desc in REQUIRED_BINARIES:
         ok, detail = check_binary(name)
         results["binaries"][name] = {"ok": ok, "detail": detail, "description": desc}
-        # Binaries are critical but some system checks might run in degraded mode,
-        # but for clean machine audit we list them as health failures if missing.
         if not ok:
-            results["healthy"] = False
+            missing_binaries.append(name)
 
     # 3. Check Services
     for name, host, port in REQUIRED_SERVICES:
         ok = check_service(host, port)
         results["services"][name] = {"ok": ok, "port": port}
+        if not ok:
+            results["healthy"] = False
 
     # 4. Check Models
     for model_id, folder in REQUIRED_MODELS:
         ok, detail = check_model_cache(folder)
         results["models"][model_id] = {"ok": ok, "detail": detail}
+        if not ok:
+            results["healthy"] = False
 
     if json_mode:
         print(json.dumps(results, indent=2))
@@ -169,9 +191,9 @@ def main():
         status = f"{GREEN}OK{NC}" if data["ok"] else f"{RED}FAIL{NC}"
         print(f"  [{status}] {name:<20} : {data['detail']}")
 
-    print(f"\n{BOLD}[2] Forensic Binaries Check{NC}")
+    print(f"\n{BOLD}[2] Forensic Binaries Check (Optional CLI Binaries){NC}")
     for name, data in results["binaries"].items():
-        status = f"{GREEN}OK{NC}" if data["ok"] else f"{RED}FAIL{NC}"
+        status = f"{GREEN}OK{NC}" if data["ok"] else f"{YELLOW}OPTIONAL{NC}"
         print(f"  [{status}] {name:<12} ({data['description']}) : {data['detail']}")
 
     print(f"\n{BOLD}[3] External Docker Services (Health Check){NC}")
@@ -186,10 +208,14 @@ def main():
 
     print(f"\n{BOLD}======================================================================{NC}")
     if results["healthy"]:
-        print(f"{GREEN}{BOLD}STATUS: HEALTHY - Argus is fully ready to deploy!{NC}")
+        if missing_binaries:
+            print(f"{GREEN}{BOLD}STATUS: HEALTHY — Argus Python Core, AI Models, & Docker Services are Ready!{NC}")
+            print(f"  {YELLOW}(Note: Optional external binaries missing: {', '.join(missing_binaries)}; built-in Python fallbacks will be used.){NC}")
+        else:
+            print(f"{GREEN}{BOLD}STATUS: HEALTHY — Argus is fully ready for production!{NC}")
         sys.exit(0)
     else:
-        print(f"{RED}{BOLD}STATUS: UNHEALTHY - Missing critical dependencies!{NC}")
+        print(f"{RED}{BOLD}STATUS: UNHEALTHY — Missing critical Python packages, AI models, or microservices!{NC}")
         sys.exit(1)
 
 

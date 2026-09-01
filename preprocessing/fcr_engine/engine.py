@@ -183,22 +183,26 @@ class FCREngine:
             nf = art.normalized_fields
             # 1. From NormalizedFields
             candidates = [
-                ("hash", nf.hash),
-                ("src_ip", nf.src_ip),
-                ("dst_ip", nf.dst_ip),
-                ("domain", nf.domain),
-                ("url", nf.url),
-                ("registry_key", nf.registry_key),
-                ("usb_serial_number", nf.usb_serial_number),
-                ("sender", nf.sender),
-                ("recipients", nf.recipients),
+                ("hash", nf.hash if nf else None),
+                ("src_ip", nf.src_ip if nf else None),
+                ("dst_ip", nf.dst_ip if nf else None),
+                ("domain", nf.domain if nf else None),
+                ("url", nf.url if nf else None),
+                ("registry_key", nf.registry_key if nf else None),
+                ("usb_serial_number", nf.usb_serial_number if nf else None),
+                ("sender", nf.sender if nf else None),
+                ("recipients", nf.recipients if nf else None),
+                ("extracted_value", art.raw_fields.get("value") if art.raw_fields else None),
+                ("extracted_ioc", art.raw_fields.get("ioc_value") if art.raw_fields else None),
             ]
             for key_name, val in candidates:
                 if val and str(val).strip():
                     norm_val = str(val).strip().lower()
                     # Exclude trivial values
                     if len(norm_val) > 2 and norm_val not in ("0.0.0.0", "127.0.0.1", "none", "null"):
-                        ioc_groups.setdefault((key_name, norm_val), set()).add(art.artifact_id)
+                        ioc_groups.setdefault(norm_val, set()).add(art.artifact_id)
+                        if getattr(art, "source_artifact_id", None):
+                            ioc_groups.setdefault(norm_val, set()).add(art.source_artifact_id)
 
             # 2. From ExtractedEntities
             if art.artifact_id in entities_by_artifact:
@@ -206,11 +210,13 @@ class FCREngine:
                     if ent.value and ent.value.strip():
                         val_str = ent.value.strip().lower()
                         if len(val_str) > 2 and val_str not in ("0.0.0.0", "127.0.0.1"):
-                            ioc_groups.setdefault((ent.entity_type, val_str), set()).add(art.artifact_id)
+                            ioc_groups.setdefault(val_str, set()).add(art.artifact_id)
+                            if getattr(art, "source_artifact_id", None):
+                                ioc_groups.setdefault(val_str, set()).add(art.source_artifact_id)
 
         art_dict = {a.artifact_id: a for a in artifacts}
 
-        for (ioc_type, ioc_value), art_id_set in ioc_groups.items():
+        for ioc_value, art_id_set in ioc_groups.items():
             if len(art_id_set) < 2:
                 continue
 
@@ -235,7 +241,7 @@ class FCREngine:
                     confidence=confidence,
                     shared_value=ioc_value,
                     strategy_params={
-                        "shared_ioc_key": ioc_type,
+                        "shared_ioc_key": "shared_ioc",
                         "shared_value": ioc_value
                     }
                 )

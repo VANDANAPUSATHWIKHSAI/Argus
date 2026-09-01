@@ -183,6 +183,8 @@ def route_fcr(
             ioc_type = (getattr(artifact, "ioc_type", None) or raw_fields.get("ioc_type") or "").lower()
             if ioc_type in ("ipv4", "ipv6", "domain", "url"):
                 target_engines.add("network")
+            elif ioc_type in ("email", "email_address", "email_header"):
+                target_engines.add("email")
             else:
                 target_engines.add("endpoint")
         elif art_type == "extracted_entity":

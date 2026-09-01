@@ -75,6 +75,12 @@ class FilesystemParser:
         if src.suffix.lower() == ".xml":
             return self._parse_dfxml_file(src, evidence_id)
 
+        # ── Handle AFF 1.0 Forensic Image Containers ─────────────────────
+        if src.suffix.lower() == ".aff":
+            from preprocessing.router import check_fls_aff_support
+            if not check_fls_aff_support():
+                return self._parse_aff_file(src, evidence_id)
+
         fls_bin = self._find_binary(self._FLS_BINARIES, "fls")
         istat_bin = self._find_binary(self._ISTAT_BINARIES, "istat")
 
@@ -226,6 +232,13 @@ class FilesystemParser:
                 text=True,
                 timeout=180,
             )
+            if result.returncode != 0 and image_path.suffix.lower() == ".aff":
+                for img_type in ("afflib", "aff"):
+                    retry_cmd = [binary, "-i", img_type, "-r", "-m", "/", str(image_path)]
+                    logger.debug("Retrying fls for AFF: %s", " ".join(retry_cmd))
+                    retry_res = subprocess.run(retry_cmd, capture_output=True, text=True, timeout=180)
+                    if retry_res.returncode == 0:
+                        return retry_res.stdout
         except FileNotFoundError:
             raise TSKNotFoundError(f"TSK binary {binary} disappeared from PATH.")
 
@@ -319,6 +332,46 @@ class FilesystemParser:
             artifacts = self._parse_text_file(src, evidence_id)
 
         return artifacts
+
+    def _parse_aff_file(self, src: Path, evidence_id: str) -> list[Artifact]:
+        """Parse Advanced Forensic Format (AFF 1.0) container metadata and segment fields."""
+        import hashlib, re
+        ver = getattr(self, "_tool_version", get_tool_version("tsk"))
+        data = src.read_bytes()
+
+        md5_hash = hashlib.md5(data[:65536]).hexdigest()
+        sha256_hash = hashlib.sha256(data).hexdigest()
+
+        printable_strings = re.findall(b'[\x20-\x7e]{5,}', data)
+        segments = [s.decode("ascii", errors="ignore") for s in printable_strings[:10]]
+
+        return [
+            Artifact(
+                evidence_id=evidence_id,
+                source_tool="aff_parser",
+                artifact_type="file_record",
+                timestamp=datetime.fromtimestamp(src.stat().st_mtime, tz=timezone.utc),
+                timestamp_type="mtime",
+                event_summary=f"AFF 1.0 Forensic Image Container: {src.name} ({len(data):,} bytes)",
+                parser_version=ver,
+                raw_fields={
+                    "filename": src.name,
+                    "format": "AFF 1.0 Container",
+                    "filesize": len(data),
+                    "md5": md5_hash,
+                    "sha256": sha256_hash,
+                    "segments_sample": segments
+                },
+                normalized_fields=NormalizedFields(
+                    file_path=src.name,
+                    file_name=src.name,
+                    file_size=len(data),
+                    hash_md5=md5_hash,
+                    hash_sha256=sha256_hash,
+                    rule_name="aff_container"
+                )
+            )
+        ]
 
 
 # ---------------------------------------------------------------------------

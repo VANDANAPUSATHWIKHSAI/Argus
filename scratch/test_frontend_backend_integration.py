@@ -11,15 +11,49 @@ Verifies that all 15 user directives are fully satisfied with REAL backend data:
 7. Cross-layer consistency check across 11 pipeline layers
 """
 
+import os
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "frontend"))
+sys.path.insert(0, os.path.abspath("frontend"))
 import api_client
 
 def run_integration_tests():
     case_id = "CASE-FINAL-DEMO-2026"
     tenant_id = "default"
     api_client.API_BASE_URL = "http://127.0.0.1:8000"
+
+    # In-process TestClient fallback if live 8000 server is not running
+    try:
+        import requests
+        requests.get("http://127.0.0.1:8000/cases/CASE-FINAL-DEMO-2026", timeout=1)
+    except Exception:
+        print("Live 8000 server offline — using in-process FastAPI TestClient...")
+        from fastapi.testclient import TestClient
+        from api.main import app
+        tc = TestClient(app)
+
+        def mock_get(url, params=None, headers=None, timeout=None):
+            path = url.replace("http://127.0.0.1:8000", "").replace("http://localhost:8000", "")
+            r = tc.get(path, params=params, headers=headers)
+            class MockResp:
+                status_code = r.status_code
+                text = r.text
+                def json(self): return r.json()
+                @property
+                def content(self): return r.content
+            return MockResp()
+
+        def mock_post(url, data=None, files=None, json=None, headers=None, timeout=None):
+            path = url.replace("http://127.0.0.1:8000", "").replace("http://localhost:8000", "")
+            r = tc.post(path, data=data, files=files, json=json, headers=headers)
+            class MockResp:
+                status_code = r.status_code
+                text = r.text
+                def json(self): return r.json()
+            return MockResp()
+
+        api_client.requests.get = mock_get
+        api_client.requests.post = mock_post
 
     print("======================================================================")
     print("ARGUS FRONTEND <-> BACKEND INTEGRATION TEST SUITE")

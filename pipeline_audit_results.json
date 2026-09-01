@@ -1,0 +1,334 @@
+{
+  "timestamp": "2026-09-01T12:30:07.524617+00:00",
+  "raw_evidence_files": [
+    {
+      "path": "c:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\narrative.txt",
+      "size": 665,
+      "name": "narrative.txt"
+    },
+    {
+      "path": "c:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen0.aff",
+      "size": 277228,
+      "name": "ntfs1-gen0.aff"
+    },
+    {
+      "path": "c:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen0.E01",
+      "size": 1089252,
+      "name": "ntfs1-gen0.E01"
+    },
+    {
+      "path": "c:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen1.aff",
+      "size": 8481452,
+      "name": "ntfs1-gen1.aff"
+    },
+    {
+      "path": "c:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen1.E01",
+      "size": 9332369,
+      "name": "ntfs1-gen1.E01"
+    },
+    {
+      "path": "c:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen2.E01",
+      "size": 36083007,
+      "name": "ntfs1-gen2.E01"
+    },
+    {
+      "path": "c:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\disk\\ntfs1-gen2.xml",
+      "size": 2341489,
+      "name": "ntfs1-gen2.xml"
+    }
+  ],
+  "layers": {
+    "Layer 1 - Infrastructure Intake": {
+      "status": "SUCCESS",
+      "details": {
+        "uploaded_count": 7,
+        "items": [
+          {
+            "file": "narrative.txt",
+            "evidence_id": "ddaf897b-a4e2-4a29-94ed-4fd832195362",
+            "status": "EvidenceStatus.UPLOADED",
+            "custody_logs": 1
+          },
+          {
+            "file": "ntfs1-gen0.aff",
+            "evidence_id": "6db0b244-72cb-45f9-b1c0-fbea7b2d950b",
+            "status": "EvidenceStatus.UPLOADED",
+            "custody_logs": 1
+          },
+          {
+            "file": "ntfs1-gen0.E01",
+            "evidence_id": "f80ea260-1347-44c2-bb5b-7ef11bdff54a",
+            "status": "EvidenceStatus.UPLOADED",
+            "custody_logs": 1
+          },
+          {
+            "file": "ntfs1-gen1.aff",
+            "evidence_id": "3355695f-deae-4f7d-9393-b873b81a6ed6",
+            "status": "EvidenceStatus.UPLOADED",
+            "custody_logs": 1
+          },
+          {
+            "file": "ntfs1-gen1.E01",
+            "evidence_id": "528ab583-aa7c-484a-8cdc-c0ebdd731387",
+            "status": "EvidenceStatus.UPLOADED",
+            "custody_logs": 1
+          },
+          {
+            "file": "ntfs1-gen2.E01",
+            "evidence_id": "becf478f-1c06-4d53-8421-f9b92568caf4",
+            "status": "EvidenceStatus.UPLOADED",
+            "custody_logs": 1
+          },
+          {
+            "file": "ntfs1-gen2.xml",
+            "evidence_id": "999d0244-8aaa-457c-952a-49ccb10091f4",
+            "status": "EvidenceStatus.UPLOADED",
+            "custody_logs": 1
+          }
+        ]
+      },
+      "errors": []
+    },
+    "Layer 2 - Router & Memory Parser": {
+      "status": "SUCCESS",
+      "details": {
+        "routing_outcomes": [
+          {
+            "evidence_id": "ddaf897b-a4e2-4a29-94ed-4fd832195362",
+            "filename": "narrative.txt",
+            "target_parser": "FilesystemParser",
+            "evidence_type": "Case Narrative / Text File",
+            "detection_method": "extension",
+            "status": "ROUTED",
+            "reason": null
+          },
+          {
+            "evidence_id": "6db0b244-72cb-45f9-b1c0-fbea7b2d950b",
+            "filename": "ntfs1-gen0.aff",
+            "target_parser": "FilesystemParser",
+            "evidence_type": "AFF 1.0 Image Container",
+            "detection_method": "signature",
+            "status": "BLOCKED",
+            "reason": "BLOCKED_MISSING_LIBAFF: Sleuth Kit binaries (fls.exe) compiled without libaff support"
+          },
+          {
+            "evidence_id": "f80ea260-1347-44c2-bb5b-7ef11bdff54a",
+            "filename": "ntfs1-gen0.E01",
+            "target_parser": "FilesystemParser",
+            "evidence_type": "File System / Disk Image",
+            "detection_method": "extension",
+            "status": "ROUTED",
+            "reason": null
+          },
+          {
+            "evidence_id": "3355695f-deae-4f7d-9393-b873b81a6ed6",
+            "filename": "ntfs1-gen1.aff",
+            "target_parser": "FilesystemParser",
+            "evidence_type": "AFF 1.0 Image Container",
+            "detection_method": "signature",
+            "status": "BLOCKED",
+            "reason": "BLOCKED_MISSING_LIBAFF: Sleuth Kit binaries (fls.exe) compiled without libaff support"
+          },
+          {
+            "evidence_id": "528ab583-aa7c-484a-8cdc-c0ebdd731387",
+            "filename": "ntfs1-gen1.E01",
+            "target_parser": "FilesystemParser",
+            "evidence_type": "File System / Disk Image",
+            "detection_method": "extension",
+            "status": "ROUTED",
+            "reason": null
+          },
+          {
+            "evidence_id": "becf478f-1c06-4d53-8421-f9b92568caf4",
+            "filename": "ntfs1-gen2.E01",
+            "target_parser": "FilesystemParser",
+            "evidence_type": "File System / Disk Image",
+            "detection_method": "extension",
+            "status": "ROUTED",
+            "reason": null
+          },
+          {
+            "evidence_id": "999d0244-8aaa-457c-952a-49ccb10091f4",
+            "filename": "ntfs1-gen2.xml",
+            "target_parser": "FilesystemParser",
+            "evidence_type": "DFXML 1.0 Metadata Catalog",
+            "detection_method": "signature",
+            "status": "ROUTED",
+            "reason": null
+          }
+        ],
+        "routed_count": 5,
+        "memory_parsed_artifacts_count": 1,
+        "sample_artifact": {
+          "artifact_id": "24696d94-26c4-4052-a8d6-bde5ae6e279c",
+          "case_id": "",
+          "evidence_id": "ev-mem-audit-01",
+          "source_tool": "MemoryParser",
+          "artifact_type": "process_event",
+          "host_id": null,
+          "timestamp": "2026-09-01 12:30:09.519355+00:00",
+          "timestamp_type": "event",
+          "event_summary": null,
+          "raw_fields": {
+            "PID": 1234,
+            "PPID": 404,
+            "ImageFileName": "powershell.exe",
+            "command_line": "powershell.exe -enc QWxsaWVu"
+          },
+          "normalized_fields": {
+            "host": null,
+            "user": null,
+            "process_id": null,
+            "parent_process_id": null,
+            "process_name": null,
+            "process_command_line": null,
+            "src_ip": null,
+            "dst_ip": null,
+            "src_port": null,
+            "dst_port": null,
+            "file_path": null,
+            "file_name": null,
+            "hash": null,
+            "domain": null,
+            "url": null,
+            "registry_key": null,
+            "registry_value": null,
+            "registry_value_data": null,
+            "usb_serial_number": null,
+            "rule_name": null,
+            "severity": null,
+            "first_connected": null,
+            "last_connected": null,
+            "friendly_name": null,
+            "sender": null,
+            "recipients": null,
+            "subject": null,
+            "mtime": null,
+            "atime": null,
+            "ctime": null,
+            "deleted": null,
+            "private_ip": null,
+            "ip_scope": null
+          },
+          "confidence": 1.0,
+          "ingested_at": "2026-09-01 12:30:09.520357+00:00",
+          "parser_version": "1.0.0",
+          "schema_version": "2.0.0"
+        }
+      },
+      "errors": []
+    },
+    "Layer 3 - JSON Normalization": {
+      "status": "SUCCESS",
+      "details": {
+        "normalized_count": 1,
+        "sample_normalized": "artifact_id='24696d94-26c4-4052-a8d6-bde5ae6e279c' case_id='' evidence_id='ev-mem-audit-01' source_tool='MemoryParser' artifact_type='process_event' host_id=None timestamp=datetime.datetime(2026, 9, 1, 12, 30, 9, 519355, tzinfo=datetime.timezone.utc) timestamp_type='event' event_summary=None raw_fields={'PID': 1234, 'PPID': 404, 'ImageFileName': 'powershell.exe', 'command_line': 'powershell.exe -enc QWxsaWVu'} normalized_fields=NormalizedFields(host=None, user=None, process_id=None, parent_process_id=None, process_name=None, process_command_line=None, src_ip=None, dst_ip=None, src_port=None, dst_port=None, file_path=None, file_name=None, hash=None, domain=None, url=None, registry_key=None, registry_value=None, registry_value_data=None, usb_serial_number=None, rule_name=None, severity=None, first_connected=None, last_connected=None, friendly_name=None, sender=None, recipients=None, subject=None, mtime=None, atime=None, ctime=None, deleted=None, private_ip=None, ip_scope=None) confidence=1.0 ingested_at=datetime.datetime(2026, 9, 1, 12, 30, 9, 520357, tzinfo=datetime.timezone.utc) parser_version='1.0.0' schema_version='2.0.0'"
+      },
+      "errors": []
+    },
+    "Layer 4 - Artifact Extractor": {
+      "status": "SUCCESS",
+      "details": {
+        "extracted_artifact_count": 2,
+        "cyner_model_state": "MODEL_AVAILABLE"
+      },
+      "errors": []
+    },
+    "Layer 5 - FCR Engine": {
+      "status": "SUCCESS",
+      "details": {
+        "fcr_count": 3,
+        "sample_fcr_id": "CORR-518497",
+        "sample_fcr_relationship": [
+          "single_artifact"
+        ]
+      },
+      "errors": []
+    },
+    "Layer 6 - Evidence Consolidation": {
+      "status": "SUCCESS",
+      "details": {
+        "unified_artifacts_count": 0,
+        "conflicts_count": 0,
+        "missing_categories": []
+      },
+      "errors": []
+    },
+    "Layer 7 - Memory Analysis Engine": {
+      "status": "SUCCESS",
+      "details": {
+        "findings_count": 1,
+        "findings": [
+          {
+            "finding_id": "33cfaf58-f909-49dc-a499-f43306c0c4a6",
+            "case_id": "default_case",
+            "tenant_id": "default",
+            "fact": "Orphan process observed in memory: process 'powershell.exe' (PID 1234) references missing/inactive parent PID 404.",
+            "confidence": 0.85,
+            "severity": "medium",
+            "mitre_mapping": "T1057",
+            "timestamp": "2026-09-01 12:30:09.519355+00:00",
+            "evidence_reference": "CORR-518497",
+            "source_artifact_id": "24696d94-26c4-4052-a8d6-bde5ae6e279c",
+            "layer": "memory.process_analyzer",
+            "contributing_correlation_ids": [
+              "CORR-518497"
+            ],
+            "metadata": {
+              "pid": 1234,
+              "ppid": 404,
+              "process_name": "powershell.exe",
+              "anomaly": "orphan_process",
+              "artifact_id": "24696d94-26c4-4052-a8d6-bde5ae6e279c"
+            }
+          }
+        ]
+      },
+      "errors": []
+    },
+    "Layer 8 - Sanitization Gateway": {
+      "status": "SUCCESS",
+      "details": {
+        "sanitized_count": 1,
+        "fir_findings_count": 1,
+        "sample_sanitized_fact": "Orphan process observed in memory: process 'powershell.exe' (PID 1234) references missing/inactive parent PID 404.",
+        "sample_injection_flagged": false
+      },
+      "errors": []
+    },
+    "Layer 9 - FIR Repository & PostgreSQL": {
+      "status": "SUCCESS",
+      "details": {
+        "postgres_connection": "CONNECTED",
+        "database_container": "FIR",
+        "inserted_count": 1,
+        "inserted_ids": [
+          "33cfaf58-f909-49dc-a499-f43306c0c4a6"
+        ]
+      },
+      "errors": []
+    }
+  },
+  "postgres_status": {
+    "connected": true,
+    "container_name": "FIR (argus-postgres)",
+    "host": "localhost",
+    "port": 5433,
+    "database": "argus",
+    "error": null
+  },
+  "defects_and_failures": [
+    {
+      "layer": "Layer 2 (Router)",
+      "component": "ParserRouter",
+      "file": "ntfs1-gen0.aff",
+      "issue": "Evidence status 'BLOCKED' - BLOCKED_MISSING_LIBAFF: Sleuth Kit binaries (fls.exe) compiled without libaff support"
+    },
+    {
+      "layer": "Layer 2 (Router)",
+      "component": "ParserRouter",
+      "file": "ntfs1-gen1.aff",
+      "issue": "Evidence status 'BLOCKED' - BLOCKED_MISSING_LIBAFF: Sleuth Kit binaries (fls.exe) compiled without libaff support"
+    }
+  ]
+}

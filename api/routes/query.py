@@ -1,8 +1,11 @@
+import logging
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 from sanitization.injection_gate import InjectionGate
 from fir.repository import FIRRepository
 from models.llm import OllamaWrapper
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 

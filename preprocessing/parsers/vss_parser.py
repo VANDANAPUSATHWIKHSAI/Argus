@@ -354,10 +354,10 @@ class VssWorkflow:
                 continue
 
             try:
-                # Lazy import Evidence to construct test context
                 from infrastructure.schemas import Evidence
+                vss_case_id = getattr(self, "case_id", None) or "case-vss"
                 ev = Evidence(
-                    case_id="case-vss",
+                    case_id=vss_case_id,
                     uploaded_by="vss_workflow",
                     evidence_id=snap_evidence_id,
                     filename=fpath.name,

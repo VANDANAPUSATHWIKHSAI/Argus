@@ -234,7 +234,7 @@ class FilesystemAnalyzer:
                 ))
 
             # 8. USN Journal & File System Images
-            elif art_type in ("usn_entry", "filesystem_entry", "endpoint.usn", "endpoint.filesystem"):
+            elif art_type in ("usn_entry", "filesystem_entry", "endpoint.usn", "endpoint.filesystem", "file_record"):
                 fname = norm.file_name or norm.file_path or str(raw.get("file_name", ""))
                 reason = str(raw.get("Reason", "")) or str(raw.get("reason", ""))
                 if fname:

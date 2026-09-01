@@ -69,16 +69,14 @@ class CorrelationRecord(BaseModel):
 
     @field_validator("artifact_ids")
     @classmethod
-    def _validate_artifact_ids(cls, v: list[str], info: Any) -> list[str]:
+    def _validate_artifact_ids(cls, v: list[str]) -> list[str]:
         if not isinstance(v, list) or len(v) < 1:
             raise ValueError("artifact_ids must contain at least 1 artifact ID.")
         cleaned = [str(x).strip() for x in v if str(x).strip()]
         if len(set(cleaned)) != len(cleaned):
             raise ValueError("artifact_ids must contain unique artifact IDs (duplicates detected).")
-        rel_types = getattr(info, "data", {}).get("relationship_type", [])
-        if "single_artifact" not in rel_types:
-            if len(cleaned) < 2:
-                raise ValueError("artifact_ids must contain at least 2 non-empty unique artifact IDs.")
+        if len(cleaned) < 1:
+            raise ValueError("artifact_ids must contain at least 1 non-empty artifact ID.")
         return cleaned
 
     @field_validator("relationship_type")
@@ -116,6 +114,8 @@ class CorrelationRecord(BaseModel):
     @model_validator(mode="after")
     def _validate_relationship_requirements(self) -> CorrelationRecord:
         rel_types = set(self.relationship_type)
+        if "single_artifact" not in rel_types and len(self.artifact_ids) < 2:
+            raise ValueError("CorrelationRecord requires at least 2 artifact IDs unless single_artifact relationship_type is specified.")
         if "temporal_proximity" in rel_types and not self.host:
             raise ValueError("temporal_proximity relationship requires 'host' field to be set.")
         if "shared_ioc" in rel_types and not self.shared_value:

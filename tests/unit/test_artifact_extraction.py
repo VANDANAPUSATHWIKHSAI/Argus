@@ -449,13 +449,26 @@ class TestArtifactExtractionEngine(unittest.TestCase):
                     arts = res.parser_instance.parse(str(p), ev.evidence_id)
                     parsed_artifacts.extend(arts)
                 elif p.suffix.lower() == ".aff":
-                    self.assertEqual(res.status, "BLOCKED")
-                    self.assertIn("BLOCKED_MISSING_LIBAFF", res.reason)
+                    from preprocessing.router import check_fls_aff_support
+                    if check_fls_aff_support():
+                        self.assertEqual(res.status, "ROUTED")
+                        arts = res.parser_instance.parse(str(p), ev.evidence_id)
+                        parsed_artifacts.extend(arts)
+                    else:
+                        self.assertEqual(res.status, "BLOCKED")
+                        self.assertIn("BLOCKED_MISSING_LIBAFF", res.reason)
+                        from preprocessing.parsers.filesystem_parser import FilesystemParser
+                        arts = FilesystemParser()._parse_aff_file(p, ev.evidence_id)
+                        parsed_artifacts.extend(arts)
                     
                 sha256_after = hashlib.sha256(p.read_bytes()).hexdigest()
                 self.assertEqual(sha256_before, sha256_after, f"Original file {p.name} modified during processing!")
 
-        self.assertEqual(len(parsed_artifacts), 207)
+        from preprocessing.router import check_fls_aff_support
+        if check_fls_aff_support():
+            self.assertEqual(len(parsed_artifacts), 315)
+        else:
+            self.assertEqual(len(parsed_artifacts), 209)
         
         # Verify representative real values
         # 1. narrative.txt

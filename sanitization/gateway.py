@@ -188,12 +188,13 @@ class SanitizationGateway:
             # ROT13 scan — check if ROT13 decoding reveals explicit injection overrides
             try:
                 rot13_text = codecs.encode(privacy_safe_text, 'rot_13')
-                if any(kw in rot13_text.lower() for kw in ("ignore previous instructions", "disregard all instructions", "system message:", "jailbreak", "system prompt override")):
-                    is_malicious, details = self.detector.is_injection(rot13_text, is_unstructured=False)
-                    if is_malicious:
-                        details["layer"] = "rot13_payload"
-                        self.log_sanitization_event(field_name, "rot13_payload", details.get("reason"), details)
-                        return self.blocked_placeholder(field_name, "rot13_payload", details.get("reason"))
+                # Check if ROT13 decoding produces malicious injection attempts
+                is_rot13_malicious, details = self.detector.is_injection(rot13_text, is_unstructured=is_unstructured)
+                if is_rot13_malicious and details.get("reason") != "status":
+                    # Require that ROT13 decoded text contains injection keywords or model prediction
+                    details["layer"] = "rot13_payload"
+                    self.log_sanitization_event(field_name, "rot13_payload", details.get("reason"), details)
+                    return self.blocked_placeholder(field_name, "rot13_payload", details.get("reason"))
             except Exception:
                 pass
 

@@ -283,13 +283,15 @@ class SanitizationGateway:
             )
         except Exception as exc:
             print(f"  [GATEWAY FAIL-CLOSED ERROR] Exception during sanitize_finding: {exc}")
+            raw_ref = getattr(finding, "evidence_reference", [])
+            safe_ref = [raw_ref] if isinstance(raw_ref, str) else (list(raw_ref) if raw_ref else [])
             # Fail closed: return safe quarantined placeholder context
             return SanitizedAgentContext(
                 finding_id=getattr(finding, "finding_id", "UNKNOWN"),
                 case_id=getattr(finding, "case_id", "UNKNOWN"),
                 tenant_id=getattr(finding, "tenant_id", "default"),
                 source_artifact_id=getattr(finding, "source_artifact_id", None),
-                evidence_reference=getattr(finding, "evidence_reference", []),
+                evidence_reference=safe_ref,
                 timestamp=getattr(finding, "timestamp", datetime.now(timezone.utc)),
                 severity="high",
                 confidence=0.0,

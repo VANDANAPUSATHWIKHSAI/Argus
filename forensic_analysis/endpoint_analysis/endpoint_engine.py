@@ -108,23 +108,43 @@ class EndpointAnalysisEngine:
             except Exception as e:
                 logger.error("UserActivityAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
-        # Deterministic artifact-level deduplication across overlapping FCRs
+        # Deterministic semantic deduplication across overlapping FCRs and multi-value artifacts
         deduped: Dict[tuple, Finding] = {}
         for finding in raw_findings:
-            key = (
-                finding.case_id,
-                finding.source_artifact_id,
-                finding.layer,
-                finding.fact,
-            )
-            if key not in deduped:
-                deduped[key] = finding
+            meta = finding.metadata or {}
+            reg_key = (meta.get("registry_key") or meta.get("service_key") or "").lower()
+            val_name = (meta.get("value_name") or "").lower()
+            task_name = (meta.get("task_name") or "").lower()
+            cmd_line = (meta.get("command_line") or meta.get("image_path") or "").lower()
+
+            if "persistence_analyzer" in finding.layer:
+                if task_name or cmd_line:
+                    sem_key = (finding.case_id, finding.layer, finding.mitre_mapping, reg_key, task_name, cmd_line)
+                else:
+                    sem_key = (finding.case_id, finding.layer, finding.mitre_mapping, reg_key, val_name, cmd_line)
+            elif "registry_analyzer" in finding.layer:
+                if finding.mitre_mapping == "T1562.001":
+                    sem_key = (finding.case_id, finding.layer, finding.mitre_mapping, reg_key, val_name)
+                else:
+                    sem_key = (finding.case_id, finding.layer, finding.mitre_mapping, reg_key)
             else:
-                existing = deduped[key]
+                sem_key = (finding.case_id, finding.layer, finding.mitre_mapping, finding.fact.strip().lower())
+
+            if sem_key not in deduped:
+                deduped[sem_key] = finding
+            else:
+                existing = deduped[sem_key]
+                # Merge metadata contributing_artifact_ids
+                contrib_arts = existing.metadata.setdefault("contributing_artifact_ids", [existing.source_artifact_id])
+                if finding.source_artifact_id and finding.source_artifact_id not in contrib_arts:
+                    contrib_arts.append(finding.source_artifact_id)
                 # Merge contributing correlation IDs
                 for cid in finding.contributing_correlation_ids:
                     if cid and cid not in existing.contributing_correlation_ids:
                         existing.contributing_correlation_ids.append(cid)
+                # Corroborated multi-source confidence boost if single-source
+                if len(existing.contributing_correlation_ids) > 1 and existing.confidence < 0.85 and not meta.get("legitimate"):
+                    existing.confidence = min(0.90, existing.confidence + 0.10)
 
         final_findings = list(deduped.values())
         logger.info("EndpointAnalysisEngine: Generated %d deduplicated findings from %d raw findings", len(final_findings), len(raw_findings))

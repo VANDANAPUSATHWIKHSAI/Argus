@@ -6,11 +6,13 @@
 
 from __future__ import annotations
 
+import re
+import shutil
 import logging
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 from preprocessing.schemas import Artifact, NormalizedFields
 from config.tool_versions import get_tool_version
@@ -35,30 +37,31 @@ class TSKExecutionError(RuntimeError):
 # ---------------------------------------------------------------------------
 
 class FilesystemParser:
-    """Parses filesystem / disk images via Sleuth Kit tools fls and istat.
+    """Parses filesystem / disk images via Sleuth Kit tools mmls, fls, and istat.
 
-    Shells out to `fls -r -m / <image>` to generate a bodyfile containing a full
-    recursive timeline of metadata. If a file is deleted (flagged), runs `istat`
-    to gather specific low-level block allocation and metadata information.
+    Performs dynamic partition discovery via `mmls`, shells out to `fls -o <offset> -r -m / <image>`
+    to generate a bodyfile containing a full recursive timeline of metadata for each partition.
+    If a file is deleted (flagged), runs `istat` to gather block allocation and inode details.
     """
 
-    # Binary candidates for fls and istat
+    # Binary candidates for fls, mmls, and istat
     _FLS_BINARIES = ("fls", "fls.exe")
+    _MMLS_BINARIES = ("mmls", "mmls.exe")
     _ISTAT_BINARIES = ("istat", "istat.exe")
 
     def parse(self, file_path: str, evidence_id: str = "") -> list[Artifact]:
         """Parse the filesystem image at *file_path* and return a list of Artifact records.
 
         Args:
-            file_path:   Absolute path to the filesystem image file (.e01, .dd, .img, .iso).
+            file_path:   Absolute path to the filesystem image file (.e01, .dd, .img, .iso, .aff).
             evidence_id: FK linking back to the ``infrastructure.Evidence`` record.
 
         Returns:
             List of :class:`~preprocessing.schemas.Artifact` objects (artifact_type="file_record").
 
         Raises:
-            TSKNotFoundError:   TSK fls/istat binaries not found.
-            TSKExecutionError:  TSK fls command execution failed.
+            TSKNotFoundError:   TSK fls/mmls/istat binaries not found.
+            TSKExecutionError:  TSK fls command execution failed across all partitions.
             FileNotFoundError:  *file_path* does not exist.
         """
         src = Path(file_path)
@@ -84,119 +87,142 @@ class FilesystemParser:
         fls_bin = self._find_binary(self._FLS_BINARIES, "fls")
         istat_bin = self._find_binary(self._ISTAT_BINARIES, "istat")
 
-        # ── 1. Run fls to generate bodyfile ────────────────────────────────
-        bodyfile_stdout = self._run_fls(fls_bin, src)
+        # ── 1. Discover Partitions via mmls ─────────────────────────────
+        partition_offsets = self._discover_partition_offsets(src)
+        logger.info("Discovered filesystem partition offsets for %s: %r", src.name, partition_offsets)
 
-        # ── 2. Parse bodyfile lines ────────────────────────────────────────
+        # ── 2. Run fls recursively across all discovered partitions ──────
+        bodyfiles_data: list[tuple[Optional[str], str, str]] = []  # (offset, command_str, stdout)
+        execution_errors = []
+
+        for offset in partition_offsets:
+            try:
+                stdout, cmd_str = self._run_fls_on_partition(fls_bin, src, offset)
+                if stdout.strip():
+                    bodyfiles_data.append((offset, cmd_str, stdout))
+            except TSKExecutionError as err:
+                execution_errors.append(str(err))
+
+        if not bodyfiles_data:
+            if execution_errors:
+                error_msg = "; ".join(execution_errors)
+                raise TSKExecutionError(
+                    f"TSK fls extraction failed across all partition offsets for image {src.name}. Errors: {error_msg}"
+                )
+            else:
+                raise TSKExecutionError(f"TSK fls returned 0 bodyfile records for image {src.name}.")
+
+        # ── 3. Parse bodyfile lines into normalized Artifact records ─────
         artifacts: list[Artifact] = []
 
-        for lineno, line in enumerate(bodyfile_stdout.splitlines(), start=1):
-            line = line.strip()
-            if not line:
-                continue
+        for offset, cmd_str, bodyfile_stdout in bodyfiles_data:
+            for lineno, line in enumerate(bodyfile_stdout.splitlines(), start=1):
+                line = line.strip()
+                if not line:
+                    continue
 
-            parts = line.split("|")
-            if len(parts) < 11:
-                logger.warning("Skipping malformed fls line %d: %r", lineno, line)
-                continue
+                parts = line.split("|")
+                if len(parts) < 11:
+                    logger.warning("Skipping malformed fls line %d: %r", lineno, line)
+                    continue
 
-            # Standard bodyfile format:
-            # MD5 | name | inode | mode_as_string | UID | GID | size | atime | mtime | ctime | crtime
-            md5_val = parts[0]
-            name = parts[1]
-            inode = parts[2]
-            mode = parts[3]
-            uid = parts[4]
-            gid = parts[5]
-            size_val = parts[6]
-            atime_raw = parts[7]
-            mtime_raw = parts[8]
-            ctime_raw = parts[9]
-            crtime_raw = parts[10]
+                # Bodyfile format:
+                # MD5 | name | inode | mode | UID | GID | size | atime | mtime | ctime | crtime
+                md5_val = parts[0]
+                name = parts[1]
+                inode = parts[2]
+                mode = parts[3]
+                uid = parts[4]
+                gid = parts[5]
+                size_val = parts[6]
+                atime_raw = parts[7]
+                mtime_raw = parts[8]
+                ctime_raw = parts[9]
+                crtime_raw = parts[10]
 
-            # Determine if deleted (indicated by * in inode, * in mode, or (deleted) in name)
-            deleted = "*" in inode or "*" in mode or "(deleted)" in name.lower()
-            clean_inode = inode.replace("*", "").strip()
+                deleted = "*" in inode or "*" in mode or "(deleted)" in name.lower()
+                clean_inode = inode.replace("*", "").strip()
 
-            # Retrieve dates
-            dt_mtime = _epoch_to_dt(mtime_raw)
-            dt_atime = _epoch_to_dt(atime_raw)
-            dt_ctime = _epoch_to_dt(ctime_raw)
-            dt_crtime = _epoch_to_dt(crtime_raw)
+                dt_mtime = _epoch_to_dt(mtime_raw)
+                dt_atime = _epoch_to_dt(atime_raw)
+                dt_ctime = _epoch_to_dt(ctime_raw)
+                dt_crtime = _epoch_to_dt(crtime_raw)
 
-            # Choose main timestamp (mtime -> atime -> crtime -> ctime)
-            ts = dt_mtime or dt_atime or dt_crtime or dt_ctime
+                # Forensic Timestamp Provenance:
+                # Primary evidence timestamp comes directly from metadata (mtime -> crtime -> ctime -> atime)
+                # DO NOT substitute current ingestion time if evidence timestamp is missing.
+                ts = dt_mtime or dt_crtime or dt_ctime or dt_atime
+                ts_type = "modified" if dt_mtime else ("created" if dt_crtime else ("changed" if dt_ctime else "accessed"))
 
-            # Form raw fields dictionary
-            raw_fields = {
-                "md5": md5_val,
-                "name": name,
-                "inode": inode,
-                "mode": mode,
-                "uid": uid,
-                "gid": gid,
-                "size_bytes": _safe_int(size_val),
-                "atime_epoch": _safe_int(atime_raw),
-                "mtime_epoch": _safe_int(mtime_raw),
-                "ctime_epoch": _safe_int(ctime_raw),
-                "crtime_epoch": _safe_int(crtime_raw),
-                "deleted": deleted,
-                "istat": None,
-            }
+                raw_fields = {
+                    "md5": md5_val,
+                    "name": name,
+                    "inode": inode,
+                    "mode": mode,
+                    "uid": uid,
+                    "gid": gid,
+                    "size_bytes": _safe_int(size_val),
+                    "atime_epoch": _safe_int(atime_raw),
+                    "mtime_epoch": _safe_int(mtime_raw),
+                    "ctime_epoch": _safe_int(ctime_raw),
+                    "crtime_epoch": _safe_int(crtime_raw),
+                    "deleted": deleted,
+                    "partition_offset": offset,
+                    "command_executed": cmd_str,
+                    "raw_fls_line": line,
+                    "source_tool": "tsk",
+                    "istat": None,
+                }
 
-            # ── 3. Run istat on flagged (deleted) files ────────────────────
-            if deleted and clean_inode and clean_inode.isdigit():
-                try:
-                    istat_output = self._run_istat(istat_bin, src, clean_inode)
-                    raw_fields["istat"] = istat_output
-                except Exception as e:
-                    logger.warning("Failed to run istat for inode %s: %s", clean_inode, e)
+                # Run istat on flagged (deleted) files for block allocation metadata
+                if deleted and clean_inode and clean_inode.split("-")[0].isdigit():
+                    try:
+                        istat_output = self._run_istat(istat_bin, src, clean_inode, offset=offset)
+                        raw_fields["istat"] = istat_output
+                    except Exception as e:
+                        logger.warning("Failed to run istat for inode %s on offset %s: %s", clean_inode, offset, e)
 
-            ver = getattr(self, "_tool_version", get_tool_version("tsk"))
-            fname = Path(name).name if name else None
-            fhash = md5_val if md5_val and md5_val != "0" and len(md5_val) == 32 else None
-            summary = f"File {name} (inode {inode}, {size_val} bytes)" if name else f"File inode {inode}"
+                ver = getattr(self, "_tool_version", get_tool_version("tsk"))
+                fname = Path(name).name if name else None
+                fhash = md5_val if md5_val and md5_val != "0" and len(md5_val) == 32 else None
+                summary = f"File {name} (inode {inode}, {size_val} bytes, offset {offset or '0'})"
 
-            artifacts.append(Artifact(
-                evidence_id=evidence_id,
-                source_tool="tsk",
-                artifact_type="file_record",
-                timestamp=ts,
-                timestamp_type="modified",
-                event_summary=summary,
-                parser_version=ver,
-                raw_fields={**raw_fields, "tool_version": ver},
-                normalized_fields=NormalizedFields(
-                    file_path=name,
-                    file_name=fname,
-                    hash=fhash,
-                    mtime=dt_mtime.isoformat() if dt_mtime else None,
-                    atime=dt_atime.isoformat() if dt_atime else None,
-                    ctime=dt_ctime.isoformat() if dt_ctime else None,
-                    deleted=deleted,
-                    rule_name="file_record",
-                )
-            ))
+                artifacts.append(Artifact(
+                    evidence_id=evidence_id,
+                    source_tool="tsk",
+                    artifact_type="file_record",
+                    timestamp=ts,
+                    timestamp_type=ts_type,
+                    event_summary=summary,
+                    parser_version=ver,
+                    raw_fields={**raw_fields, "tool_version": ver},
+                    normalized_fields=NormalizedFields(
+                        file_path=name,
+                        file_name=fname,
+                        file_size=_safe_int(size_val),
+                        hash=fhash,
+                        hash_md5=fhash,
+                        mtime=dt_mtime.isoformat() if dt_mtime else None,
+                        atime=dt_atime.isoformat() if dt_atime else None,
+                        ctime=dt_ctime.isoformat() if dt_ctime else None,
+                        crtime=dt_crtime.isoformat() if dt_crtime else None,
+                        deleted=deleted,
+                        rule_name="file_record",
+                    )
+                ))
 
-        logger.info("Parsed %d filesystem timeline entries from %s", len(artifacts), src.name)
+        logger.info("Successfully extracted %d bodyfile timeline records from %s", len(artifacts), src.name)
         return artifacts
-
-    # -----------------------------------------------------------------------
-    # Binary detection
-    # -----------------------------------------------------------------------
 
     def _find_binary(self, candidates: tuple[str, ...], name: str) -> str:
         """Find candidate binary on system path or local workspace folder."""
         import shutil
-        # Check system PATH first
         for candidate in candidates:
             resolved = shutil.which(candidate)
             if resolved:
                 return resolved
 
-        # Check local workspace tsk/ folder
         try:
-            # Path(__file__).resolve().parents[2] is the argus root directory
             project_root = Path(__file__).resolve().parents[2]
             tsk_dir = project_root / "tsk"
             if tsk_dir.exists():
@@ -214,55 +240,89 @@ class FilesystemParser:
         raise TSKNotFoundError(
             f"TSK tool '{name}' not found on PATH and not found in tsk/ folder. "
             f"Tried: {', '.join(candidates)}. "
-            f"Install The Sleuth Kit and ensure fls/istat are on PATH."
+            f"Install The Sleuth Kit and ensure fls/mmls/istat are on PATH."
         )
 
-    # -----------------------------------------------------------------------
-    # Execution
-    # -----------------------------------------------------------------------
-
-    def _run_fls(self, binary: str, image_path: Path) -> str:
-        """Run `fls -r -m / <image>` and return stdout."""
-        cmd = [binary, "-r", "-m", "/", str(image_path)]
-        logger.debug("Running: %s", " ".join(cmd))
+    def _discover_partition_offsets(self, image_path: Path) -> list[Optional[str]]:
+        """Run `mmls` to discover partition starting sector offsets."""
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=180,
-            )
-            if result.returncode != 0 and image_path.suffix.lower() == ".aff":
+            mmls_bin = self._find_binary(self._MMLS_BINARIES, "mmls")
+        except TSKNotFoundError:
+            return [None]
+
+        cmd = [mmls_bin, str(image_path)]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if res.returncode != 0:
+                return [None]
+
+            offsets: list[Optional[str]] = []
+            pattern = re.compile(r'^\s*\d+:\s+(\S+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(.*)$', re.MULTILINE)
+            ignored_keywords = {"unallocated", "meta", "safety table", "gpt header", "partition table", "microsoft reserved partition"}
+
+            for match in pattern.finditer(res.stdout):
+                slot_type = match.group(1).lower()
+                start_sector = match.group(2)
+                desc = match.group(5).lower().strip()
+
+                if slot_type in ("meta", "-------"):
+                    continue
+                if any(kw in desc for kw in ignored_keywords):
+                    continue
+
+                offsets.append(str(int(start_sector)))
+
+            return offsets if offsets else [None]
+        except Exception as err:
+            logger.warning("mmls partition discovery failed for %s (%s). Defaulting to unpartitioned image mode.", image_path.name, err)
+            return [None]
+
+    def _run_fls_on_partition(self, binary: str, image_path: Path, offset: Optional[str]) -> Tuple[str, str]:
+        """Run `fls -r -m / <image>` with partition offset parameter."""
+        cmd = [binary]
+        if offset and offset != "0":
+            cmd.extend(["-o", str(offset)])
+        cmd.extend(["-r", "-m", "/", str(image_path)])
+
+        cmd_str = " ".join(cmd)
+        logger.debug("Executing TSK command: %s", cmd_str)
+
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout, cmd_str
+
+            if image_path.suffix.lower() == ".aff":
                 for img_type in ("afflib", "aff"):
-                    retry_cmd = [binary, "-i", img_type, "-r", "-m", "/", str(image_path)]
-                    logger.debug("Retrying fls for AFF: %s", " ".join(retry_cmd))
+                    retry_cmd = [binary]
+                    if offset and offset != "0":
+                        retry_cmd.extend(["-o", str(offset)])
+                    retry_cmd.extend(["-i", img_type, "-r", "-m", "/", str(image_path)])
                     retry_res = subprocess.run(retry_cmd, capture_output=True, text=True, timeout=180)
-                    if retry_res.returncode == 0:
-                        return retry_res.stdout
+                    if retry_res.returncode == 0 and retry_res.stdout.strip():
+                        return retry_res.stdout, " ".join(retry_cmd)
         except FileNotFoundError:
-            raise TSKNotFoundError(f"TSK binary {binary} disappeared from PATH.")
+            raise TSKNotFoundError(f"TSK binary {binary} missing from environment.")
 
-        if result.returncode != 0:
-            raise TSKExecutionError(
-                f"TSK fls failed with code {result.returncode}.\n"
-                f"stdout: {result.stdout.strip()[:300]}\n"
-                f"stderr: {result.stderr.strip()[:300]}"
-            )
-        return result.stdout
-
-    def _run_istat(self, binary: str, image_path: Path, inode: str) -> str:
-        """Run `istat <image> <inode>` and return stdout."""
-        cmd = [binary, str(image_path), inode]
-        logger.debug("Running: %s", " ".join(cmd))
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=30,
+        raise TSKExecutionError(
+            f"TSK fls failed with exit code {res.returncode}.\n"
+            f"Command: {cmd_str}\n"
+            f"stdout: {res.stdout.strip()[:300]}\n"
+            f"stderr: {res.stderr.strip()[:300]}"
         )
-        if result.returncode != 0:
-            raise TSKExecutionError(f"TSK istat failed with code {result.returncode}: {result.stderr}")
-        return result.stdout
+
+    def _run_istat(self, binary: str, image_path: Path, inode: str, offset: Optional[str] = None) -> str:
+        """Run `istat [-o offset] <image> <inode>` and return stdout."""
+        cmd = [binary]
+        if offset and offset != "0":
+            cmd.extend(["-o", str(offset)])
+        cmd.extend([str(image_path), inode])
+
+        logger.debug("Running: %s", " ".join(cmd))
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if res.returncode != 0:
+            raise TSKExecutionError(f"TSK istat failed with code {res.returncode}: {res.stderr}")
+        return res.stdout
 
     def _parse_text_file(self, src: Path, evidence_id: str) -> list[Artifact]:
         """Parse text file or narrative record."""

@@ -136,7 +136,7 @@ class RegistryParser:
     def __init__(self, profiles: Optional[list[str]] = None) -> None:
         self._profiles = profiles or DEFAULT_PROFILES
 
-    def parse(self, file_path: str, evidence_id: str = "") -> list[Artifact]:
+    def parse(self, file_path: str, evidence_id: str = "", case_id: str = "") -> list[Artifact]:
         """Parse the registry hive at *file_path* and return Artifact records."""
         src = Path(file_path)
         if not src.exists():
@@ -147,48 +147,155 @@ class RegistryParser:
         if recmd_bin:
             try:
                 self._tool_version = get_tool_version("recmd")
-                artifacts = self._parse_with_recmd(recmd_bin, src, evidence_id)
+                artifacts = self._parse_with_recmd(recmd_bin, src, evidence_id, case_id)
                 if artifacts:
                     logger.info("RegistryParser total (RECmd): %d artifacts from %s", len(artifacts), src.name)
                     artifacts.extend(_check_timestomping(
-                        artifacts, evidence_id, tool_version=self._tool_version
+                        artifacts, evidence_id, case_id=case_id, tool_version=self._tool_version
                     ))
                     return artifacts
             except Exception as e:
                 logger.warning("RECmd execution/parsing failed: %s. Falling back to RegRipper.", e)
 
         # 2. RegRipper fallback path
-        binary = self._find_binary()
-        self._tool_version = get_tool_version("regripper")
+        try:
+            binary = self._find_binary()
+            self._tool_version = get_tool_version("regripper")
 
-        artifacts: list[Artifact] = []
-        success_count = 0
-        for profile in self._profiles:
-            raw_text = self._run_regripper(binary, src, profile)
-            if raw_text is None:
-                continue
-            success_count += 1
-            sections = _split_into_sections(raw_text)
-            for section in sections:
-                artifacts.extend(
-                    _section_to_artifacts(section, evidence_id, tool_version=self._tool_version)
+            artifacts: list[Artifact] = []
+            success_count = 0
+            for profile in self._profiles:
+                raw_text = self._run_regripper(binary, src, profile)
+                if raw_text is None:
+                    continue
+                success_count += 1
+                sections = _split_into_sections(raw_text)
+                for section in sections:
+                    artifacts.extend(
+                        _section_to_artifacts(section, evidence_id, case_id=case_id, tool_version=self._tool_version)
+                    )
+                logger.info(
+                    "RegRipper profile=%s: %d sections → %d artifacts so far",
+                    profile, len(sections), len(artifacts),
                 )
-            logger.info(
-                "RegRipper profile=%s: %d sections → %d artifacts so far",
-                profile, len(sections), len(artifacts),
-            )
 
-        if success_count == 0 and len(self._profiles) > 0:
-            logger.error("RegistryParser failed: every attempted RegRipper profile failed to execute.")
-            raise RegRipperExecutionError(
-                "RegRipper failed to execute successfully on all attempted profiles."
-            )
+            if artifacts:
+                logger.info("RegistryParser total (RegRipper): %d artifacts from %s", len(artifacts), src.name)
+                artifacts.extend(_check_timestomping(
+                    artifacts, evidence_id, case_id=case_id, tool_version=self._tool_version
+                ))
+                return artifacts
+        except Exception as e:
+            logger.warning("RegRipper execution/lookup failed (%s). Falling back to native python-registry.", e)
 
-        logger.info("RegistryParser total (RegRipper): %d artifacts from %s", len(artifacts), src.name)
+        # 3. Native python-registry fallback path
+        return self._parse_with_python_registry(src, evidence_id, case_id)
 
-        artifacts.extend(_check_timestomping(
-            artifacts, evidence_id, tool_version=self._tool_version
-        ))
+    def _parse_with_python_registry(self, src: Path, evidence_id: str, case_id: str = "") -> list[Artifact]:
+        """Native pure-Python registry parser fallback using python-registry library."""
+        try:
+            from Registry import Registry
+        except ImportError:
+            logger.error("python-registry package is not installed.")
+            raise RuntimeError("No registry parser available: RECmd/RegRipper missing and python-registry not installed.")
+
+        try:
+            reg = Registry.Registry(str(src))
+        except Exception as e:
+            logger.error("Failed to open registry hive %s with python-registry: %s", src.name, e)
+            raise RuntimeError(f"Failed to open registry hive {src.name}: {e}")
+
+        ver = get_tool_version("python_registry") or "1.4.0"
+        artifacts: list[Artifact] = []
+
+        def walk(key, depth=0):
+            if depth > 12:
+                return
+            kp = key.path()
+            kp_lower = kp.lower()
+
+            # Skip redundant file-association Classes trees in SOFTWARE hive
+            if key.name().lower() == "classes" and ("software" in kp_lower or depth <= 3):
+                return
+
+            ts = key.timestamp()
+            if ts and ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            
+            values = []
+            try:
+                values = key.values()
+            except Exception:
+                pass
+
+            if values:
+                for val in values:
+                    try:
+                        v_name = val.name()
+                        v_data_raw = val.value()
+                        if isinstance(v_data_raw, bytes):
+                            v_data = v_data_raw.decode("utf-8", errors="ignore")
+                        elif isinstance(v_data_raw, (list, dict)):
+                            v_data = json.dumps(v_data_raw)
+                        else:
+                            v_data = str(v_data_raw) if v_data_raw is not None else None
+                    except Exception:
+                        continue
+
+                    plugin_cat = "python_registry"
+                    if "userassist" in kp_lower:
+                        plugin_cat = "userassist"
+                    elif "recentdocs" in kp_lower or "runmru" in kp_lower or "typedpaths" in kp_lower:
+                        plugin_cat = "recentdocs"
+                    elif "services" in kp_lower:
+                        plugin_cat = "services"
+                    elif "bam" in kp_lower or "dam" in kp_lower:
+                        plugin_cat = "bam"
+                    elif "muicache" in kp_lower:
+                        plugin_cat = "muicache"
+                    elif "networklist" in kp_lower or "interfaces" in kp_lower:
+                        plugin_cat = "network"
+                    elif "tasks" in kp_lower:
+                        plugin_cat = "tasks"
+
+                    art = _make_artifact(
+                        evidence_id=evidence_id,
+                        case_id=case_id,
+                        plugin=plugin_cat,
+                        plugin_text=f"Key: {kp} | Value: {v_name} = {v_data}",
+                        key_path=kp,
+                        value_name=v_name,
+                        value_data=v_data,
+                        timestamp=ts,
+                        tool_version=ver,
+                        source_tool="python_registry"
+                    )
+                    artifacts.append(art)
+            else:
+                if depth <= 2 or any(w in kp_lower for w in ["run", "services", "userassist", "recentdocs", "network", "bam", "dam", "muicache"]):
+                    art = _make_artifact(
+                        evidence_id=evidence_id,
+                        case_id=case_id,
+                        plugin="python_registry",
+                        plugin_text=f"Key: {kp}",
+                        key_path=kp,
+                        value_name=None,
+                        value_data=None,
+                        timestamp=ts,
+                        tool_version=ver,
+                        source_tool="python_registry"
+                    )
+                    artifacts.append(art)
+
+            try:
+                for subkey in key.subkeys():
+                    walk(subkey, depth + 1)
+            except Exception:
+                pass
+
+        walk(reg.root())
+        logger.info("RegistryParser total (python-registry): %d artifacts from %s", len(artifacts), src.name)
+        artifacts.extend(_check_timestomping(artifacts, evidence_id, case_id=case_id, tool_version=ver))
         return artifacts
 
     def _find_recmd_binary(self) -> Optional[str]:
@@ -203,20 +310,8 @@ class RegistryParser:
             if shutil.which(candidate):
                 return candidate
 
-        if sys.platform == "win32":
-            try:
-                res = subprocess.run(
-                    ["wsl", "test", "-f", "/usr/lib/regripper/rip.pl"],
-                    capture_output=True,
-                    timeout=5
-                )
-                if res.returncode == 0:
-                    return "wsl_rip"
-            except Exception:
-                pass
-
         raise RegRipperNotFoundError(
-            f"RegRipper binary not found on PATH and not found in WSL. Tried: {', '.join(self._BINARIES)}."
+            f"RegRipper binary not found on PATH. Tried: {', '.join(self._BINARIES)}."
         )
 
     def _run_recmd(self, binary: str, hive_path: Path, out_dir: Path) -> None:
@@ -240,22 +335,22 @@ class RegistryParser:
                 f"stdout: {result.stdout[:500]}\nstderr: {result.stderr[:500]}"
             )
 
-    def _parse_with_recmd(self, binary: str, hive_path: Path, evidence_id: str) -> list[Artifact]:
+    def _parse_with_recmd(self, binary: str, hive_path: Path, evidence_id: str, case_id: str = "") -> list[Artifact]:
         tmp_dir = Path(tempfile.mkdtemp(prefix="argus_recmd_"))
         try:
             self._run_recmd(binary, hive_path, tmp_dir)
-            return self._parse_recmd_output_dir(tmp_dir, evidence_id, self._tool_version)
+            return self._parse_recmd_output_dir(tmp_dir, evidence_id, case_id, self._tool_version)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
-    def _parse_recmd_output_dir(self, out_dir: Path, evidence_id: str, tool_version: str) -> list[Artifact]:
+    def _parse_recmd_output_dir(self, out_dir: Path, evidence_id: str, case_id: str, tool_version: str) -> list[Artifact]:
         artifacts: list[Artifact] = []
         json_files = list(out_dir.glob("*.json")) + list(out_dir.glob("*.jsonl"))
         for jf in json_files:
-            artifacts.extend(self._parse_recmd_json_file(jf, evidence_id, tool_version))
+            artifacts.extend(self._parse_recmd_json_file(jf, evidence_id, case_id, tool_version))
         return artifacts
 
-    def _parse_recmd_json_file(self, json_file: Path, evidence_id: str, tool_version: str) -> list[Artifact]:
+    def _parse_recmd_json_file(self, json_file: Path, evidence_id: str, case_id: str, tool_version: str) -> list[Artifact]:
         artifacts: list[Artifact] = []
         content = json_file.read_text(encoding="utf-8", errors="replace")
         if not content.strip():
@@ -278,7 +373,7 @@ class RegistryParser:
                     continue
 
         for rec in records:
-            artifacts.append(_recmd_record_to_artifact(rec, evidence_id, tool_version=tool_version))
+            artifacts.append(_recmd_record_to_artifact(rec, evidence_id, case_id=case_id, tool_version=tool_version))
         return artifacts
 
     def _run_regripper(self, binary: str, hive_path: Path, profile: str) -> Optional[str]:
@@ -325,7 +420,7 @@ class RegistryParser:
         return output
 
 
-def _recmd_record_to_artifact(rec: dict, evidence_id: str, tool_version: str) -> Artifact:
+def _recmd_record_to_artifact(rec: dict, evidence_id: str, case_id: str = "", tool_version: str = "unknown") -> Artifact:
     key_path = rec.get("KeyPath") or rec.get("Key") or rec.get("key_path")
     value_name = rec.get("ValueName") or rec.get("Value") or rec.get("value_name")
     value_data = rec.get("ValueData") or rec.get("Data") or rec.get("value_data")
@@ -342,6 +437,7 @@ def _recmd_record_to_artifact(rec: dict, evidence_id: str, tool_version: str) ->
 
     return _make_artifact(
         evidence_id=evidence_id,
+        case_id=case_id,
         plugin=plugin,
         plugin_text=json.dumps(rec),
         key_path=key_path,
@@ -391,6 +487,7 @@ def _split_into_sections(raw_text: str) -> list[dict]:
 def _section_to_artifacts(
     section: dict,
     evidence_id: str,
+    case_id: str = "",
     *,
     tool_version: str = "unknown",
 ) -> list[Artifact]:
@@ -420,6 +517,7 @@ def _section_to_artifacts(
             value_data = m.group(2).strip()
             artifacts.append(_make_artifact(
                 evidence_id=evidence_id,
+                case_id=case_id,
                 plugin=plugin,
                 plugin_text=plugin_text,
                 key_path=current_key_path,
@@ -434,6 +532,7 @@ def _section_to_artifacts(
     if not artifacts:
         artifacts.append(_make_artifact(
             evidence_id=evidence_id,
+            case_id=case_id,
             plugin=plugin,
             plugin_text=plugin_text,
             key_path=current_key_path,
@@ -448,6 +547,7 @@ def _section_to_artifacts(
         serial, friendly, first, last = _extract_usb_details(plugin_text, current_key_path)
         usb_art = Artifact(
             evidence_id=evidence_id,
+            case_id=case_id,
             source_tool="regripper",
             artifact_type="usb_device",
             timestamp=ts,
@@ -518,6 +618,7 @@ def _extract_usb_details(plugin_text: str, key_path: Optional[str]) -> tuple[Opt
 def _make_artifact(
     *,
     evidence_id: str,
+    case_id: str = "",
     plugin: str,
     plugin_text: str,
     key_path: Optional[str],
@@ -663,6 +764,7 @@ def _make_artifact(
 
     return Artifact(
         evidence_id=evidence_id,
+        case_id=case_id,
         source_tool=source_tool,
         artifact_type=artifact_type,
         timestamp=timestamp,
@@ -681,6 +783,7 @@ def _make_artifact(
 def _check_timestomping(
     artifacts: list[Artifact],
     evidence_id: str,
+    case_id: str = "",
     *,
     tool_version: str = "unknown",
 ) -> list[Artifact]:
@@ -740,6 +843,7 @@ def _check_timestomping(
                 logger.warning("Evasion indicator: timestomping in plugin %r", plugin)
                 indicators.append(Artifact(
                     evidence_id=evidence_id,
+                    case_id=case_id,
                     source_tool="regripper",
                     artifact_type="evasion_indicator",
                     timestamp=created_ts,
@@ -769,6 +873,7 @@ def _check_timestomping(
                 identical_ts = next(iter(ts_seconds))
                 indicators.append(Artifact(
                     evidence_id=evidence_id,
+                    case_id=case_id,
                     source_tool="regripper",
                     artifact_type="evasion_indicator",
                     timestamp=identical_ts,

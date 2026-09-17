@@ -168,8 +168,10 @@ class TestEvtxECmdParserUnit(unittest.TestCase):
 
     @patch("shutil.which", return_value=None)
     def test_missing_evtxecmd_binary_raises_not_found(self, mock_which: MagicMock):
-        with self.assertRaises(EvtxECmdNotFoundError):
-            self.parser.parse(str(self.evtx_path))
+        with patch.object(self.parser, "_find_binary", return_value=None):
+            with patch.dict("sys.modules", {"Evtx.Evtx": None, "Evtx": None}):
+                with self.assertRaises(EvtxECmdNotFoundError):
+                    self.parser.parse(str(self.evtx_path))
 
     @patch("shutil.which", return_value="EvtxECmd.exe")
     @patch("subprocess.run")

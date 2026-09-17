@@ -101,13 +101,19 @@ class EvidenceConsolidationEngine:
 
     def _link_fcrs_to_uais(self, fcrs: list[CorrelationRecord], uais: list[UnifiedArtifact]) -> None:
         """Link relevant FCR correlation_ids to UnifiedArtifact records."""
+        # Build inverted index mapping artifact_id -> list of fcr.correlation_id
+        art_to_fcrs: dict[str, list[str]] = {}
+        for fcr in fcrs:
+            for art_id in fcr.artifact_ids:
+                art_to_fcrs.setdefault(art_id, []).append(fcr.correlation_id)
+
         for uai in uais:
-            source_set = set(uai.source_artifact_ids)
             fcr_ids = []
-            for fcr in fcrs:
-                if set(fcr.artifact_ids).intersection(source_set):
-                    fcr_ids.append(fcr.correlation_id)
-            uai.source_fcr_ids = sorted(list(set(fcr_ids)))
+            for art_id in uai.source_artifact_ids:
+                if art_id in art_to_fcrs:
+                    fcr_ids.extend(art_to_fcrs[art_id])
+            if fcr_ids:
+                uai.source_fcr_ids = sorted(list(set(fcr_ids)))
 
     def _detect_conflicts(
         self,

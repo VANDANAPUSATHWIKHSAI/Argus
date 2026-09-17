@@ -101,13 +101,12 @@ class RegistryAnalyzer:
                 # Generic Registry Modification Flag
                 elif any(k in reg_key for k in ("\\control\\lsa", "\\policies\\system")):
                     fact_msg = (
-                        f"Critical system security key modification observed in Registry: '{reg_key}' "
-                        f"value '{val_name}' = '{val_data[:100]}'."
+                        f"Critical system security key modification observed in Registry key '{reg_key}'."
                     )
                     findings.append(Finding(
                         case_id=case_id,
                         fact=fact_msg,
-                        confidence=0.88,
+                        confidence=0.75,
                         severity="medium",
                         mitre_mapping="T1112",
                         timestamp=ts,

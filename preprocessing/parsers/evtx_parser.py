@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
 import subprocess
 import tempfile
 from datetime import datetime, timezone
@@ -118,15 +119,41 @@ class EvtxParser:
     # Private helpers
     # -----------------------------------------------------------------------
 
+    def _find_binary(self) -> Optional[str]:
+        """Find hayabusa binary on PATH or project external_tools."""
+        resolved = shutil.which("hayabusa") or shutil.which("hayabusa.exe")
+        if resolved:
+            return resolved
+
+        try:
+            repo_root = Path(__file__).resolve().parents[3]
+            ext_hayabusa = repo_root / "external_tools" / "hayabusa"
+            if ext_hayabusa.exists():
+                for p in ext_hayabusa.rglob("hayabusa.exe"):
+                    if p.is_file():
+                        return str(p)
+        except Exception:
+            pass
+
+        return None
+
     def _run_hayabusa(self, evtx_path: Path, output_path: Path) -> None:
-        """Shell out to `hayabusa json-timeline` and write JSONL to *output_path*."""
+        """Shell out to `hayabusa` and write JSONL to *output_path*."""
+        binary = self._find_binary()
+        if not binary:
+            raise HayabusaNotFoundError(
+                "hayabusa binary not found on PATH or external_tools. "
+                "Install Hayabusa from https://github.com/Yamato-Security/hayabusa "
+                "and ensure it is accessible."
+            )
+
         cmd = [
-            "hayabusa",
-            "json-timeline",
+            binary,
+            "dfir-timeline",
             "-f", str(evtx_path),
             "-o", str(output_path),
-            "-L",   # JSONL (one object per line)
-            "-q",   # quiet — no progress bars or banners
+            "-t", "jsonl",
+            "-q", "-w", "-U", "-C"
         ]
         logger.debug("Running: %s", " ".join(cmd))
 
@@ -139,9 +166,7 @@ class EvtxParser:
             )
         except FileNotFoundError:
             raise HayabusaNotFoundError(
-                "hayabusa binary not found on PATH. "
-                "Install Hayabusa from https://github.com/Yamato-Security/hayabusa "
-                "and ensure it is accessible as `hayabusa`."
+                f"hayabusa binary {binary} disappeared mid-run."
             )
 
         if result.returncode != 0:

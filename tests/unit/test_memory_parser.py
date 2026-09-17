@@ -37,7 +37,7 @@ class TestMemoryParserAllPlugins:
             "windows.dlllist",
             "windows.handles",
             "windows.filescan",
-            "windows.hivelist",
+            "windows.registry.hivelist",
         ]
         assert plugin_names == expected
 
@@ -116,7 +116,7 @@ class TestMemoryParserAllPlugins:
                     "columns": ["Offset", "Name"],
                     "rows": [["0x80000000", "\\Device\\HarddiskVolume1\\Windows\\System32\\cmd.exe"]]
                 })
-            elif plugin == "windows.hivelist":
+            elif plugin in ("windows.hivelist", "windows.registry.hivelist"):
                 return json.dumps({
                     "columns": ["Offset", "FileFullPath"],
                     "rows": [["0x90000000", "\\Device\\HarddiskVolume1\\Windows\\System32\\config\\SYSTEM"]]
@@ -202,3 +202,30 @@ class TestMemoryParserAllPlugins:
         parser = MemoryParser()
         with pytest.raises(VolatilityExecutionError):
             parser.parse(str(dump_file))
+
+    @patch.object(MemoryParser, "_run_vol")
+    def test_registry_hivelist_availability_and_routing(self, mock_run_vol, tmp_path):
+        """Verify windows.registry.hivelist plugin routing, hive_record artifact type, and normalized fields."""
+        dump_file = tmp_path / "mem.raw"
+        dump_file.write_bytes(b"dummy memory contents")
+
+        def side_effect(dump_path, plugin, json_output=True):
+            if plugin == "windows.registry.hivelist":
+                return json.dumps([
+                    {
+                        "File output": "Disabled",
+                        "FileFullPath": "\\SystemRoot\\System32\\Config\\SOFTWARE",
+                        "Offset": 273366084005904
+                    }
+                ])
+            return json.dumps([])
+
+        mock_run_vol.side_effect = side_effect
+        parser = MemoryParser()
+        artifacts = parser.parse(str(dump_file), evidence_id="ev_hive_test")
+
+        hive_arts = [a for a in artifacts if a.artifact_type == "hive_record"]
+        assert len(hive_arts) == 1
+        assert hive_arts[0].source_tool == "volatility3"
+        assert hive_arts[0].raw_fields["FileFullPath"] == "\\SystemRoot\\System32\\Config\\SOFTWARE"
+        assert hive_arts[0].normalized_fields.file_path == "\\SystemRoot\\System32\\Config\\SOFTWARE"

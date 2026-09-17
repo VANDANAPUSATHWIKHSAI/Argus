@@ -1,0 +1,60 @@
+{
+  "audit_metadata": {
+    "evidence_file": "exec_sysmon_1_lolbin_rundll32_advpack_RegisterOCX.evtx",
+    "evidence_path": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\windows\\exec_sysmon_1_lolbin_rundll32_advpack_RegisterOCX.evtx",
+    "evidence_size_bytes": 69632,
+    "sha256": "6d5b52398a67b36c160ec22db8e027efbc3e40943075d2d79c748931bc8d9982",
+    "audit_timestamp": "2026-09-17T21:30:00Z",
+    "evidence_id": "EVTX-PHASEA-001",
+    "case_id": "CASE-EVTX-AUDIT-001"
+  },
+  "execution_metrics": {
+    "raw_events": 2,
+    "hayabusa_hunted_events": 3,
+    "normalized_artifacts": 5,
+    "atomic_entities": 51,
+    "unique_entities": 46,
+    "fcr_count": 46,
+    "uai_count": 56,
+    "forensic_findings": 1,
+    "fir_findings": 1,
+    "sanitized_contexts": 1,
+    "e2e_runtime_seconds": 9.11
+  },
+  "forensic_audit_matrix": {
+    "total_findings_audited": 1,
+    "valid": 1,
+    "valid_but_confidence_review": 0,
+    "severity_review": 0,
+    "false_positives": 0,
+    "duplicate_findings": 0,
+    "overstated_claims": 0,
+    "broken_provenance": 0,
+    "unsupported_mitre_mappings": 0,
+    "sanitization_defects": 0
+  },
+  "findings": [
+    {
+      "fir_id": "FIR-EVTX-001",
+      "finding_id": "FINDING-EVTX-001",
+      "layer": "log.process_creation",
+      "fact": "Rundll32 command line executed advpack.dll,RegisterOCX: rundll32.exe advpack.dll,RegisterOCX c:\\Windows\\System32\\calc.exe",
+      "severity": "high",
+      "confidence": 0.90,
+      "mitre_mapping": "T1218.011",
+      "classification": "VALID",
+      "provenance_status": "INTACT",
+      "sanitization_status": "PASS",
+      "contributing_artifact_ids": [
+        "ART-EVTX-002"
+      ],
+      "contributing_fcr_ids": [
+        "FCR-EVTX-002"
+      ],
+      "contributing_uai_ids": [
+        "UAI-EVTX-002"
+      ]
+    }
+  ],
+  "final_status": "EVTX — FORENSICALLY VALIDATED"
+}

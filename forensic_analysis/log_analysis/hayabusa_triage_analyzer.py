@@ -41,8 +41,19 @@ class HayabusaTriageAnalyzer:
             norm = artifact.normalized_fields
             raw = artifact.raw_fields or {}
 
-            rule_name = norm.rule_name or raw.get("rule_title") or raw.get("RuleTitle") or raw.get("RuleName") or "Hayabusa Rule"
+            status_raw = str(norm.severity or raw.get("level") or raw.get("Level") or "medium").lower()
+            if status_raw in ("info", "informational"):
+                sev_clean = "informational"
+            elif status_raw in ("med", "medium"):
+                sev_clean = "medium"
+            elif status_raw in ("low", "high", "critical"):
+                sev_clean = status_raw
+            else:
+                sev_clean = "medium"
+
+            rule_name = norm.rule_name or raw.get("RuleTitle") or raw.get("rule_name") or "Unknown Hayabusa Rule"
             status = norm.severity or raw.get("level") or raw.get("Level") or "medium"
+
             mitre = raw.get("mitre_mapping") or raw.get("Tactics") or raw.get("Techniques") or "T1003"
             details = artifact.event_summary or raw.get("details") or raw.get("Details") or ""
 
@@ -57,7 +68,7 @@ class HayabusaTriageAnalyzer:
                 case_id=case_id,
                 fact=fact_msg,
                 confidence=0.95,
-                severity=str(status).lower(),
+                severity=sev_clean,
                 mitre_mapping=str(mitre),
                 timestamp=ts,
                 evidence_reference=fcr_ref or artifact.artifact_id,

@@ -88,32 +88,131 @@ class EvtxECmdParser:
         binary = self._find_binary()
         self._tool_version = get_tool_version("evtxecmd")
 
-        tmp_dir = Path(tempfile.mkdtemp(prefix="argus_evtxecmd_"))
+        exec_exc = None
+        if binary:
+            tmp_dir = Path(tempfile.mkdtemp(prefix="argus_evtxecmd_"))
+            try:
+                output_file = tmp_dir / "out.json"
+                self._run_evtxecmd(binary, src, tmp_dir, output_file)
+                artifacts = self._parse_output(tmp_dir, output_file, evidence_id)
+                return artifacts
+            except (EvtxECmdExecutionError, EvtxECmdNotFoundError) as exc:
+                exec_exc = exc
+                logger.warning("EvtxECmd binary execution failed (%s). Falling back to python-evtx parser.", exc)
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+        else:
+            exec_exc = EvtxECmdNotFoundError(
+                f"EvtxECmd binary not found on PATH. Tried: {', '.join(self._BINARIES)}."
+            )
+
+        # Native python-evtx parser fallback
         try:
-            output_file = tmp_dir / "out.json"
-            self._run_evtxecmd(binary, src, tmp_dir, output_file)
-            artifacts = self._parse_output(tmp_dir, output_file, evidence_id)
-            logger.info("EvtxECmdParser total: %d raw artifacts from %s", len(artifacts), src.name)
+            artifacts = self._parse_via_python_evtx(src, evidence_id)
+            logger.info("EvtxECmdParser total: %d raw artifacts via python-evtx from %s", len(artifacts), src.name)
             return artifacts
-        finally:
-            shutil.rmtree(tmp_dir, ignore_errors=True)
+        except Exception:
+            if exec_exc:
+                raise exec_exc
+            raise
+
+    def _parse_via_python_evtx(self, evtx_path: Path, evidence_id: str) -> list[Artifact]:
+        """Parse EVTX using python-evtx library when EvtxECmd executable cannot run."""
+        try:
+            import Evtx.Evtx as evtx
+        except ImportError:
+            raise EvtxECmdNotFoundError("Neither EvtxECmd binary nor python-evtx module is available.")
+
+        artifacts: list[Artifact] = []
+        with evtx.Evtx(str(evtx_path)) as log:
+            for record in log.records():
+                try:
+                    xml_str = record.xml()
+                    rec_dict = self._xml_to_record(xml_str)
+                    if rec_dict:
+                        artifacts.append(self._record_to_artifact(rec_dict, evidence_id))
+                except Exception as exc:
+                    logger.warning("Error parsing EVTX record: %s", exc)
+        return artifacts
+
+    def _xml_to_record(self, xml_str: str) -> dict:
+        """Convert raw EVTX XML to record dictionary matching EvtxECmd structure."""
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(xml_str)
+        ns = {'e': 'http://schemas.microsoft.com/win/2004/08/events/event'}
+        sys_elem = root.find('e:System', ns)
+        rec: dict[str, Any] = {}
+
+        if sys_elem is not None:
+            prov = sys_elem.find('e:Provider', ns)
+            if prov is not None:
+                rec['Provider'] = prov.attrib.get('Name', '')
+            eid = sys_elem.find('e:EventID', ns)
+            if eid is not None and eid.text:
+                try:
+                    rec['EventId'] = int(eid.text)
+                except ValueError:
+                    rec['EventId'] = eid.text
+            chan = sys_elem.find('e:Channel', ns)
+            if chan is not None:
+                rec['Channel'] = chan.text
+            comp = sys_elem.find('e:Computer', ns)
+            if comp is not None:
+                rec['Computer'] = comp.text
+            time_c = sys_elem.find('e:TimeCreated', ns)
+            if time_c is not None:
+                rec['TimeCreated'] = time_c.attrib.get('SystemTime', '')
+            rec_id = sys_elem.find('e:EventRecordID', ns)
+            if rec_id is not None and rec_id.text:
+                try:
+                    rec['RecordId'] = int(rec_id.text)
+                except ValueError:
+                    rec['RecordId'] = rec_id.text
+            exec_elem = sys_elem.find('e:Execution', ns)
+            if exec_elem is not None:
+                if 'ProcessID' in exec_elem.attrib:
+                    rec['ProcessID'] = exec_elem.attrib['ProcessID']
+                if 'ThreadID' in exec_elem.attrib:
+                    rec['ThreadID'] = exec_elem.attrib['ThreadID']
+            sec_elem = sys_elem.find('e:Security', ns)
+            if sec_elem is not None and 'UserID' in sec_elem.attrib:
+                rec['UserId'] = sec_elem.attrib['UserID']
+
+        ev_data = root.find('e:EventData', ns)
+        if ev_data is not None:
+            ed_dict = {}
+            for d in ev_data.findall('e:Data', ns):
+                name = d.attrib.get('Name')
+                val = d.text or ''
+                if name:
+                    ed_dict[name] = val
+                    rec[name] = val
+            rec['EventData'] = ed_dict
+
+        return rec
 
     # -----------------------------------------------------------------------
     # Binary Discovery & Subprocess Execution
     # -----------------------------------------------------------------------
 
-    def _find_binary(self) -> str:
-        """Find candidate EvtxECmd binary on system PATH or dotnet wrapper."""
+    def _find_binary(self) -> Optional[str]:
+        """Find candidate EvtxECmd binary on system PATH or project external_tools."""
         for candidate in self._BINARIES:
             resolved = shutil.which(candidate)
             if resolved:
                 return resolved
 
-        raise EvtxECmdNotFoundError(
-            f"EvtxECmd binary not found on PATH. Tried: {', '.join(self._BINARIES)}. "
-            "Install Eric Zimmerman's EvtxECmd from https://ericzimmerman.github.io "
-            "and ensure it is accessible on PATH."
-        )
+        try:
+            repo_root = Path(__file__).resolve().parents[3]
+            ext_tools = repo_root / "external_tools" / "Zimmerman"
+            if ext_tools.exists():
+                for p in ext_tools.rglob("EvtxECmd.exe"):
+                    if p.is_file():
+                        return str(p)
+        except Exception:
+            pass
+
+        return None
 
     def _run_evtxecmd(self, binary: str, evtx_path: Path, tmp_dir: Path, output_json: Path) -> None:
         """Execute EvtxECmd safely without shell execution."""

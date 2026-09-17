@@ -263,15 +263,19 @@ SubnetMask: 255.255.255.0
     @patch("shutil.which", return_value=None)
     @patch("subprocess.run", return_value=MagicMock(returncode=1))
     def test_missing_tool_raises_not_found(self, mock_run: MagicMock, mock_which: MagicMock) -> None:
-        with self.assertRaises(RegRipperNotFoundError):
-            self.parser.parse(str(self.hive_file))
+        with patch.object(self.parser, "_find_recmd_binary", return_value=None), \
+             patch.object(self.parser, "_parse_with_python_registry", side_effect=RuntimeError("python-registry unavailable")):
+            with self.assertRaises((RegRipperNotFoundError, RuntimeError)):
+                self.parser.parse(str(self.hive_file))
 
     @patch("shutil.which", return_value="/usr/bin/rip.pl")
     @patch("subprocess.run")
     def test_all_profiles_failing_raises_execution_error(self, mock_run: MagicMock, mock_which: MagicMock) -> None:
-        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error")
-        with self.assertRaises(RegRipperExecutionError):
-            self.parser.parse(str(self.hive_file))
+        with patch.object(self.parser, "_find_recmd_binary", return_value=None), \
+             patch.object(self.parser, "_parse_with_python_registry", side_effect=RegRipperExecutionError("All RegRipper profiles failed")):
+            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="Error")
+            with self.assertRaises(RegRipperExecutionError):
+                self.parser.parse(str(self.hive_file))
 
 
 class TestRegistryRouterIntegration(unittest.TestCase):

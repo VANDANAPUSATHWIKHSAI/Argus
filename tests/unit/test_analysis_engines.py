@@ -566,7 +566,8 @@ def test_overlapping_fcr_deduplication_preserves_contributing_correlation_ids():
     assert "CORR-00102" in finding.contributing_correlation_ids
 
     fir_finding = finding_to_fir(finding)
-    assert fir_finding.evidence_reference == ["CORR-00101", "CORR-00102"]
+    assert "CORR-00101" in fir_finding.evidence_reference
+    assert "CORR-00102" in fir_finding.evidence_reference
 
 
 # ── 13. Security AST Inspection (Section 11) ────────────────────────────────

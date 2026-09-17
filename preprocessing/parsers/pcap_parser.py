@@ -144,10 +144,10 @@ class PcapParser:
         run_cwd = str(cwd)
 
         if binary:
-            cmd = [binary, "-r", str(pcap_path)]
+            cmd = [os.path.abspath(binary), "-r", str(pcap_path)]
         elif sys.platform == "win32":
             try:
-                r = subprocess.run(["wsl", "bash", "-lc", "which zeek"], capture_output=True, text=True, timeout=5)
+                r = subprocess.run(["wsl", "bash", "-lc", "which zeek"], capture_output=True, text=True, timeout=30)
                 if r.returncode == 0 and r.stdout.strip():
                     wsl_pcap = _to_wsl_path(pcap_path)
                     wsl_cwd = _to_wsl_path(cwd)
@@ -289,24 +289,23 @@ class PcapParser:
 
         if binary:
             cmd = [
-                binary,
+                os.path.abspath(binary),
                 "-r", str(pcap_path),
                 "-l", str(log_dir),
-                "-q",   # quiet — suppress informational progress output
             ]
         elif sys.platform == "win32":
             try:
-                r = subprocess.run(["wsl", "bash", "-lc", "which suricata"], capture_output=True, text=True, timeout=5)
+                r = subprocess.run(["wsl", "bash", "-lc", "which suricata"], capture_output=True, text=True, timeout=30)
                 if r.returncode == 0 and r.stdout.strip():
                     wsl_pcap = _to_wsl_path(pcap_path)
                     wsl_log = _to_wsl_path(log_dir)
-                    cmd = ["wsl", "bash", "-lc", f"suricata -r '{wsl_pcap}' -l '{wsl_log}' -q"]
+                    cmd = ["wsl", "bash", "-lc", f"suricata -r '{wsl_pcap}' -l '{wsl_log}'"]
                 else:
                     raise SuricataNotFoundError("Suricata binary not found on PATH or WSL.")
             except FileNotFoundError:
                 raise SuricataNotFoundError("Suricata binary not found on PATH or WSL.")
         else:
-            cmd = ["suricata", "-r", str(pcap_path), "-l", str(log_dir), "-q"]
+            cmd = ["suricata", "-r", str(pcap_path), "-l", str(log_dir)]
 
         logger.debug("Running Suricata: %s", " ".join(cmd))
         try:

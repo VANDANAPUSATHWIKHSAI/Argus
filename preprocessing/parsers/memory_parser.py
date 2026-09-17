@@ -99,7 +99,7 @@ _PLUGINS: list[tuple[str, str, list[str]]] = [
         ["Offset", "Name", "Access"],
     ),
     (
-        "windows.hivelist",
+        "windows.registry.hivelist",
         "hive_record",
         ["Offset", "FileFullPath", "Name"],
     ),
@@ -147,14 +147,25 @@ class MemoryParser:
 
         self._tool_version = get_tool_version("volatility3")
         artifacts: list[Artifact] = []
+        failed_errors: list[VolatilityExecutionError] = []
         for plugin, artifact_type, fallback_cols in _PLUGINS:
-            plugin_artifacts = self._run_plugin(
-                src, plugin, artifact_type, fallback_cols, evidence_id
-            )
-            artifacts.extend(plugin_artifacts)
-            logger.info(
-                "Plugin %s produced %d artifacts", plugin, len(plugin_artifacts)
-            )
+            try:
+                plugin_artifacts = self._run_plugin(
+                    src, plugin, artifact_type, fallback_cols, evidence_id
+                )
+                artifacts.extend(plugin_artifacts)
+                logger.info(
+                    "Plugin %s produced %d artifacts", plugin, len(plugin_artifacts)
+                )
+            except VolatilityExecutionError as e:
+                failed_errors.append(e)
+                logger.warning(
+                    "Plugin %s is inactive or failed for dump %s: %s", plugin, src.name, e
+                )
+
+        if not artifacts and failed_errors:
+            # If all plugins failed and produced 0 artifacts, re-raise the last typed error
+            raise failed_errors[-1]
 
         logger.info(
             "MemoryParser total: %d artifacts from %s", len(artifacts), src.name
@@ -202,9 +213,10 @@ class MemoryParser:
         self, dump_path: Path, plugin: str, *, json_output: bool
     ) -> str:
         """Execute `vol -f <dump> <plugin> [--output=json]` and return stdout."""
-        cmd = ["vol", "-f", str(dump_path), plugin]
         if json_output:
-            cmd.append("--output=json")
+            cmd = ["vol", "-r", "json", "-f", str(dump_path), plugin]
+        else:
+            cmd = ["vol", "-f", str(dump_path), plugin]
 
         logger.debug("Running: %s", " ".join(cmd))
 
@@ -268,8 +280,17 @@ class MemoryParser:
             logger.warning("Plugin %s: JSON parse error: %s", plugin, exc)
             return []
 
-        columns: list[str] = data.get("columns", [])
-        rows: list[list] = data.get("rows", [])
+        if isinstance(data, list):
+            artifacts: list[Artifact] = []
+            for item in data:
+                if isinstance(item, dict):
+                    artifacts.append(
+                        self._record_to_artifact(item, plugin, artifact_type, evidence_id)
+                    )
+            return artifacts
+
+        columns: list[str] = data.get("columns", []) if isinstance(data, dict) else []
+        rows: list[list] = data.get("rows", []) if isinstance(data, dict) else []
 
         artifacts: list[Artifact] = []
         for row in rows:

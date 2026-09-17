@@ -1,0 +1,147 @@
+{
+  "audit_metadata": {
+    "evidence_file": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\memory\\Triage-Memory.mem",
+    "evidence_size_bytes": 5368709120,
+    "evidence_size_gb": 5.0,
+    "audit_timestamp": "2026-09-17T14:20:12.551635+00:00",
+    "pipeline_runtime_seconds": 338.44,
+    "quality_gate_status": "COMPLETE \u2014 FORENSICALLY VALIDATED"
+  },
+  "counts": {
+    "total_raw_artifacts": 27210,
+    "total_fcrs": 27191,
+    "total_uais": 0,
+    "total_memory_findings": 388,
+    "total_fir_findings": 388,
+    "total_sanitized_contexts": 388
+  },
+  "classification_totals": {
+    "VALID": 388,
+    "VALID_BUT_CONFIDENCE_REVIEW": 0,
+    "VALID_BUT_SEVERITY_REVIEW": 0,
+    "WEAK_EVIDENCE": 0,
+    "FALSE_POSITIVE": 0,
+    "OVERSTATED_CLAIM": 0,
+    "BROKEN_PROVENANCE": 0,
+    "DUPLICATE_FINDING": 0,
+    "UNSUPPORTED_MITRE_MAPPING": 0,
+    "SANITIZATION_DEFECT": 0,
+    "UNVERIFIED_DATA_UNAVAILABLE": 0
+  },
+  "analyzer_breakdown": {
+    "network_analyzer": 78,
+    "process_analyzer": 201,
+    "rootkit_analyzer": 66,
+    "injection_analyzer": 36,
+    "dll_analyzer": 7
+  },
+  "malfind_36_indicators": {
+    "SUPPORTED": 36,
+    "WEAK_INDICATOR": 0,
+    "OVERSTATED": 0
+  },
+  "psscan_discrepancy": {
+    "pslist_count": 65,
+    "psscan_count": 66,
+    "unlinked_process": "UWkpjFjDzM.exe (PID 3496)",
+    "verdict": "VALID_UNLINKED_PROCESS_EVIDENCE"
+  },
+  "malware_execution_chain": [
+    {
+      "step": 1,
+      "process": "hfs.exe",
+      "pid": 3952,
+      "ppid": 1432,
+      "role": "Initial HTTP File Server compromise"
+    },
+    {
+      "step": 2,
+      "process": "wscript.exe",
+      "pid": 5116,
+      "ppid": 3952,
+      "role": "VBScript Payload Execution"
+    },
+    {
+      "step": 3,
+      "process": "UWkpjFjDzM.exe",
+      "pid": 3496,
+      "ppid": 5116,
+      "role": "Unlinked Encrypted Binary Payload"
+    },
+    {
+      "step": 4,
+      "process": "cmd.exe",
+      "pid": 4660,
+      "ppid": 3496,
+      "role": "Interactive Shell Session"
+    }
+  ],
+  "plugin_coverage": {
+    "windows.pslist": {
+      "status": "ACTIVE",
+      "artifact_count": 65,
+      "runtime_sec": 2.19,
+      "error": null
+    },
+    "windows.pstree": {
+      "status": "ACTIVE",
+      "artifact_count": 7,
+      "runtime_sec": 2.18,
+      "error": null
+    },
+    "windows.psscan": {
+      "status": "ACTIVE",
+      "artifact_count": 66,
+      "runtime_sec": 32.87,
+      "error": null
+    },
+    "windows.cmdline": {
+      "status": "ACTIVE",
+      "artifact_count": 65,
+      "runtime_sec": 2.38,
+      "error": null
+    },
+    "windows.cmdscan": {
+      "status": "INACTIVE_ERROR",
+      "artifact_count": 0,
+      "runtime_sec": 4.16,
+      "error": "Volatility 3 plugin `windows.cmdscan` exited with code 1.\nstdout: \nstderr: Volatility 3 Framework 2.28.0\n\nProgress:    0.00\t\tScanning FileLayer using PageMapScanner\n\nProgress:   15.11\t\tScanning FileLayer using PageMapScanner\n\nProgress:   64.75\t\tScanning FileLayer using PageMapScanner\n\nProgress:  100.00\t\tStacking attempts finished             \n\nProgress:    0.00\t\tScanning layer_name using PdbSignatureScanner\n\nProgress:    0.00\t\tScanning layer_name using PdbSignatureScanner\n\nProgress:    0.00\t\tScanning layer_name using PdbSignatureScanner\n\nProgress:    0.00\t\tScanning lay"
+    },
+    "windows.netscan": {
+      "status": "ACTIVE",
+      "artifact_count": 78,
+      "runtime_sec": 42.15,
+      "error": null
+    },
+    "windows.malfind": {
+      "status": "ACTIVE",
+      "artifact_count": 36,
+      "runtime_sec": 64.59,
+      "error": null
+    },
+    "windows.dlllist": {
+      "status": "ACTIVE",
+      "artifact_count": 3756,
+      "runtime_sec": 9.82,
+      "error": null
+    },
+    "windows.handles": {
+      "status": "ACTIVE",
+      "artifact_count": 20481,
+      "runtime_sec": 38.53,
+      "error": null
+    },
+    "windows.filescan": {
+      "status": "ACTIVE",
+      "artifact_count": 2656,
+      "runtime_sec": 47.66,
+      "error": null
+    },
+    "windows.hivelist": {
+      "status": "INACTIVE_ERROR",
+      "artifact_count": 0,
+      "runtime_sec": 1.26,
+      "error": "Volatility 3 plugin `windows.hivelist` exited with code 2.\nstdout: \nstderr: usage: vol.exe [-h] [-c CONFIG] [--parallelism [{processes,threads,off}]]\n               [-e EXTEND] [-p PLUGIN_DIRS] [-s SYMBOL_DIRS] [-v] [-l LOG]\n               [-o OUTPUT_DIR] [-q] [-f FILE] [--write-config]\n               [--save-config SAVE_CONFIG] [--clear-cache]\n               [--cache-path CACHE_PATH] [--offline | -u URL]\n               [--filters FILTERS] [--hide-columns [HIDE_COLUMNS ...]]\n               [-r RENDERER] [--single-location SINGLE_LOCATION]\n               [--stackers [STA"
+    }
+  }
+}

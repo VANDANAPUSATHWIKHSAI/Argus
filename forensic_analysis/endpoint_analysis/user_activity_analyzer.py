@@ -154,11 +154,11 @@ class UserActivityAnalyzer:
                         }
                     ))
 
-            # 5. Timeline & Search History
-            elif art_type in ("timeline_activity", "search_history", "endpoint.timeline", "endpoint.search"):
-                act_detail = norm.file_name or norm.url or str(raw.get("query", "")) or str(raw.get("DisplayText", ""))
+            # 5. Timeline & Search History & Windows Search EDB
+            elif art_type in ("windows_search", "timeline_activity", "search_history", "endpoint.timeline", "endpoint.search"):
+                act_detail = norm.file_name or norm.file_path or norm.url or str(raw.get("query", "")) or str(raw.get("entry", "")) or str(raw.get("DisplayText", ""))
                 if act_detail:
-                    fact_msg = f"User activity / search record in Windows Timeline/Search: '{act_detail}'."
+                    fact_msg = f"User activity / indexed search record in Windows Search / Timeline: '{act_detail}'."
                     findings.append(Finding(
                         case_id=case_id,
                         fact=fact_msg,

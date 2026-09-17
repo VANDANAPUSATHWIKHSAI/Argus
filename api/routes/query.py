@@ -31,8 +31,13 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
     analyst_role = "forensic_analyst"
     has_permission = True  # stubbed permission check placeholder
 
+    from api.routes.evidence import sanitize_uuid
+    clean_case_id = sanitize_uuid(case_id)
+
     # 2. Pull all findings for the case from FIRRepository
-    findings = _fir_repo.get_by_case(x_tenant_id, case_id)
+    findings = _fir_repo.get_by_case(x_tenant_id, clean_case_id)
+    if not findings and case_id != clean_case_id:
+        findings = _fir_repo.get_by_case(x_tenant_id, case_id)
 
     # 3. Compile evidence context using sanitized_fact (model reasoning only sees sanitized_fact)
     evidence_contexts = []

@@ -60,9 +60,11 @@ def process_fcr_batch(
 
     target_store = store or unified_store
     all_findings: List[Finding] = []
+    logger.info("Orchestrator: process_fcr_batch started for case '%s' with %d FCR objects and %d total artifacts.", case_id, len(fcr_objects), len(artifacts_by_id))
 
     for fcr in fcr_objects:
         engine_names = route_fcr(fcr, artifacts_by_id)
+        logger.info("Orchestrator: FCR '%s' (rel: %s, art_ids: %s) routed to engines: %s", getattr(fcr, "correlation_id", "UNKNOWN"), getattr(fcr, "relationship_type", []), getattr(fcr, "artifact_ids", []), engine_names)
 
         for engine_name in engine_names:
             engine = ENGINE_REGISTRY.get(engine_name)
@@ -76,6 +78,7 @@ def process_fcr_batch(
 
             try:
                 findings = engine.analyze([fcr], artifacts_by_id)
+                logger.info("Orchestrator: Engine '%s' returned %d findings for FCR '%s'.", engine_name, len(findings), getattr(fcr, "correlation_id", "UNKNOWN"))
                 for finding in findings:
                     if tenant_id and tenant_id != "default":
                         finding.tenant_id = tenant_id
@@ -99,4 +102,5 @@ def process_fcr_batch(
                     engine_name, getattr(fcr, "correlation_id", "UNKNOWN"), e, exc_info=True
                 )
 
+    logger.warning("Orchestrator: process_fcr_batch completed for case '%s', total findings: %d.", case_id, len(all_findings))
     return all_findings

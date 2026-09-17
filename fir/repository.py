@@ -77,7 +77,7 @@ class FIRRepository:
                 connect_timeout=3
             )
             cur = conn.cursor()
-            # Idempotent migration DDL updating schema safely without dropping existing rows
+            # Idempotent table creation
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS fir_findings (
@@ -99,7 +99,6 @@ class FIRRepository:
                     layer               TEXT NOT NULL DEFAULT 'unknown',
                     timestamp           TIMESTAMPTZ DEFAULT NOW(),
                     raw_data            JSONB DEFAULT '{}'
-                );
                 ALTER TABLE fir_findings DROP CONSTRAINT IF EXISTS fir_findings_case_id_fkey;
                 ALTER TABLE fir_findings ALTER COLUMN case_id TYPE TEXT USING case_id::text;
                 ALTER TABLE fir_findings ADD COLUMN IF NOT EXISTS source_engine TEXT;
@@ -163,7 +162,7 @@ class FIRRepository:
             conn.commit()
             conn.close()
         except Exception as e:
-            logger.debug("Postgres persistence skipped for FIRRepository.insert: %s", e)
+            logger.error("Postgres insert error in FIRRepository.insert: %s", e, exc_info=True)
 
         return finding
 
@@ -179,9 +178,7 @@ class FIRRepository:
         return None
 
     def _hydrate_from_postgres(self, case_id: str, tenant_id: str) -> None:
-        """Hydrates findings from PostgreSQL 'fir_findings' table if not present in memory."""
-        if any(f.case_id == case_id and f.tenant_id == tenant_id for f in self.findings.values()):
-            return
+        """Hydrates findings from PostgreSQL 'fir_findings' table."""
         try:
             import psycopg2
             from config.settings import settings

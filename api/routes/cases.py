@@ -29,12 +29,15 @@ _analyst_service = AnalystFindingService(fir_repo=_fir_repo)
 class CaseSummaryResponse(BaseModel):
     case_id: str
     tenant_id: str
-    total_findings: int
+    total_evidence_files: int = 0
+    total_artifacts: int = 0
+    total_findings: int = 0
     severity_breakdown: Dict[str, int]
     review_status_breakdown: Dict[str, int]
     layer_breakdown: Dict[str, int]
     source_artifact_count: int
     latest_timestamp: Optional[str] = None
+    evidence_files: list[Dict[str, Any]] = Field(default_factory=list)
 
 
 @router.get("/{case_id}", response_model=CaseSummaryResponse)
@@ -46,11 +49,20 @@ async def get_case(
     Retrieve structured case summary, severity metrics, and review status breakdown.
     Enforces strict tenant isolation.
     """
-    if not case_id or not case_id.strip():
-        raise HTTPException(status_code=400, detail="case_id path parameter cannot be empty.")
+    from api.routes.evidence import sanitize_uuid
+    from infrastructure.repository.evidence_store import get_case_session, list_evidence_by_case
 
-    findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
-    if not findings:
+    clean_case_id = sanitize_uuid(case_id)
+    session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+    evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
+    if not evidence_list and case_id != clean_case_id:
+        evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id)
+
+    findings = _analyst_service.list_findings(case_id=clean_case_id, tenant_id=x_tenant_id)
+    if not findings and case_id != clean_case_id:
+        findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
+
+    if not session and not evidence_list and not findings:
         raise HTTPException(
             status_code=404,
             detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
@@ -80,13 +92,32 @@ async def get_case(
             if latest_ts is None or ts_str > latest_ts:
                 latest_ts = ts_str
 
+    total_artifacts = 0
+    formatted_evidence = []
+    for ev in (evidence_list or []):
+        meta = ev.metadata or {}
+        arts = meta.get("parsed_artifact_count", 0) + meta.get("derived_observable_count", 0)
+        total_artifacts += arts
+        formatted_evidence.append({
+            "evidence_id": ev.evidence_id,
+            "filename": ev.filename,
+            "status": ev.status,
+            "sha256_hash": ev.sha256_hash,
+            "parsed_artifact_count": meta.get("parsed_artifact_count", 0),
+            "derived_observable_count": meta.get("derived_observable_count", 0),
+            "timeline_event_count": meta.get("timeline_event_count", 0)
+        })
+
     return CaseSummaryResponse(
         case_id=case_id,
         tenant_id=x_tenant_id,
+        total_evidence_files=len(evidence_list or []),
+        total_artifacts=total_artifacts,
         total_findings=len(findings),
         severity_breakdown=severity_counts,
         review_status_breakdown=status_counts,
         layer_breakdown=layer_counts,
         source_artifact_count=len(source_artifacts),
-        latest_timestamp=latest_ts
+        latest_timestamp=latest_ts,
+        evidence_files=formatted_evidence
     )

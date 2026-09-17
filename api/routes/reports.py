@@ -29,7 +29,22 @@ _analyst_service = AnalystFindingService(fir_repo=_fir_repo)
 _report_generator = ReportGenerator()
 
 
-@router.get("/{case_id}/report")
+from fastapi.responses import Response
+
+@router.get(
+    "/{case_id}/report",
+    response_class=Response,
+    responses={
+        200: {
+            "content": {
+                "text/html": {"schema": {"type": "string", "format": "binary"}},
+                "application/json": {},
+                "application/pdf": {"schema": {"type": "string", "format": "binary"}},
+            },
+            "description": "Report generated successfully."
+        }
+    }
+)
 async def get_report(
     case_id: str,
     format: str = Query("html", description="Report format: 'html', 'json', or 'pdf'"),
@@ -43,20 +58,37 @@ async def get_report(
     if not case_id or not case_id.strip():
         raise HTTPException(status_code=400, detail="case_id path parameter cannot be empty.")
 
-    # 1. Fetch case findings with tenant isolation
-    findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
-    if not findings:
+    from api.routes.evidence import sanitize_uuid
+    clean_case_id = sanitize_uuid(case_id)
+
+    from infrastructure.repository.evidence_store import list_evidence_by_case
+
+    # 1. Fetch case evidence and findings with tenant isolation
+    evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
+    if not evidence_list and case_id != clean_case_id:
+        evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id)
+
+    findings = _analyst_service.list_findings(case_id=clean_case_id, tenant_id=x_tenant_id)
+    target_case_id = clean_case_id
+    if not findings and case_id != clean_case_id:
+        findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
+        if findings:
+            target_case_id = case_id
+
+    if not evidence_list and not findings:
         raise HTTPException(
             status_code=404,
-            detail=f"Case '{case_id}' not found or contains no findings for tenant '{x_tenant_id}'."
+            detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
         )
 
     # 2. Export sanitized findings payload subject to review gate
-    exported_findings = _analyst_service.export_report(
-        case_id=case_id,
-        tenant_id=x_tenant_id,
-        allow_unreviewed=allow_unreviewed
-    )
+    exported_findings = []
+    if findings:
+        exported_findings = _analyst_service.export_report(
+            case_id=target_case_id,
+            tenant_id=x_tenant_id,
+            allow_unreviewed=allow_unreviewed
+        )
 
     # Build report dictionary payload
     report_payload = {
@@ -64,6 +96,12 @@ async def get_report(
         "tenant_id": x_tenant_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "findings": exported_findings,
+        "evidence_files": [{
+            "evidence_id": ev.evidence_id,
+            "filename": ev.filename,
+            "status": ev.status.value if hasattr(ev.status, "value") else str(ev.status).replace("EvidenceStatus.", "").lower(),
+            "sha256_hash": ev.sha256_hash
+        } for ev in (evidence_list or [])],
         "timeline": []
     }
 
@@ -76,11 +114,14 @@ async def get_report(
         logger.error(f"Report generation error for case {case_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
 
-    # 4. Return HTTP Response with appropriate media type
+    # 4. Return HTTP Response with appropriate media type and Content-Disposition header
     fmt = (format or "html").lower().strip()
+    filename = f"argus_report_{case_id}.{fmt}"
+    disposition = f'attachment; filename="{filename}"'
+
     if fmt == "json":
-        return Response(content=content, media_type="application/json")
+        return Response(content=content, media_type="application/json", headers={"Content-Disposition": disposition})
     elif fmt == "pdf":
-        return Response(content=content, media_type="application/pdf")
-    else: # html
-        return Response(content=content, media_type="text/html")
+        return Response(content=content, media_type="application/pdf", headers={"Content-Disposition": disposition})
+    else:  # html
+        return Response(content=content, media_type="text/html", headers={"Content-Disposition": disposition})

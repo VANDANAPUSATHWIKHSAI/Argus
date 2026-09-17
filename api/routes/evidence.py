@@ -16,7 +16,7 @@ import logging
 from typing import Optional, List
 from pathlib import Path
 
-from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException
+from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from infrastructure.schemas import Evidence, CaseSession
@@ -55,10 +55,23 @@ class EvidenceUploadResponse(BaseModel):
     errors: List[str] = Field(default_factory=list)
 
 
+import uuid
+
+def sanitize_uuid(val: Optional[str]) -> str:
+    """Ensure case_id is a valid 36-character UUID for PostgreSQL storage."""
+    if not val or val.strip().lower() in ("", "string", "none", "null"):
+        return str(uuid.uuid4())
+    try:
+        return str(uuid.UUID(val.strip()))
+    except ValueError:
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, val.strip()))
+
+
 @router.post("/upload", response_model=EvidenceUploadResponse)
 async def upload_evidence(
     file: UploadFile = File(...),
-    case_id: Optional[str] = Form(None),
+    case_id: Optional[str] = Query(None),
+    form_case_id: Optional[str] = Form(None, alias="case_id"),
     tenant_id: str = Header("default", alias="X-Tenant-ID"),
     uploaded_by: str = Form("analyst_api"),
     host_id: str = Form("NTFS1-HOST"),
@@ -66,14 +79,15 @@ async def upload_evidence(
     """
     Ingest a raw evidence file, execute the Stage 1-4 pipeline, and store findings.
     """
+    raw_case_id = case_id or form_case_id
     if not file or not file.filename:
         raise HTTPException(status_code=400, detail="No file provided in evidence upload request.")
 
-    target_case_id = case_id or f"CASE-{hashlib.sha256(file.filename.encode()).hexdigest()[:8]}"
-    
+    target_case_id = sanitize_uuid(raw_case_id)
+
     # Create or fetch case session
     try:
-        session = create_case_session(case_id=target_case_id, tenant_id=tenant_id, created_by=uploaded_by)
+        session = create_case_session(tenant_id=tenant_id, created_by=uploaded_by, case_id=target_case_id)
     except Exception as e:
         logger.warning(f"Case session setup warning: {e}")
         session = CaseSession(case_id=target_case_id, tenant_id=tenant_id, created_by=uploaded_by)
@@ -103,11 +117,8 @@ async def upload_evidence(
         metadata={"size_bytes": len(file_bytes)}
     )
 
-    try:
-        store_evidence(evidence, session)
-    except Exception as e:
-        logger.warning(f"Store evidence warning: {e}")
-
+    # Stage 1 / 2 Parsing (must run BEFORE store_evidence cleans up temp file)
+    routing_res = _parser_router.determine_routing(evidence)
     parsed_artifacts = []
     derived_observables = []
     fcr_records = []
@@ -195,23 +206,57 @@ async def upload_evidence(
             logger.warning(err_msg)
             errors.append(err_msg)
 
-        if parsed_artifacts:
-            try:
-                derived_observables = _extractor.extract(parsed_artifacts, evidence_id=evidence.evidence_id) or []
-            except Exception as ext_e:
-                logger.error(f"Extractor execution failed: {ext_e}")
+    # Store evidence into durable storage/MinIO (cleans up temp file)
+    try:
+        store_evidence(evidence, session)
+    except Exception as e:
+        logger.warning(f"Store evidence warning: {e}")
+        err_msg = f"Parser routing failed or blocked for file '{file.filename}' (status: {routing_res.status})."
+        logger.warning(err_msg)
+        errors.append(err_msg)
 
-            try:
-                fcr_records = _fcr_engine.correlate(artifacts=parsed_artifacts, extracted_entities=derived_observables, allow_single_artifact=True) or []
-            except Exception as fcr_e:
-                logger.error(f"FCR Engine correlation failed: {fcr_e}")
+    # Stage 2.5 Extractor
+    derived_observables = []
+    if parsed_artifacts:
+        try:
+            obs_list = _extractor.extract(parsed_artifacts, evidence_id=evidence.evidence_id)
+            for obs in (obs_list or []):
+                obs.case_id = target_case_id
+                obs.host_id = host_id
+                if obs.normalized_fields:
+                    obs.normalized_fields.host = host_id
+                derived_observables.append(obs)
+        except Exception as ext_e:
+            logger.error(f"Extractor execution failed: {ext_e}")
 
-            if fcr_records:
-                try:
-                    artifacts_map = {art.artifact_id: art for art in parsed_artifacts}
-                    findings = process_fcr_batch(case_id=target_case_id, fcr_objects=fcr_records, artifacts_by_id=artifacts_map, fir_repo=_fir_repo, tenant_id=tenant_id) or []
-                except Exception as batch_e:
-                    logger.error(f"Stage 4 analysis batch execution failed: {batch_e}")
+    all_artifacts = parsed_artifacts + list(derived_observables)
+    # Ensure artifacts_map contains the parsed Stage 2 Artifact objects (ExtractedEntity objects share parent artifact_id and must not overwrite parent Artifacts)
+    artifacts_map = {art.artifact_id: art for art in parsed_artifacts}
+
+    # Stage 3 FCR Correlation
+    fcr_records = []
+    if all_artifacts:
+        try:
+            fcr_records = _fcr_engine.correlate(
+                artifacts=parsed_artifacts,
+                extracted_entities=derived_observables,
+                allow_single_artifact=True
+            )
+        except Exception as fcr_e:
+            logger.error(f"FCR Engine correlation failed: {fcr_e}")
+
+    # Stage 4 Analysis Engines & FIR Storage
+    findings = []
+    if fcr_records:
+        try:
+            findings = process_fcr_batch(
+                case_id=target_case_id,
+                fcr_objects=fcr_records,
+                artifacts_by_id=artifacts_map,
+                fir_repo=_fir_repo
+            )
+        except Exception as batch_e:
+            logger.error(f"Stage 4 analysis batch execution failed: {batch_e}")
 
     # Timeline calculation
     all_artifacts = parsed_artifacts + list(derived_observables)
@@ -225,6 +270,35 @@ async def upload_evidence(
         )
     except Exception as tl_e:
         logger.error(f"Timeline building failed: {tl_e}")
+
+    # Persist updated metadata counts to PostgreSQL evidence table
+    try:
+        evidence.metadata.update({
+            "parsed_artifact_count": len(parsed_artifacts),
+            "derived_observable_count": len(derived_observables),
+            "fcr_count": len(fcr_records),
+            "finding_count": len(findings),
+            "timeline_event_count": len(timeline)
+        })
+        import json, psycopg2
+        from config.settings import settings
+        conn = psycopg2.connect(
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            database=settings.postgres_db,
+            user=settings.postgres_user,
+            password=settings.postgres_password,
+            connect_timeout=2
+        )
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
+            (json.dumps(evidence.metadata), evidence.evidence_id)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as db_meta_e:
+        logger.warning(f"Failed to update evidence metadata counts in PostgreSQL: {db_meta_e}")
 
     return EvidenceUploadResponse(
         status="SUCCESS" if not errors else "PARTIAL_SUCCESS",

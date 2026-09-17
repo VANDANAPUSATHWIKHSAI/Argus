@@ -164,6 +164,10 @@ HTML_REPORT_TEMPLATE = """<!DOCTYPE html>
             <h2>Executive Summary</h2>
             <div class="stats-grid">
                 <div class="stat-card">
+                    <div class="value">{{ summary.total_evidence_files }}</div>
+                    <div class="label">Evidence Files</div>
+                </div>
+                <div class="stat-card">
                     <div class="value">{{ summary.total_findings }}</div>
                     <div class="label">Total Findings</div>
                 </div>
@@ -181,6 +185,32 @@ HTML_REPORT_TEMPLATE = """<!DOCTYPE html>
                 </div>
             </div>
         </div>
+
+        {% if evidence_files %}
+        <div class="section">
+            <h2>Ingested Evidence Files</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Evidence ID</th>
+                        <th>Filename</th>
+                        <th>Status</th>
+                        <th>SHA-256 Hash</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for ev in evidence_files %}
+                    <tr>
+                        <td class="mono">{{ ev.evidence_id|e }}</td>
+                        <td><strong>{{ ev.filename|e }}</strong></td>
+                        <td><span class="badge badge-info">{{ ev.status|e }}</span></td>
+                        <td class="mono" style="word-break: break-all;">{{ ev.sha256_hash|e }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
 
         <div class="section">
             <h2>Forensic Findings</h2>
@@ -303,6 +333,7 @@ class ReportGenerator:
         tenant_id = report_data.get("tenant_id", "default")
         generated_at = report_data.get("generated_at", datetime.now(timezone.utc).isoformat())
         findings = report_data.get("findings", [])
+        evidence_files = report_data.get("evidence_files", [])
         timeline = report_data.get("timeline", [])
 
         # Calculate summary statistics
@@ -310,8 +341,10 @@ class ReportGenerator:
         critical_high = sum(1 for f in findings if str(f.get("severity", "")).lower() in ("critical", "high"))
         confirmed = sum(1 for f in findings if str(f.get("review_status", "")).lower() in ("analyst_confirmed", "confirmed"))
         total_timeline = len(timeline)
+        total_evidence_files = len(evidence_files)
 
         summary = {
+            "total_evidence_files": total_evidence_files,
             "total_findings": total_findings,
             "critical_high": critical_high,
             "confirmed": confirmed,
@@ -324,6 +357,7 @@ class ReportGenerator:
             tenant_id=tenant_id,
             generated_at=generated_at,
             summary=summary,
+            evidence_files=evidence_files,
             findings=findings,
             timeline=timeline,
         )

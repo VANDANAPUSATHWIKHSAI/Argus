@@ -37,17 +37,18 @@ class TestApiAndReportGeneration:
         content = b"2026-08-31 12:00:00 [ERROR] User admin failed login from 192.168.1.50\n"
         file_obj = io.BytesIO(content)
 
+        test_case_id = "11111111-1111-1111-1111-111111111111"
         response = client.post(
             "/evidence/upload",
             files={"file": ("narrative.txt", file_obj, "text/plain")},
-            data={"case_id": "CASE-API-TEST", "uploaded_by": "unit_test_analyst"},
+            data={"case_id": test_case_id, "uploaded_by": "unit_test_analyst"},
             headers={"X-Tenant-ID": "tenant-api"}
         )
 
         assert response.status_code == 200
         data = response.json()
         assert data["status"] in ("SUCCESS", "PARTIAL_SUCCESS")
-        assert data["case_id"] == "CASE-API-TEST"
+        assert data["case_id"] == test_case_id
         assert data["tenant_id"] == "tenant-api"
         assert data["filename"] == "narrative.txt"
         assert len(data["sha256_hash"]) == 64

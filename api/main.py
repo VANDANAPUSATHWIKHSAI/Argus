@@ -16,9 +16,9 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"status": "ok", "service": "ARGUS Digital Forensics API", "version": "1.0.0"}
-
 app.include_router(evidence.router, prefix='/evidence', tags=['Evidence'])
 app.include_router(cases.router, prefix='/cases', tags=['Cases'])
 app.include_router(reports.router, prefix='/reports', tags=['Reports'])
 app.include_router(query.router, prefix='/cases', tags=['Query'])
+
 

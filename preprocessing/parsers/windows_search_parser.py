@@ -139,16 +139,57 @@ class WindowsSearchParser:
     def _parse_text_export(self, src: Path, evidence_id: str, ver: str, user: Optional[str]) -> list[Artifact]:
         artifacts: list[Artifact] = []
         try:
-            lines = src.read_text(encoding="utf-8", errors="replace").splitlines()
+            raw_data = src.read_bytes()
         except Exception as exc:
-            raise WindowsSearchParserError(f"Failed to read search export text {src.name}: {exc}")
+            raise WindowsSearchParserError(f"Failed to read search export binary/text {src.name}: {exc}")
 
-        for idx, line in enumerate(lines, start=1):
-            line = line.strip()
-            if not line or line.startswith("#"):
-                continue
-            rec = {"query": line, "line_number": idx}
+        if not raw_data:
+            return artifacts
+
+        extracted_items: set[str] = set()
+
+        # Extract file paths, file:/// URIs, search-ms: queries from binary ESE Windows.edb (ASCII & UTF-16LE)
+        ascii_patterns = [
+            rb'file:///[^\x00\r\n\t"\'<>]{4,250}',
+            rb'[A-Za-z]:\\[^\x00\r\n\t"\'<>]{4,250}',
+            rb'search-ms:[^\x00\r\n\t"\'<>]{4,250}',
+            rb'https?://[^\x00\r\n\t"\'<>]{4,250}',
+        ]
+        for pat in ascii_patterns:
+            for m in re.finditer(pat, raw_data, re.IGNORECASE):
+                try:
+                    val = m.group(0).decode("ascii", errors="ignore").strip()
+                    if len(val) > 4:
+                        extracted_items.add(val)
+                except Exception:
+                    pass
+
+        # Scan UTF-16LE strings (ESE Windows.edb stores paths in UTF-16LE)
+        try:
+            text_u16 = raw_data.decode("utf-16le", errors="ignore")
+            for m in re.finditer(r'(?:file:///|[A-Za-z]:\\|search-ms:|https?://)[^\x00\r\n\t"\'<>]{4,250}', text_u16, re.IGNORECASE):
+                val = m.group(0).strip()
+                if len(val) > 4:
+                    extracted_items.add(val)
+        except Exception:
+            pass
+
+        for idx, item in enumerate(sorted(extracted_items), start=1):
+            rec = {"query": item, "line_number": idx}
             artifacts.append(self._record_to_artifact(rec, "query", "url", "timestamp", evidence_id, ver, src, user))
+
+        # Fallback to UTF-8 text lines if no binary strings extracted
+        if not artifacts:
+            try:
+                lines = raw_data.decode("utf-8", errors="ignore").splitlines()
+                for idx, line in enumerate(lines, start=1):
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    rec = {"query": line, "line_number": idx}
+                    artifacts.append(self._record_to_artifact(rec, "query", "url", "timestamp", evidence_id, ver, src, user))
+            except Exception:
+                pass
 
         return artifacts
 
@@ -173,11 +214,12 @@ class WindowsSearchParser:
 
         raw_fields = {**record, "query_text": query_text, "searched_item": item_path, "tool_version": ver}
 
+        target_val = query_text or item_path
         norm = NormalizedFields(
             user=user or None,
-            file_path=item_path if item_path and "\\" in item_path else str(src),
-            file_name=os.path.basename(item_path) if item_path and "\\" in item_path else src.name,
-            url=item_path if item_path.startswith("http") else None,
+            file_path=item_path if item_path and ("\\" in item_path or "/" in item_path) else (query_text if ("\\" in query_text or "/" in query_text) else str(src)),
+            file_name=target_val if target_val else src.name,
+            url=target_val if target_val.startswith(("http://", "https://", "file:///", "search-ms:")) else None,
         )
 
         return Artifact(

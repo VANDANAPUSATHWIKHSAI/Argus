@@ -133,7 +133,15 @@ async def upload_evidence(
         zip_source_path = getattr(evidence, "original_repository_path", None) or getattr(evidence, "repository_path", None) or evidence.file_path or str(file_path)
         try:
             with zipfile.ZipFile(zip_source_path, 'r') as zf:
-                zf.extractall(extract_dir)
+                resolved_extract_dir = extract_dir.resolve()
+                for member in zf.infolist():
+                    member_target = (extract_dir / member.filename).resolve()
+                    try:
+                        member_target.relative_to(resolved_extract_dir)
+                    except ValueError:
+                        logger.warning(f"Skipping unsafe zip entry (Path Traversal / Zip Slip attempt): {member.filename}")
+                        continue
+                    zf.extract(member, extract_dir)
             
             extracted_files = [p for p in extract_dir.rglob("*") if p.is_file() and not p.name.startswith(".") and not p.name.startswith("__MACOSX")]
             logger.info(f"Extracted {len(extracted_files)} files from folder archive '{file.filename}'")
@@ -161,24 +169,6 @@ async def upload_evidence(
                         parsed_artifacts.extend(sub_arts)
                     except Exception as pe:
                         logger.error(f"Failed parsing file '{ext_file.name}': {pe}")
-            
-            if parsed_artifacts:
-                try:
-                    derived_observables = _extractor.extract(parsed_artifacts, evidence_id=evidence.evidence_id) or []
-                except Exception as ext_e:
-                    logger.error(f"Folder extractor error: {ext_e}")
-                
-                try:
-                    fcr_records = _fcr_engine.correlate(artifacts=parsed_artifacts, extracted_entities=derived_observables, allow_single_artifact=True) or []
-                except Exception as fcr_e:
-                    logger.error(f"Folder FCR error: {fcr_e}")
-                
-                if fcr_records:
-                    try:
-                        art_map = {a.artifact_id: a for a in parsed_artifacts}
-                        findings = process_fcr_batch(case_id=target_case_id, fcr_objects=fcr_records, artifacts_by_id=art_map, fir_repo=_fir_repo, tenant_id=tenant_id) or []
-                    except Exception as batch_e:
-                        logger.error(f"Folder stage 4 error: {batch_e}")
         except Exception as zip_e:
             err_msg = f"Zip folder extraction error: {zip_e}"
             logger.error(err_msg)
@@ -211,9 +201,6 @@ async def upload_evidence(
         store_evidence(evidence, session)
     except Exception as e:
         logger.warning(f"Store evidence warning: {e}")
-        err_msg = f"Parser routing failed or blocked for file '{file.filename}' (status: {routing_res.status})."
-        logger.warning(err_msg)
-        errors.append(err_msg)
 
     # Stage 2.5 Extractor
     derived_observables = []
@@ -253,7 +240,8 @@ async def upload_evidence(
                 case_id=target_case_id,
                 fcr_objects=fcr_records,
                 artifacts_by_id=artifacts_map,
-                fir_repo=_fir_repo
+                fir_repo=_fir_repo,
+                tenant_id=tenant_id
             )
         except Exception as batch_e:
             logger.error(f"Stage 4 analysis batch execution failed: {batch_e}")

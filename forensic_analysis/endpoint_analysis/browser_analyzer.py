@@ -47,7 +47,8 @@ class BrowserAnalyzer:
             # 1. Browser History Visits
             if art_type in ("browser_history", "endpoint.browser_history"):
                 url = norm.url or str(raw.get("url", "")) or str(raw.get("URL", ""))
-                domain = norm.domain or str(raw.get("domain", ""))
+                domain = norm.domain or str(raw.get("domain", "")) or str(raw.get("host", ""))
+                title = str(raw.get("title", "")) or str(raw.get("name", ""))
                 if not domain and url:
                     parsed = urlparse(url)
                     domain = parsed.netloc or url
@@ -113,5 +114,56 @@ class BrowserAnalyzer:
                                 "artifact_id": artifact.artifact_id,
                             }
                         ))
+
+            # 3. Installed Extensions
+            elif art_type in ("browser_extension", "endpoint.browser_extension") or "extension" in str(raw.get("row_type", "")).lower():
+                ext_name = str(raw.get("name", "")) or str(raw.get("title", "")) or norm.rule_name or "Unknown Extension"
+                ext_id = str(raw.get("url", "")) or str(raw.get("value", ""))
+                fact_msg = (
+                    f"Browser extension recorded in profile: '{ext_name}' (ID/Path: '{ext_id}'). "
+                    f"Note: Browser profile confirms extension installation/configuration."
+                )
+                findings.append(Finding(
+                    case_id=case_id,
+                    fact=fact_msg,
+                    confidence=0.85,
+                    severity="informational",
+                    mitre_mapping="T1176",
+                    timestamp=ts,
+                    evidence_reference=fcr_ref or artifact.artifact_id,
+                    source_artifact_id=artifact.artifact_id,
+                    layer="endpoint.browser_analyzer",
+                    metadata={
+                        "extension_name": ext_name,
+                        "extension_id": ext_id,
+                        "artifact_id": artifact.artifact_id,
+                    }
+                ))
+
+            # 4. Cookies & Site Settings
+            elif art_type in ("browser_cookie", "endpoint.browser_cookie"):
+                c_domain = norm.domain or str(raw.get("host_key", "")) or str(raw.get("domain", ""))
+                c_name = str(raw.get("name", ""))
+                if c_domain or c_name:
+                    fact_msg = (
+                        f"Browser cookie record observed: name '{c_name}' for domain '{c_domain}'. "
+                        f"Note: Confirms site session state/access."
+                    )
+                    findings.append(Finding(
+                        case_id=case_id,
+                        fact=fact_msg,
+                        confidence=0.80,
+                        severity="informational",
+                        mitre_mapping="T1539",
+                        timestamp=ts,
+                        evidence_reference=fcr_ref or artifact.artifact_id,
+                        source_artifact_id=artifact.artifact_id,
+                        layer="endpoint.browser_analyzer",
+                        metadata={
+                            "domain": c_domain,
+                            "cookie_name": c_name,
+                            "artifact_id": artifact.artifact_id,
+                        }
+                    ))
 
         return findings

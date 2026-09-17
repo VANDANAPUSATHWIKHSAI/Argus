@@ -99,11 +99,56 @@ class BrowserParser:
             tmp_path.with_name(tmp_path.name + ".jsonl").unlink(missing_ok=True)
 
     def _run_hindsight(self, input_path: Path, output_path: Path) -> None:
-        """Shell out to `hindsight.py` to generate the JSONL report."""
+        """Execute Hindsight against the browser profile directory to generate JSONL report."""
         import shutil
         import sys
-        
-        # Resolve the full path of hindsight.py relative to active python interpreter
+
+        # 1. Programmatic pyhindsight API invocation
+        try:
+            from pyhindsight import analysis
+            with tempfile.TemporaryDirectory(prefix="argus_chrome_") as tmp_dir:
+                tmp_profile = Path(tmp_dir) / "Default"
+                if input_path.is_dir():
+                    shutil.copytree(input_path, tmp_profile)
+                else:
+                    tmp_profile.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(input_path, tmp_profile / input_path.name)
+
+                # Initialize optional subdirectories expected by pyhindsight/ccl_chromium_reader
+                (tmp_profile / "Local Storage" / "leveldb").mkdir(parents=True, exist_ok=True)
+                (tmp_profile / "Session Storage").mkdir(parents=True, exist_ok=True)
+                (tmp_profile / "Cache").mkdir(parents=True, exist_ok=True)
+                (tmp_profile / "Code Cache").mkdir(parents=True, exist_ok=True)
+                (tmp_profile / "GPUCache").mkdir(parents=True, exist_ok=True)
+                (tmp_profile / "IndexedDB").mkdir(parents=True, exist_ok=True)
+                (tmp_profile / "Extension State").mkdir(parents=True, exist_ok=True)
+
+                session = analysis.AnalysisSession()
+                session.input_path = str(tmp_profile)
+                session.no_copy = True
+                session.temp_dir = str(Path(tmp_dir) / "temp")
+                session.run()
+
+                if session.parsed_artifacts:
+                    lines = []
+                    for item in session.parsed_artifacts:
+                        if hasattr(item, "to_dict"):
+                            rec = item.to_dict()
+                        elif hasattr(item, "__dict__"):
+                            rec = {k: v for k, v in item.__dict__.items() if not k.startswith("_")}
+                        else:
+                            rec = {}
+                        if rec:
+                            lines.append(json.dumps(rec, default=str))
+
+                    if lines:
+                        output_path.write_text("\n".join(lines), encoding="utf-8")
+                        logger.info("Parsed %d records via pyhindsight Python API for %s", len(lines), input_path.name)
+                        return
+        except Exception as exc:
+            logger.warning("Programmatic pyhindsight execution failed (%s). Trying CLI invocation.", exc)
+
+        # 2. CLI Hindsight execution
         resolved = None
         try:
             python_dir = Path(sys.executable).parent
@@ -117,14 +162,16 @@ class BrowserParser:
         if not resolved:
             resolved = shutil.which("hindsight.py")
         
+        env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
         cmd_candidates = []
+        out_no_ext = str(output_path.with_suffix(""))
         if resolved:
-            cmd_candidates.append([sys.executable, resolved, "-i", str(input_path), "-o", str(output_path), "-l", "jsonl"])
+            cmd_candidates.append([sys.executable, resolved, "-i", str(input_path), "-o", out_no_ext, "-f", "jsonl"])
             
         cmd_candidates.extend([
-            ["hindsight.py", "-i", str(input_path), "-o", str(output_path), "-l", "jsonl"],
-            ["hindsight", "-i", str(input_path), "-o", str(output_path), "-l", "jsonl"],
-            ["python", "hindsight.py", "-i", str(input_path), "-o", str(output_path), "-l", "jsonl"]
+            ["hindsight.py", "-i", str(input_path), "-o", out_no_ext, "-f", "jsonl"],
+            ["hindsight", "-i", str(input_path), "-o", out_no_ext, "-f", "jsonl"],
+            ["python", "hindsight.py", "-i", str(input_path), "-o", out_no_ext, "-f", "jsonl"]
         ])
 
         last_err: Optional[Exception] = None
@@ -138,11 +185,11 @@ class BrowserParser:
                     capture_output=True,
                     text=True,
                     timeout=300,
+                    env=env,
                 )
                 if result.returncode == 0:
-                    break  # Success!
+                    break
                 else:
-                    # Collect error information
                     last_err = HindsightExecutionError(
                         f"Hindsight exited with code {result.returncode}.\n"
                         f"stdout: {result.stdout.strip()[:500]}\n"
@@ -156,16 +203,74 @@ class BrowserParser:
             except Exception as e:
                 last_err = e
 
+        if output_path.exists() and output_path.stat().st_size > 0:
+            logger.info("Hindsight CLI finished successfully: input=%s output=%s", input_path.name, output_path)
+            return
+
+        # Check if output was written with double suffix
+        alt_output = output_path.with_name(output_path.name + ".jsonl")
+        if alt_output.exists() and alt_output.stat().st_size > 0:
+            shutil.move(str(alt_output), str(output_path))
+            logger.info("Moved Hindsight CLI output to %s", output_path)
+            return
+
+        # 3. Direct SQLite parsing fallback if Hindsight unavailable/failed
+        records = self._parse_sqlite_fallback(input_path)
+        if records:
+            output_path.write_text("\n".join(json.dumps(r, default=str) for r in records), encoding="utf-8")
+            logger.info("Parsed %d browser records via native SQLite fallback from %s", len(records), input_path.name)
+            return
+
         if result is None or result.returncode != 0:
             if isinstance(last_err, (HindsightNotFoundError, HindsightExecutionError)):
                 raise last_err
             raise HindsightExecutionError(f"Failed to execute Hindsight: {last_err}")
 
-        logger.info(
-            "Hindsight finished successfully: input=%s output=%s",
-            input_path.name,
-            output_path,
-        )
+    def _parse_sqlite_fallback(self, input_path: Path) -> list[dict]:
+        """Native SQLite parsing fallback for Chrome History, Cookies, and Web Data."""
+        import sqlite3
+        records = []
+        profile_dir = input_path if input_path.is_dir() else input_path.parent
+
+        # 1. Parse History
+        hist_db = profile_dir / "History"
+        if hist_db.exists():
+            try:
+                conn = sqlite3.connect(f"file:{hist_db}?mode=ro", uri=True)
+                cursor = conn.cursor()
+                cursor.execute("SELECT url, title, visit_count, last_visit_time FROM urls")
+                for url, title, visits, last_visit in cursor.fetchall():
+                    records.append({
+                        "type": "url (visited)",
+                        "url": url,
+                        "title": title,
+                        "visit_count": visits,
+                        "timestamp": last_visit
+                    })
+                conn.close()
+            except Exception as exc:
+                logger.warning("Error parsing SQLite History: %s", exc)
+
+        # 2. Parse Cookies
+        cookie_db = profile_dir / "Cookies"
+        if cookie_db.exists():
+            try:
+                conn = sqlite3.connect(f"file:{cookie_db}?mode=ro", uri=True)
+                cursor = conn.cursor()
+                cursor.execute("SELECT host_key, name, path, creation_utc, expires_utc FROM cookies")
+                for host, name, path, creation, expires in cursor.fetchall():
+                    records.append({
+                        "type": "cookie (created)",
+                        "url": f"{host}{path}",
+                        "domain": host,
+                        "name": name,
+                        "timestamp": creation
+                    })
+                conn.close()
+            except Exception as exc:
+                logger.warning("Error parsing SQLite Cookies: %s", exc)
+
+        return records
 
     def _parse_jsonl(self, jsonl_path: Path, evidence_id: str) -> list[Artifact]:
         """Read the JSONL output file and convert each line to an Artifact."""
@@ -192,8 +297,8 @@ class BrowserParser:
 
     def _record_to_artifact(self, record: dict, evidence_id: str) -> Artifact:
         """Map one parsed Hindsight record to an Artifact."""
-        # Determine the artifact type from the Hindsight record type
-        raw_type = str(record.get("type", "")).lower()
+        # Determine the artifact type from the Hindsight record type or row_type
+        raw_type = str(record.get("row_type", "") or record.get("type", "")).lower()
 
         if "download" in raw_type:
             art_type = "browser_download"
@@ -201,13 +306,19 @@ class BrowserParser:
         elif "cookie" in raw_type:
             art_type = "browser_cookie"
             ts_type = "accessed"
+        elif "extension" in raw_type:
+            art_type = "browser_extension"
+            ts_type = "installation"
+        elif "preference" in raw_type or "site setting" in raw_type or "hsts" in raw_type:
+            art_type = "browser_preference"
+            ts_type = "configuration"
         else:
             # Defaults to history for urls / bookmarks / cache
             art_type = "browser_history"
             ts_type = "visit"
 
         ver = getattr(self, "_tool_version", get_tool_version("hindsight"))
-        url = record.get("url") or record.get("URL") or ""
+        url = record.get("url") or record.get("URL") or record.get("name") or ""
         summary = f"Browser {art_type}: {url}" if url else f"Browser {art_type}"
 
         return Artifact(

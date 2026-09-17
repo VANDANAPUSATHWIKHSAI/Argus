@@ -99,6 +99,7 @@ class FIRRepository:
                     layer               TEXT NOT NULL DEFAULT 'unknown',
                     timestamp           TIMESTAMPTZ DEFAULT NOW(),
                     raw_data            JSONB DEFAULT '{}'
+                );
                 ALTER TABLE fir_findings DROP CONSTRAINT IF EXISTS fir_findings_case_id_fkey;
                 ALTER TABLE fir_findings ALTER COLUMN case_id TYPE TEXT USING case_id::text;
                 ALTER TABLE fir_findings ADD COLUMN IF NOT EXISTS source_engine TEXT;

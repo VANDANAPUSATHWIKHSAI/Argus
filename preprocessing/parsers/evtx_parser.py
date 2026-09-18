@@ -102,14 +102,19 @@ class EvtxParser:
         if not src.exists():
             raise FileNotFoundError(f"EVTX file not found: {file_path}")
 
-        with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tmp:
-            tmp_path = Path(tmp.name)
+        binary = self._find_binary()
+        if binary:
+            with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tmp:
+                tmp_path = Path(tmp.name)
 
-        try:
-            self._run_hayabusa(src, tmp_path)
-            artifacts = self._parse_jsonl(tmp_path, evidence_id)
-        finally:
-            tmp_path.unlink(missing_ok=True)
+            try:
+                self._run_hayabusa(src, tmp_path)
+                artifacts = self._parse_jsonl(tmp_path, evidence_id)
+            finally:
+                tmp_path.unlink(missing_ok=True)
+        else:
+            logger.info("Hayabusa binary not found. Falling back to python-evtx parser.")
+            artifacts = self._parse_python_evtx(src, evidence_id)
 
         # Post-parse evasion indicator checks (non-raising; append indicators)
         artifacts.extend(self._check_evasion_indicators(artifacts, evidence_id))
@@ -203,6 +208,78 @@ class EvtxParser:
                 artifacts.append(self._record_to_artifact(record, evidence_id))
 
         logger.info("Parsed %d Hayabusa records from %s", len(artifacts), jsonl_path)
+        return artifacts
+
+    def _parse_python_evtx(self, evtx_path: Path, evidence_id: str) -> list[Artifact]:
+        """Fallback EVTX parser using python-evtx package when Hayabusa binary is unavailable."""
+        artifacts: list[Artifact] = []
+        try:
+            import Evtx.Evtx as evtx
+            import xml.etree.ElementTree as ET
+        except ImportError:
+            raise HayabusaNotFoundError(
+                "hayabusa binary not found on PATH or external_tools, and python-evtx library is not installed."
+            )
+
+        try:
+            with evtx.Evtx(str(evtx_path)) as log:
+                for record in log.records():
+                    try:
+                        xml_str = record.xml()
+                        root = ET.fromstring(xml_str)
+                        ns = {'ns': 'http://schemas.microsoft.com/win/2004/08/events/event'}
+
+                        rec: dict = {}
+                        system = root.find('ns:System', ns)
+                        if system is not None:
+                            eid = system.find('ns:EventID', ns)
+                            if eid is not None and eid.text:
+                                try:
+                                    rec['EventID'] = int(eid.text)
+                                except ValueError:
+                                    rec['EventID'] = eid.text
+                            chan = system.find('ns:Channel', ns)
+                            if chan is not None and chan.text:
+                                rec['Channel'] = chan.text
+                            comp = system.find('ns:Computer', ns)
+                            if comp is not None and comp.text:
+                                rec['Computer'] = comp.text
+                            tc = system.find('ns:TimeCreated', ns)
+                            if tc is not None:
+                                rec['Timestamp'] = tc.attrib.get('SystemTime')
+                            rec_id = system.find('ns:EventRecordID', ns)
+                            if rec_id is not None and rec_id.text:
+                                try:
+                                    rec['EventRecordID'] = int(rec_id.text)
+                                except ValueError:
+                                    pass
+                            prov = system.find('ns:Provider', ns)
+                            if prov is not None:
+                                rec['Provider'] = prov.attrib.get('Name', '')
+
+                        event_data = root.find('ns:EventData', ns)
+                        if event_data is not None:
+                            details = []
+                            for data in event_data.findall('ns:Data', ns):
+                                name = data.attrib.get('Name')
+                                val = data.text or ''
+                                if name:
+                                    rec[name] = val
+                                    details.append(f'{name}: {val}')
+                                else:
+                                    details.append(val)
+                            rec['Details'] = ' | '.join(details)
+
+                        art = self._record_to_artifact(rec, evidence_id)
+                        artifacts.append(art)
+                    except Exception as rec_e:
+                        logger.debug(f"Skipping unparseable EVTX record: {rec_e}")
+                        continue
+        except Exception as e:
+            logger.error(f"python-evtx parsing failed for {evtx_path}: {e}")
+            raise HayabusaExecutionError(f"python-evtx parsing failed: {e}")
+
+        logger.info("Parsed %d EVTX records using python-evtx fallback from %s", len(artifacts), evtx_path)
         return artifacts
 
     # -----------------------------------------------------------------------

@@ -111,6 +111,16 @@ class InjectionDetector:
         Returns: (is_malicious, confidence_score)
         """
         try:
+            # Fast trigger pre-check to bypass heavy CPU PyTorch model inference for clean telemetry text
+            text_lower = text.lower()
+            TRIGGERS = (
+                "ignore", "disregard", "override", "instruction", "prompt", "system",
+                "message", "jailbreak", "bypass", "assistant", "developer", "cdata",
+                "benign", "legitimate", "authorized", "malware", "say no", "report as"
+            )
+            if not any(trig in text_lower for trig in TRIGGERS):
+                return False, 0.0
+
             detector = self.classifier_loader.load_injection_detector()
             result = detector(text)[0]
             

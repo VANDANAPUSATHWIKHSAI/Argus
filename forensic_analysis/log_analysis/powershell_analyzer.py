@@ -43,8 +43,27 @@ SUSPICIOUS_CMDLETS = [
     "memorystream",
 ]
 
+# Discovery, Reconnaissance, File Management & Execution Cmdlets
+RECON_CMDLETS: Dict[str, Tuple[str, str, str]] = {
+    "whoami": ("System Owner/User Discovery", "T1033", "low"),
+    "ipconfig": ("System Network Configuration / IP Discovery", "T1049", "low"),
+    "get-nettcpconnection": ("Active Network Connections Discovery", "T1049", "medium"),
+    "get-computerinfo": ("System Information Discovery", "T1082", "low"),
+    "get-localuser": ("Local User Account Discovery", "T1087", "medium"),
+    "get-process": ("Process Discovery", "T1057", "low"),
+    "get-service": ("System Service Discovery", "T1007", "low"),
+    "get-childitem": ("File and Directory Discovery", "T1083", "informational"),
+    "get-filehash": ("File Hash Calculation / Verification", "T1083", "low"),
+    "get-content": ("File Content Retrieval", "T1005", "informational"),
+    "set-location": ("Working Directory Navigation", "T1083", "informational"),
+    "new-item": ("File / Directory Creation", "T1083", "informational"),
+    "remove-item": ("File / Directory Deletion", "T1070.004", "low"),
+    "start-process": ("Process Spawning / Execution", "T1059.001", "medium"),
+}
+
 # Encoded Command Flags
 ENCODED_FLAGS_REGEX = re.compile(r"-(?:enc|encodedcommand|e|en)\b", re.IGNORECASE)
+
 
 
 def try_inert_base64_decode(text: str) -> Optional[str]:
@@ -159,4 +178,36 @@ class PowerShellAnalyzer:
                     }
                 ))
 
+            # 3. Discovery, Reconnaissance, and Command Execution Telemetry
+            recon_matches = []
+            for token, (name, mitre, default_sev) in RECON_CMDLETS.items():
+                if re.search(rf"\b{re.escape(token)}\b", cmd_lower):
+                    recon_matches.append((token, name, mitre, default_sev))
+
+            if recon_matches:
+                primary_token, primary_name, primary_mitre, primary_sev = recon_matches[0]
+                fact_msg = (
+                    f"PowerShell command activity observed: {primary_name} ({primary_token}). "
+                    f"Command: '{cmd_line[:150]}'"
+                )
+                findings.append(Finding(
+                    case_id=case_id,
+                    fact=fact_msg,
+                    confidence=0.90,
+                    severity=primary_sev,
+                    mitre_mapping=primary_mitre,
+                    timestamp=ts,
+                    evidence_reference=fcr_ref or artifact.artifact_id,
+                    source_artifact_id=artifact.artifact_id,
+                    layer="log.powershell_analyzer",
+                    metadata={
+                        "cmdlet": primary_token,
+                        "activity_type": primary_name,
+                        "command_line": cmd_line,
+                        "artifact_id": artifact.artifact_id,
+                        "sequence_number": raw.get("sequence_number"),
+                    }
+                ))
+
         return findings
+

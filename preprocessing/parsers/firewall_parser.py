@@ -67,13 +67,14 @@ class WindowsFirewallParser:
             raise WindowsFirewallParserError(f"Failed to read firewall log {src.name}: {exc}")
 
         fields_header: list[str] = []
+        seen_flows: dict[tuple, int] = {}
+
         for line in content.splitlines():
             line_str = line.strip()
             if not line_str:
                 continue
 
             if line_str.startswith("#Fields:"):
-                # Header definition e.g. #Fields: date time action protocol src-ip dst-ip src-port dst-port size tcpflags tcpsyn tcpack tcpwin icmptype icmptime info path
                 fields_header = line_str.replace("#Fields:", "").strip().split()
                 continue
 
@@ -86,7 +87,18 @@ class WindowsFirewallParser:
 
             rec = self._parse_line(parts, fields_header)
             if rec:
-                artifacts.append(self._record_to_artifact(rec, line_str, evidence_id, ver, src, user))
+                flow_key = (
+                    rec.get("action"),
+                    rec.get("protocol"),
+                    rec.get("src_ip"),
+                    rec.get("dst_ip"),
+                    rec.get("dst_port")
+                )
+                count = seen_flows.get(flow_key, 0)
+                seen_flows[flow_key] = count + 1
+                if count < 10:
+                    rec["flow_occurrence_count"] = count + 1
+                    artifacts.append(self._record_to_artifact(rec, line_str, evidence_id, ver, src, user))
 
         logger.info("WindowsFirewallParser total: %d firewall artifacts from %s", len(artifacts), src.name)
         return artifacts

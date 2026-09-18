@@ -76,7 +76,11 @@ class NetworkAnalysisEngine:
             ]
             conn_artifacts = [
                 a for a in fcr_artifacts
-                if a.artifact_type in ("network_connection", "network.conn", "network_flow")
+                if a.artifact_type in ("network_connection", "network.conn", "network_flow", "firewall_log")
+            ]
+            firewall_artifacts = [
+                a for a in fcr_artifacts
+                if a.artifact_type in ("firewall_log", "network.firewall") or a.source_tool == "windows_firewall_parser"
             ]
 
             # Dispatch to sub-analyzers
@@ -91,6 +95,66 @@ class NetworkAnalysisEngine:
 
             if conn_artifacts:
                 raw_findings.extend(self.session_reconstructor.analyze(case_id, conn_artifacts, fcr_ref))
+
+            if firewall_artifacts:
+                for a in firewall_artifacts:
+                    raw = a.raw_fields or {}
+                    norm = a.normalized_fields
+                    action = (raw.get("action") or "").upper()
+                    src_ip = (norm.src_ip if norm else None) or raw.get("src_ip") or "UNKNOWN_SRC"
+                    dst_ip = (norm.dst_ip if norm else None) or raw.get("dst_ip") or "UNKNOWN_DST"
+                    src_port = (norm.src_port if norm else None) or raw.get("src_port") or "*"
+                    dst_port = (norm.dst_port if norm else None) or raw.get("dst_port") or "*"
+                    proto = raw.get("protocol") or "IP"
+                    ts = a.timestamp or datetime.now(timezone.utc)
+
+                    if action == "DROP":
+                        HIGH_RISK_PORTS = {4444, 4445, 1337, 8443, 6667, 31337, 5555, 23, 21}
+                        is_high_risk = dst_port in HIGH_RISK_PORTS or src_port in HIGH_RISK_PORTS
+                        fact_msg = f"Windows Firewall BLOCKED (DROP) connection attempt: {src_ip}:{src_port} -> {dst_ip}:{dst_port} ({proto})."
+                        raw_findings.append(Finding(
+                            case_id=case_id,
+                            fact=fact_msg,
+                            confidence=0.90,
+                            severity="high" if is_high_risk else "medium",
+                            mitre_mapping="T1071",
+                            timestamp=ts,
+                            evidence_reference=fcr_ref or a.artifact_id,
+                            source_artifact_id=a.artifact_id,
+                            layer="network.firewall_analyzer",
+                            metadata={
+                                "action": action,
+                                "src_ip": src_ip,
+                                "dst_ip": dst_ip,
+                                "src_port": src_port,
+                                "dst_port": dst_port,
+                                "protocol": proto,
+                                "artifact_id": a.artifact_id,
+                            }
+                        ))
+                    elif action == "ALLOW":
+                        fact_msg = f"Windows Firewall ALLOWED connection: {src_ip}:{src_port} -> {dst_ip}:{dst_port} ({proto})."
+                        raw_findings.append(Finding(
+                            case_id=case_id,
+                            fact=fact_msg,
+                            confidence=0.88,
+                            severity="low" if (isinstance(dst_port, int) and dst_port in (80, 443)) else "medium",
+                            mitre_mapping="T1071",
+                            timestamp=ts,
+                            evidence_reference=fcr_ref or a.artifact_id,
+                            source_artifact_id=a.artifact_id,
+                            layer="network.firewall_analyzer",
+                            metadata={
+                                "action": action,
+                                "src_ip": src_ip,
+                                "dst_ip": dst_ip,
+                                "src_port": src_port,
+                                "dst_port": dst_port,
+                                "protocol": proto,
+                                "artifact_id": a.artifact_id,
+                            }
+                        ))
+
 
         # Also process capture-wide telemetry and Suricata IDS alerts across the store
         all_store_artifacts = list(artifacts_store.values())

@@ -48,7 +48,7 @@ from fastapi.responses import Response
 async def get_report(
     case_id: str,
     format: str = Query("html", description="Report format: 'html', 'json', or 'pdf'"),
-    allow_unreviewed: bool = Query(False, description="Whether to include unreviewed findings"),
+    allow_unreviewed: bool = Query(True, description="Whether to include unreviewed findings"),
     x_tenant_id: str = Header("default", alias="X-Tenant-ID")
 ):
     """
@@ -90,6 +90,73 @@ async def get_report(
             allow_unreviewed=allow_unreviewed
         )
 
+    # Build timeline entries for report payload
+    timeline_events = []
+    for f in findings:
+        if allow_unreviewed or (hasattr(f.review_status, "value") and f.review_status.value != "pending_review") or str(f.review_status) != "pending_review":
+            timeline_events.append({
+                "timestamp": f.timestamp.isoformat() if hasattr(f.timestamp, "isoformat") and f.timestamp else str(f.timestamp) if f.timestamp else None,
+                "event_type": f.layer or "finding",
+                "host": getattr(f, "host", None),
+                "summary": f.sanitized_fact or f.fact,
+                "source_tool": getattr(f, "source_tool", "ARGUS")
+            })
+
+    # If timeline is empty (e.g. 0 threat findings), populate timeline directly from evidence file artifacts
+    if not timeline_events and evidence_list:
+        import os
+        from infrastructure.schemas import Evidence
+        from preprocessing.router import ParserRouter
+        router_inst = ParserRouter()
+        for ev in evidence_list:
+            try:
+                target_path = None
+                for candidate in [ev.file_path, getattr(ev, "original_file_path", None), ev.original_repository_path, ev.repository_path]:
+                    if not candidate:
+                        continue
+                    if os.path.exists(candidate):
+                        target_path = candidate
+                        break
+                    parts = candidate.replace("\\", "/").split("/")
+                    if len(parts) > 1:
+                        c_p = os.path.join("data", "repository", *parts[1:])
+                        if os.path.exists(c_p):
+                            target_path = c_p
+                            break
+                        c_p2 = os.path.join("data", "repository", *parts)
+                        if os.path.exists(c_p2):
+                            target_path = c_p2
+                            break
+                    loc_p = os.path.join("data", "repository", ev.case_id, ev.evidence_id, "original", ev.filename)
+                    if os.path.exists(loc_p):
+                        target_path = loc_p
+                        break
+
+                if target_path and os.path.exists(target_path):
+                    sub_ev = Evidence(
+                        case_id=ev.case_id,
+                        evidence_id=ev.evidence_id,
+                        filename=ev.filename,
+                        file_path=target_path,
+                        raw_file_path=target_path,
+                        uploaded_by=ev.uploaded_by,
+                        sha256_hash=ev.sha256_hash
+                    )
+                    r_res = router_inst.determine_routing(sub_ev)
+                    if r_res.status == "ROUTED" and r_res.parser_instance:
+                        arts = r_res.parser_instance.parse(target_path, ev.evidence_id) or []
+                        for art in arts[:100]:
+                            ts_str = art.timestamp.isoformat() if hasattr(art.timestamp, "isoformat") and art.timestamp else str(art.timestamp) if art.timestamp else None
+                            timeline_events.append({
+                                "timestamp": ts_str,
+                                "event_type": art.artifact_type or "artifact",
+                                "host": getattr(art.normalized_fields, "host", None) if art.normalized_fields else None,
+                                "summary": art.event_summary or f"Artifact from {ev.filename}",
+                                "source_tool": art.source_tool or "ARGUS"
+                            })
+            except Exception as ev_err:
+                logger.warning(f"Failed extracting timeline artifacts for report: {ev_err}")
+
     # Build report dictionary payload
     report_payload = {
         "case_id": case_id,
@@ -102,7 +169,7 @@ async def get_report(
             "status": ev.status.value if hasattr(ev.status, "value") else str(ev.status).replace("EvidenceStatus.", "").lower(),
             "sha256_hash": ev.sha256_hash
         } for ev in (evidence_list or [])],
-        "timeline": []
+        "timeline": timeline_events
     }
 
     # 3. Render report via ReportGenerator

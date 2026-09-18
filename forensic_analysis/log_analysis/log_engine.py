@@ -72,7 +72,7 @@ class LogAnalysisEngine:
             ]
             powershell_artifacts = [
                 a for a in fcr_artifacts
-                if a.artifact_type in ("powershell_event", "log.powershell")
+                if a.artifact_type in ("powershell_event", "powershell_history", "log.powershell") or a.source_tool == "powershell_history"
             ]
             hayabusa_artifacts = [
                 a for a in fcr_artifacts

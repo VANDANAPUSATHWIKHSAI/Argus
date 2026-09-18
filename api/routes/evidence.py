@@ -59,12 +59,15 @@ import uuid
 
 def sanitize_uuid(val: Optional[str]) -> str:
     """Ensure case_id is a valid 36-character UUID for PostgreSQL storage."""
-    if not val or val.strip().lower() in ("", "string", "none", "null"):
+    if not val:
+        return str(uuid.uuid4())
+    cleaned = val.strip().strip('"').strip("'").strip("%22").strip()
+    if cleaned.lower() in ("", "string", "none", "null"):
         return str(uuid.uuid4())
     try:
-        return str(uuid.UUID(val.strip()))
+        return str(uuid.UUID(cleaned))
     except ValueError:
-        return str(uuid.uuid5(uuid.NAMESPACE_DNS, val.strip()))
+        return str(uuid.uuid5(uuid.NAMESPACE_DNS, cleaned))
 
 
 @router.post("/upload", response_model=EvidenceUploadResponse)

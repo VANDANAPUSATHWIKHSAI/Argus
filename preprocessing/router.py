@@ -566,7 +566,7 @@ class ParserRouter:
                 detection_method="extension", status="ROUTED", parser_instance=WindowsUpdateLogParser()
             )
 
-        if fn_lower == "consolehost_history.txt" or "psreadline" in path_lower:
+        if fn_lower in {"consolehost_history.txt", "powershell_history.txt", "powershell.txt"} or "psreadline" in path_lower or "powershell" in fn_lower:
             return RoutingResult(
                 evidence_id=evidence_id, case_id=case_id,
                 target_parser="PowerShellHistoryParser", evidence_type="PowerShell Command History",
@@ -671,10 +671,12 @@ class ParserRouter:
             )
 
         # Chrome/Chromium Browser directory or profile pattern
-        if ("hindsight" in path_lower or "hindsight" in fn_lower or
+        if ("powershell" not in fn_lower and "consolehost" not in fn_lower and "psreadline" not in fn_lower and ext != ".txt") and (
+            "hindsight" in path_lower or "hindsight" in fn_lower or
             "chrome" in path_lower or "chrome" in fn_lower or
-            "history" in fn_lower or "cookies" in fn_lower or
-            "web data" in fn_lower or "login data" in fn_lower):
+            fn_lower in {"history", "cookies", "web data", "login data"} or
+            "browser" in path_lower
+        ):
             return RoutingResult(
                 evidence_id=evidence_id, case_id=case_id,
                 target_parser="BrowserParser", evidence_type="Browser Artifacts — Chrome / Chromium",

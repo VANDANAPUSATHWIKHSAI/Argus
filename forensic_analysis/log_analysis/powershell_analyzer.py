@@ -44,20 +44,20 @@ SUSPICIOUS_CMDLETS = [
 ]
 
 # Discovery, Reconnaissance, File Management & Execution Cmdlets
-RECON_CMDLETS: Dict[str, Tuple[str, str, str]] = {
+RECON_CMDLETS: Dict[str, Tuple[str, Optional[str], str]] = {
     "whoami": ("System Owner/User Discovery", "T1033", "low"),
-    "ipconfig": ("System Network Configuration / IP Discovery", "T1049", "low"),
+    "ipconfig": ("System Network Configuration / IP Discovery", "T1016", "low"),
     "get-nettcpconnection": ("Active Network Connections Discovery", "T1049", "medium"),
     "get-computerinfo": ("System Information Discovery", "T1082", "low"),
     "get-localuser": ("Local User Account Discovery", "T1087", "medium"),
     "get-process": ("Process Discovery", "T1057", "low"),
     "get-service": ("System Service Discovery", "T1007", "low"),
     "get-childitem": ("File and Directory Discovery", "T1083", "informational"),
-    "get-filehash": ("File Hash Calculation / Verification", "T1083", "low"),
-    "get-content": ("File Content Retrieval", "T1005", "informational"),
-    "set-location": ("Working Directory Navigation", "T1083", "informational"),
-    "new-item": ("File / Directory Creation", "T1083", "informational"),
-    "remove-item": ("File / Directory Deletion", "T1070.004", "low"),
+    "get-filehash": ("File Hash Calculation / Verification", None, "low"),
+    "get-content": ("File Content Retrieval", None, "informational"),
+    "set-location": ("Working Directory Navigation", None, "informational"),
+    "new-item": ("File / Directory Creation", None, "informational"),
+    "remove-item": ("File / Directory Deletion", None, "low"),
     "start-process": ("Process Spawning / Execution", "T1059.001", "medium"),
 }
 
@@ -122,7 +122,7 @@ class PowerShellAnalyzer:
                 continue
 
             cmd_lower = cmd_line.lower()
-            ts = artifact.timestamp or datetime.now(timezone.utc)
+            ts = artifact.timestamp
 
             # 1. Encoded Command Detection
             has_encoded_flag = bool(ENCODED_FLAGS_REGEX.search(cmd_line))

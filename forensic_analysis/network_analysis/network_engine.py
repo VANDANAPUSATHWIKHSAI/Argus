@@ -117,7 +117,7 @@ class NetworkAnalysisEngine:
                             fact=fact_msg,
                             confidence=0.90,
                             severity="high" if is_high_risk else "medium",
-                            mitre_mapping="T1071",
+                            mitre_mapping=None,
                             timestamp=ts,
                             evidence_reference=fcr_ref or a.artifact_id,
                             source_artifact_id=a.artifact_id,
@@ -139,7 +139,7 @@ class NetworkAnalysisEngine:
                             fact=fact_msg,
                             confidence=0.88,
                             severity="low" if (isinstance(dst_port, int) and dst_port in (80, 443)) else "medium",
-                            mitre_mapping="T1071",
+                            mitre_mapping=None,
                             timestamp=ts,
                             evidence_reference=fcr_ref or a.artifact_id,
                             source_artifact_id=a.artifact_id,
@@ -210,5 +210,5 @@ class NetworkAnalysisEngine:
         final_findings = list(deduped.values())
 
         # Deterministic ordering by (timestamp, layer, finding_id)
-        final_findings.sort(key=lambda f: (f.timestamp, f.layer, f.finding_id))
+        final_findings.sort(key=lambda f: (f.timestamp is None, f.timestamp or datetime.min.replace(tzinfo=timezone.utc), f.layer, f.finding_id))
         return final_findings

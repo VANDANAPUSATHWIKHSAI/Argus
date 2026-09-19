@@ -233,10 +233,21 @@ class TestMsgEmailParserUnit(unittest.TestCase):
             with self.assertRaises(MsgParserCorruptError):
                 self.parser.parse(str(self.msg_path))
 
-    def test_nonexistent_file_raises_not_found(self):
-        with patch("preprocessing.parsers.msg_parser.extract_msg", Mock()):
-            with self.assertRaises(FileNotFoundError):
-                self.parser.parse(str(Path(self.tmp_dir) / "missing.msg"))
+    def test_real_msg_file_parsing(self):
+        real_msg_path = Path(r"C:\Users\Sudeep\Downloads\Argus\raw evidence\phase a\msg\outlook-sample.msg")
+        if not real_msg_path.exists():
+            self.skipTest("Real MSG evidence file not found")
+
+        artifacts = self.parser.parse(str(real_msg_path), evidence_id="ev-real-msg-01")
+        self.assertEqual(len(artifacts), 1)
+
+        art = artifacts[0]
+        self.assertEqual(art.source_tool, "extract_msg")
+        self.assertEqual(art.artifact_type, "email")
+        self.assertIn("muratcan.kurtulus@gmail.com", art.raw_fields["sender"])
+        self.assertEqual(art.raw_fields["subject"], "Test Email Message")
+        self.assertEqual(art.raw_fields["file_hash"], "028d84ffe67e1865009669d13d4c12682943b32eccf7f84a8da1899db63b0131")
+        self.assertEqual(len(art.raw_fields["attachments"]), 0)
 
 
 class TestFirefoxAndMsgRouterIntegration(unittest.TestCase):

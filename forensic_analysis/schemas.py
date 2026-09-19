@@ -35,7 +35,7 @@ class Finding(BaseModel):
     confidence:                   float              = Field(ge=0.0, le=1.0)
     severity:                     str
     mitre_mapping:                Optional[str]      = None
-    timestamp:                    datetime           = Field(default_factory=lambda: datetime.now(timezone.utc))
+    timestamp:                    Optional[datetime] = None
     evidence_reference:           str                # Primary FCR correlation_id or artifact_id
     source_artifact_id:           str                # Structurally required: underlying artifact ID
     layer:                        str
@@ -106,7 +106,9 @@ class Finding(BaseModel):
 
     @field_validator("timestamp")
     @classmethod
-    def _validate_timestamp(cls, v: datetime) -> datetime:
+    def _validate_timestamp(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is None:
+            return None
         if v.tzinfo is None:
             return v.replace(tzinfo=timezone.utc)
         return v

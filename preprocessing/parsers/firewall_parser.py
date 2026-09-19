@@ -94,11 +94,10 @@ class WindowsFirewallParser:
                     rec.get("dst_ip"),
                     rec.get("dst_port")
                 )
-                count = seen_flows.get(flow_key, 0)
-                seen_flows[flow_key] = count + 1
-                if count < 10:
-                    rec["flow_occurrence_count"] = count + 1
-                    artifacts.append(self._record_to_artifact(rec, line_str, evidence_id, ver, src, user))
+                count = seen_flows.get(flow_key, 0) + 1
+                seen_flows[flow_key] = count
+                rec["flow_occurrence_count"] = count
+                artifacts.append(self._record_to_artifact(rec, line_str, evidence_id, ver, src, user))
 
         logger.info("WindowsFirewallParser total: %d firewall artifacts from %s", len(artifacts), src.name)
         return artifacts

@@ -89,7 +89,9 @@ class EndpointAnalysisEngine:
                 logger.error("FilesystemAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.registry_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                res = self.registry_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id)
+                print(f"DEBUG RegistryAnalyzer inside EndpointAnalysisEngine returned {len(res)} findings for fcr {fcr_id}")
+                raw_findings.extend(res)
             except Exception as e:
                 logger.error("RegistryAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
@@ -123,7 +125,11 @@ class EndpointAnalysisEngine:
                 else:
                     sem_key = (finding.case_id, finding.layer, finding.mitre_mapping, reg_key, val_name, cmd_line)
             elif "registry_analyzer" in finding.layer:
-                if finding.mitre_mapping == "T1562.001":
+                threat_name = meta.get("threat_name", "").lower()
+                art_id = finding.source_artifact_id or meta.get("artifact_id", "")
+                if threat_name:
+                    sem_key = (finding.case_id, finding.layer, finding.mitre_mapping, threat_name, art_id)
+                elif finding.mitre_mapping == "T1562.001":
                     sem_key = (finding.case_id, finding.layer, finding.mitre_mapping, reg_key, val_name)
                 else:
                     sem_key = (finding.case_id, finding.layer, finding.mitre_mapping, reg_key)

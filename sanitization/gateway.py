@@ -42,7 +42,7 @@ class SanitizedAgentContext(BaseModel):
     source_artifact_id: Optional[str] = None
     evidence_reference: List[str]
     contributing_correlation_ids: List[str] = Field(default_factory=list)
-    timestamp: datetime
+    timestamp: Optional[datetime] = None
     severity: str
     confidence: float
     layer: str
@@ -269,7 +269,7 @@ class SanitizationGateway:
                 source_artifact_id=source_artifact_id,
                 evidence_reference=ev_ref,
                 contributing_correlation_ids=contrib_ids,
-                timestamp=getattr(finding, "timestamp", datetime.now(timezone.utc)),
+                timestamp=getattr(finding, "timestamp", None),
                 severity=getattr(finding, "severity", "informational"),
                 confidence=getattr(finding, "confidence", 1.0),
                 layer=getattr(finding, "layer", "unknown"),
@@ -292,7 +292,7 @@ class SanitizationGateway:
                 tenant_id=getattr(finding, "tenant_id", "default"),
                 source_artifact_id=getattr(finding, "source_artifact_id", None),
                 evidence_reference=safe_ref,
-                timestamp=getattr(finding, "timestamp", datetime.now(timezone.utc)),
+                timestamp=getattr(finding, "timestamp", None),
                 severity="high",
                 confidence=0.0,
                 layer=getattr(finding, "layer", "unknown"),

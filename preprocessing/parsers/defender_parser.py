@@ -90,26 +90,72 @@ class WindowsDefenderParser:
 
     def _parse_xml_or_text(self, src: Path, evidence_id: str, ver: str, user: Optional[str]) -> list[Artifact]:
         artifacts: list[Artifact] = []
-        try:
-            content = src.read_text(encoding="utf-8", errors="replace")
-        except Exception as exc:
-            raise WindowsDefenderParserError(f"Failed to read Defender XML/EVTX file {src.name}: {exc}")
+        content: str = ""
+
+        if src.suffix.lower() == ".evtx":
+            xml_str = self._extract_xml_from_evtx(src)
+            if xml_str:
+                content = xml_str
+
+        if not content:
+            try:
+                content = src.read_text(encoding="utf-8", errors="replace")
+            except Exception as exc:
+                raise WindowsDefenderParserError(f"Failed to read Defender XML/EVTX file {src.name}: {exc}")
 
         # Attempt XML parse
         if "<Event" in content:
             try:
-                root = ET.fromstring(content if content.strip().startswith("<") else f"<Events>{content}</Events>")
-                events = root.findall(".//Event") if root.tag != "Event" else [root]
+                xml_wrapped = f"<Events>{content}</Events>" if not content.strip().startswith("<Events>") else content
+                root = ET.fromstring(xml_wrapped)
+                events = root.findall(".//{*}Event") if root.tag != "Event" else [root]
+                if not events:
+                    events = root.findall(".//Event") if root.tag != "Event" else [root]
                 for ev in events:
                     rec = self._parse_xml_event(ev)
                     if rec:
                         artifacts.append(self._record_to_artifact(rec, evidence_id, ver, src, user))
-                return artifacts
+                if artifacts:
+                    return artifacts
             except Exception:
                 pass
 
         # Fallback to key-value or line parsing
         return self._parse_mplog_or_text(src, evidence_id, ver, user)
+
+    def _extract_xml_from_evtx(self, src: Path) -> Optional[str]:
+        """Extract XML string from binary EVTX file via wevtutil or PowerShell."""
+        import shutil
+        import subprocess
+
+        if shutil.which("wevtutil"):
+            try:
+                res = subprocess.run(
+                    ["wevtutil", "qe", str(src), "/lf:true", "/f:xml"],
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                )
+                if res.returncode == 0 and "<Event" in res.stdout:
+                    return res.stdout
+            except Exception:
+                pass
+
+        if shutil.which("powershell"):
+            try:
+                cmd = f"Get-WinEvent -Path '{src}' | ForEach-Object {{ $_.ToXml() }}"
+                res = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", cmd],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
+                if res.returncode == 0 and "<Event" in res.stdout:
+                    return res.stdout
+            except Exception:
+                pass
+
+        return None
 
     def _parse_xml_event(self, ev: ET.Element) -> dict[str, Any]:
         rec: dict[str, Any] = {}
@@ -177,14 +223,31 @@ class WindowsDefenderParser:
         severity = (
             record.get("severity")
             or record.get("Severity")
+            or record.get("Severity Name")
             or record.get("SeverityID")
+            or record.get("Severity ID")
             or record.get("ThreatSeverityID")
             or "Unknown"
         )
-        action = record.get("action") or record.get("Action") or record.get("CleaningActionID") or "Detected"
-        file_path = record.get("file_path") or record.get("FilePath") or record.get("Path") or record.get("Resources")
-        proc_name = record.get("process_name") or record.get("ProcessName") or record.get("Process")
+        action = (
+            record.get("action")
+            or record.get("Action")
+            or record.get("Action Name")
+            or record.get("ActionID")
+            or record.get("Action ID")
+            or record.get("CleaningActionID")
+            or "Detected"
+        )
+        raw_file_path = record.get("file_path") or record.get("FilePath") or record.get("Path") or record.get("Resources")
+        file_path = raw_file_path
+        if file_path and isinstance(file_path, str):
+            # Clean Defender 'file:_C:\...' prefixes
+            paths = [p.strip().removeprefix("file:_") for p in file_path.split(";")]
+            file_path = "; ".join(paths)
+
+        proc_name = record.get("process_name") or record.get("ProcessName") or record.get("Process Name") or record.get("Process")
         proc_id = record.get("process_id") or record.get("ProcessID") or record.get("PID")
+        det_user = record.get("Detection User") or record.get("user") or record.get("User")
 
         raw_ts = record.get("timestamp") or record.get("TimeCreated") or record.get("EventTime")
         dt = self._parse_timestamp(raw_ts)
@@ -214,7 +277,7 @@ class WindowsDefenderParser:
                 pass
 
         norm = NormalizedFields(
-            user=user or record.get("user") or record.get("User"),
+            user=det_user or user,
             process_id=pid_int,
             process_name=proc_basename,
             file_path=file_path or str(src),
@@ -261,6 +324,18 @@ class WindowsDefenderParser:
         s = str(val).strip().replace(" ", "T")
         if not s or s == "0":
             return None
+
+        # Clean sub-second fractional digits beyond 6 microsecond digits
+        s_cleaned = re.sub(r'(\.\d{6})\d+', r'\1', s)
+        try:
+            s_iso = s_cleaned.replace("Z", "+00:00")
+            dt = datetime.fromisoformat(s_iso)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            pass
+
         if len(s) > 6 and s[-3] == ":":
             s = s[:-3] + s[-2:]
         for fmt in (

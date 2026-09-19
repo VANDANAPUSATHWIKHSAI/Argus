@@ -50,46 +50,51 @@ class FirefoxParser:
     """Parses Firefox SQLite databases (places.sqlite, cookies.sqlite, formhistory.sqlite)."""
 
     def parse(self, file_path: str, evidence_id: str = "") -> list[Artifact]:
-        """Parse a Firefox SQLite database file and return Artifact records.
-
-        Args:
-            file_path:   Path to the Firefox SQLite database.
-            evidence_id: FK linking back to infrastructure.Evidence.evidence_id.
-
-        Returns:
-            List of Artifact records.
-
-        Raises:
-            FileNotFoundError:            If file_path does not exist.
-            FirefoxDatabaseCorruptError:  If SQLite DB is corrupt or not a valid database.
-        """
+        """Parse a Firefox / Browser SQLite database or profile directory and return Artifact records."""
         src = Path(file_path)
         if not src.exists():
-            raise FileNotFoundError(f"Firefox database file not found: {file_path}")
+            raise FileNotFoundError(f"Browser profile path not found: {file_path}")
 
-        fn_lower = src.name.lower()
         self._tool_version = get_tool_version("firefox")
 
-        conn = self._connect_readonly(src)
+        if src.is_dir():
+            artifacts: list[Artifact] = []
+            for child in src.rglob("*"):
+                if child.is_file() and not child.name.startswith("."):
+                    try:
+                        arts = self.parse(str(child), evidence_id)
+                        artifacts.extend(arts)
+                    except Exception:
+                        pass
+            return artifacts
+
+        fn_lower = src.name.lower()
         try:
-            if "places" in fn_lower:
+            conn = self._connect_readonly(src)
+        except FirefoxDatabaseCorruptError:
+            raise
+        except Exception:
+            return []
+
+        try:
+            tables = self._get_table_names(conn)
+            if "moz_historyvisits" in tables and "moz_places" in tables:
+                return self._parse_places(conn, evidence_id, src.name)
+            elif "moz_cookies" in tables:
+                return self._parse_cookies(conn, evidence_id, src.name)
+            elif "moz_formhistory" in tables:
+                return self._parse_formhistory(conn, evidence_id, src.name)
+            elif "urls" in tables:
+                return self._parse_chromium_history(conn, evidence_id, src.name)
+            elif "places" in fn_lower:
                 return self._parse_places(conn, evidence_id, src.name)
             elif "cookies" in fn_lower:
                 return self._parse_cookies(conn, evidence_id, src.name)
             elif "formhistory" in fn_lower:
                 return self._parse_formhistory(conn, evidence_id, src.name)
             else:
-                # Dispatch places check by default or inspect table names
-                tables = self._get_table_names(conn)
-                if "moz_historyvisits" in tables and "moz_places" in tables:
-                    return self._parse_places(conn, evidence_id, src.name)
-                elif "moz_cookies" in tables:
-                    return self._parse_cookies(conn, evidence_id, src.name)
-                elif "moz_formhistory" in tables:
-                    return self._parse_formhistory(conn, evidence_id, src.name)
-                else:
-                    logger.warning("Unrecognized Firefox database tables in %s: %s", src.name, tables)
-                    return []
+                logger.warning("Unrecognized Firefox / Browser database tables in %s: %s", src.name, tables)
+                return []
         finally:
             conn.close()
 
@@ -287,8 +292,100 @@ class FirefoxParser:
         return artifacts
 
     # -----------------------------------------------------------------------
+    # Chromium / Fallback History Parsing
+    # -----------------------------------------------------------------------
+
+    def _parse_chromium_history(self, conn: sqlite3.Connection, evidence_id: str, filename: str) -> list[Artifact]:
+        """Parse browsing history from Chromium-style SQLite database (urls + visits)."""
+        tables = self._get_table_names(conn)
+        has_visits = "visits" in tables
+        if has_visits:
+            query = """
+            SELECT 
+                u.id AS url_id,
+                u.url,
+                u.title,
+                u.visit_count,
+                u.typed_count,
+                v.id AS visit_id,
+                v.visit_time,
+                v.from_visit,
+                v.transition
+            FROM urls u
+            JOIN visits v ON u.id = v.url
+            ORDER BY v.visit_time ASC;
+            """
+        else:
+            query = """
+            SELECT 
+                id AS url_id,
+                url,
+                title,
+                visit_count,
+                typed_count,
+                last_visit_time AS visit_time
+            FROM urls
+            ORDER BY last_visit_time ASC;
+            """
+        artifacts: list[Artifact] = []
+        ver = getattr(self, "_tool_version", get_tool_version("firefox"))
+
+        try:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            for row in cursor.fetchall():
+                rdict = dict(row)
+                url = rdict.get("url") or ""
+                title = rdict.get("title") or ""
+                visit_time_raw = rdict.get("visit_time")
+                visit_count = rdict.get("visit_count")
+
+                dt = self._convert_webkit_timestamp(visit_time_raw) or self._convert_firefox_timestamp(visit_time_raw)
+                host = self._extract_host(url)
+
+                summary = f"Visited {title or url or 'page'}"
+                raw_fields = {**rdict, "tool_version": ver, "source_file": filename}
+
+                norm = NormalizedFields(
+                    host=host,
+                    url=url,
+                    title=title,
+                    visit_count=visit_count,
+                )
+
+                art = Artifact(
+                    evidence_id=evidence_id,
+                    source_tool="firefox_sqlite",
+                    artifact_type="browser_history",
+                    timestamp=dt,
+                    timestamp_type="visit",
+                    event_summary=summary,
+                    parser_version=ver,
+                    raw_fields=raw_fields,
+                    normalized_fields=norm,
+                )
+                artifacts.append(art)
+        except sqlite3.Error as exc:
+            raise FirefoxDatabaseCorruptError(f"Error querying urls table in {filename}: {exc}")
+
+        return artifacts
+
+    # -----------------------------------------------------------------------
     # Utilities
     # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _convert_webkit_timestamp(val: Any) -> Optional[datetime]:
+        """Convert WebKit microsecond timestamp to UTC datetime."""
+        if not val or not isinstance(val, (int, float)) or val <= 0:
+            return None
+        try:
+            secs = (float(val) / 1_000_000.0) - 11644473600.0
+            if secs <= 0:
+                return None
+            return datetime.fromtimestamp(secs, tz=timezone.utc)
+        except Exception:
+            return None
 
     @staticmethod
     def _convert_firefox_timestamp(microsec: Any) -> Optional[datetime]:
@@ -315,5 +412,7 @@ class FirefoxParser:
         try:
             parsed = urlparse(url)
             return parsed.netloc or None
+        except Exception:
+            return None
         except Exception:
             return None

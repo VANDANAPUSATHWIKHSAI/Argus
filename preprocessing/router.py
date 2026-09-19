@@ -345,6 +345,24 @@ class ParserRouter:
 
             # EVTX: "ElfFile\x00"
             if magic.startswith(b"ElfFile\x00"):
+                if "sysmon" in path_lower or "microsoft-windows-sysmon" in fn_lower or fn_lower.startswith("microsoft-windows-sysmon"):
+                    return RoutingResult(
+                        evidence_id=evidence_id, case_id=case_id,
+                        target_parser="EvtxParser", evidence_type="Sysmon Operational Logs",
+                        detection_method="signature", status="ROUTED", parser_instance=EvtxParser()
+                    )
+                if "grouppolicy" in path_lower or "microsoft-windows-grouppolicy" in fn_lower or fn_lower.startswith("microsoft-windows-grouppolicy"):
+                    return RoutingResult(
+                        evidence_id=evidence_id, case_id=case_id,
+                        target_parser="GroupPolicyLogParser", evidence_type="Group Policy Application Logs",
+                        detection_method="signature", status="ROUTED", parser_instance=GroupPolicyLogParser()
+                    )
+                if "defender" in path_lower or "microsoft-windows-windows defender" in fn_lower or fn_lower.startswith("microsoft-windows-windows defender"):
+                    return RoutingResult(
+                        evidence_id=evidence_id, case_id=case_id,
+                        target_parser="WindowsDefenderParser", evidence_type="Windows Defender Logs",
+                        detection_method="signature", status="ROUTED", parser_instance=WindowsDefenderParser()
+                    )
                 if metadata.get("stream") == "raw" or metadata.get("tool") == "evtxecmd":
                     return RoutingResult(
                         evidence_id=evidence_id, case_id=case_id,
@@ -691,6 +709,12 @@ class ParserRouter:
         mime_type = (metadata.get("mime_type") or "").lower()
 
         if ext == ".evtx":
+            if "sysmon" in path_lower or "microsoft-windows-sysmon" in fn_lower or fn_lower.startswith("microsoft-windows-sysmon"):
+                return RoutingResult(
+                    evidence_id=evidence_id, case_id=case_id,
+                    target_parser="EvtxParser", evidence_type="Sysmon Operational Logs",
+                    detection_method="extension", status="ROUTED", parser_instance=EvtxParser()
+                )
             if "grouppolicy" in path_lower or "microsoft-windows-grouppolicy" in fn_lower or fn_lower.startswith("microsoft-windows-grouppolicy"):
                 return RoutingResult(
                     evidence_id=evidence_id, case_id=case_id,

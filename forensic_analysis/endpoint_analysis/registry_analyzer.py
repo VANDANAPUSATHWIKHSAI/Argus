@@ -126,6 +126,8 @@ class RegistryAnalyzer:
                 threat_name = norm.rule_name or str(raw.get("ThreatName", "")) or str(raw.get("threat_name", ""))
                 proc_name = norm.process_name or str(raw.get("ProcessName", ""))
                 sev = norm.severity or "high"
+                ev_id = str(raw.get("event_id", "") or raw.get("EventID", ""))
+                mitre_tech = "T1562.001" if ev_id in ("5001", "5007") else None
 
                 if threat_name:
                     fact_msg = (
@@ -137,7 +139,7 @@ class RegistryAnalyzer:
                         fact=fact_msg,
                         confidence=0.95,
                         severity=sev,
-                        mitre_mapping="T1562.001",
+                        mitre_mapping=mitre_tech,
                         timestamp=ts,
                         evidence_reference=fcr_ref or artifact.artifact_id,
                         source_artifact_id=artifact.artifact_id,

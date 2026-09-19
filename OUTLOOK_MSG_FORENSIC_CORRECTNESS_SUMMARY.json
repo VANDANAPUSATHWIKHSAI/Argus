@@ -1,0 +1,56 @@
+{
+  "audit_metadata": {
+    "evidence_file": "outlook-sample.msg",
+    "evidence_path": "C:\\Users\\Sudeep\\Downloads\\Argus\\raw evidence\\phase a\\msg\\outlook-sample.msg",
+    "evidence_size_bytes": 13312,
+    "sha256": "028d84ffe67e1865009669d13d4c12682943b32eccf7f84a8da1899db63b0131",
+    "format": "OLE Compound File Binary Format (d0cf11e0a1b11ae1)",
+    "audit_timestamp": "2026-09-19T13:00:00Z",
+    "evidence_id": "EVID-MSG-001",
+    "case_id": "CASE-MSG-AUDIT-001",
+    "tenant_id": "TENANT-MSG-001",
+    "parser_class": "preprocessing.parsers.msg_parser.MsgEmailParser",
+    "tool_version": "extract-msg v0.56.1"
+  },
+  "execution_metrics": {
+    "raw_artifacts": 1,
+    "normalized_artifacts": 1,
+    "atomic_entities": 5,
+    "unique_entities": 3,
+    "fcr_count": 0,
+    "uai_count": 1,
+    "forensic_findings": 0,
+    "fir_findings": 0,
+    "sanitized_contexts": 0,
+    "e2e_runtime_seconds": 5.5999
+  },
+  "forensic_audit_matrix": {
+    "total_findings_audited": 0,
+    "valid": 0,
+    "valid_but_confidence_review": 0,
+    "severity_review": 0,
+    "false_positives": 0,
+    "duplicate_findings": 0,
+    "overstated_claims": 0,
+    "broken_provenance": 0,
+    "unsupported_mitre_mappings": 0,
+    "sanitization_defects": 0
+  },
+  "extracted_message_metadata": {
+    "sender": "M. C. Kurtuluş <muratcan.kurtulus@gmail.com>",
+    "recipients": "M. C. Kurtuluş <muratcan.kurtulus@gmail.com>",
+    "cc": "<>",
+    "bcc": "<>",
+    "subject": "Test Email Message",
+    "message_id": "<CAG5p-vYs4eK8i7X=N5XSB+4bHTg-RQqwmH9DpemS-dQwAU6Chw@mail.gmail.com>",
+    "sent_timestamp_utc": "2024-12-22T08:23:00Z",
+    "received_timestamp": "2024-12-22T13:53:00+05:30",
+    "attachment_count": 0,
+    "attachment_coverage_status": "Attachment coverage not exercised by this evidence"
+  },
+  "regression_tests": {
+    "targeted_msg_unit_tests": "13 passed in 0.56s",
+    "full_repository_suite": "554 passed, 2 skipped in 65.10s (100% Pass Rate)"
+  },
+  "final_status": "OUTLOOK MSG — FORENSICALLY VALIDATED"
+}

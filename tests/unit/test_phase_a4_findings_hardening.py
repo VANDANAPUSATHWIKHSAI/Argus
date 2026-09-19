@@ -215,17 +215,20 @@ class TestPhaseA4FindingsHardening(unittest.TestCase):
 
     def test_strict_case_and_tenant_isolation(self):
         """Verify findings from CASE-A/tenant-1 cannot be accessed from CASE-B/tenant-2."""
-        f_a = Finding(case_id="CASE-A", tenant_id="tenant-1", fact="Fact A", confidence=0.8, severity="low", evidence_reference="CORR-1", source_artifact_id="art-1", layer="endpoint")
-        f_b = Finding(case_id="CASE-B", tenant_id="tenant-2", fact="Fact B", confidence=0.8, severity="low", evidence_reference="CORR-2", source_artifact_id="art-2", layer="endpoint")
+        import uuid
+        case_a = f"CASE-ISO-A-{uuid.uuid4()}"
+        case_b = f"CASE-ISO-B-{uuid.uuid4()}"
+        f_a = Finding(case_id=case_a, tenant_id="tenant-1", fact="Fact A", confidence=0.8, severity="low", evidence_reference="CORR-1", source_artifact_id="art-1", layer="endpoint")
+        f_b = Finding(case_id=case_b, tenant_id="tenant-2", fact="Fact B", confidence=0.8, severity="low", evidence_reference="CORR-2", source_artifact_id="art-2", layer="endpoint")
 
         self.service.fir_repo.insert(finding_to_fir(f_a))
         self.service.fir_repo.insert(finding_to_fir(f_b))
 
-        findings_a = self.service.list_findings("CASE-A", tenant_id="tenant-1")
+        findings_a = self.service.list_findings(case_a, tenant_id="tenant-1")
         self.assertEqual(len(findings_a), 1)
         self.assertEqual(findings_a[0].fact, "Fact A")
 
-        findings_b_leak = self.service.list_findings("CASE-A", tenant_id="tenant-2")
+        findings_b_leak = self.service.list_findings(case_a, tenant_id="tenant-2")
         self.assertEqual(len(findings_b_leak), 0)
 
     # ─────────────────────────────────────────────────────────────────

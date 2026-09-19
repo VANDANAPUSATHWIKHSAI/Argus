@@ -36,7 +36,7 @@ class FIRFinding(BaseModel):
     confidence: float
     severity: str
     mitre_mapping: Optional[str] = None
-    timestamp: datetime
+    timestamp: Optional[datetime] = None
     evidence_reference: list[str]  # links back to FCR / raw artifact(s)
     layer: str               # which analysis engine produced this
     source_artifact_id: Optional[str] = None

@@ -310,8 +310,16 @@ class RegistryParser:
             if shutil.which(candidate):
                 return candidate
 
+        try:
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            rip_pl = repo_root / "tools" / "regripper" / "rip.pl"
+            if rip_pl.exists():
+                return str(rip_pl)
+        except Exception:
+            pass
+
         raise RegRipperNotFoundError(
-            f"RegRipper binary not found on PATH. Tried: {', '.join(self._BINARIES)}."
+            f"RegRipper binary not found on PATH or tools dir. Tried: {', '.join(self._BINARIES)}."
         )
 
     def _run_recmd(self, binary: str, hive_path: Path, out_dir: Path) -> None:
@@ -393,7 +401,10 @@ class RegistryParser:
                 return None
             cmd = ["wsl", "perl", "/usr/lib/regripper/rip.pl", "-r", wsl_hive_path, "-f", profile]
         else:
-            cmd = [binary, "-r", str(hive_path), "-f", profile]
+            if binary.endswith(".pl"):
+                cmd = ["perl", binary, "-r", str(hive_path), "-f", profile]
+            else:
+                cmd = [binary, "-r", str(hive_path), "-f", profile]
 
         logger.debug("Running: %s", " ".join(cmd))
 

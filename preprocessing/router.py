@@ -783,7 +783,7 @@ class ParserRouter:
                 except Exception:
                     pass
 
-        if ext == ".txt" or fn_lower == "narrative.txt":
+        if ext in {".txt", ".log"} or fn_lower == "narrative.txt":
             return RoutingResult(
                 evidence_id=evidence_id, case_id=case_id,
                 target_parser="FilesystemParser", evidence_type="Case Narrative / Text File",

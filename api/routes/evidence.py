@@ -20,7 +20,7 @@ from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException, Qu
 from pydantic import BaseModel, Field
 
 from infrastructure.schemas import Evidence, CaseSession
-from infrastructure.repository.evidence_store import create_case_session, store_evidence
+from infrastructure.repository.evidence_store import create_case_session, store_evidence, list_evidence_by_case
 from preprocessing.router import ParserRouter
 from preprocessing.artifact_extractor.extractor import ArtifactExtractor
 from preprocessing.fcr_engine.engine import FCREngine
@@ -78,6 +78,7 @@ async def upload_evidence(
     tenant_id: str = Header("default", alias="X-Tenant-ID"),
     uploaded_by: str = Form("analyst_api"),
     host_id: str = Form("NTFS1-HOST"),
+    relative_path: Optional[str] = Form(None),
 ):
     """
     Ingest a raw evidence file, execute the Stage 1-4 pipeline, and store findings.
@@ -98,7 +99,14 @@ async def upload_evidence(
     # Save temp upload file
     temp_dir = Path(tempfile.gettempdir()) / "argus_uploads"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    file_path = temp_dir / file.filename
+    
+    safe_name = file.filename
+    if relative_path:
+        # avoid path traversal
+        safe_name = relative_path.replace("..", "").lstrip("\\/")
+        
+    file_path = temp_dir / safe_name
+    file_path.parent.mkdir(parents=True, exist_ok=True)
 
     file_bytes = await file.read()
     if not file_bytes:
@@ -112,7 +120,7 @@ async def upload_evidence(
     # Create evidence object
     evidence = Evidence(
         case_id=target_case_id,
-        filename=file.filename,
+        filename=safe_name,
         file_path=str(file_path),
         raw_file_path=str(file_path),
         uploaded_by=uploaded_by,
@@ -133,7 +141,7 @@ async def upload_evidence(
         import zipfile
         extract_dir = temp_dir / f"extracted_{hashlib.sha256(file.filename.encode()).hexdigest()[:8]}"
         extract_dir.mkdir(parents=True, exist_ok=True)
-        zip_source_path = getattr(evidence, "original_repository_path", None) or getattr(evidence, "repository_path", None) or evidence.file_path or str(file_path)
+        zip_source_path = str(file_path)
         try:
             with zipfile.ZipFile(zip_source_path, 'r') as zf:
                 resolved_extract_dir = extract_dir.resolve()
@@ -181,7 +189,7 @@ async def upload_evidence(
         routing_res = _parser_router.determine_routing(evidence)
         if routing_res.status == "ROUTED" and routing_res.parser_instance:
             try:
-                target_path = getattr(evidence, "original_repository_path", None) or getattr(evidence, "repository_path", None) or evidence.file_path or str(file_path)
+                target_path = str(file_path)
                 arts = routing_res.parser_instance.parse(target_path, evidence.evidence_id)
                 if arts:
                     for art in arts:
@@ -305,3 +313,18 @@ async def upload_evidence(
         timeline_event_count=len(timeline),
         errors=errors
     )
+
+@router.get("/case/{case_id}")
+async def get_evidence_by_case(
+    case_id: str,
+    tenant_id: str = Header("default", alias="X-Tenant-ID")
+):
+    """
+    Retrieve all evidence records for a given case ID.
+    """
+    try:
+        evidence_list = list_evidence_by_case(tenant_id=tenant_id, case_id=case_id)
+        return {"status": "SUCCESS", "data": [e.model_dump(mode='json') for e in evidence_list]}
+    except Exception as e:
+        logger.error(f"Error fetching evidence for case {case_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

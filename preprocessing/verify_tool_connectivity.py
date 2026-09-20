@@ -155,18 +155,16 @@ def main():
         "error": str(exc) if exc else (stderr.strip() if rc != 0 else "")
     }
 
-    # ----------------------------------------------------
-    # 4. Volatility3 Check
-    # ----------------------------------------------------
     print("Checking Volatility3...")
-    rc, stdout, stderr, exc = run_cmd(["vol", "--help"])
+    vol_exe = str(Path(sys.exec_prefix) / "Scripts" / "vol.exe")
+    rc, stdout, stderr, exc = run_cmd([vol_exe, "--help"])
     vol_direct = "FOUND" if exc is None else "NOT FOUND"
     if exc:
         vol_direct = f"NOT FOUND ({type(exc).__name__})"
     elif rc != 0:
         vol_direct = f"FOUND BUT ERRORED (exit code {rc})"
         
-    s_rc, s_out, s_err, s_exc = run_cmd(["vol", "--help"])
+    s_rc, s_out, s_err, s_exc = run_cmd([vol_exe, "--help"])
     vol_shell = "yes" if s_exc is None and s_rc == 0 else "no"
     
     parser_mem = MemoryParser()
@@ -269,8 +267,10 @@ def main():
     print("Checking Hindsight...")
     hindsight_script = None
     try:
-        python_dir = Path(sys.executable).parent
-        scripts_dir = python_dir / "Scripts"
+        if sys.platform == "win32":
+            scripts_dir = Path(sys.exec_prefix) / "Scripts"
+        else:
+            scripts_dir = Path(sys.exec_prefix) / "bin"
         hindsight_py = scripts_dir / "hindsight.py"
         if hindsight_py.exists():
             hindsight_script = str(hindsight_py)

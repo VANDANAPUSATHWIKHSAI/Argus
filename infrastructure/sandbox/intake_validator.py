@@ -258,7 +258,7 @@ exit 0
             user="nobody",
             mem_limit="100m",
             nano_cpus=500_000_000,  # 0.5 CPU
-            volumes={file_path: {"bind": "/evidence/file", "mode": "ro"}},
+            volumes={os.path.abspath(file_path): {"bind": "/evidence/file", "mode": "ro"}},
             detach=True,
         )
         try:
@@ -316,9 +316,10 @@ def run_clamav_scan(file_path: str) -> list[str]:
         if not cd.ping():
             flags.append("clamav_ping_failed")
         else:
-            scan_res = cd.scan_file(file_path)
+            with open(file_path, "rb") as f:
+                scan_res = cd.scan_stream(f.read())
             if scan_res:
-                status, virus_name = scan_res.get(file_path, ("FOUND", "unknown"))
+                status, virus_name = scan_res.get("stream", ("FOUND", "unknown"))
                 flags.append(f"virus_detected:{virus_name}")
     except Exception as e:
         flags.append(f"clamav_scan_error:{type(e).__name__}:{e}")

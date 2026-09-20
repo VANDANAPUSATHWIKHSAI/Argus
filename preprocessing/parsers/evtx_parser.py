@@ -125,16 +125,18 @@ class EvtxParser:
     # -----------------------------------------------------------------------
 
     def _find_binary(self) -> Optional[str]:
-        """Find hayabusa binary on PATH or project external_tools."""
-        resolved = shutil.which("hayabusa") or shutil.which("hayabusa.exe")
-        if resolved:
-            return resolved
+        """Locates the hayabusa executable on PATH or in a designated tools folder."""
+        # 1. Check PATH
+        path_bin = shutil.which("hayabusa")
+        if path_bin:
+            return path_bin
 
+        # 2. Check ARGUS-relative tools directory
         try:
-            repo_root = Path(__file__).resolve().parents[3]
-            ext_hayabusa = repo_root / "external_tools" / "hayabusa"
+            repo_root = Path(__file__).resolve().parent.parent.parent
+            ext_hayabusa = repo_root / "tools" / "hayabusa"
             if ext_hayabusa.exists():
-                for p in ext_hayabusa.rglob("hayabusa.exe"):
+                for p in ext_hayabusa.rglob("hayabusa*.exe"):
                     if p.is_file():
                         return str(p)
         except Exception:

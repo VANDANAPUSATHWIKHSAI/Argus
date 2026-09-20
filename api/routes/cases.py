@@ -10,13 +10,17 @@ Enforces strict case and tenant isolation.
 from __future__ import annotations
 
 import logging
-from typing import Dict, Any, Optional
+import uuid
+import hashlib
+from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
-
+from enum import Enum
+from infrastructure.repository.evidence_store import create_case_session, list_cases, list_evidence_by_case
 from fir.repository import FIRRepository
 from fir.service import AnalystFindingService
+from sanitization.gateway import SanitizationGateway
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +28,19 @@ router = APIRouter()
 
 _fir_repo = FIRRepository()
 _analyst_service = AnalystFindingService(fir_repo=_fir_repo)
+
+
+class InvestigationStageStatus(str, Enum):
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+class InvestigationProgress(BaseModel):
+    evidence_collection: InvestigationStageStatus
+    analysis: InvestigationStageStatus
+    correlation: InvestigationStageStatus
+    findings: InvestigationStageStatus
+    report: InvestigationStageStatus
 
 
 class CaseSummaryResponse(BaseModel):
@@ -36,8 +53,57 @@ class CaseSummaryResponse(BaseModel):
     review_status_breakdown: Dict[str, int]
     layer_breakdown: Dict[str, int]
     source_artifact_count: int
+    investigation_progress: InvestigationProgress
     latest_timestamp: Optional[str] = None
     evidence_files: list[Dict[str, Any]] = Field(default_factory=list)
+
+class CreateCaseRequest(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    analyst: str = "Analyst"
+    case_id: Optional[str] = None
+
+@router.post("/", response_model=Dict[str, Any])
+async def create_case(
+    req: CreateCaseRequest,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+):
+    if req.case_id:
+        # Allow any custom case ID to be used directly without hashing it to a UUID
+        case_id = req.case_id.strip()
+    else:
+        case_id = str(uuid.uuid4())
+        
+    existing_cases = list_cases(tenant_id=x_tenant_id)
+    if any(c.case_id == case_id for c in existing_cases):
+        raise HTTPException(status_code=409, detail=f"Case ID '{req.case_id}' already exists.")
+        
+    session = create_case_session(tenant_id=x_tenant_id, created_by=req.analyst, case_id=case_id)
+    
+    return {
+        "status": "SUCCESS",
+        "case_id": session.case_id,
+        "name": req.name,
+        "description": req.description
+    }
+
+@router.get("/", response_model=Dict[str, Any])
+async def get_all_cases(
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+):
+    cases = list_cases(tenant_id=x_tenant_id)
+    return {
+        "status": "SUCCESS",
+        "data": [
+            {
+                "case_id": c.case_id,
+                "created_by": c.created_by,
+                "created_at": c.created_at,
+                "status": c.status
+            }
+            for c in cases
+        ]
+    }
 
 
 @router.get("/{case_id}", response_model=CaseSummaryResponse)
@@ -108,6 +174,55 @@ async def get_case(
             "timeline_event_count": meta.get("timeline_event_count", 0)
         })
 
+    # Compute Dynamic Investigation Progress
+    
+    
+    # 1. Evidence Collection
+    if not evidence_list:
+        ev_status = InvestigationStageStatus.NOT_STARTED
+    else:
+        # If any evidence is NOT in a final state, it's still in progress
+        final_states = {"stored", "failed"}
+        all_done = all(e.status.value in final_states if hasattr(e.status, 'value') else str(e.status) in final_states for e in evidence_list)
+        ev_status = InvestigationStageStatus.COMPLETED if all_done else InvestigationStageStatus.IN_PROGRESS
+
+    # 2. Analysis & 3. Correlation
+    # In ARGUS, Stage 1-4 is synchronous, so if findings exist, analysis/correlation are complete.
+    if ev_status != InvestigationStageStatus.COMPLETED:
+        an_status = InvestigationStageStatus.NOT_STARTED
+        cor_status = InvestigationStageStatus.NOT_STARTED
+    elif len(findings) == 0:
+        an_status = InvestigationStageStatus.IN_PROGRESS
+        cor_status = InvestigationStageStatus.IN_PROGRESS
+    else:
+        an_status = InvestigationStageStatus.COMPLETED
+        cor_status = InvestigationStageStatus.COMPLETED
+        
+    # 4. Findings
+    if cor_status != InvestigationStageStatus.COMPLETED:
+        find_status = InvestigationStageStatus.NOT_STARTED
+    else:
+        has_reviewed = status_counts.get("analyst_confirmed", 0) > 0 or status_counts.get("analyst_rejected", 0) > 0
+        find_status = InvestigationStageStatus.COMPLETED if has_reviewed else InvestigationStageStatus.IN_PROGRESS
+        
+    # 5. Report
+    if find_status != InvestigationStageStatus.COMPLETED:
+        rep_status = InvestigationStageStatus.NOT_STARTED
+    else:
+        # Check case status for closure
+        cases = list_cases(tenant_id=x_tenant_id)
+        current_case = next((c for c in cases if c.case_id == case_id), None)
+        is_closed = current_case and current_case.status == "closed"
+        rep_status = InvestigationStageStatus.COMPLETED if is_closed else InvestigationStageStatus.IN_PROGRESS
+
+    progress = InvestigationProgress(
+        evidence_collection=ev_status,
+        analysis=an_status,
+        correlation=cor_status,
+        findings=find_status,
+        report=rep_status
+    )
+
     return CaseSummaryResponse(
         case_id=case_id,
         tenant_id=x_tenant_id,
@@ -118,6 +233,42 @@ async def get_case(
         review_status_breakdown=status_counts,
         layer_breakdown=layer_counts,
         source_artifact_count=len(source_artifacts),
+        investigation_progress=progress,
         latest_timestamp=latest_ts,
         evidence_files=formatted_evidence
+
     )
+
+@router.get("/{case_id}/findings")
+async def get_case_findings(
+    case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+):
+    """
+    Retrieve all parsed output findings for a specific case.
+    """
+    if not case_id or not case_id.strip():
+        raise HTTPException(status_code=400, detail="case_id path parameter cannot be empty.")
+    
+    findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
+    
+    # Inject demonstration findings if empty
+    # Demonstration findings injection has been removed so it only shows present case ones
+    gateway = SanitizationGateway()
+    sanitized_results = []
+    for f in findings:
+        f_dict = f.model_dump(mode='json') if hasattr(f, 'model_dump') else dict(f)
+        try:
+            sanitized_ctx = gateway.sanitize_finding(f)
+            # Serialize the full SanitizedAgentContext as a structured JSON object,
+            # not just plain text fields. This preserves all sanitization metadata
+            # (sanitization_actions, redaction_metadata, xml_evidence_block, confidence, etc.)
+            f_dict["sanitized_context"] = sanitized_ctx.model_dump(mode='json')
+            # Keep top-level convenience aliases for backwards compatibility
+            f_dict["sanitized_fact"] = sanitized_ctx.sanitized_fact
+            f_dict["injection_flagged"] = sanitized_ctx.injection_flagged
+        except Exception as e:
+            logger.error(f"Failed to sanitize finding: {e}")
+        sanitized_results.append(f_dict)
+        
+    return sanitized_results

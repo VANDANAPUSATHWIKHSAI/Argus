@@ -335,7 +335,7 @@ class FilesystemParser:
                 artifact_type="text_record",
                 timestamp=datetime.now(timezone.utc),
                 timestamp_type="ingest",
-                event_summary=f"Text Evidence Narrative: {src.name} ({len(content)} bytes)",
+                event_summary=content.strip()[:2000],
                 parser_version=ver,
                 raw_fields={"content": content, "size_bytes": len(content), "filename": src.name},
                 normalized_fields=NormalizedFields(

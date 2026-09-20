@@ -213,10 +213,11 @@ class MemoryParser:
         self, dump_path: Path, plugin: str, *, json_output: bool
     ) -> str:
         """Execute `vol -f <dump> <plugin> [--output=json]` and return stdout."""
+        vol_exe = str(Path(sys.exec_prefix) / "Scripts" / "vol.exe")
         if json_output:
-            cmd = ["vol", "-r", "json", "-f", str(dump_path), plugin]
+            cmd = [vol_exe, "-r", "json", "-f", str(dump_path), plugin]
         else:
-            cmd = ["vol", "-f", str(dump_path), plugin]
+            cmd = [vol_exe, "-f", str(dump_path), plugin]
 
         logger.debug("Running: %s", " ".join(cmd))
 

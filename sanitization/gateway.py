@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from typing import Tuple, Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 
-from sanitization.injection_detector import InjectionDetector
+from sanitization.injection_detector import InjectionDetector, ModelUnavailableError
 from sanitization.pii_redactor import PIIRedactor
 
 
@@ -215,6 +215,8 @@ class SanitizationGateway:
             )
             return delimited
 
+        except ModelUnavailableError:
+            raise
         except Exception as exc:
             # Fail closed on unexpected exception
             print(f"  [GATEWAY FAIL-CLOSED ERROR] Exception in sanitize(): {exc}")

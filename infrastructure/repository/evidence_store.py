@@ -373,6 +373,44 @@ def get_case_session(tenant_id: str, case_id: str) -> Optional[CaseSession]:
             logger.error("Failed to query case session: %s", e)
     return None
 
+def list_cases(tenant_id: str) -> list[CaseSession]:
+    """
+    Retrieves all CaseSessions for a tenant.
+    """
+    if not tenant_id:
+        raise ValueError("tenant_id is required to list cases.")
+
+    cases = []
+    if _should_attempt_postgres():
+        try:
+            import psycopg2
+            from config.settings import settings
+            conn = psycopg2.connect(
+                host=settings.postgres_host,
+                port=settings.postgres_port,
+                database=settings.postgres_db,
+                user=settings.postgres_user,
+                password=settings.postgres_password,
+                connect_timeout=2
+            )
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT case_id, tenant_id, created_at, created_by, status FROM cases WHERE tenant_id = %s ORDER BY created_at DESC;",
+                (tenant_id,)
+            )
+            rows = cur.fetchall()
+            conn.close()
+            for row in rows:
+                cases.append(CaseSession(
+                    case_id=str(row[0]),
+                    tenant_id=row[1],
+                    created_at=row[2],
+                    created_by=row[3],
+                    status=row[4]
+                ))
+        except Exception as e:
+            logger.error("Failed to query cases: %s", e)
+    return cases
 
 def get_evidence(tenant_id: str, evidence_id: str) -> Optional[Evidence]:
     """
@@ -454,6 +492,35 @@ def list_evidence_by_case(tenant_id: str, case_id: str) -> list[Evidence]:
                     evidence_list.append(ev)
         except Exception as e:
             logger.error("Failed to list evidence by case: %s", e)
+    else:
+        # LOCAL FALLBACK: scan local data/repository/{case_id}
+        from infrastructure.repository.evidence_store import REPOSITORY_DIR
+        import os
+        from datetime import datetime
+        
+        case_dir = Path(REPOSITORY_DIR) / case_id
+        if case_dir.exists() and case_dir.is_dir():
+            for ev_id_dir in case_dir.iterdir():
+                if ev_id_dir.is_dir():
+                    orig_dir = ev_id_dir / "original"
+                    if orig_dir.exists() and orig_dir.is_dir():
+                        files = list(orig_dir.iterdir())
+                        if files:
+                            # Use the first file found in original/
+                            file_path = files[0]
+                            evidence_list.append(Evidence(
+                                evidence_id=ev_id_dir.name,
+                                case_id=case_id,
+                                filename=file_path.name,
+                                file_path=str(file_path),
+                                uploaded_by="Unknown (Local Fallback)",
+                                upload_timestamp=datetime.fromtimestamp(file_path.stat().st_ctime),
+                                status=EvidenceStatus.STORED,
+                                original_repository_path=str(file_path),
+                                repository_path=str(file_path),
+                                metadata={"size_bytes": file_path.stat().st_size}
+                            ))
+                            
     return evidence_list
 
 

@@ -21,7 +21,7 @@ class PIIRedactor:
         "EMAIL": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
         
         # Phone Numbers: US (xxx-xxx-xxxx) and Indian (xxxxx-xxxxx) layouts, excluding IP addresses
-        "PHONE": r"(?<![\d\.])(?:\+?\d{1,3}[-\s]?)?(?:\(?\d{3}\)?[\-\s]\d{3}[\-\s]\d{4}|\d{5}[\-\s]\d{5})(?![\d\.])",
+        "PHONE": r"(?<![\d\.])(?:\+?\d{1,3}[-\s]?)?(?:\(?\d{3}\)?[\-\s]\d{3}[\-\s]\d{4}|\d{5}[-\s]?\d{5})(?![\d\.])",
 
         # Addresses (standard keyword-based street/ave/road address and Zip/Pin Code indicators)
         "ADDRESS": r"\b\d{1,5}\s+[A-Za-z0-9\.\s]{3,30}\s+(?:Street|St|Road|Rd|Avenue|Ave|Drive|Dr|Lane|Ln|Court|Ct|Boulevard|Blvd|Way)\b|\bPin\s*Code:\s*\d{6}\b|\bZip:\s*\d{5}\b",

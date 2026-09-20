@@ -151,8 +151,10 @@ class BrowserParser:
         # 2. CLI Hindsight execution
         resolved = None
         try:
-            python_dir = Path(sys.executable).parent
-            scripts_dir = python_dir / "Scripts"
+            if sys.platform == "win32":
+                scripts_dir = Path(sys.exec_prefix) / "Scripts"
+            else:
+                scripts_dir = Path(sys.exec_prefix) / "bin"
             hindsight_py = scripts_dir / "hindsight.py"
             if hindsight_py.exists():
                 resolved = str(hindsight_py)

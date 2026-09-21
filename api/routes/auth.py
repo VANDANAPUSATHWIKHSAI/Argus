@@ -248,6 +248,13 @@ class EmployeeCreate(BaseModel):
     doj: Optional[str] = None
     password: Optional[str] = "1"
 
+class EmployeeUpdate(BaseModel):
+    name: str
+    email: str
+    role: str
+    phone: Optional[str] = None
+    doj: Optional[str] = None
+
 @router.get("/employees")
 async def get_employees(current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "admin":
@@ -272,15 +279,47 @@ async def create_employee(emp: EmployeeCreate, current_user: dict = Depends(get_
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
+                if emp.role == "admin":
+                    cur.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'")
+                    if cur.fetchone()[0] > 0:
+                        raise HTTPException(status_code=400, detail="An admin already exists. Only one admin is allowed.")
+                
                 cur.execute(
                     "INSERT INTO users (id, email, password_hash, role, name, phone, doj) VALUES (%s, %s, %s, %s, %s, %s, %s)",
                     (emp.userid, emp.email, default_password, emp.role, emp.name, emp.phone, emp.doj)
                 )
             conn.commit()
         return {"message": "Employee created successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"DB Error: {e}")
         raise HTTPException(status_code=500, detail="Database error or user already exists")
+
+@router.put("/employees/{userid}")
+async def update_employee(userid: str, emp: EmployeeUpdate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                if emp.role == "admin":
+                    cur.execute("SELECT COUNT(*) FROM users WHERE role = 'admin' AND id != %s", (userid,))
+                    if cur.fetchone()[0] > 0:
+                        raise HTTPException(status_code=400, detail="An admin already exists. Only one admin is allowed.")
+                
+                cur.execute(
+                    "UPDATE users SET name = %s, email = %s, role = %s, phone = %s, doj = %s WHERE id = %s",
+                    (emp.name, emp.email, emp.role, emp.phone, emp.doj, userid)
+                )
+            conn.commit()
+        return {"message": "Employee updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"DB Error: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
 
 @router.delete("/employees/{userid}")
 async def delete_employee(userid: str, current_user: dict = Depends(get_current_user)):

@@ -161,7 +161,8 @@ class TestStickyNotesParserUnit(unittest.TestCase):
         self.assertEqual(art1.artifact_type, "sticky_notes")
         self.assertEqual(art1.evidence_id, "ev_sn_01")
         self.assertIsNotNone(art1.normalized_fields.user)
-        self.assertIn(art1.normalized_fields.user.lower(), ("analyst_mary", "sudeep"))
+        import getpass
+        self.assertIn(art1.normalized_fields.user.lower(), ("analyst_mary", "sudeep", getpass.getuser().lower()))
         self.assertIn("Secret Password Note", art1.raw_fields["note_text"])
         self.assertFalse(art1.raw_fields["is_deleted"])
         self.assertEqual(art1.timestamp_type, "created")

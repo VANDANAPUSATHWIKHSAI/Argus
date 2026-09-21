@@ -14,13 +14,14 @@ import uuid
 import hashlib
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query, Depends
 from pydantic import BaseModel, Field
 from enum import Enum
-from infrastructure.repository.evidence_store import create_case_session, list_cases, list_evidence_by_case
+from infrastructure.repository.evidence_store import create_case_session, list_cases, list_evidence_by_case, close_case
 from fir.repository import FIRRepository
 from fir.service import AnalystFindingService
 from sanitization.gateway import SanitizationGateway
+from api.routes.auth import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -62,14 +63,61 @@ class CreateCaseRequest(BaseModel):
     description: Optional[str] = ""
     analyst: str = "Analyst"
     case_id: Optional[str] = None
+    analyst_id: Optional[str] = None
+    senior_analyst_id: Optional[str] = None
+
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from api.routes.auth import get_user_by_id
+
+def send_assignment_email(target_email: str, case_id: str, case_name: str, role_title: str):
+    SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "argus1267saaas@gmail.com")
+    smtp_pass = os.environ.get("SMTP_PASSWORD") or os.environ.get("GMAIL_APP_PASSWORD")
+    if not smtp_pass:
+        print(f"[AUTH EMAIL] Email password not set. Simulated email to {target_email}: Assigned to {case_id}")
+        return False
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = f"ARGUS Forensics — Case Assignment: {case_name}"
+        msg["From"] = SENDER_EMAIL
+        msg["To"] = target_email
+
+        text = f"You have been assigned to Case {case_id} ({case_name}) as {role_title}."
+        html = f"""
+        <div style="font-family: Arial, sans-serif; padding: 20px; background: #090d16; color: #f8fafc; border-radius: 8px;">
+            <h2 style="color: #3b82f6;">ARGUS Digital Forensics Platform</h2>
+            <p>You have been assigned to a new case as <strong>{role_title}</strong>.</p>
+            <div style="background: rgba(59,130,246,0.15); border: 1px solid #3b82f6; padding: 15px; text-align: center; border-radius: 6px; font-size: 18px; color: #60a5fa;">
+                Case ID: {case_id} <br/> {case_name}
+            </div>
+            <p style="font-size: 12px; color: #94a3b8; margin-top: 15px;">Please log in to the dashboard to begin your investigation.</p>
+        </div>
+        """
+        msg.attach(MIMEText(text, "plain"))
+        msg.attach(MIMEText(html, "html"))
+
+        with smtplib.SMTP("smtp.gmail.com", 587, timeout=10) as server:
+            server.starttls()
+            server.login(SENDER_EMAIL, smtp_pass)
+            server.sendmail(SENDER_EMAIL, target_email, msg.as_string())
+        print(f"[AUTH EMAIL] Successfully sent assignment email to {target_email}")
+        return True
+    except Exception as e:
+        print(f"[AUTH EMAIL ERROR] {e}")
+        return False
 
 @router.post("/", response_model=Dict[str, Any])
 async def create_case(
     req: CreateCaseRequest,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
 ):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can create cases")
+
     if req.case_id:
-        # Allow any custom case ID to be used directly without hashing it to a UUID
         case_id = req.case_id.strip()
     else:
         case_id = str(uuid.uuid4())
@@ -78,7 +126,45 @@ async def create_case(
     if any(c.case_id == case_id for c in existing_cases):
         raise HTTPException(status_code=409, detail=f"Case ID '{req.case_id}' already exists.")
         
-    session = create_case_session(tenant_id=x_tenant_id, created_by=req.analyst, case_id=case_id)
+    session = create_case_session(
+        tenant_id=x_tenant_id, 
+        created_by=req.analyst, 
+        case_id=case_id,
+        analyst_id=req.analyst_id,
+        senior_analyst_id=req.senior_analyst_id
+    )
+    
+    # Store the case name in DB
+    try:
+        from config.settings import settings
+        import psycopg2
+        conn = psycopg2.connect(
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            database=settings.postgres_db,
+            user=settings.postgres_user,
+            password=settings.postgres_password,
+            connect_timeout=2
+        )
+        cur = conn.cursor()
+        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS name VARCHAR(255)")
+        cur.execute("UPDATE cases SET name = %s WHERE case_id = %s", (req.name, session.case_id))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[DB WARNING] Could not store case name: {e}")
+    
+    # Send emails in background
+    # Actually, we'll just send them synchronously for simplicity here since it's just two emails
+    if req.analyst_id:
+        analyst = get_user_by_id(req.analyst_id)
+        if analyst and analyst.get("email"):
+            send_assignment_email(analyst["email"], session.case_id, req.name, "Analyst")
+            
+    if req.senior_analyst_id:
+        senior = get_user_by_id(req.senior_analyst_id)
+        if senior and senior.get("email"):
+            send_assignment_email(senior["email"], session.case_id, req.name, "Senior Analyst")
     
     return {
         "status": "SUCCESS",
@@ -92,6 +178,28 @@ async def get_all_cases(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID")
 ):
     cases = list_cases(tenant_id=x_tenant_id)
+    
+    # Fetch case names from DB
+    case_names = {}
+    try:
+        from config.settings import settings
+        import psycopg2
+        conn = psycopg2.connect(
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            database=settings.postgres_db,
+            user=settings.postgres_user,
+            password=settings.postgres_password,
+            connect_timeout=2
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT case_id, name, analyst_id, senior_analyst_id FROM cases WHERE tenant_id = %s", (x_tenant_id,))
+        for row in cur.fetchall():
+            case_names[row[0]] = {"name": row[1], "analyst_id": row[2], "senior_analyst_id": row[3]}
+        conn.close()
+    except Exception as e:
+        print(f"[DB WARNING] Could not fetch case names: {e}")
+    
     return {
         "status": "SUCCESS",
         "data": [
@@ -99,11 +207,34 @@ async def get_all_cases(
                 "case_id": c.case_id,
                 "created_by": c.created_by,
                 "created_at": c.created_at,
-                "status": c.status
+                "status": c.status,
+                "name": case_names.get(c.case_id, {}).get("name", ""),
+                "analyst_id": case_names.get(c.case_id, {}).get("analyst_id"),
+                "senior_analyst_id": case_names.get(c.case_id, {}).get("senior_analyst_id")
             }
             for c in cases
         ]
     }
+
+
+@router.put("/{case_id}/close")
+async def close_case_endpoint(
+    case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+):
+    """
+    Close an active case globally.
+    """
+    from api.routes.evidence import sanitize_uuid
+    clean_case_id = sanitize_uuid(case_id)
+    success = close_case(tenant_id=x_tenant_id, case_id=clean_case_id)
+    if not success and clean_case_id != case_id:
+        success = close_case(tenant_id=x_tenant_id, case_id=case_id)
+    
+    if not success:
+        raise HTTPException(status_code=404, detail="Case not found or could not be closed.")
+        
+    return {"status": "SUCCESS", "message": f"Case {case_id} closed."}
 
 
 @router.get("/{case_id}", response_model=CaseSummaryResponse)

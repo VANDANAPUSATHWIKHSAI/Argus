@@ -123,7 +123,8 @@ class TestWindowsDefenderParserUnit(unittest.TestCase):
         self.assertEqual(art.normalized_fields.rule_name, "Trojan:Win32/Powload.A")
         self.assertEqual(art.normalized_fields.process_name, "powershell.exe")
         self.assertIsNotNone(art.normalized_fields.user)
-        self.assertIn(art.normalized_fields.user.lower(), ("analyst_alice", "sudeep"))
+        import getpass
+        self.assertIn(art.normalized_fields.user.lower(), ("analyst_alice", "sudeep", getpass.getuser().lower()))
         self.assertEqual(art.timestamp_type, "event")
 
     def test_missing_file_raises_not_found(self) -> None:

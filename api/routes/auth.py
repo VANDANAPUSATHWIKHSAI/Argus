@@ -28,31 +28,51 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
-# In-memory user database
-USERS_DB = {
-    "remakhat115@gmail.com": {
-        "id": "u-115",
-        "email": "remakhat115@gmail.com",
-        "password": "$2b$12$NQhT3fIoXDJ0OWV7RFnW2egMzA9IUcxpewsO7VBKWRtQOGscU6wWe",
-        "role": "analyst",
-        "name": "Remakhat"
-    },
-    "analyst@agency.gov": {
-        "id": "u-1234",
-        "email": "analyst@agency.gov",
-        "password": "$2b$12$dSjWP/zDDtYMFf6N3krNaOJKnD4PdGEjoi78K5mh24c60ig7TCvkO",
-        "role": "analyst",
-        "name": "Senior Analyst"
-    }
-}
+import psycopg2
 
-# OTP storage: email -> {"otp": str, "expires": float}
+def get_db_connection():
+    return psycopg2.connect(
+        host=os.environ.get("POSTGRES_HOST", "localhost"),
+        port=os.environ.get("POSTGRES_PORT", "5433"),
+        database=os.environ.get("POSTGRES_DB", "argus"),
+        user=os.environ.get("POSTGRES_USER", "argus_user"),
+        password=os.environ.get("POSTGRES_PASSWORD", "argus_dev")
+    )
+
+def get_user_by_id(userid: str):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, email, password_hash, role, name FROM users WHERE id = %s", (userid,))
+                row = cur.fetchone()
+                if row:
+                    return {
+                        "id": row[0],
+                        "email": row[1],
+                        "password": row[2],
+                        "role": row[3],
+                        "name": row[4]
+                    }
+    except Exception as e:
+        print(f"DB Error: {e}")
+    return None
+
+def update_user_password(userid: str, new_password_hash: str):
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (new_password_hash, userid))
+            conn.commit()
+    except Exception as e:
+        print(f"DB Error: {e}")
+
+# OTP storage: userid -> {"otp": str, "expires": float}
 OTP_DB = {}
 
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "argus1267saaas@gmail.com")
 
 class LoginRequest(BaseModel):
-    email: str
+    userid: str
     password: str
 
 class LoginResponse(BaseModel):
@@ -61,10 +81,10 @@ class LoginResponse(BaseModel):
     user: dict
 
 class ForgotPasswordRequest(BaseModel):
-    email: str
+    userid: str
 
 class VerifyOTPRequest(BaseModel):
-    email: str
+    userid: str
     otp: str
     new_password: str
 
@@ -85,10 +105,13 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 def get_current_user(token: str = Depends(oauth2_scheme)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None or email not in USERS_DB:
+        userid: str = payload.get("sub")
+        if userid is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return USERS_DB[email]
+        user = get_user_by_id(userid)
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
@@ -131,14 +154,13 @@ def send_email_otp(target_email: str, otp: str):
 
 @router.post("/login", response_model=LoginResponse)
 async def login(credentials: LoginRequest):
-    email = credentials.email.strip().lower()
+    userid = credentials.userid.strip().lower()
     password = credentials.password
 
-    # Check database
-    if email in USERS_DB and verify_password(password, USERS_DB[email]["password"]):
-        user = USERS_DB[email]
+    user = get_user_by_id(userid)
+    if user and verify_password(password, user["password"]):
         access_token = create_access_token(
-            data={"sub": user["email"], "role": user["role"], "name": user["name"]}
+            data={"sub": user["id"], "role": user["role"], "name": user["name"]}
         )
         return {
             "token": access_token,
@@ -151,81 +173,128 @@ async def login(credentials: LoginRequest):
             }
         }
     
-    # If we got here, the credentials don't match or the user doesn't exist
-    raise HTTPException(status_code=401, detail="Invalid email or password")
+    raise HTTPException(status_code=401, detail="Invalid User ID or password")
 
 @router.post("/forgot-password")
 async def forgot_password(req: ForgotPasswordRequest, background_tasks: BackgroundTasks):
-    email = req.email.strip().lower()
+    userid = req.userid.strip().lower()
     
-    # Ensure user exists
-    if email not in USERS_DB:
-        raise HTTPException(status_code=404, detail="This employee is not registered.")
+    user = get_user_by_id(userid)
+    if not user:
+        raise HTTPException(status_code=404, detail="This User ID is not registered.")
 
-    # Generate 6-digit OTP
+    email = user["email"]
+    
     otp = f"{random.randint(100000, 999999)}"
-    OTP_DB[email] = {
+    OTP_DB[userid] = {
         "otp": otp,
-        "expires": time.time() + 600 # 10 minutes
+        "expires": time.time() + 600
     }
 
-    # Attempt background email dispatch
     background_tasks.add_task(send_email_otp, email, otp)
+    
+    parts = email.split('@')
+    masked_email = f"{parts[0][0]}***{parts[0][-1]}@{parts[1]}" if len(parts[0]) > 2 else f"***@{parts[1]}"
 
     return {
-        "message": f"OTP generated and sent from {SENDER_EMAIL} to {email}.",
-        "email": email,
-        "otp": otp, # Include in response for seamless UI testing & verification
-        "sender": SENDER_EMAIL
+        "message": f"OTP generated and sent to {masked_email}."
     }
 
 @router.post("/verify-otp")
 async def verify_otp(req: VerifyOTPRequest):
-    email = req.email.strip().lower()
+    userid = req.userid.strip().lower()
     otp_input = req.otp.strip()
     new_password = req.new_password.strip()
 
-    if email not in OTP_DB:
-        raise HTTPException(status_code=400, detail="No OTP requested for this email.")
+    if userid not in OTP_DB:
+        raise HTTPException(status_code=400, detail="No OTP requested for this User ID.")
 
-    otp_info = OTP_DB[email]
+    otp_info = OTP_DB[userid]
     if time.time() > otp_info["expires"]:
         raise HTTPException(status_code=400, detail="OTP has expired. Please request a new one.")
 
     if otp_info["otp"] != otp_input:
         raise HTTPException(status_code=400, detail="Invalid OTP code. Please check and try again.")
 
-    # Reset user password in database
     hashed_password = get_password_hash(new_password)
-    if email in USERS_DB:
-        USERS_DB[email]["password"] = hashed_password
-    else:
-        USERS_DB[email] = {
-            "id": f"u-{random.randint(1000, 9999)}",
-            "email": email,
-            "password": hashed_password,
-            "role": "analyst",
-            "name": email.split('@')[0].replace('.', ' ').title()
-        }
+    update_user_password(userid, hashed_password)
 
-    # Clear OTP
-    del OTP_DB[email]
+    del OTP_DB[userid]
 
     return {
         "message": "Password updated successfully! You can now log in with your new password.",
-        "email": email
+        "userid": userid
     }
 
 @router.post("/update-password")
 async def update_password(req: UpdatePasswordRequest, current_user: dict = Depends(get_current_user)):
-    email = current_user["email"]
+    userid = current_user["id"]
     
-    if not verify_password(req.current_password, USERS_DB[email]["password"]):
+    if not verify_password(req.current_password, current_user["password"]):
         raise HTTPException(status_code=400, detail="Incorrect current password")
     
-    USERS_DB[email]["password"] = get_password_hash(req.new_password)
+    update_user_password(userid, get_password_hash(req.new_password))
     
     return {
         "message": "Password successfully updated!"
     }
+
+class EmployeeCreate(BaseModel):
+    userid: str
+    email: str
+    name: str
+    role: str
+    phone: Optional[str] = None
+    doj: Optional[str] = None
+    password: Optional[str] = "1"
+
+@router.get("/employees")
+async def get_employees(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, email, role, name, phone, doj FROM users")
+                rows = cur.fetchall()
+                return [{"id": r[0], "email": r[1], "role": r[2], "name": r[3], "phone": r[4], "doj": r[5]} for r in rows]
+    except Exception as e:
+        print(f"DB Error: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
+
+@router.post("/employees")
+async def create_employee(emp: EmployeeCreate, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    pwd_to_hash = emp.password if emp.password else "1"
+    default_password = get_password_hash(pwd_to_hash)
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users (id, email, password_hash, role, name, phone, doj) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (emp.userid, emp.email, default_password, emp.role, emp.name, emp.phone, emp.doj)
+                )
+            conn.commit()
+        return {"message": "Employee created successfully"}
+    except Exception as e:
+        print(f"DB Error: {e}")
+        raise HTTPException(status_code=500, detail="Database error or user already exists")
+
+@router.delete("/employees/{userid}")
+async def delete_employee(userid: str, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    if userid == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM users WHERE id = %s", (userid,))
+            conn.commit()
+        return {"message": "Employee deleted successfully"}
+    except Exception as e:
+        print(f"DB Error: {e}")
+        raise HTTPException(status_code=500, detail="Database error")
 

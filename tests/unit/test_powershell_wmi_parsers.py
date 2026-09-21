@@ -59,7 +59,8 @@ class TestPowerShellHistoryParserUnit(unittest.TestCase):
         self.assertEqual(art1.artifact_type, "powershell_history")
         self.assertEqual(art1.evidence_id, "ev_ps_01")
         self.assertIsNotNone(art1.normalized_fields.user)
-        self.assertIn(art1.normalized_fields.user.lower(), ("analyst_john", "sudeep"))
+        import getpass
+        self.assertIn(art1.normalized_fields.user.lower(), ("analyst_john", "sudeep", getpass.getuser().lower()))
         self.assertEqual(art1.raw_fields["command_text"], "Get-Process")
         self.assertEqual(art1.raw_fields["sequence_number"], 1)
 

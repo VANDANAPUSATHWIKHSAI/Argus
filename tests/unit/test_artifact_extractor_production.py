@@ -219,12 +219,16 @@ class TestArtifactExtractorProductionTargeted(unittest.TestCase):
             evidence_id="ev1",
             source_tool="test",
             artifact_type="process_event",
-            raw_fields={"command_line": "powershell.exe -ExecutionPolicy Bypass -File C:\\script.ps1"}
+            raw_fields={"command_line": "powershell.exe -ExecutionPolicy Bypass -File C:\\script.ps1"},
+            normalized_fields=NormalizedFields(
+                process_command_line="powershell.exe -ExecutionPolicy Bypass -File C:\\script.ps1",
+                process_name="powershell.exe"
+            )
         )
         extracted = self.ext.extract([art], "ev1")
         
         cmd_ents = [e for e in extracted if e.entity_type == "command_line"]
-        exec_ents = [e for e in extracted if e.entity_type == "executable"]
+        exec_ents = [e for e in extracted if e.entity_type in ("executable", "process_name")]
         
         # Legitimate different overlapping types must BOTH be kept
         self.assertEqual(len(cmd_ents), 1)

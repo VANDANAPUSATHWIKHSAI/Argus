@@ -67,11 +67,13 @@ class TimestampRecord(BaseModel):
 
 class CaseSession(BaseModel):
     """One investigation. Created once, referenced by every piece of evidence in it."""
-    case_id:    str      = Field(default_factory=lambda: str(uuid.uuid4()))
-    tenant_id:  str
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    created_by: str
-    status:     str      = "open"         # open / closed / archived
+    case_id:           str           = Field(default_factory=lambda: str(uuid.uuid4()))
+    tenant_id:         str
+    created_at:        datetime      = Field(default_factory=datetime.utcnow)
+    created_by:        str
+    status:            str           = "open"         # open / closed / archived
+    analyst_id:        Optional[str] = None
+    senior_analyst_id: Optional[str] = None
 
 
 class Evidence(BaseModel):

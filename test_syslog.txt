@@ -1,0 +1,4 @@
+Sep 15 10:00:01 host sshd[12345]: Failed password for root from 192.168.1.100 port 22 ssh2
+Sep 15 10:00:02 host sshd[12345]: Failed password for root from 192.168.1.100 port 22 ssh2
+Sep 15 10:00:03 host sshd[12345]: Failed password for root from 192.168.1.100 port 22 ssh2
+Sep 15 10:00:04 host sshd[12345]: Accepted password for root from 192.168.1.100 port 22 ssh2

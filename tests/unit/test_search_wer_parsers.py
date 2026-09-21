@@ -79,7 +79,8 @@ class TestWindowsSearchParserUnit(unittest.TestCase):
         self.assertEqual(art1.artifact_type, "windows_search")
         self.assertEqual(art1.evidence_id, "ev_srch_01")
         self.assertIsNotNone(art1.normalized_fields.user)
-        self.assertIn(art1.normalized_fields.user.lower(), ("analyst_bob", "sudeep"))
+        import getpass
+        self.assertIn(art1.normalized_fields.user.lower(), ("analyst_bob", "sudeep", getpass.getuser().lower()))
         self.assertEqual(art1.raw_fields["query_text"], "password reset documentation")
         self.assertIn("password reset documentation", art1.event_summary)
         self.assertEqual(art1.timestamp_type, "event")

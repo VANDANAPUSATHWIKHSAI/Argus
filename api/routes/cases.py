@@ -260,18 +260,17 @@ async def get_recent_activity(
     cases = list_cases(tenant_id=x_tenant_id)
     active_case_ids = set()
     for c in cases:
-        if c.status != "closed":
-            active_case_ids.add(c.case_id)
-            c_by = c.created_by if c.created_by else ""
-            mapped_name = user_map.get(c_by, c_by)
-            
-            activity.append({
-                "action": "Created Case",
-                "case_id": c.case_id,
-                "created_by": mapped_name,
-                "created_at": c.created_at.isoformat() if hasattr(c.created_at, "isoformat") else str(c.created_at),
-                "details": c.case_id
-            })
+        active_case_ids.add(c.case_id)
+        c_by = c.created_by if c.created_by else ""
+        mapped_name = user_map.get(c_by, c_by)
+        
+        activity.append({
+            "action": "Created Case",
+            "case_id": c.case_id,
+            "created_by": mapped_name,
+            "created_at": c.created_at.isoformat() if hasattr(c.created_at, "isoformat") else str(c.created_at),
+            "details": c.case_id
+        })
             
     # 2. Get Evidence from DB (Only for active cases)
     try:
@@ -281,7 +280,7 @@ async def get_recent_activity(
                 SELECT e.evidence_id, e.case_id, e.filename, e.uploaded_by, e.upload_timestamp
                 FROM evidence e
                 INNER JOIN cases c ON e.case_id = c.case_id
-                WHERE c.tenant_id = %s AND c.status != 'closed'
+                WHERE c.tenant_id = %s
                 """, 
                 (x_tenant_id,)
             )

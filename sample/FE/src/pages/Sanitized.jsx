@@ -27,6 +27,7 @@ const ConfidenceBar = ({ value }) => (
 import Sidebar from '../components/Sidebar';
 import { fetchFindings, API_BASE_URL } from '../js/api';
 import AlertModal from '../components/AlertModal';
+import NotificationMenu from '../components/NotificationMenu';
 import ProfileModal from '../components/ProfileModal';
 
 const syntaxHighlight = (json) => {
@@ -260,31 +261,30 @@ const Sanitized = () => {
               <span className="search-shortcut">⌘ K</span>
             </div>
             <div className="topbar-actions" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
-              <button
-                type="button"
-                onClick={handleCloseCase}
-                className="btn btn-outline"
-                style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                Close Case
-              </button>
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={handleCloseCase}
+                  className="btn btn-outline"
+                  style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  Close Case
+                </button>
+              )}
               {isAdmin && (
                 <button
                   type="button"
                   onClick={handleOpenCreateCase}
                   className="btn btn-primary"
-                  style={{ background: 'linear-gradient(135deg, var(--blue), var(--purple))', border: 'none', boxShadow: '0 4px 12px rgba(59,130,246,0.3)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, color: '#fff', cursor: 'pointer' }}
+                  style={{ background: 'var(--blue)', border: 'none', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, color: '#fff', cursor: 'pointer' }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                   Create Case
                 </button>
               )}
               {localStorage.getItem('active_case_id') && <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>}
-              <button className="icon-btn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <div className="notification-dot"></div>
-              </button>
+              <NotificationMenu />
               <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
                 <div className="avatar">A</div>
                 <span style={{ fontWeight: 500 }}>Analyst</span>
@@ -423,7 +423,7 @@ const Sanitized = () => {
 
       {/* Create Case Modal */}
       {showModal && (
-        <div style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 100, alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ display: 'flex', position: 'fixed', inset: 0, background: 'transparent', zIndex: 100, alignItems: 'center', justifyContent: 'center' }}>
           <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', width: 480, boxShadow: '0 20px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
             <div style={{ padding: 24, borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ fontSize: 18, fontWeight: 600 }}>Create New Case</h2>

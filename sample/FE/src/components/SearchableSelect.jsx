@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-const SearchableSelect = ({ options, value, onChange, placeholder }) => {
+const SearchableSelect = ({ options, value, onChange, placeholder, noSearch, size }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
   const wrapperRef = useRef(null);
@@ -27,8 +27,9 @@ const SearchableSelect = ({ options, value, onChange, placeholder }) => {
         onClick={() => setIsOpen(!isOpen)}
         style={{
           width: '100%',
-          padding: '10px 12px',
-          borderRadius: '8px',
+          padding: size === 'small' ? '6px 12px' : '10px 12px',
+          borderRadius: size === 'small' ? '6px' : '8px',
+          fontSize: size === 'small' ? '12px' : 'inherit',
           border: '1px solid var(--border-strong)',
           background: 'var(--bg-input)',
           color: selectedOption ? 'var(--text-main)' : 'var(--text-muted)',
@@ -52,7 +53,7 @@ const SearchableSelect = ({ options, value, onChange, placeholder }) => {
           left: 0,
           right: 0,
           marginTop: '4px',
-          background: 'var(--bg-card)',
+          background: 'var(--bg-page)',
           border: '1px solid var(--border-strong)',
           borderRadius: '8px',
           boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
@@ -61,26 +62,28 @@ const SearchableSelect = ({ options, value, onChange, placeholder }) => {
           display: 'flex',
           flexDirection: 'column'
         }}>
-          <div style={{ padding: '8px' }}>
-            <input 
-              type="text" 
-              placeholder="Search..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              autoFocus
-              style={{
-                width: '100%',
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: '1px solid var(--border-subtle)',
-                background: 'var(--bg-input)',
-                color: 'var(--text-main)',
-                outline: 'none',
-                boxSizing: 'border-box'
-              }}
-            />
-          </div>
+          {!noSearch && (
+            <div style={{ padding: '8px' }}>
+              <input 
+                type="text" 
+                placeholder="Search..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                autoFocus
+                style={{
+                  width: '100%',
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-subtle)',
+                  background: 'var(--bg-input)',
+                  color: 'var(--text-main)',
+                  outline: 'none',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+          )}
           <div style={{ overflowY: 'auto', padding: '0 0 8px 0' }}>
             {filteredOptions.length > 0 ? (
               filteredOptions.map(opt => (
@@ -92,7 +95,8 @@ const SearchableSelect = ({ options, value, onChange, placeholder }) => {
                     setSearch('');
                   }}
                   style={{
-                    padding: '8px 16px',
+                    padding: size === 'small' ? '6px 12px' : '8px 16px',
+                    fontSize: size === 'small' ? '12px' : 'inherit',
                     cursor: 'pointer',
                     color: 'var(--text-main)',
                     background: opt.value === value ? 'var(--bg-app)' : 'transparent',

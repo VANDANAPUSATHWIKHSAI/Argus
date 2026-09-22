@@ -50,6 +50,12 @@ const AuditLogs = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUser, setFilterUser] = useState('All Users');
   const [filterAction, setFilterAction] = useState('All Actions');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterUser, filterAction]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -89,6 +95,9 @@ const AuditLogs = () => {
     const matchesAction = filterAction === 'All Actions' || log.action === filterAction;
     return matchesSearch && matchesUser && matchesAction;
   });
+
+  const totalPages = Math.max(1, Math.ceil(filteredLogs.length / itemsPerPage));
+  const currentLogs = filteredLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div id="app-shell">
@@ -160,7 +169,7 @@ const AuditLogs = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredLogs.map(log => (
+                {currentLogs.map((log) => (
                   <tr key={log.id}>
                     <td>
                       <div className="td-timestamp">
@@ -203,15 +212,23 @@ const AuditLogs = () => {
           </div>
 
           <div className="audit-footer">
-            <span>Showing 1 to {filteredLogs.length} of 124 logs</span>
+            <span>Showing {filteredLogs.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, filteredLogs.length)} of {filteredLogs.length} logs</span>
             <div className="pagination">
-              <button className="btn-page">&lt;</button>
-              <button className="btn-page active">1</button>
-              <button className="btn-page">2</button>
-              <button className="btn-page">3</button>
-              <button className="btn-page">4</button>
-              <button className="btn-page">5</button>
-              <button className="btn-page">&gt;</button>
+              <button className="btn-page" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>&lt;</button>
+              {Array.from({ length: totalPages }, (_, i) => {
+                // Show up to 5 page buttons total (current page and 2 on each side if possible)
+                if (totalPages > 5 && (i + 1 < currentPage - 2 || i + 1 > currentPage + 2)) {
+                  if (i + 1 === 1 || i + 1 === totalPages) return <button key={i+1} className="btn-page" onClick={() => setCurrentPage(i+1)}>{i+1}</button>;
+                  if (i + 1 === currentPage - 3 || i + 1 === currentPage + 3) return <span key={i+1} style={{color: 'var(--text-muted)'}}>...</span>;
+                  return null;
+                }
+                return (
+                  <button key={i + 1} className={`btn-page ${currentPage === i + 1 ? 'active' : ''}`} onClick={() => setCurrentPage(i + 1)}>
+                    {i + 1}
+                  </button>
+                );
+              })}
+              <button className="btn-page" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>&gt;</button>
             </div>
           </div>
         </div>

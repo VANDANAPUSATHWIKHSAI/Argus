@@ -272,8 +272,9 @@ class EmployeeUpdate(BaseModel):
     doj: Optional[str] = None
     password: Optional[str] = None
 
+from fastapi import APIRouter, Depends, HTTPException, Response
 @router.get("/employees")
-async def get_employees(current_user: dict = Depends(get_current_user)):
+async def get_employees(response: Response, current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
     try:
@@ -281,6 +282,7 @@ async def get_employees(current_user: dict = Depends(get_current_user)):
             with conn.cursor() as cur:
                 cur.execute("SELECT id, email, role, name, phone, doj FROM users")
                 rows = cur.fetchall()
+                response.headers["Cache-Control"] = "no-store, max-age=0"
                 return [{"id": r[0], "email": r[1], "role": r[2], "name": r[3], "phone": r[4], "doj": r[5]} for r in rows]
     except Exception as e:
         print(f"DB Error: {e}")

@@ -21,6 +21,7 @@ const AdminDashboard = () => {
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hasOpenCase, setHasOpenCase] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCaseName, setNewCaseName] = useState('');
@@ -63,12 +64,13 @@ const AdminDashboard = () => {
       setNewCaseName('');
       setNewCaseAnalyst('');
       setNewCaseSeniorAnalyst('');
+      setRefreshTrigger(prev => prev + 1);
       setCustomAlert({
         isOpen: true,
         title: 'Success',
         message: 'Case created and assigned successfully.',
         type: 'success',
-        onClose: () => window.location.reload()
+        onClose: null
       });
     } catch (err) {
       console.error(err);
@@ -98,12 +100,13 @@ const AdminDashboard = () => {
         localStorage.removeItem('active_case_id');
         localStorage.removeItem('active_case_name');
         localStorage.removeItem('active_case_desc');
+        setRefreshTrigger(prev => prev + 1);
         setCustomAlert({
           isOpen: true,
           title: 'Success',
           message: 'Case closed successfully.',
           type: 'success',
-          onClose: () => window.location.reload()
+          onClose: null
         });
       } else {
         setCustomAlert({
@@ -168,8 +171,7 @@ const AdminDashboard = () => {
             const activeId = localStorage.getItem('active_case_id');
             let active = sorted.find(c => c.case_id === activeId && (c.status === 'open' || c.status === 'in_progress'));
             if (!active) active = sorted.find(c => c.status === 'open' || c.status === 'in_progress');
-            if (!active) active = sorted[0]; // fallback to most recent
-            setCurrentCase(active);
+            setCurrentCase(active || null);
 
             setHasOpenCase(sorted.some(c => c.status === 'open' || c.status === 'in_progress'));
           } else {
@@ -194,7 +196,7 @@ const AdminDashboard = () => {
     fetchDashboardData();
     const intervalId = setInterval(fetchDashboardData, 5000);
     return () => clearInterval(intervalId);
-  }, []);
+  }, [refreshTrigger]);
 
   return (
     <div style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -230,7 +232,7 @@ const AdminDashboard = () => {
                 setShowCreateModal(true);
               }
             }}
-            style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: hasOpenCase ? 'not-allowed' : 'pointer', fontSize: '14px', boxShadow: '0 4px 12px rgba(59,130,246,0.35)', opacity: hasOpenCase ? 0.6 : 1 }}
+            style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: '8px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', cursor: hasOpenCase ? 'not-allowed' : 'pointer', fontSize: '14px', opacity: hasOpenCase ? 0.6 : 1 }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Create Case
@@ -418,7 +420,7 @@ const AdminDashboard = () => {
         <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', padding: '24px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
             <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0, color: 'var(--text-main)' }}>Recent Activity</h2>
-            <span style={{ color: '#3b82f6', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>View All</span>
+            <span onClick={() => navigate('/audit-logs')} style={{ color: '#3b82f6', fontSize: '14px', fontWeight: 500, cursor: 'pointer' }}>View All</span>
           </div>
 
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
@@ -431,8 +433,8 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {recentActivity.length > 0 ? recentActivity.map((activity, idx) => (
-                <tr key={idx} style={{ borderBottom: idx === recentActivity.length - 1 ? 'none' : '1px solid var(--border-subtle)' }}>
+              {recentActivity.length > 0 ? recentActivity.slice(0, 5).map((activity, idx, arr) => (
+                <tr key={idx} style={{ borderBottom: idx === arr.length - 1 ? 'none' : '1px solid var(--border-subtle)' }}>
                   <td style={{ padding: '16px 0', fontSize: '13px', color: 'var(--text-muted)' }}>
                     {activity.created_at ? new Date(activity.created_at).toLocaleDateString() : '-'}<br/>
                     {activity.created_at ? new Date(activity.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
@@ -464,20 +466,20 @@ const AdminDashboard = () => {
 
       {/* Admin Create Case Modal */}
       {showCreateModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)' }}>
-          <div style={{ background: 'var(--bg-card)', width: '100%', maxWidth: '400px', borderRadius: '12px', boxShadow: '0 10px 25px rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent' }}>
+          <div style={{ background: 'var(--bg-card)', width: '100%', maxWidth: '400px', borderRadius: '16px', boxShadow: '0 10px 30px rgba(0,0,0,0.6)', border: '1px solid var(--border-strong)', overflow: 'visible' }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Create New Case</h2>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+               <h2 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: 'var(--text-main)' }}>Create New Case</h2>
+              <button onClick={() => setShowCreateModal(false)} style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-strong)', borderRadius: '8px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', cursor: 'pointer', transition: 'background 0.2s' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             </div>
             <form onSubmit={handleCreateCase} style={{ padding: '24px' }}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Case Name</label>
-                <input type="text" value={newCaseName} onChange={e => setNewCaseName(e.target.value)} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-strong)', background: 'var(--bg-input)', color: 'var(--text-main)', outline: 'none' }} placeholder="e.g., Operation Dark Web" required />
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-main)' }}>Case Name</label>
+                <input type="text" value={newCaseName} onChange={e => setNewCaseName(e.target.value)} style={{ width: '100%', padding: '12px 14px', borderRadius: '10px', border: '1px solid var(--border-strong)', background: 'var(--bg-input)', color: 'var(--text-main)', outline: 'none', fontSize: '14px', transition: 'border-color 0.2s' }} placeholder="e.g., Operation Dark Web" required />
               </div>
-              <div style={{ marginBottom: '16px' }}>
+              <div style={{ marginBottom: '20px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Assign Analyst</label>
                 <SearchableSelect 
                   value={newCaseAnalyst} 
@@ -486,8 +488,8 @@ const AdminDashboard = () => {
                   options={employees.filter(e => e.role === 'analyst').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
                 />
               </div>
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Assign Senior Analyst</label>
+              <div style={{ marginBottom: '32px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-main)' }}>Assign Senior Analyst (Optional)</label>
                 <SearchableSelect 
                   value={newCaseSeniorAnalyst} 
                   onChange={setNewCaseSeniorAnalyst} 
@@ -495,11 +497,9 @@ const AdminDashboard = () => {
                   options={employees.filter(e => e.role === 'senior_analyst').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
                 />
               </div>
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <button type="button" onClick={() => setShowCreateModal(false)} style={{ flex: 1, padding: '10px', background: 'var(--bg-card-alt)', border: '1px solid var(--border-strong)', borderRadius: '8px', color: 'var(--text-main)', fontWeight: 500, cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" disabled={creating} style={{ flex: 1, padding: '10px', background: 'var(--blue)', border: 'none', borderRadius: '8px', color: '#fff', fontWeight: 500, cursor: 'pointer', opacity: creating ? 0.7 : 1 }}>
-                  {creating ? 'Creating...' : 'Create Case'}
-                </button>
+              <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid var(--border-subtle)' }}>
+                <button type="button" onClick={() => setShowCreateModal(false)} style={{ padding: '12px 24px', background: 'var(--bg-surface)', border: '1px solid var(--border-strong)', borderRadius: '10px', color: 'var(--text-main)', fontWeight: 600, cursor: 'pointer', transition: 'background 0.2s', fontSize: '14px' }}>Cancel</button>
+                <button type="submit" disabled={!newCaseName || !newCaseAnalyst} style={{ padding: '12px 24px', background: 'var(--blue)', border: 'none', borderRadius: '10px', color: '#fff', fontWeight: 600, cursor: (!newCaseName || !newCaseAnalyst) ? 'not-allowed' : 'pointer', fontSize: '14px', opacity: (!newCaseName || !newCaseAnalyst) ? 0.6 : 1, transition: 'opacity 0.2s' }}>Create Case</button>
               </div>
             </form>
           </div>

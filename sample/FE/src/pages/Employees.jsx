@@ -20,10 +20,11 @@ const Employees = () => {
     try {
       const token = localStorage.getItem('argus_token');
       const res = await fetch(`${API_BASE_URL}/auth/employees`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store'
       });
       if (res.status === 401 || res.status === 403) {
-        navigate('/dashboard');
+        navigate('/login');
         return;
       }
       if (!res.ok) throw new Error('Failed to fetch employees');
@@ -105,6 +106,9 @@ const Employees = () => {
         phone: editEmp.phone || null,
         doj: editEmp.doj || null,
       };
+      if (editEmp.password) {
+        payload.password = editEmp.password;
+      }
       
       const res = await fetch(`${API_BASE_URL}/auth/employees/${editEmp.id}`, {
         method: 'PUT',
@@ -166,7 +170,7 @@ const Employees = () => {
           <div className="topbar-actions">
             <button
               onClick={() => setShowAddModal(true)}
-              style={{ background: 'linear-gradient(135deg, #3b82f6, #2563eb)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px' }}
+              style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px' }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               Add Employee
@@ -184,7 +188,7 @@ const Employees = () => {
             <p style={{ color: 'var(--text-muted)', margin: 0 }}>View, add, and remove access for team members.</p>
           </div>
 
-          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', overflow: 'hidden', flexShrink: 0 }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-card-alt)', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -203,9 +207,9 @@ const Employees = () => {
                   employees.map((emp) => (
                     <tr key={emp.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                       <td style={{ padding: '16px 24px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--blue-light)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-                            {emp.name.charAt(0)}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minHeight: 0 }}>
+                          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: 'var(--blue-light)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 0, fontWeight: 'bold' }}>
+                            {emp.name ? emp.name.charAt(0).toUpperCase() : '?'}
                           </div>
                           <div>
                             <div style={{ fontWeight: 500, color: 'var(--text-main)' }}>{emp.name}</div>
@@ -246,7 +250,7 @@ const Employees = () => {
 
       {/* Add Employee Modal */}
       {showAddModal && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent' }}>
           <div style={{ background: 'var(--bg-card-modal)', width: '100%', maxWidth: '420px', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
             <div style={{ padding: '24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text-main)' }}>Add New Employee</h2>
@@ -257,15 +261,15 @@ const Employees = () => {
             <form onSubmit={handleAddEmployee} style={{ padding: '24px' }}>
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>User ID</label>
-                <input type="text" value={newEmp.userid} onChange={e => setNewEmp({...newEmp, userid: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none', transition: 'border-color 0.2s' }} placeholder="e.g., u-1234" required />
+                <input type="text" value={newEmp.userid} onChange={e => setNewEmp({...newEmp, userid: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none', transition: 'border-color 0.2s' }} placeholder="e.g., u-1234" />
               </div>
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Full Name</label>
-                <input type="text" value={newEmp.name} onChange={e => setNewEmp({...newEmp, name: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} placeholder="Jane Doe" required />
+                <input type="text" value={newEmp.name} onChange={e => setNewEmp({...newEmp, name: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} placeholder="Jane Doe" />
               </div>
               <div style={{ marginBottom: '16px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Email Address</label>
-                <input type="email" value={newEmp.email} onChange={e => setNewEmp({...newEmp, email: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} placeholder="jane@agency.gov" required />
+                <input type="text" value={newEmp.email} onChange={e => setNewEmp({...newEmp, email: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} placeholder="jane@agency.gov" />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
@@ -301,7 +305,7 @@ const Employees = () => {
 
       {/* Edit Employee Modal */}
       {showEditModal && editEmp && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent' }}>
           <div style={{ background: 'var(--bg-card-modal)', width: '100%', maxWidth: '420px', borderRadius: '16px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
             <div style={{ padding: '24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: 'var(--text-main)' }}>Edit Employee</h2>

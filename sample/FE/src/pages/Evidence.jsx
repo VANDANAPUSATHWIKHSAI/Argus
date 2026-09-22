@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import '../css/style.css';
 import '../css/evidence.css';
 import { fetchEvidenceForCase } from '../js/api';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
+import NotificationMenu from '../components/NotificationMenu';
+import SearchableSelect from '../components/SearchableSelect';
 
 const Evidence = () => {
   const formatBytes = (bytes, decimals = 2) => {
@@ -21,9 +23,22 @@ const Evidence = () => {
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
+  const [riskFilter, setRiskFilter] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [selectedItem, setSelectedItem] = useState(null);
+  const filterRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (filterRef.current && !filterRef.current.contains(event.target)) {
+        setShowAdvancedFilters(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [filterRef]);
   const [_loading, setLoading] = useState(true);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [_showProfileModal, _setShowProfileModal] = useState(false);
@@ -94,9 +109,10 @@ const Evidence = () => {
       if (typeFilter && item.type !== typeFilter) return false;
       if (statusFilter && item.status !== statusFilter) return false;
       if (sourceFilter && item.source !== sourceFilter) return false;
+      if (riskFilter && item.risk !== riskFilter) return false;
       return true;
     });
-  }, [evidenceData, searchQuery, typeFilter, statusFilter, sourceFilter]);
+  }, [evidenceData, searchQuery, typeFilter, statusFilter, sourceFilter, riskFilter]);
 
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -158,31 +174,30 @@ const Evidence = () => {
         <span className="search-shortcut">⌘ K</span>
       </div>
       <div className="topbar-actions">
-        <button
-          type="button"
-          onClick={handleCloseCase}
-          className="btn btn-outline"
-          style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-          Close Case
-        </button>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={handleCloseCase}
+            className="btn btn-outline"
+            style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            Close Case
+          </button>
+        )}
         {isAdmin && (
           <button
             type="button"
             onClick={handleOpenCreateCase}
             className="btn btn-primary"
-            style={{background: 'linear-gradient(135deg, var(--blue), var(--purple))', border: 'none', boxShadow: '0 4px 12px rgba(59,130,246,0.3)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer'}}
+            style={{background: 'var(--blue)', border: 'none', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#fff'}}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Create Case
           </button>
         )}
         {localStorage.getItem('active_case_id') && <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>}
-        <button className="icon-btn" onClick={() => setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Notifications are not yet implemented in this prototype.', type: 'info'})}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-          <div className="notification-dot"></div>
-        </button>
+        <NotificationMenu />
         <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
           <div className="avatar">A</div>
           <span style={{fontWeight: '500'}}>Analyst</span>
@@ -309,35 +324,85 @@ const Evidence = () => {
           </div>
 
           {/* Search & Filters */}
-          <div className="evidence-toolbar" style={{display: 'flex', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border-strong)', alignItems: 'center'}}>
+          <div className="evidence-toolbar" style={{display: 'flex', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border-strong)', alignItems: 'center', position: 'relative', zIndex: 100}}>
             <div className="toolbar-left" style={{display: 'flex', gap: '16px', alignItems: 'center'}}>
               <div className="search-container" style={{background: 'var(--bg-app)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', padding: '6px 12px', width: '250px'}}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color: 'var(--text-muted)'}}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                 <input type="text" placeholder="Search evidence..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{border: 'none', background: 'transparent', outline: 'none', marginLeft: '8px', fontSize: '13px', color: 'var(--text-main)', width: '80%'}} />
               </div>
-              <div className="filter-chips" style={{display: 'flex', gap: '8px'}}>
-                <span className={`chip ${typeFilter === '' ? 'active' : ''}`} onClick={() => setTypeFilter('')} style={{background: typeFilter === '' ? 'var(--blue)' : 'var(--bg-app)', color: typeFilter === '' ? 'white' : 'var(--text-muted)', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '12px', fontWeight: typeFilter === '' ? '600' : '500', cursor: 'pointer', border: typeFilter === '' ? 'none' : '1px solid var(--border-strong)'}}>All</span>
-                <span className={`chip ${typeFilter === 'File' ? 'active' : ''}`} onClick={() => setTypeFilter('File')} style={{background: typeFilter === 'File' ? 'var(--blue)' : 'var(--bg-app)', color: typeFilter === 'File' ? 'white' : 'var(--text-muted)', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '12px', fontWeight: typeFilter === 'File' ? '600' : '500', cursor: 'pointer', border: typeFilter === 'File' ? 'none' : '1px solid var(--border-strong)'}}>Files</span>
-                <span className={`chip ${typeFilter === 'Log' ? 'active' : ''}`} onClick={() => setTypeFilter('Log')} style={{background: typeFilter === 'Log' ? 'var(--blue)' : 'var(--bg-app)', color: typeFilter === 'Log' ? 'white' : 'var(--text-muted)', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '12px', fontWeight: typeFilter === 'Log' ? '600' : '500', cursor: 'pointer', border: typeFilter === 'Log' ? 'none' : '1px solid var(--border-strong)'}}>Logs</span>
-                <span className={`chip ${typeFilter === 'Archive' ? 'active' : ''}`} onClick={() => setTypeFilter('Archive')} style={{background: typeFilter === 'Archive' ? 'var(--blue)' : 'var(--bg-app)', color: typeFilter === 'Archive' ? 'white' : 'var(--text-muted)', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '12px', fontWeight: typeFilter === 'Archive' ? '600' : '500', cursor: 'pointer', border: typeFilter === 'Archive' ? 'none' : '1px solid var(--border-strong)'}}>Archives</span>
-                <span className={`chip ${typeFilter === 'Flagged' ? 'active' : ''}`} onClick={() => setTypeFilter('Flagged')} style={{background: typeFilter === 'Flagged' ? 'var(--blue)' : 'var(--bg-app)', color: typeFilter === 'Flagged' ? 'white' : 'var(--text-muted)', padding: '4px 12px', borderRadius: 'var(--radius-full)', fontSize: '12px', fontWeight: typeFilter === 'Flagged' ? '600' : '500', cursor: 'pointer', border: typeFilter === 'Flagged' ? 'none' : '1px solid var(--border-strong)'}}>Flagged</span>
-              </div>
             </div>
             <div className="toolbar-right" style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
-              <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} style={{padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '12px', fontWeight: '500', color: 'var(--text-muted)', background: 'var(--bg-card)', outline: 'none'}}>
-                <option value="">All Sources</option>
-                {Array.from(new Set(evidenceData.map(e => e.source))).map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '12px', fontWeight: '500', color: 'var(--text-muted)', background: 'var(--bg-card)', outline: 'none'}}>
-                <option value="">All Status</option>
-                <option value="Stored">Stored</option>
-                <option value="Processing">Processing</option>
-                <option value="Failed">Failed</option>
-              </select>
-              <button className="btn btn-outline" onClick={() => setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Advanced filter menu is not yet implemented in this prototype.', type: 'info'})} style={{fontSize: '12px', padding: '6px 12px', gap: '4px'}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg> Filters</button>
-              <div style={{display: 'flex', border: '1px solid var(--border-strong)', borderRadius: 'var(--radius-md)', overflow: 'hidden'}}>
-                <button style={{padding: '6px 10px', background: 'var(--bg-app)', border: 'none', color: 'var(--blue)', cursor: 'pointer'}}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
-                <button style={{padding: '6px 10px', background: 'var(--bg-card)', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', borderLeft: '1px solid var(--border-strong)'}} onClick={() => setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Grid view is not yet implemented in this prototype.', type: 'info'})}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></button>
+              <div style={{ width: '130px', position: 'relative' }}>
+                <SearchableSelect 
+                  value={typeFilter} 
+                  onChange={setTypeFilter} 
+                  placeholder="All Sources" 
+                  noSearch 
+                  size="small"
+                  options={[
+                    { label: "All Sources", value: "" },
+                    { label: "Files", value: "File" },
+                    { label: "Logs", value: "Log" },
+                    { label: "Archives", value: "Archive" },
+                    { label: "Flagged", value: "Flagged" }
+                  ]}
+                />
+              </div>
+              <div style={{ width: '130px', position: 'relative' }}>
+                <SearchableSelect 
+                  value={statusFilter} 
+                  onChange={setStatusFilter} 
+                  placeholder="All Status" 
+                  noSearch 
+                  size="small"
+                  options={[
+                    { label: "All Status", value: "" },
+                    { label: "Parsed", value: "Parsed" },
+                    { label: "Processing", value: "Processing" },
+                    { label: "Failed", value: "Failed" }
+                  ]}
+                />
+              </div>
+              <div style={{ position: 'relative' }} ref={filterRef}>
+                <button 
+                  className={`btn ${showAdvancedFilters ? 'btn-primary' : 'btn-outline'}`} 
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)} 
+                  style={{fontSize: '12px', padding: '6px 12px', gap: '4px', border: showAdvancedFilters ? 'none' : '1px solid var(--border-strong)'}}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg> Filters
+                </button>
+                {showAdvancedFilters && (
+                  <div style={{
+                    position: 'absolute', top: '100%', right: 0, marginTop: '8px',
+                    width: '280px', background: 'var(--bg-card)', border: '1px solid var(--border-strong)',
+                    borderRadius: '8px', padding: '16px', zIndex: 1000,
+                    boxShadow: 'var(--shadow-card)', display: 'flex', flexDirection: 'column', gap: '16px'
+                  }}>
+                    <h4 style={{ margin: 0, fontSize: '14px', color: 'var(--text-main)', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '8px' }}>Advanced Filters</h4>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Original Source Host</label>
+                      <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: 'var(--bg-input)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', fontSize: '13px', outline: 'none' }}>
+                        <option value="">All Hosts</option>
+                        {Array.from(new Set(evidenceData.map(e => e.source))).filter(Boolean).map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Risk Level</label>
+                      <select value={riskFilter} onChange={e => setRiskFilter(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: 'var(--bg-input)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', fontSize: '13px', outline: 'none' }}>
+                        <option value="">Any Risk</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                      <button onClick={() => { setSourceFilter(''); setRiskFilter(''); setTypeFilter(''); setStatusFilter(''); }} style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '12px', padding: '6px 12px' }}>Clear All Filters</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

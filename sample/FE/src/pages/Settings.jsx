@@ -151,7 +151,7 @@ const Settings = () => {
                   className="btn btn-primary"
                   disabled={isUpdatingPassword}
                   style={{
-                    background: 'linear-gradient(135deg, var(--blue), var(--purple))',
+                    background: 'var(--blue)',
                     padding: '12px 28px',
                     fontWeight: 600,
                     fontSize: 14,

@@ -1,11 +1,11 @@
 /* ── STUNNING ENTERPRISE DESIGN SYSTEM ──────────────────────────────── */
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
     :root {
-      --bg-page: #09090B; /* Deep charcoal */
-      --bg-card: rgba(24, 24, 27, 0.45); /* High transparency for dark glass */
-      --bg-input: rgba(24, 24, 27, 0.6);
+      --bg-page: #121212; /* Neutral dark grey */
+      --bg-card: rgba(30, 30, 30, 1); /* Neutral card */
+      --bg-input: rgba(18, 18, 18, 1); /* Neutral input */
       --bg-input-focus: #27272A;
-      --bg-ambient: rgba(15, 23, 42, 0.65);
+      --bg-ambient: rgba(15, 23, 42, 1);
       
       --border-subtle: #27272A;
       --border-glow: rgba(56, 189, 248, 0.35);
@@ -30,10 +30,10 @@
 
     [data-theme="light"] {
       --bg-page: #F8FAFC;
-      --bg-card: rgba(255, 255, 255, 0.55); /* High transparency for light glass */
-      --bg-input: rgba(255, 255, 255, 0.7);
+      --bg-card: rgba(255, 255, 255, 1); /* Opaque for light mode */
+      --bg-input: rgba(255, 255, 255, 1);
       --bg-input-focus: #F1F5F9;
-      --bg-ambient: rgba(224, 242, 254, 0.65);
+      --bg-ambient: rgba(224, 242, 254, 1);
       
       --border-subtle: #E2E8F0;
       --border-glow: rgba(37, 99, 235, 0.25);
@@ -233,9 +233,7 @@
     .login-card {
       width: 100%;
       background: var(--bg-card);
-      backdrop-filter: blur(40px) saturate(150%);
-      -webkit-backdrop-filter: blur(40px) saturate(150%);
-      border: 1px solid var(--border-glow);
+      border: 1px solid var(--border-subtle);
       border-radius: 28px;
       padding: 40px 36px 32px;
       box-shadow: var(--shadow-card);
@@ -256,7 +254,7 @@
       width: 52px;
       height: 52px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--brand-blue) 0%, #1D4ED8 100%);
+      background: var(--brand-blue);
       color: #FFFFFF;
       display: flex;
       align-items: center;
@@ -382,7 +380,7 @@
     .btn-login-submit {
       width: 100%;
       height: 48px;
-      background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-blue-hover) 100%);
+      background: var(--brand-blue);
       color: #FFFFFF;
       border: none;
       border-radius: 12px;

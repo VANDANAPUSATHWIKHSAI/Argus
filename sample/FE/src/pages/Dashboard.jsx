@@ -4,6 +4,7 @@ import '../css/style.css';
 import Sidebar from '../components/Sidebar';
 import ProfileModal from '../components/ProfileModal';
 import AlertModal from '../components/AlertModal';
+import NotificationMenu from '../components/NotificationMenu';
 import AdminDashboard from './AdminDashboard';
 import { fetchCases, fetchCaseSummary, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
@@ -242,10 +243,7 @@ const Dashboard = () => {
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                     )}
                   </button>
-                  <button className="icon-btn">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                    <div className="notification-dot"></div>
-                  </button>
+                  <NotificationMenu />
                   <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)} style={{ cursor: 'pointer' }}>
                     <div className="avatar" style={{ background: '#4b5563' }}>A</div>
                     <span style={{ fontWeight: 500 }}>Admin</span>
@@ -294,10 +292,7 @@ const Dashboard = () => {
               </button>
 
               {/* Bell */}
-              <button className="icon-btn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                <div className="notification-dot"></div>
-              </button>
+              <NotificationMenu />
 
               {/* User profile */}
               <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
@@ -510,7 +505,7 @@ const Dashboard = () => {
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)' }}>{completedSteps} of {timelineSteps.length} stages complete</span>
                           <div style={{ width: '120px', height: '5px', backgroundColor: 'var(--border-strong)', borderRadius: '99px', overflow: 'hidden' }}>
-                            <div style={{ width: progressBarWidth, height: '100%', background: 'linear-gradient(90deg,#3b82f6,#60a5fa)', borderRadius: '99px', transition: 'width 0.6s ease' }}></div>
+                            <div style={{ width: progressBarWidth, height: '100%', background: 'var(--blue)', borderRadius: '99px', transition: 'width 0.6s ease' }}></div>
                           </div>
                         </div>
                       </div>
@@ -578,8 +573,8 @@ const Dashboard = () => {
 
       {/* CREATE CASE MODAL — matches HTML exactly */}
       {showCreateModal && (
-        <div style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 100, alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--bg-card-modal)', borderRadius: 'var(--radius-lg)', width: '480px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', position: 'fixed', inset: 0, background: 'transparent', zIndex: 100, alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-card)', padding: '30px', borderRadius: 'var(--radius-lg)', width: '400px', border: '1px solid var(--border-strong)', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
             <div style={{ padding: '24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)' }}>Create New Case</h2>
               <button onClick={() => setShowCreateModal(false)} style={{ background: 'none', border: '1px solid var(--border-strong)', borderRadius: '8px', width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>

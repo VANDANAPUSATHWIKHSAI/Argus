@@ -1,0 +1,589 @@
+/* ── STUNNING ENTERPRISE DESIGN SYSTEM ──────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+    :root {
+      --bg-page: #09090B; /* Deep charcoal */
+      --bg-card: rgba(24, 24, 27, 0.45); /* High transparency for dark glass */
+      --bg-input: rgba(24, 24, 27, 0.6);
+      --bg-input-focus: #27272A;
+      --bg-ambient: rgba(15, 23, 42, 0.65);
+      
+      --border-subtle: #27272A;
+      --border-glow: rgba(56, 189, 248, 0.35);
+      --border-focus: #38BDF8;
+      
+      --text-main: #F8FAFC;
+      --text-secondary: #CBD5E1;
+      --text-muted: #64748B;
+      
+      --brand-blue: #2563EB;
+      --brand-blue-hover: #3B82F6;
+      --brand-blue-light: rgba(59, 130, 246, 0.15);
+      --cyan-glow: #22D3EE;
+      --success-green: #10B981;
+      
+      --font-main: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-display: 'Poppins', sans-serif;
+      
+      --shadow-card: 0 30px 70px -15px rgba(0, 0, 0, 0.4), 0 0 45px rgba(37, 99, 235, 0.15);
+      --shadow-badge: 0 10px 25px -4px rgba(0, 0, 0, 0.3), 0 2px 8px -2px rgba(0, 0, 0, 0.2);
+    }
+
+    [data-theme="light"] {
+      --bg-page: #F8FAFC;
+      --bg-card: rgba(255, 255, 255, 0.55); /* High transparency for light glass */
+      --bg-input: rgba(255, 255, 255, 0.7);
+      --bg-input-focus: #F1F5F9;
+      --bg-ambient: rgba(224, 242, 254, 0.65);
+      
+      --border-subtle: #E2E8F0;
+      --border-glow: rgba(37, 99, 235, 0.25);
+      --border-focus: #2563EB;
+      
+      --text-main: #0F172A;
+      --text-secondary: #475569;
+      --text-muted: #94A3B8;
+      
+      --brand-blue: #2563EB;
+      --brand-blue-hover: #1D4ED8;
+      --brand-blue-light: #EFF6FF;
+      --cyan-glow: #06B6D4;
+      --success-green: #16A34A;
+      
+      --shadow-card: 0 30px 70px -15px rgba(15, 23, 42, 0.12), 0 0 45px rgba(37, 99, 235, 0.08);
+      --shadow-badge: 0 10px 25px -4px rgba(15, 23, 42, 0.08), 0 2px 8px -2px rgba(15, 23, 42, 0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Poppins', var(--font-main) !important;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    html, body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background-color: var(--bg-page);
+      font-family: var(--font-main);
+      color: var(--text-main);
+      position: relative;
+    }
+
+    .bg-ambient-gradient {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1;
+      pointer-events: none;
+      background: 
+        radial-gradient(circle at 50% 50%, var(--bg-ambient) 0%, var(--bg-page) 65%),
+        radial-gradient(circle at 15% 20%, rgba(37, 99, 235, 0.05) 0%, transparent 45%),
+        radial-gradient(circle at 85% 80%, rgba(6, 182, 212, 0.05) 0%, transparent 45%);
+    }
+
+    /* ── FULLSCREEN 3D GLOBE CANVAS ─────────────────────────────────────── */
+    #webgl-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 2;
+      display: block;
+      cursor: grab;
+    }
+
+    #webgl-canvas:active {
+      cursor: grabbing;
+    }
+
+    /* ── HEADER ──────────────────────────────────────────────────────────── */
+    .argus-header {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 80px;
+      padding: 0 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 20;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .header-logo-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: var(--bg-input);
+      border: 1.5px solid var(--brand-blue);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--brand-blue);
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.2);
+    }
+
+    .header-brand-title {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .brand-name {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: var(--text-main);
+      line-height: 1;
+    }
+
+    .brand-sub {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .security-badge {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      padding: 6px 14px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .badge-top-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--text-main);
+    }
+
+    .status-dot-green {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--success-green);
+      box-shadow: 0 0 10px rgba(22, 163, 74, 0.8);
+      animation: pulseGreen 2s infinite;
+    }
+
+    @keyframes pulseGreen {
+      0% { transform: scale(0.9); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.8; }
+    }
+
+    .badge-sub-row {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    /* ── CENTER STAGE & FLOATING LOGIN CARD ─────────────────────────────── */
+    .page-center-stage {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding-right: 12vw;
+      pointer-events: none;
+    }
+
+    .login-card-container {
+      pointer-events: auto;
+      width: 100%;
+      max-width: 440px;
+      padding: 0 20px;
+    }
+
+    .login-card {
+      width: 100%;
+      background: var(--bg-card);
+      backdrop-filter: blur(40px) saturate(150%);
+      -webkit-backdrop-filter: blur(40px) saturate(150%);
+      border: 1px solid var(--border-glow);
+      border-radius: 28px;
+      padding: 40px 36px 32px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 22px;
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    .login-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 35px 80px -15px rgba(15, 23, 42, 0.16), 0 0 50px rgba(37, 99, 235, 0.12);
+    }
+
+    .card-logo-circle {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--brand-blue) 0%, #1D4ED8 100%);
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+      margin-bottom: -6px;
+    }
+
+    .card-title-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .card-brand-title {
+      font-family: var(--font-display);
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: var(--text-main);
+      line-height: 1.1;
+    }
+
+    .card-brand-sub {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .blue-divider-line {
+      width: 44px;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--brand-blue);
+      margin: 4px 0 2px;
+    }
+
+    .card-micro-tagline {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.4px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .login-form {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      text-align: left;
+    }
+
+    .input-field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    .input-box-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .field-icon {
+      position: absolute;
+      left: 14px;
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+
+    .form-input {
+      width: 100%;
+      height: 46px;
+      padding: 0 42px 0 42px;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      font-family: var(--font-main);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-main);
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .form-input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .form-input:focus {
+      background: var(--bg-input-focus);
+      border-color: var(--brand-blue);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    }
+
+    .pw-toggle-btn {
+      position: absolute;
+      right: 12px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+    }
+
+    .pw-toggle-btn:hover {
+      color: var(--text-main);
+    }
+
+    /* LOGIN PRIMARY BUTTON */
+    .btn-login-submit {
+      width: 100%;
+      height: 48px;
+      background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-blue-hover) 100%);
+      color: #FFFFFF;
+      border: none;
+      border-radius: 12px;
+      font-family: var(--font-main);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 1.2px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.35);
+      transition: all 0.2s ease;
+      margin-top: 4px;
+    }
+
+    .btn-login-submit:hover {
+      box-shadow: 0 8px 25px rgba(37, 99, 235, 0.45);
+      transform: translateY(-1px);
+    }
+
+    .btn-login-submit:active {
+      transform: translateY(0);
+    }
+
+    /* AUTHENTICATION PROGRESS DISPLAY */
+    .auth-sequence-box {
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+
+    .auth-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      transition: all 0.3s ease;
+    }
+
+    .auth-step.active {
+      color: var(--brand-blue);
+    }
+
+    .auth-step.complete {
+      color: var(--success-green);
+    }
+
+    .auth-step-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+
+    .auth-step.active .auth-step-dot {
+      background: var(--brand-blue);
+      box-shadow: 0 0 8px rgba(37, 99, 235, 0.8);
+      transform: scale(1.4);
+    }
+
+    .auth-step.complete .auth-step-dot {
+      background: var(--success-green);
+      box-shadow: 0 0 8px rgba(22, 163, 74, 0.8);
+    }
+
+    .error-banner {
+      padding: 10px 14px;
+      background: rgba(220, 38, 38, 0.15); /* Darker red background */
+      border: 1px solid rgba(220, 38, 38, 0.5); /* Subtle red border */
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #FCA5A5; /* Lighter red text */
+    }
+
+    .card-footer-note {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      padding-top: 4px;
+    }
+
+    /* ── FLOATING FEATURE BADGES (LEFT & RIGHT OF GLOBE) ─────────────────── */
+    .floating-badges-column {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 15;
+      display: flex;
+      flex-direction: column;
+      gap: 90px;
+      pointer-events: none;
+    }
+
+    .floating-badges-column.left-side {
+      left: 7%;
+    }
+
+    .floating-badges-column.right-side {
+      right: 7%;
+    }
+
+    .feature-badge-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      text-align: center;
+      pointer-events: auto;
+    }
+
+    .badge-icon-circle {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-badge);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--brand-blue);
+      transition: all 0.25s ease;
+    }
+
+    .feature-badge-item:hover .badge-icon-circle {
+      transform: scale(1.08);
+      border-color: rgba(37, 99, 235, 0.4);
+      box-shadow: 0 12px 30px -4px rgba(37, 99, 235, 0.2);
+    }
+
+    .badge-text-group {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .badge-title {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--text-main);
+      text-transform: uppercase;
+      line-height: 1.2;
+    }
+
+    .badge-sub {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.8px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    /* ── FOOTER ──────────────────────────────────────────────────────────── */
+    .argus-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100vw;
+      height: 48px;
+      padding: 0 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      z-index: 20;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    /* ── RESPONSIVE ADAPTATION ───────────────────────────────────────────── */
+    @media (max-width: 1100px) {
+      .floating-badges-column {
+        display: none;
+      }
+
+      .argus-header, .argus-footer {
+        padding: 0 24px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .login-card {
+        padding: 32px 24px 24px;
+        border-radius: 22px;
+      }
+
+      .card-brand-title {
+        font-size: 22px;
+      }
+    }

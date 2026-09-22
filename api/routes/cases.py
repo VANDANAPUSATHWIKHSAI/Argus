@@ -14,7 +14,7 @@ import uuid
 import hashlib
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Depends
+from fastapi import APIRouter, Header, HTTPException, Query, Depends, BackgroundTasks
 from pydantic import BaseModel, Field
 from enum import Enum
 from infrastructure.repository.evidence_store import create_case_session, list_cases, list_evidence_by_case, close_case
@@ -47,6 +47,8 @@ class InvestigationProgress(BaseModel):
 class CaseSummaryResponse(BaseModel):
     case_id: str
     tenant_id: str
+    name: Optional[str] = "Unnamed Case"
+    description: Optional[str] = "No description provided."
     total_evidence_files: int = 0
     total_artifacts: int = 0
     total_findings: int = 0
@@ -111,6 +113,7 @@ def send_assignment_email(target_email: str, case_id: str, case_name: str, role_
 @router.post("/", response_model=Dict[str, Any])
 async def create_case(
     req: CreateCaseRequest,
+    background_tasks: BackgroundTasks,
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: dict = Depends(get_current_user)
 ):
@@ -148,23 +151,25 @@ async def create_case(
         )
         cur = conn.cursor()
         cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS name VARCHAR(255)")
-        cur.execute("UPDATE cases SET name = %s WHERE case_id = %s", (req.name, session.case_id))
+        cur.execute(
+            "UPDATE cases SET name = %s, analyst_id = %s, senior_analyst_id = %s WHERE case_id = %s", 
+            (req.name, req.analyst_id, req.senior_analyst_id, session.case_id)
+        )
         conn.commit()
         conn.close()
     except Exception as e:
         print(f"[DB WARNING] Could not store case name: {e}")
     
     # Send emails in background
-    # Actually, we'll just send them synchronously for simplicity here since it's just two emails
     if req.analyst_id:
         analyst = get_user_by_id(req.analyst_id)
         if analyst and analyst.get("email"):
-            send_assignment_email(analyst["email"], session.case_id, req.name, "Analyst")
+            background_tasks.add_task(send_assignment_email, analyst["email"], session.case_id, req.name, "Analyst")
             
     if req.senior_analyst_id:
         senior = get_user_by_id(req.senior_analyst_id)
         if senior and senior.get("email"):
-            send_assignment_email(senior["email"], session.case_id, req.name, "Senior Analyst")
+            background_tasks.add_task(send_assignment_email, senior["email"], session.case_id, req.name, "Senior Analyst")
     
     return {
         "status": "SUCCESS",
@@ -215,6 +220,66 @@ async def get_all_cases(
             for c in cases
         ]
     }
+
+@router.get("/activity", response_model=Dict[str, Any])
+async def get_recent_activity(
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+):
+    activity = []
+    
+    # 1. Get Cases
+    cases = list_cases(tenant_id=x_tenant_id)
+    for c in cases:
+        activity.append({
+            "action": "Created Case",
+            "case_id": c.case_id,
+            "created_by": c.created_by,
+            "created_at": c.created_at.isoformat() if hasattr(c.created_at, "isoformat") else str(c.created_at),
+            "details": c.case_id
+        })
+        
+    # 2. Get Evidence from DB
+    try:
+        from config.settings import settings
+        import psycopg2
+        conn = psycopg2.connect(
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            database=settings.postgres_db,
+            user=settings.postgres_user,
+            password=settings.postgres_password,
+            connect_timeout=2
+        )
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT e.evidence_id, e.case_id, e.filename, e.uploaded_by, e.upload_timestamp
+            FROM evidence e
+            INNER JOIN cases c ON e.case_id = c.case_id
+            WHERE c.tenant_id = %s
+            """, 
+            (x_tenant_id,)
+        )
+        for row in cur.fetchall():
+            activity.append({
+                "action": "Uploaded Evidence",
+                "case_id": row[1],
+                "created_by": row[3],
+                "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
+                "details": row[2] # filename
+            })
+        conn.close()
+    except Exception as e:
+        print(f"[DB WARNING] Could not fetch evidence activity: {e}")
+        
+    # Sort by created_at descending
+    activity.sort(key=lambda x: x["created_at"], reverse=True)
+    
+    return {
+        "status": "SUCCESS",
+        "data": activity[:20] # Return top 20 recent activities
+    }
+
 
 
 @router.put("/{case_id}/close")
@@ -354,9 +419,34 @@ async def get_case(
         report=rep_status
     )
 
+    # Fetch name and description from DB
+    case_name = "Unnamed Case"
+    case_desc = "No description provided."
+    try:
+        from config.settings import settings
+        import psycopg2
+        conn = psycopg2.connect(
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            database=settings.postgres_db,
+            user=settings.postgres_user,
+            password=settings.postgres_password,
+            connect_timeout=2
+        )
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
+        row = cur.fetchone()
+        if row and row[0]:
+            case_name = row[0]
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Could not fetch case name for summary: {e}")
+
     return CaseSummaryResponse(
         case_id=case_id,
         tenant_id=x_tenant_id,
+        name=case_name,
+        description=case_desc,
         total_evidence_files=len(evidence_list or []),
         total_artifacts=total_artifacts,
         total_findings=len(findings),

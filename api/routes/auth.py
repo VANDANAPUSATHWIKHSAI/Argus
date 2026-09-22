@@ -30,14 +30,21 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 import psycopg2
 
+from contextlib import contextmanager
+
+@contextmanager
 def get_db_connection():
-    return psycopg2.connect(
+    conn = psycopg2.connect(
         host=os.environ.get("POSTGRES_HOST", "localhost"),
         port=os.environ.get("POSTGRES_PORT", "5433"),
         database=os.environ.get("POSTGRES_DB", "argus"),
         user=os.environ.get("POSTGRES_USER", "argus_user"),
         password=os.environ.get("POSTGRES_PASSWORD", "argus_dev")
     )
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 def get_user_by_id(userid: str):
     try:
@@ -153,7 +160,7 @@ def send_email_otp(target_email: str, otp: str):
         return False
 
 @router.post("/login", response_model=LoginResponse)
-async def login(credentials: LoginRequest):
+def login(credentials: LoginRequest):
     userid = credentials.userid.strip().lower()
     password = credentials.password
 
@@ -254,6 +261,7 @@ class EmployeeUpdate(BaseModel):
     role: str
     phone: Optional[str] = None
     doj: Optional[str] = None
+    password: Optional[str] = None
 
 @router.get("/employees")
 async def get_employees(current_user: dict = Depends(get_current_user)):
@@ -313,6 +321,10 @@ async def update_employee(userid: str, emp: EmployeeUpdate, current_user: dict =
                     "UPDATE users SET name = %s, email = %s, role = %s, phone = %s, doj = %s WHERE id = %s",
                     (emp.name, emp.email, emp.role, emp.phone, emp.doj, userid)
                 )
+                # Update password if a new one was provided
+                if emp.password:
+                    new_hash = get_password_hash(emp.password)
+                    cur.execute("UPDATE users SET password_hash = %s WHERE id = %s", (new_hash, userid))
             conn.commit()
         return {"message": "Employee updated successfully"}
     except HTTPException:

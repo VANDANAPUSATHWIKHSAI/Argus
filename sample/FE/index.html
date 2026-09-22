@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ARGUS | AI for Digital Forensics</title>
+    <script>
+      function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+      }
+      // Always default to dark mode unless otherwise saved
+      let currentTheme = localStorage.getItem('argus_theme') || 'dark';
+      applyTheme(currentTheme);
+      window.currentTheme = currentTheme;
+
+      window.toggleTheme = function() {
+        currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        localStorage.setItem('argus_theme', currentTheme);
+        localStorage.setItem('argus_theme_user_set', '1');
+        applyTheme(currentTheme);
+        window.currentTheme = currentTheme;
+      };
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="/src/js/app.js"></script>
+  </body>
+</html>

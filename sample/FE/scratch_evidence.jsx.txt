@@ -1,0 +1,361 @@
+<div id="app-shell">
+  <!-- SIDEBAR -->
+  <aside className="sidebar">
+    <div className="sidebar-logo">
+      <div className="logo-icon">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+          <circle cx="12" cy="12" r="3"></circle>
+        </svg>
+      </div>
+      <div className="logo-text">
+        <h1>ARGUS</h1>
+        <p>AI for Digital Forensics</p>
+      </div>
+    </div>
+    
+    <nav className="nav-menu">
+      <a href="./index.html" className="nav-item">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+        <span>Dashboard</span>
+      </a>
+      <a href="./evidence.html" className="nav-item active">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+        <span>Evidence</span>
+      </a>
+      <a href="#" className="nav-item">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        <span>Findings</span>
+      </a>
+      <a href="#" className="nav-item">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        <span>Timeline</span>
+      </a>
+      <a href="#" className="nav-item">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+        <span>Reports</span>
+      </a>
+      <a href="#" className="nav-item">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        <span>Settings</span>
+      </a>
+    </nav>
+    <div className="sidebar-footer">
+      <p>DIGITAL<br />TRUTH<br />LEAVES<br />TRACES.</p>
+    </div>
+  </aside>
+
+  <!-- MAIN AREA -->
+  <main className="main-content">
+    
+    <!-- TOPBAR -->
+    <header className="topbar">
+      <div className="search-container">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted); margin-right: 8px;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <input type="text" placeholder="Search cases, evidence, or findings..." />
+        <span className="search-shortcut">⌘ K</span>
+      </div>
+      <div className="topbar-actions">
+        <button className="btn btn-primary" onclick="document.getElementById('create-case-modal').style.display='flex'" style="background: linear-gradient(135deg, var(--blue), var(--purple)); border: none; box-shadow: 0 4px 12px rgba(59,130,246,0.3); padding: 8px 16px; border-radius: var(--radius-full); font-weight: 600; display: flex; align-items: center; gap: 6px;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Create Case
+        </button>
+        <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>
+        <button className="icon-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+          <div className="notification-dot">3</div>
+        </button>
+        <button className="icon-btn" onclick="window.toggleTheme()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+        <div className="user-profile">
+          <div className="avatar">A</div>
+          <span style="font-weight: 500;">Analyst</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+      </div>
+    </header>
+
+    <!-- DASHBOARD SCROLL AREA -->
+    <div className="dashboard-scroll">
+      
+      <!-- Case Header -->
+      <div className="header-card" style="flex-shrink: 0;">
+        <div className="header-info-wrap">
+          <div className="header-id">
+            <h1>EVIDENCE</h1>
+          </div>
+          <div className="header-details">
+            <h2 style="font-size: 16px; font-weight: 500; color: var(--text-muted);">Review, filter and investigate digital artifacts collected for this case.</h2>
+            <div className="header-meta" style="margin-top: 12px; gap: 12px;">
+              <div className="meta-item" style="color: var(--text-main);">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><path d="M10 4v4"></path><path d="M14 4v4"></path><path d="M2 8h20"></path></svg>
+                <div>
+                  <span style="font-size: 11px; text-transform: uppercase;">Case F-2048</span>
+                  <strong style="font-size: 14px;">Suspicious Credential Activity</strong>
+                </div>
+              </div>
+              <div className="badge-danger">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                High Risk
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="header-quote">
+          <p>"From digital traces to real answers."</p>
+          <span>— ARGUS</span>
+        </div>
+      </div>
+
+      <!-- Stats Grid -->
+      <div className="stats-grid evidence-stats" style="flex-shrink: 0; grid-template-columns: repeat(5, 1fr);">
+        <div className="stat-card">
+          <div className="stat-icon" style="background-color: var(--blue-light); color: var(--blue);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          </div>
+          <div className="stat-info">
+            <h2>12</h2>
+            <h4>Total Items</h4>
+            <p>Collected for this case</p>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon" style="background-color: var(--green-light, #e6f6ec); color: var(--green, #10b981);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          </div>
+          <div className="stat-info">
+            <h2>10</h2>
+            <h4>Ingested</h4>
+            <p>Ready for analysis</p>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon" style="background-color: var(--orange-light); color: var(--orange);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          </div>
+          <div className="stat-info">
+            <h2>2</h2>
+            <h4>Processing</h4>
+            <p>Currently analyzing</p>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon" style="background-color: var(--red-light); color: var(--red);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </div>
+          <div className="stat-info">
+            <h2>0</h2>
+            <h4>Failed</h4>
+            <p>No errors</p>
+          </div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon" style="background-color: var(--blue-light); color: var(--blue);">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+          </div>
+          <div className="stat-info">
+            <h2>1.24 TB</h2>
+            <h4>Total Size</h4>
+            <p>Across all evidence</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Panels -->
+      <div className="main-grid" id="main-grid" style="flex-shrink: 0; min-height: 800px; display: grid; grid-template-columns: 1fr; gap: 24px; transition: all 0.3s ease;">
+        
+        <!-- Evidence Workspace -->
+        <div className="panel-card evidence-workspace" style="display: flex; flex-direction: column; background-color: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-card); overflow: hidden;">
+          
+          <!-- Navigation Tabs -->
+          <div className="evidence-tabs" style="display: flex; border-bottom: 1px solid var(--border-strong); padding: 0 24px; background-color: #fafbfc;">
+            <div className="evidence-tab active" style="padding: 16px 20px; font-weight: 600; font-size: 14px; color: var(--blue); border-bottom: 2px solid var(--blue); cursor: pointer;">Evidence Items</div>
+            <a href="./upload.html" className="evidence-tab" style="padding: 16px 20px; font-weight: 500; font-size: 14px; color: var(--text-muted); text-decoration: none;">Upload Evidence</a>
+            <div className="evidence-tab" style="padding: 16px 20px; font-weight: 500; font-size: 14px; color: var(--text-muted); cursor: pointer;">Coverage</div>
+          </div>
+
+          <!-- Search & Filters -->
+          <div className="evidence-toolbar" style="display: flex; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--border-strong); align-items: center;">
+            <div className="toolbar-left" style="display: flex; gap: 16px; align-items: center;">
+              <div className="search-container" style="background-color: var(--bg-app); border-radius: var(--radius-md); border: 1px solid var(--border-strong); padding: 6px 12px; width: 250px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted);"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" placeholder="Search evidence..." style="border: none; background: transparent; outline: none; margin-left: 8px; font-size: 13px; color: var(--text-main); width: 80%;" />
+              </div>
+              <div className="filter-chips" style="display: flex; gap: 8px;">
+                <span className="chip active" style="background-color: var(--blue); color: white; padding: 4px 12px; border-radius: var(--radius-full); font-size: 12px; font-weight: 600; cursor: pointer;">All</span>
+                <span className="chip" style="background-color: var(--bg-app); color: var(--text-muted); padding: 4px 12px; border-radius: var(--radius-full); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border-strong);">Files</span>
+                <span className="chip" style="background-color: var(--bg-app); color: var(--text-muted); padding: 4px 12px; border-radius: var(--radius-full); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border-strong);">Logs</span>
+                <span className="chip" style="background-color: var(--bg-app); color: var(--text-muted); padding: 4px 12px; border-radius: var(--radius-full); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border-strong);">Network</span>
+                <span className="chip" style="background-color: var(--bg-app); color: var(--text-muted); padding: 4px 12px; border-radius: var(--radius-full); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border-strong);">Registry</span>
+                <span className="chip" style="background-color: var(--bg-app); color: var(--text-muted); padding: 4px 12px; border-radius: var(--radius-full); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border-strong);">Archives</span>
+                <span className="chip" style="background-color: var(--bg-app); color: var(--text-muted); padding: 4px 12px; border-radius: var(--radius-full); font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border-strong);">Flagged</span>
+              </div>
+            </div>
+            <div className="toolbar-right" style="display: flex; gap: 12px; align-items: center;">
+              <select style="padding: 6px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); font-size: 12px; font-weight: 500; color: var(--text-muted); background: white; outline: none;"><option>All Sources</option></select>
+              <select style="padding: 6px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); font-size: 12px; font-weight: 500; color: var(--text-muted); background: white; outline: none;"><option>All Status</option></select>
+              <button className="btn btn-outline" style="font-size: 12px; padding: 6px 12px; gap: 4px;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"></line><line x1="4" y1="10" x2="4" y2="3"></line><line x1="12" y1="21" x2="12" y2="12"></line><line x1="12" y1="8" x2="12" y2="3"></line><line x1="20" y1="21" x2="20" y2="16"></line><line x1="20" y1="12" x2="20" y2="3"></line><line x1="1" y1="14" x2="7" y2="14"></line><line x1="9" y1="8" x2="15" y2="8"></line><line x1="17" y1="16" x2="23" y2="16"></line></svg> Filters</button>
+              <div style="display: flex; border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden;">
+                <button style="padding: 6px 10px; background: var(--bg-app); border: none; color: var(--blue); cursor: pointer;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg></button>
+                <button style="padding: 6px 10px; background: white; border: none; color: var(--text-muted); cursor: pointer; border-left: 1px solid var(--border-strong);"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Evidence Table -->
+          <div className="table-container" style="flex: 1; overflow-y: auto;">
+            <table className="evidence-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+              <thead>
+                <tr style="border-bottom: 1px solid var(--border-strong); font-size: 12px; color: var(--text-muted); font-weight: 600;">
+                  <th style="padding: 16px 24px; width: 40px;"><input type="checkbox" /></th>
+                  <th style="padding: 16px 12px;">Evidence Name</th>
+                  <th style="padding: 16px 12px;">Type</th>
+                  <th style="padding: 16px 12px;">Source</th>
+                  <th style="padding: 16px 12px;">Size</th>
+                  <th style="padding: 16px 12px;">Status</th>
+                  <th style="padding: 16px 12px;">Added On</th>
+                  <th style="padding: 16px 12px;">Risk</th>
+                  <th style="padding: 16px 24px; text-align: right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="evidence-tbody">
+                <!-- Rows will be populated by JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination -->
+          <div className="pagination" style="padding: 16px 24px; border-top: 1px solid var(--border-strong); display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 13px; color: var(--text-muted);">Showing 1–8 of 12 evidence items</span>
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <button className="btn-icon" style="width: 32px; height: 32px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+              <button className="btn-icon" style="width: 32px; height: 32px; background: var(--blue); color: white; border-color: var(--blue);">1</button>
+              <button className="btn-icon" style="width: 32px; height: 32px;">2</button>
+              <button className="btn-icon" style="width: 32px; height: 32px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+              <select style="margin-left: 12px; padding: 6px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); font-size: 13px; color: var(--text-muted); background: white; outline: none;"><option>10 / page</option></select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Node Details Panel -->
+        <aside className="details-panel" id="details-panel" style="display: none; background-color: var(--bg-card); border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); box-shadow: var(--shadow-card); flex-direction: column; overflow: hidden; height: 100%;">
+          <div className="panel-header" style="padding: 20px 24px; border-bottom: 1px solid var(--border-strong); display: flex; justify-content: space-between; align-items: center; background-color: #fafbfc;">
+            <h3 style="font-size: 16px; font-weight: 600; color: var(--text-main);">Evidence Details</h3>
+            <div className="panel-actions">
+              <button className="btn-icon" onclick="evidenceApp.clearSelection()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+            </div>
+          </div>
+          
+          <div className="details-content" id="details-content" style="display: flex; padding: 24px; flex-direction: column; flex-grow: 1; overflow-y: auto;">
+            <div className="details-header" style="display: flex; gap: 16px; margin-bottom: 24px;">
+              <div className="details-icon" id="details-icon" style="width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 2px solid; flex-shrink: 0; background-color: var(--blue-light); color: var(--blue); border-color: var(--blue);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              </div>
+              <div className="details-title-wrap" style="flex: 1;">
+                <h4 id="details-title" style="font-size: 18px; font-weight: 600; color: var(--text-main); line-height: 1.2; margin-bottom: 4px;">suspicious.ps1</h4>
+                <p id="details-subtitle" style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px;">PowerShell Script</p>
+                <div id="details-badge"><div style="background-color: var(--red-light); color: var(--red); padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; display: inline-block;">High Risk</div></div>
+              </div>
+            </div>
+            
+            <div className="details-tabs" style="display: flex; border-bottom: 1px solid var(--border-strong); margin-bottom: 24px;">
+              <div className="tab active" style="padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--blue); border-bottom: 2px solid var(--blue); cursor: pointer;">Overview</div>
+              <div className="tab" style="padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer;">Metadata</div>
+              <div className="tab" style="padding: 12px 16px; font-size: 13px; font-weight: 600; color: var(--text-muted); cursor: pointer;">Related Items (5)</div>
+            </div>
+            
+            <div style="font-size: 13px; font-weight: 600; color: var(--text-main); margin-bottom: 8px;">Description</div>
+            <div id="details-desc" className="details-desc" style="font-size: 13px; color: var(--text-main); line-height: 1.6; margin-bottom: 24px;">
+              Suspicious PowerShell script with obfuscated commands. Associated with credential harvesting activity.
+            </div>
+            
+            <div className="details-list" id="details-list" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px;">
+              <div className="details-row" style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-subtle);">
+                <span style="color: var(--text-muted);">SHA-256</span>
+                <span style="font-weight: 500; color: var(--text-main);">3f2a4e8c9d7b...e1f4d2c9a</span>
+              </div>
+              <div className="details-row" style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-subtle);">
+                <span style="color: var(--text-muted);">File Size</span>
+                <span style="font-weight: 500; color: var(--text-main);">18 KB</span>
+              </div>
+              <div className="details-row" style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-subtle);">
+                <span style="color: var(--text-muted);">File Type</span>
+                <span style="font-weight: 500; color: var(--text-main);">PowerShell Script</span>
+              </div>
+              <div className="details-row" style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-subtle);">
+                <span style="color: var(--text-muted);">Collected From</span>
+                <span style="font-weight: 500; color: var(--text-main);">DESKTOP-7G2K</span>
+              </div>
+              <div className="details-row" style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-subtle);">
+                <span style="color: var(--text-muted);">Collected</span>
+                <span style="font-weight: 500; color: var(--text-main);">Nov 14, 2024 09:32 AM</span>
+              </div>
+              <div className="details-row" style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-subtle);">
+                <span style="color: var(--text-muted);">Related Process</span>
+                <span style="font-weight: 500; color: var(--text-main);">powershell.exe</span>
+              </div>
+              <div className="details-row" style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-subtle);">
+                <span style="color: var(--text-muted);">Related User</span>
+                <span style="font-weight: 500; color: var(--text-main);">john.doe@company.com</span>
+              </div>
+              <div className="details-row" style="display: flex; justify-content: space-between; font-size: 13px; padding-bottom: 12px; border-bottom: 1px dashed var(--border-subtle);">
+                <span style="color: var(--text-muted);">Related Finding</span>
+                <span style="font-weight: 500; color: var(--text-main);">Credential Harvesting</span>
+              </div>
+            </div>
+            
+            <a href="./index.html" className="btn btn-primary" style="width: 100%; justify-content: center; padding: 12px; font-weight: 600; margin-top: auto; text-decoration: none;">
+              View in Investigation Map →
+            </a>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Create Case Modal -->
+<div id="create-case-modal" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); z-index: 100; align-items: center; justify-content: center;">
+  <div style="background: white; border-radius: var(--radius-lg); width: 480px; box-shadow: 0 20px 40px rgba(0,0,0,0.2); overflow: hidden; animation: slideUp 0.3s ease-out;">
+    <div style="padding: 24px; border-bottom: 1px solid var(--border-subtle); display: flex; justify-content: space-between; align-items: center;">
+      <h2 style="font-size: 18px; font-weight: 600;">Create New Case</h2>
+      <button className="btn-icon" onclick="document.getElementById('create-case-modal').style.display='none'">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+      </button>
+    </div>
+    <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+      <div>
+        <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">Case Name</label>
+        <input type="text" placeholder="e.g. Ransomware Incident - Alpha Corp" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); font-size: 14px; outline: none;" />
+      </div>
+      <div>
+        <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">Description</label>
+        <textarea rows="3" placeholder="Brief details about the investigation..." style="width: 100%; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); font-size: 14px; outline: none; resize: none;"></textarea>
+      </div>
+      <div>
+        <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">Assigned Analysts</label>
+        <input type="text" value="john.doe@company.com" style="width: 100%; padding: 10px 12px; border-radius: var(--radius-md); border: 1px solid var(--border-strong); font-size: 14px; outline: none;" />
+      </div>
+      <div>
+        <label style="font-size: 12px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">Initial Evidence (Optional)</label>
+        <div style="border: 1px dashed var(--blue); border-radius: var(--radius-md); padding: 16px; text-align: center; background: var(--blue-light); color: var(--blue); font-size: 13px; cursor: pointer;" onclick="document.getElementById('modal-file-input').click()">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 4px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg><br />
+          Click to browse or drop files here
+        </div>
+        <input type="file" id="modal-file-input" multiple style={{display: "none"}} />
+      </div>
+    </div>
+    <div style="padding: 16px 24px; background: var(--bg-card); border-top: 1px solid var(--border-subtle); display: flex; justify-content: flex-end; gap: 12px;">
+      <button className="btn btn-outline" onclick="document.getElementById('create-case-modal').style.display='none'" style="padding: 8px 16px;">Cancel</button>
+      <button className="btn btn-primary" onclick="document.getElementById('create-case-modal').style.display='none'; alert('Case Created Successfully!');" style="padding: 8px 16px; background: var(--blue);">Create Case</button>
+    </div>
+  </div>
+</div>
+<style>
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+

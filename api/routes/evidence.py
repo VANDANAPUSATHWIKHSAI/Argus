@@ -58,16 +58,13 @@ class EvidenceUploadResponse(BaseModel):
 import uuid
 
 def sanitize_uuid(val: Optional[str]) -> str:
-    """Ensure case_id is a valid 36-character UUID for PostgreSQL storage."""
+    """Ensure case_id is present."""
     if not val:
         return str(uuid.uuid4())
     cleaned = val.strip().strip('"').strip("'").strip("%22").strip()
     if cleaned.lower() in ("", "string", "none", "null"):
         return str(uuid.uuid4())
-    try:
-        return str(uuid.UUID(cleaned))
-    except ValueError:
-        return str(uuid.uuid5(uuid.NAMESPACE_DNS, cleaned))
+    return cleaned
 
 
 @router.post("/upload", response_model=EvidenceUploadResponse)

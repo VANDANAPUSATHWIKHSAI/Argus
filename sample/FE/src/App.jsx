@@ -6,9 +6,10 @@ import Evidence from './pages/Evidence';
 import Settings from './pages/Settings';
 import Upload from './pages/Upload';
 import Sanitized from './pages/Sanitized';
+import SanitizedDetail from './pages/SanitizedDetail';
 import Employees from './pages/Employees';
-
-// Global styles for the app (can also just import individual ones in components)
+import AuditLogs from './pages/AuditLogs';
+import ProtectedRoute from './components/ProtectedRoute';// Global styles for the app (can also just import individual ones in components)
 import './App.css';
 
 function App() {
@@ -22,16 +23,18 @@ function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/employees" element={<Employees />} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
+        <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
         <Route path="/index.html" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/evidence" element={<Evidence />} />
+        <Route path="/evidence" element={<ProtectedRoute><Evidence /></ProtectedRoute>} />
         <Route path="/evidence.html" element={<Navigate to="/evidence" replace />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/settings.html" element={<Navigate to="/settings" replace />} />
-        <Route path="/upload" element={<Upload />} />
+        <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
         <Route path="/upload.html" element={<Navigate to="/upload" replace />} />
-        <Route path="/sanitized" element={<Sanitized />} />
+        <Route path="/sanitized" element={<ProtectedRoute><Sanitized /></ProtectedRoute>} />
+        <Route path="/sanitized/:id" element={<ProtectedRoute><SanitizedDetail /></ProtectedRoute>} />
         <Route path="/sanitized.html" element={<Navigate to="/sanitized" replace />} />
       </Routes>
     </Router>

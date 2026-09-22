@@ -164,27 +164,6 @@ const Settings = () => {
                 >
                   {isUpdatingPassword ? 'Updating Password...' : 'Update Password'}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => { localStorage.removeItem('argus_token'); localStorage.removeItem('argus_user'); navigate('/login'); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    padding: '10px 16px',
-                    borderRadius: 8,
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    cursor: 'pointer',
-                    fontWeight: 600,
-                    fontSize: 13,
-                    background: 'rgba(239, 68, 68, 0.08)',
-                    color: '#f87171',
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                  Sign Out
-                </button>
               </div>
             </form>
           </div>

@@ -190,10 +190,6 @@ const Upload = () => {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                       My Profile
                     </button>
-                    <button className="user-dropdown-item danger" onClick={(e) => { e.stopPropagation(); localStorage.removeItem('argus_token'); localStorage.removeItem('argus_user'); navigate('/login'); }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                      Sign Out
-                    </button>
                   </div>
                 )}
               </div>
@@ -233,7 +229,6 @@ const Upload = () => {
               <div style={{ display: 'flex', borderBottom: '1px solid var(--border-strong)', padding: '0 24px', background: 'var(--bg-app)' }}>
                 <a href="/evidence" style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none' }}>Evidence Items</a>
                 <div style={{ padding: '16px 20px', fontWeight: 600, fontSize: 14, color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'pointer' }}>Upload Evidence</div>
-                <a href="/sanitized" style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none' }}>Sanitized Output</a>
                 <div style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer' }}>Coverage</div>
               </div>
 

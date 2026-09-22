@@ -15,6 +15,7 @@ const Login = () => {
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
   const [isOtpMode, setIsOtpMode] = useState(false);
   const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -291,7 +292,7 @@ const Login = () => {
       }
       setIsSendingReset(true);
       try {
-        const response = await fetch('http://127.0.0.1:8000/auth/forgot-password', {
+        const response = await fetch('http://localhost:8000/auth/forgot-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userid })
@@ -317,16 +318,36 @@ const Login = () => {
     }
 
     if (isOtpMode) {
-      if (!otp) {
-        setError('Please enter the OTP sent to your email.');
+      if (!otp || !newPassword) {
+        setError('Please enter the OTP sent to your email and your new password.');
         return;
       }
-      if (otp === '123456') {
-        localStorage.setItem('argus_token', 'mock_token_123');
-        localStorage.setItem('argus_user', JSON.stringify({ userid: userid, name: 'Analyst' }));
-        navigate('/dashboard');
-      } else {
-        setError('Invalid OTP. Please try again. (Hint: 123456)');
+      setIsSendingReset(true);
+      try {
+        const response = await fetch('http://localhost:8000/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userid, otp, new_password: newPassword })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          setError(errorData.detail || 'Invalid OTP. Please check and try again.');
+          setIsSendingReset(false);
+          return;
+        }
+        
+        const successData = await response.json();
+        setResetSuccess(successData.message);
+        setIsSendingReset(false);
+        setIsOtpMode(false);
+        setIsForgotPasswordMode(false);
+        setOtp('');
+        setNewPassword('');
+        setPassword('');
+      } catch (err) {
+        setError('Network error. Failed to connect to server.');
+        setIsSendingReset(false);
       }
       return;
     }
@@ -522,16 +543,43 @@ const Login = () => {
 
               {/* OTP FIELD */}
               {isOtpMode && (
-                <div className="input-field-group">
-                  <label className="field-label" htmlFor="login-otp">One-Time Password</label>
-                  <div className="input-box-wrapper">
-                    <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                    </svg>
-                    <input type="text" id="login-otp" className="form-input" placeholder="Enter 6-digit OTP (123456)" value={otp} onChange={(e) => setOtp(e.target.value)} required autoComplete="off" maxLength={6} />
+                <>
+                  <div className="input-field-group">
+                    <label className="field-label" htmlFor="login-otp">One-Time Password</label>
+                    <div className="input-box-wrapper">
+                      <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                      <input type="text" id="login-otp" className="form-input" placeholder="Enter 6-digit OTP" value={otp} onChange={(e) => setOtp(e.target.value)} required autoComplete="off" maxLength={6} />
+                    </div>
                   </div>
-                </div>
+                  <div className="input-field-group">
+                    <label className="field-label" htmlFor="login-new-password">New Password</label>
+                    <div className="input-box-wrapper">
+                      <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                      <input type={showPassword ? "text" : "password"} id="login-new-password" className="form-input" placeholder="Enter new password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required autoComplete="new-password" />
+                      <button type="button" className="pw-toggle-btn" aria-label="Toggle password visibility" onClick={() => setShowPassword(!showPassword)}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          {showPassword ? (
+                            <>
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                              <line x1="1" y1="1" x2="23" y2="23"/>
+                            </>
+                          ) : (
+                            <>
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                              <circle cx="12" cy="12" r="3"/>
+                            </>
+                          )}
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
 
               {/* PASSWORD FIELD */}
@@ -570,7 +618,7 @@ const Login = () => {
               )}
 
               <button type="submit" className="btn-login-submit" style={{ opacity: (isSendingReset || isLoggingIn) ? 0.8 : 1, cursor: (isSendingReset || isLoggingIn) ? 'not-allowed' : 'pointer' }}>
-                {isLoggingIn ? 'AUTHENTICATING...' : (isSendingReset ? 'SENDING...' : (isOtpMode ? 'VERIFY OTP' : (isForgotPasswordMode ? 'SEND OTP' : 'SECURE LOGIN')))}
+                {isLoggingIn ? 'AUTHENTICATING...' : (isSendingReset ? (isOtpMode ? 'VERIFYING...' : 'SENDING...') : (isOtpMode ? 'VERIFY OTP' : (isForgotPasswordMode ? 'SEND OTP' : 'SECURE LOGIN')))}
                 {!isForgotPasswordMode && !isOtpMode && !isSendingReset && !isLoggingIn && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>}
               </button>
 

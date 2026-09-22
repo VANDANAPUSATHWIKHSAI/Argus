@@ -16,7 +16,8 @@ import logging
 from typing import Optional, List
 from pathlib import Path
 
-from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException, Query
+from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException, Query, Depends
+from api.routes.auth import get_current_user
 from pydantic import BaseModel, Field
 
 from infrastructure.schemas import Evidence, CaseSession
@@ -76,6 +77,7 @@ async def upload_evidence(
     uploaded_by: str = Form("analyst_api"),
     host_id: str = Form("NTFS1-HOST"),
     relative_path: Optional[str] = Form(None),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Ingest a raw evidence file, execute the Stage 1-4 pipeline, and store findings.
@@ -87,11 +89,12 @@ async def upload_evidence(
     target_case_id = sanitize_uuid(raw_case_id)
 
     # Create or fetch case session
+    uploader_name = current_user.get("name", uploaded_by)
     try:
-        session = create_case_session(tenant_id=tenant_id, created_by=uploaded_by, case_id=target_case_id)
+        session = create_case_session(tenant_id=tenant_id, created_by=uploader_name, case_id=target_case_id)
     except Exception as e:
         logger.warning(f"Case session setup warning: {e}")
-        session = CaseSession(case_id=target_case_id, tenant_id=tenant_id, created_by=uploaded_by)
+        session = CaseSession(case_id=target_case_id, tenant_id=tenant_id, created_by=uploader_name)
 
     # Save temp upload file
     temp_dir = Path(tempfile.gettempdir()) / "argus_uploads"
@@ -120,7 +123,7 @@ async def upload_evidence(
         filename=safe_name,
         file_path=str(file_path),
         raw_file_path=str(file_path),
-        uploaded_by=uploaded_by,
+        uploaded_by=uploader_name,
         sha256_hash=sha256_digest,
         metadata={"size_bytes": len(file_bytes)}
     )

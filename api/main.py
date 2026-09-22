@@ -5,10 +5,19 @@ from api.routes import evidence, cases, reports, query, auth
 
 app = FastAPI(title='Argus', description='Multi-Agent Digital Forensic Investigation Platform')
 
+import os
+
+_allowed_origins_env = os.environ.get("ARGUS_ALLOWED_ORIGINS", "")
+if _allowed_origins_env:
+    _allowed_origins = [o.strip() for o in _allowed_origins_env.split(",") if o.strip()]
+else:
+    # Development fallback — restrict in production by setting ARGUS_ALLOWED_ORIGINS
+    _allowed_origins = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:3000"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=_allowed_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

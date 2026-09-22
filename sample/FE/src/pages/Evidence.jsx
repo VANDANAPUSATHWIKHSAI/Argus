@@ -181,7 +181,7 @@ const Evidence = () => {
         {localStorage.getItem('active_case_id') && <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>}
         <button className="icon-btn" onClick={() => setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Notifications are not yet implemented in this prototype.', type: 'info'})}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" strokeWidth="2" stroke="currentColor"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-          <div className="notification-dot">3</div>
+          <div className="notification-dot"></div>
         </button>
         <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
           <div className="avatar">A</div>
@@ -196,10 +196,6 @@ const Evidence = () => {
               <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowProfileModal(true); setShowUserDropdown(false); }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 My Profile
-              </button>
-              <button className="user-dropdown-item danger" onClick={(e) => { e.stopPropagation(); localStorage.removeItem('argus_token'); localStorage.removeItem('argus_user'); navigate('/login'); }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                Sign Out
               </button>
             </div>
           )}
@@ -309,7 +305,6 @@ const Evidence = () => {
           <div className="evidence-tabs" style={{display: 'flex', borderBottom: '1px solid var(--border-strong)', padding: '0 24px', background: 'var(--bg-app)'}}>
             <div className="evidence-tab active" style={{padding: '16px 20px', fontWeight: '600', fontSize: '14px', color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'pointer'}}>Evidence Items</div>
             <Link to="/upload" className="evidence-tab" style={{padding: '16px 20px', fontWeight: '500', fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none'}}>Upload Evidence</Link>
-            <Link to="/sanitized" className="evidence-tab" style={{padding: '16px 20px', fontWeight: '500', fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none'}}>Sanitized Output</Link>
             <div className="evidence-tab" onClick={() => setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Coverage view is not yet implemented in this prototype.', type: 'info'})} style={{padding: '16px 20px', fontWeight: '500', fontSize: '14px', color: 'var(--text-muted)', cursor: 'pointer'}}>Coverage</div>
           </div>
 

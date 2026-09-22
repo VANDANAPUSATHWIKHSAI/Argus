@@ -120,18 +120,27 @@ async def create_case(
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admins can create cases")
 
+    existing_cases = list_cases(tenant_id=x_tenant_id)
+    
     if req.case_id:
         case_id = req.case_id.strip()
     else:
-        case_id = str(uuid.uuid4())
+        existing_seqs = []
+        for c in existing_cases:
+            if c.case_id.startswith('ARGUS_'):
+                try:
+                    existing_seqs.append(int(c.case_id.split('_')[1]))
+                except ValueError:
+                    pass
+        next_seq = max(existing_seqs) + 1 if existing_seqs else 1
+        case_id = f"ARGUS_{next_seq:02d}"
         
-    existing_cases = list_cases(tenant_id=x_tenant_id)
     if any(c.case_id == case_id for c in existing_cases):
-        raise HTTPException(status_code=409, detail=f"Case ID '{req.case_id}' already exists.")
+        raise HTTPException(status_code=409, detail=f"Case ID '{case_id}' already exists.")
         
     session = create_case_session(
         tenant_id=x_tenant_id, 
-        created_by=req.analyst, 
+        created_by=current_user.get("name", req.analyst), 
         case_id=case_id,
         analyst_id=req.analyst_id,
         senior_analyst_id=req.senior_analyst_id
@@ -227,18 +236,7 @@ async def get_recent_activity(
 ):
     activity = []
     
-    # 1. Get Cases
-    cases = list_cases(tenant_id=x_tenant_id)
-    for c in cases:
-        activity.append({
-            "action": "Created Case",
-            "case_id": c.case_id,
-            "created_by": c.created_by,
-            "created_at": c.created_at.isoformat() if hasattr(c.created_at, "isoformat") else str(c.created_at),
-            "details": c.case_id
-        })
-        
-    # 2. Get Evidence from DB
+    user_map = {"Admin": "Admin User", "analyst_api": "Analyst", "Analyst_api": "Analyst"}
     try:
         from config.settings import settings
         import psycopg2
@@ -251,24 +249,52 @@ async def get_recent_activity(
             connect_timeout=2
         )
         cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT e.evidence_id, e.case_id, e.filename, e.uploaded_by, e.upload_timestamp
-            FROM evidence e
-            INNER JOIN cases c ON e.case_id = c.case_id
-            WHERE c.tenant_id = %s
-            """, 
-            (x_tenant_id,)
-        )
+        cur.execute("SELECT id, name FROM users")
         for row in cur.fetchall():
+            user_map[str(row[0])] = row[1]
+    except Exception as e:
+        print(f"[DB WARNING] Could not fetch users: {e}")
+        conn = None
+    
+    # 1. Get Cases (Excluding closed cases)
+    cases = list_cases(tenant_id=x_tenant_id)
+    active_case_ids = set()
+    for c in cases:
+        if c.status != "closed":
+            active_case_ids.add(c.case_id)
+            c_by = c.created_by if c.created_by else ""
+            mapped_name = user_map.get(c_by, c_by)
+            
             activity.append({
-                "action": "Uploaded Evidence",
-                "case_id": row[1],
-                "created_by": row[3],
-                "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
-                "details": row[2] # filename
+                "action": "Created Case",
+                "case_id": c.case_id,
+                "created_by": mapped_name,
+                "created_at": c.created_at.isoformat() if hasattr(c.created_at, "isoformat") else str(c.created_at),
+                "details": c.case_id
             })
-        conn.close()
+            
+    # 2. Get Evidence from DB (Only for active cases)
+    try:
+        if conn and not conn.closed:
+            cur.execute(
+                """
+                SELECT e.evidence_id, e.case_id, e.filename, e.uploaded_by, e.upload_timestamp
+                FROM evidence e
+                INNER JOIN cases c ON e.case_id = c.case_id
+                WHERE c.tenant_id = %s AND c.status != 'closed'
+                """, 
+                (x_tenant_id,)
+            )
+            for row in cur.fetchall():
+                u_by = row[3] if row[3] else ""
+                activity.append({
+                    "action": "Uploaded Evidence",
+                    "case_id": row[1],
+                    "created_by": user_map.get(u_by, u_by),
+                    "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
+                    "details": row[2]
+                })
+            conn.close()
     except Exception as e:
         print(f"[DB WARNING] Could not fetch evidence activity: {e}")
         
@@ -277,7 +303,7 @@ async def get_recent_activity(
     
     return {
         "status": "SUCCESS",
-        "data": activity[:20] # Return top 20 recent activities
+        "data": activity[:20]
     }
 
 

@@ -25,9 +25,33 @@ const ConfidenceBar = ({ value }) => (
 );
 
 import Sidebar from '../components/Sidebar';
-import ProfileModal from '../components/ProfileModal';
+import { fetchFindings, API_BASE_URL } from '../js/api';
 import AlertModal from '../components/AlertModal';
-import { fetchFindings } from '../js/api';
+import ProfileModal from '../components/ProfileModal';
+
+const syntaxHighlight = (json) => {
+  if (typeof json != 'string') {
+    json = JSON.stringify(json, undefined, 2);
+  }
+  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+    let cls = 'var(--text-main)';
+    if (/^"/.test(match)) {
+      if (/:$/.test(match)) {
+        cls = 'var(--blue)'; // Key
+      } else {
+        cls = 'var(--orange)'; // String
+      }
+    } else if (/true|false/.test(match)) {
+      cls = 'var(--teal)'; // boolean
+    } else if (/null/.test(match)) {
+      cls = 'var(--red)'; // null
+    } else {
+      cls = 'var(--green)'; // number
+    }
+    return '<span style="color:' + cls + '">' + match + '</span>';
+  });
+};
 
 const Sanitized = () => {
   const navigate = useNavigate();
@@ -178,8 +202,7 @@ const Sanitized = () => {
   };
 
   const handleRowClick = (item) => {
-    setSelected(item);
-    setDetailTab('overview');
+    navigate('/sanitized/' + item.id, { state: { item } });
   };
 
   const handleOpenCreateCase = () => {
@@ -260,7 +283,7 @@ const Sanitized = () => {
               {localStorage.getItem('active_case_id') && <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>}
               <button className="icon-btn">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                <div className="notification-dot">3</div>
+                <div className="notification-dot"></div>
               </button>
               <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
                 <div className="avatar">A</div>
@@ -276,10 +299,6 @@ const Sanitized = () => {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                       My Profile
                     </button>
-                    <button className="user-dropdown-item danger" onClick={(e) => { e.stopPropagation(); localStorage.removeItem('argus_token'); localStorage.removeItem('argus_user'); navigate('/login'); }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                      Sign Out
-                    </button>
                   </div>
                 )}
               </div>
@@ -287,68 +306,16 @@ const Sanitized = () => {
           </header>
 
           <div className="dashboard-scroll">
-            {/* Case Header */}
-            <div className="header-card" style={{ flexShrink: 0 }}>
-              <div className="header-info-wrap">
-                <div className="header-id"><h1>EVIDENCE</h1></div>
-                <div className="header-details">
-                  <h2 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-muted)' }}>Review, filter and investigate digital artifacts collected for this case.</h2>
-                  <div className="header-meta" style={{ marginTop: 12, gap: 12 }}>
-                    <div className="meta-item" style={{ color: 'var(--text-main)' }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M10 4v4"/><path d="M14 4v4"/><path d="M2 8h20"/></svg>
-                      <div>
-                        <span id="evidence-case-id" style={{ fontSize: 11, textTransform: 'uppercase' }}>{localStorage.getItem('active_case_id') || 'UNKNOWN ID'}</span>
-                        <strong id="evidence-case-name" style={{ fontSize: 14 }}>{localStorage.getItem('active_case_name') || 'Unnamed Case'}</strong>
-                      </div>
-                    </div>
-                    <div className="badge-danger">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                      High Risk
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="header-quote">
-                <p>"From digital traces to real answers."</p>
-                <span>— ARGUS</span>
-              </div>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="stats-grid evidence-stats" style={{ flexShrink: 0, gridTemplateColumns: 'repeat(5, 1fr)' }}>
-              {[
-                { icon: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></>, bg: 'var(--blue-light)', col: 'var(--blue)', val: statsTotal, label: 'Total Items', sub: 'Sanitized facts' },
-                { icon: <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>, bg: '#e6f6ec', col: '#10b981', val: statsCritical, label: 'Critical', sub: 'Highest severity' },
-                { icon: <><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>, bg: '#fef3c7', col: '#d97706', val: statsHigh, label: 'High Risk', sub: 'Require attention' },
-                { icon: <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></>, bg: 'var(--blue-light)', col: 'var(--blue)', val: `${statsAvgConf}%`, label: 'Avg. Confidence', sub: 'AI certainty' },
-                { icon: <><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></>, bg: 'var(--orange-light)', col: 'var(--orange)', val: layers.length, label: 'Layers', sub: 'Evidence types' },
-              ].map((s, i) => (
-                <div key={i} className="stat-card">
-                  <div className="stat-icon" style={{ backgroundColor: s.bg, color: s.col }}>
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">{s.icon}</svg>
-                  </div>
-                  <div className="stat-info">
-                    <h2>{s.val}</h2>
-                    <h4>{s.label}</h4>
-                    <p>{s.sub}</p>
-                  </div>
-                </div>
-              ))}
+            {/* Page Header */}
+            <div style={{ padding: '24px 24px 0 24px', flexShrink: 0 }}>
+              <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-main)', marginBottom: 24 }}>Sanitized Output</h1>
             </div>
 
             {/* Main Panels */}
-            <div className="main-grid" style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: selected ? '1fr 380px' : '1fr', gap: 24, transition: 'all 0.3s ease', minHeight: 600 }}>
+            <div className="main-grid" style={{ flexShrink: 0, display: 'grid', gridTemplateColumns: '1fr', gap: 24, transition: 'all 0.3s ease', minHeight: 600 }}>
 
               {/* Evidence Workspace */}
               <div className="panel-card evidence-workspace" style={{ display: 'flex', flexDirection: 'column', backgroundColor: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', overflow: 'hidden' }}>
-
-                {/* Navigation Tabs */}
-                <div className="evidence-tabs" style={{ display: 'flex', borderBottom: '1px solid var(--border-strong)', padding: '0 24px', backgroundColor: 'var(--bg-app)' }}>
-                  <Link to="/evidence" className="evidence-tab" style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none' }}>Evidence Items</Link>
-                  <Link to="/upload" className="evidence-tab" style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none' }}>Upload Evidence</Link>
-                  <div className="evidence-tab active" style={{ padding: '16px 20px', fontWeight: 600, fontSize: 14, color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'pointer' }}>Sanitized Output</div>
-                  <div className="evidence-tab" style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer' }}>Coverage</div>
-                </div>
 
                 {/* Toolbar */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border-strong)', alignItems: 'center' }}>
@@ -449,94 +416,6 @@ const Sanitized = () => {
                   </div>
                 </div>
               </div>
-
-              {/* Details Panel */}
-              {selected && (
-                <aside className="details-panel" style={{ backgroundColor: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', display: 'flex', flexDirection: 'column', overflow: 'hidden', height: '100%' }}>
-                  <div className="panel-header" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-strong)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-app)' }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-main)' }}>Fact Details</h3>
-                    <button className="btn-icon" onClick={() => setSelected(null)}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                    </button>
-                  </div>
-
-                  <div style={{ padding: 24, display: 'flex', flexDirection: 'column', flex: 1, overflowY: 'auto', gap: 0 }}>
-                    {/* Header */}
-                    <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-                      <div style={{ width: 48, height: 48, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: 'var(--blue-light)', color: 'var(--blue)', border: '2px solid var(--blue)' }}>
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <h4 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.3, marginBottom: 4 }}>{selected.ref}</h4>
-                        <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>{selected.layer} Layer</p>
-                        <SeverityBadge severity={selected.severity} />
-                      </div>
-                    </div>
-
-                    {/* Tabs */}
-                    <div style={{ display: 'flex', borderBottom: '1px solid var(--border-strong)', marginBottom: 24 }}>
-                      {['overview', 'metadata', 'json'].map(tab => (
-                        <div key={tab} onClick={() => setDetailTab(tab)} style={{ padding: '12px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', color: detailTab === tab ? 'var(--blue)' : 'var(--text-muted)', borderBottom: detailTab === tab ? '2px solid var(--blue)' : 'none', textTransform: 'capitalize' }}>{tab}</div>
-                      ))}
-                    </div>
-
-                    {detailTab === 'overview' && (
-                      <>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', marginBottom: 8 }}>Sanitized Fact</div>
-                        <div style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--text-main)', lineHeight: 1.6, marginBottom: 24, background: 'var(--bg-surface)', padding: 16, borderRadius: 8, border: '1px solid var(--border-strong)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'normal', overflowWrap: 'break-word' }}>
-                          {selected.fact}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 24 }}>
-                          {[
-                            { label: 'Evidence Ref', value: selected.ref },
-                            { label: 'Layer', value: selected.layer },
-                            { label: 'Timestamp', value: selected.timestamp },
-                            { label: 'Confidence', value: `${selected.confidence}%` },
-                            { label: 'Severity', value: selected.severity.charAt(0).toUpperCase() + selected.severity.slice(1) },
-                          ].map(row => (
-                            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 12, borderBottom: '1px dashed var(--border-subtle)' }}>
-                              <span style={{ color: 'var(--text-muted)' }}>{row.label}</span>
-                              <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{row.value}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-
-                    {detailTab === 'metadata' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {[
-                          { label: 'Evidence Ref', value: selected.evidenceRef || 'N/A' },
-                          { label: 'Injection Flag', value: selected.injectionFlagged ? 'Yes' : 'No' },
-                          { label: 'Injection Score', value: `${(selected.injectionScore * 100).toFixed(1)}%` },
-                          { label: 'Actions Applied', value: selected.sanitizationActions?.join(', ') || 'None' },
-                          { label: 'MITRE Mapping', value: selected.mitreMapping || 'None' },
-                        ].map(row => (
-                          <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 12, borderBottom: '1px dashed var(--border-subtle)' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>{row.label}</span>
-                            <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{row.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {detailTab === 'json' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          Sanitized Context (stored JSON)
-                        </div>
-                        <pre style={{ whiteSpace: 'pre-wrap', fontFamily: '"Courier New", monospace', fontSize: '11.5px', background: 'var(--bg-app)', padding: 14, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', maxHeight: 340, overflowY: 'auto', color: 'var(--text-main)', lineHeight: 1.6 }}>
-                          {JSON.stringify(selected.sanitizedContext || {}, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-
-                    <a href="/dashboard" className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', padding: 12, fontWeight: 600, marginTop: 'auto', textDecoration: 'none', display: 'flex', alignItems: 'center', background: 'linear-gradient(135deg, var(--blue), var(--purple))', borderRadius: 'var(--radius-md)' }}>
-                      View in Investigation Map →
-                    </a>
-                  </div>
-                </aside>
-              )}
             </div>
           </div>
         </main>

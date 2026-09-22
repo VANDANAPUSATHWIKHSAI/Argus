@@ -38,7 +38,6 @@ const AdminDashboard = () => {
 
     setCreating(true);
     try {
-      const customId = `ARGUS_${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`;
       const token = localStorage.getItem('argus_token');
       const res = await fetch(`${API_BASE_URL}/cases/`, {
         method: 'POST',
@@ -50,14 +49,13 @@ const AdminDashboard = () => {
         body: JSON.stringify({ 
           name: newCaseName, 
           analyst: 'Admin', 
-          case_id: customId,
           analyst_id: newCaseAnalyst || null,
           senior_analyst_id: newCaseSeniorAnalyst || null
         }),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      const createdId = data.case_id || data.id || customId;
+      const createdId = data.case_id || data.id;
       localStorage.setItem('active_case_id', createdId);
       localStorage.setItem('active_case_name', newCaseName);
       

@@ -108,7 +108,6 @@ const Dashboard = () => {
 
     setCreating(true);
     try {
-      const customId = `ARGUS_${(cases.length + 1).toString().padStart(2, '0')}`;
       const token = localStorage.getItem('argus_token');
       const res = await fetch(`${API_BASE_URL}/cases/`, {
         method: 'POST',
@@ -117,11 +116,11 @@ const Dashboard = () => {
           'X-Tenant-ID': DEFAULT_TENANT_ID,
           'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify({ name: newCaseName, description: newCaseDesc, analyst: 'Analyst', case_id: customId }),
+        body: JSON.stringify({ name: newCaseName, description: newCaseDesc, analyst: 'Analyst' }),
       });
       if (!res.ok) throw new Error(await res.text());
       const data = await res.json();
-      const createdId = data.case_id || data.id || customId;
+      const createdId = data.case_id || data.id;
       localStorage.setItem('active_case_id', createdId);
       localStorage.setItem('active_case_name', newCaseName);
       localStorage.setItem('active_case_desc', newCaseDesc);
@@ -245,7 +244,7 @@ const Dashboard = () => {
                   </button>
                   <button className="icon-btn">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                    <div className="notification-dot" style={{ background: '#ef4444' }}></div>
+                    <div className="notification-dot"></div>
                   </button>
                   <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)} style={{ cursor: 'pointer' }}>
                     <div className="avatar" style={{ background: '#4b5563' }}>A</div>
@@ -257,10 +256,6 @@ const Dashboard = () => {
                           <div className="ud-name">Admin</div>
                           <div className="ud-role">System Administrator</div>
                         </div>
-                        <button className="user-dropdown-item danger" onClick={(e) => { e.stopPropagation(); localStorage.removeItem('argus_token'); localStorage.removeItem('argus_user'); navigate('/login'); }}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                          Sign Out
-                        </button>
                       </div>
                     )}
                   </div>
@@ -301,7 +296,7 @@ const Dashboard = () => {
               {/* Bell */}
               <button className="icon-btn">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
-                <div className="notification-dot">3</div>
+                <div className="notification-dot"></div>
               </button>
 
               {/* User profile */}
@@ -315,10 +310,6 @@ const Dashboard = () => {
                       <div className="ud-name">Analyst</div>
                       <div className="ud-role">Digital Forensics Investigator</div>
                     </div>
-                    <button className="user-dropdown-item danger" onClick={(e) => { e.stopPropagation(); localStorage.removeItem('argus_token'); localStorage.removeItem('argus_user'); navigate('/login'); }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
-                      Sign Out
-                    </button>
                   </div>
                 )}
               </div>

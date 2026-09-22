@@ -9,7 +9,7 @@ const Employees = () => {
   const [loading, setLoading] = useState(true);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
-  const [newEmp, setNewEmp] = useState({ userid: '', name: '', email: '', role: 'analyst', phone: '', doj: '' });
+  const [newEmp, setNewEmp] = useState({ userid: '', name: '', email: '', role: 'analyst', phone: '', doj: '', password: '123' });
   const [editEmp, setEditEmp] = useState(null);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
   const navigate = useNavigate();
@@ -78,7 +78,7 @@ const Employees = () => {
       }
       
       setShowAddModal(false);
-      setNewEmp({ userid: '', name: '', email: '', role: 'analyst', phone: '', doj: '' });
+      setNewEmp({ userid: '', name: '', email: '', role: 'analyst', phone: '', doj: '', password: '123' });
       fetchEmployees();
       setCustomAlert({ isOpen: true, title: 'Success', message: 'Employee added successfully!', type: 'success' });
     } catch (err) {
@@ -277,12 +277,18 @@ const Employees = () => {
                   <input type="date" value={newEmp.doj} onChange={e => setNewEmp({...newEmp, doj: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               </div>
-              <div style={{ marginBottom: '32px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Role</label>
-                <select value={newEmp.role} onChange={e => setNewEmp({...newEmp, role: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }}>
-                  <option value="analyst">Analyst</option>
-                  <option value="senior_analyst">Senior Analyst</option>
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Role</label>
+                  <select value={newEmp.role} onChange={e => setNewEmp({...newEmp, role: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }}>
+                    <option value="analyst">Analyst</option>
+                    <option value="senior_analyst">Senior Analyst</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Password</label>
+                  <input type="text" value={newEmp.password} onChange={e => setNewEmp({...newEmp, password: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} placeholder="123" />
+                </div>
               </div>
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button type="button" onClick={() => setShowAddModal(false)} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-muted)', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
@@ -326,14 +332,19 @@ const Employees = () => {
                   <input type="date" value={editEmp.doj || ''} onChange={e => setEditEmp({...editEmp, doj: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none', boxSizing: 'border-box' }} />
                 </div>
               </div>
-              <div style={{ marginBottom: '32px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Role</label>
-                <select value={editEmp.role} onChange={e => setEditEmp({...editEmp, role: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }}>
-                  <option value="analyst">Analyst</option>
-                  <option value="senior_analyst">Senior Analyst</option>
-                  {editEmp.role === 'admin' && <option value="admin">Admin</option>}
-                  {editEmp.role !== 'admin' && <option value="admin">Admin</option>}
-                </select>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Role</label>
+                  <select value={editEmp.role} onChange={e => setEditEmp({...editEmp, role: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }}>
+                    <option value="analyst">Analyst</option>
+                    <option value="senior_analyst">Senior Analyst</option>
+                    {editEmp.role === 'admin' && <option value="admin">Admin</option>}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>New Password (Leave blank to keep)</label>
+                  <input type="text" value={editEmp.password || ''} onChange={e => setEditEmp({...editEmp, password: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} placeholder="Enter new password" />
+                </div>
               </div>
               <div style={{ display: 'flex', gap: '12px' }}>
                 <button type="button" onClick={() => { setShowEditModal(false); setEditEmp(null); }} style={{ flex: 1, padding: '12px', background: 'transparent', border: '1px solid var(--border-subtle)', borderRadius: '8px', color: 'var(--text-muted)', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>

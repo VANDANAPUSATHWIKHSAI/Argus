@@ -22,29 +22,38 @@ load_dotenv()
 
 router = APIRouter()
 
-SECRET_KEY = "argus_super_secret_key"
+SECRET_KEY = os.environ.get("ARGUS_SECRET_KEY", "argus_super_secret_key_CHANGE_IN_PRODUCTION")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 
 import psycopg2
-
+from psycopg2 import pool
 from contextlib import contextmanager
 
-@contextmanager
-def get_db_connection():
-    conn = psycopg2.connect(
+try:
+    db_pool = psycopg2.pool.SimpleConnectionPool(
+        1, 20,
         host=os.environ.get("POSTGRES_HOST", "localhost"),
         port=os.environ.get("POSTGRES_PORT", "5433"),
         database=os.environ.get("POSTGRES_DB", "argus"),
         user=os.environ.get("POSTGRES_USER", "argus_user"),
         password=os.environ.get("POSTGRES_PASSWORD", "argus_dev")
     )
+except Exception as e:
+    print("Error initializing connection pool:", e)
+    db_pool = None
+
+@contextmanager
+def get_db_connection():
+    if not db_pool:
+        raise Exception("Database connection pool is not available")
+    conn = db_pool.getconn()
     try:
         yield conn
     finally:
-        conn.close()
+        db_pool.putconn(conn)
 
 def get_user_by_id(userid: str):
     try:
@@ -253,7 +262,7 @@ class EmployeeCreate(BaseModel):
     role: str
     phone: Optional[str] = None
     doj: Optional[str] = None
-    password: Optional[str] = "1"
+    password: Optional[str] = "123"
 
 class EmployeeUpdate(BaseModel):
     name: str
@@ -282,7 +291,7 @@ async def create_employee(emp: EmployeeCreate, current_user: dict = Depends(get_
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    pwd_to_hash = emp.password if emp.password else "1"
+    pwd_to_hash = emp.password if emp.password else "123"
     default_password = get_password_hash(pwd_to_hash)
     try:
         with get_db_connection() as conn:

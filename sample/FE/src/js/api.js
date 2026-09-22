@@ -1,5 +1,5 @@
-export const API_BASE_URL = 'http://127.0.0.1:8000';
-export const DEFAULT_TENANT_ID = 'dev-team';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+export const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID || 'dev-team';
 
 // Helper for authenticated requests
 async function fetchWithAuth(url, options = {}) {
@@ -89,4 +89,8 @@ export async function updatePassword(currentPassword, newPassword) {
     method: 'POST',
     body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   });
+}
+
+export async function fetchActivity() {
+  return fetchWithAuth('/cases/activity');
 }

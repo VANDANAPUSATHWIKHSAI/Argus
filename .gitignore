@@ -59,3 +59,12 @@ logs/
 
 # ── Executables ───────────────────────────────────────────────
 minio.exe
+
+# ── Node / Frontend ────────────────────────────────────────────
+node_modules/
+sample/FE/node_modules/
+sample/FE/dist/
+*.local
+
+# ── No duplicate frontend ─────────────────────────────────────
+# frontend/ is deleted. Do not re-add.

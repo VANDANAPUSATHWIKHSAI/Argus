@@ -216,7 +216,6 @@ const AdminPanel = () => {
                 <select value={newEmp.role} onChange={e => setNewEmp({...newEmp, role: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-strong)', background: 'var(--bg-input)', color: 'var(--text-main)', outline: 'none' }}>
                   <option value="analyst">Analyst</option>
                   <option value="senior analyst">Senior Analyst</option>
-                  <option value="admin">Admin</option>
                 </select>
               </div>
               <div style={{ display: 'flex', gap: '12px' }}>

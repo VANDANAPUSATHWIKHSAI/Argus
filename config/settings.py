@@ -41,6 +41,13 @@ class Settings(BaseSettings):
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: Optional[str] = None
 
+    # ── Redis (live state / queues / checkpoints) ──
+    redis_host: str = "localhost"
+    redis_port: int = 6379
+    redis_db: int = 0
+    redis_password: Optional[str] = None
+    redis_url: str = "redis://localhost:6379/0"
+
     # ── Threat Intel ─────────────────────────────
     taxii_server_url: Optional[str] = None
     taxii_api_key: Optional[str] = None

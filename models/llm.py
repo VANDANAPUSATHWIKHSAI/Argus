@@ -39,6 +39,15 @@ class LLMLoader:
             return self._get_ollama_client(settings.llm_fallback_model)
         return self._load_hf_model(settings.llm_fallback_model, quantize=True)
 
+    def load_qwen3_8b(self) -> Any:
+        """
+        Loads Qwen3-8B required for primary agent reasoning (e.g. Agent 1).
+        """
+        model_name = getattr(settings, "llm_fallback_model", "Qwen/Qwen3-8B")
+        if self.use_ollama:
+            return self._get_ollama_client(model_name)
+        return self._load_hf_model(model_name, quantize=True)
+
     def _get_ollama_client(self, model_name: str) -> "OllamaWrapper":
         """Returns a helper wrapper to call local Ollama endpoint."""
         return OllamaWrapper(model_name, self.ollama_url)

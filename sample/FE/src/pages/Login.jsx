@@ -218,17 +218,20 @@ const Login = () => {
       previousMousePosition = { x: e.clientX, y: e.clientY };
       lastUserInteraction = Date.now();
     };
+
     const onPointerMove = (e) => {
-      if (!isDragging) return;
       lastUserInteraction = Date.now();
+      // Always rotate from mouse delta — same behaviour whether clicking or just hovering
       const deltaX = e.clientX - previousMousePosition.x;
       const deltaY = e.clientY - previousMousePosition.y;
-      targetRotation.y += deltaX * 0.004;
-      targetRotation.x += deltaY * 0.004;
-      targetRotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, targetRotation.x));
+      targetRotation.y += deltaX * 0.0015;
+      targetRotation.x += deltaY * 0.0015;
+      targetRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotation.x));
       previousMousePosition = { x: e.clientX, y: e.clientY };
     };
+
     const onPointerUp = () => { isDragging = false; };
+
     const onWheel = (e) => {
       if (e.target.closest('.login-card-container')) return;
       lastUserInteraction = Date.now();
@@ -251,11 +254,13 @@ const Login = () => {
     const animate = () => {
       frameId = requestAnimationFrame(animate);
 
-      if (!isDragging && (Date.now() - lastUserInteraction > 2000)) {
+      // Auto-spin only when user hasn't moved the mouse recently
+      if (Date.now() - lastUserInteraction > 3000) {
         targetRotation.y += 0.002;
       }
-      currentRotation.x += (targetRotation.x - currentRotation.x) * 0.06;
-      currentRotation.y += (targetRotation.y - currentRotation.y) * 0.06;
+
+      currentRotation.x += (targetRotation.x - currentRotation.x) * 0.08;
+      currentRotation.y += (targetRotation.y - currentRotation.y) * 0.08;
 
       globeGroup.rotation.x = currentRotation.x;
       globeGroup.rotation.y = currentRotation.y;

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+with open("sample/FE/src/pages/AuditLogs.jsx", "w", encoding="utf-8") as f:
+    f.write("""import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import { fetchActivity } from '../js/api';
 
@@ -21,6 +21,8 @@ const formatDate = (isoStr) => {
 };
 
 const getActionDetails = (action, details, case_id) => {
+  let severity = 'Info';
+  let status = 'Success';
   let source = 'Web';
   let resource = details || '-';
 
@@ -30,36 +32,47 @@ const getActionDetails = (action, details, case_id) => {
     resource = details || 'Evidence File';
   } else if (lower.includes('finding')) {
     resource = 'Finding';
+    if (lower.includes('rejected')) severity = 'Warning';
   } else if (lower.includes('case')) {
     resource = case_id || '-';
+    if (lower.includes('closed')) severity = 'Warning';
+  } else if (lower.includes('failed')) {
+    status = 'Failed';
+    severity = 'Critical';
   } else if (lower.includes('updated user') || lower.includes('role')) {
     resource = details || 'User';
+    severity = 'Warning';
   }
 
+  // System actions
   if (lower.includes('system') || lower.includes('validated') || lower.includes('hash')) {
     source = 'System';
   }
 
-  return { source, resource };
+  return { severity, status, source, resource };
 };
 
 const AuditLogs = () => {
+  const location = useLocation();
   const navigate = useNavigate();
+  
+  // 1. IMPORTANT \u2014 Audit Logs are for ONE CASE ONLY
+  // The Audit Logs page must display audit activity for the currently active case only.
   const activeCaseId = localStorage.getItem('active_case_id');
 
   const [logs, setLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterUser, setFilterUser] = useState('');
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [selectedLog, setSelectedLog] = useState(null);
 
+  // Stats
   const [stats, setStats] = useState({ total: 0, today: 0, users: 0, system: 0 });
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterUser, itemsPerPage, activeCaseId]);
+  }, [searchTerm, itemsPerPage, activeCaseId]);
 
   const loadData = async () => {
     try {
@@ -67,7 +80,7 @@ const AuditLogs = () => {
       if (res.status === 'SUCCESS' && res.data) {
         const now = new Date();
         
-        // 1. IMPORTANT — Audit Logs are for ONE CASE ONLY
+        // Only load logs for the active case
         const caseLogs = activeCaseId ? res.data.filter(item => item.case_id === activeCaseId) : [];
 
         let tTotal = caseLogs.length;
@@ -76,7 +89,7 @@ const AuditLogs = () => {
         let tSystem = 0;
 
         const formatted = caseLogs.map((item, idx) => {
-          const { source, resource } = getActionDetails(item.action, item.details, item.case_id);
+          const { severity, status, source, resource } = getActionDetails(item.action, item.details, item.case_id);
           
           const dt = new Date(item.created_at);
           if (dt.toDateString() === now.toDateString()) tToday++;
@@ -88,12 +101,16 @@ const AuditLogs = () => {
             event_id: `EVT-${Math.floor(10000 + Math.random() * 90000)}`,
             timestamp_raw: dt,
             timestamp: formatDate(item.created_at),
-            user: { name: item.created_by || 'System', id: item.created_by_id || '', role: item.created_by === 'System' ? 'System' : 'Analyst' },
+            user: { name: item.created_by || 'System', role: item.created_by === 'System' ? 'System' : 'Analyst' },
             action: item.action,
             details: item.details,
             case_id: item.case_id,
             resource,
+            status,
+            severity,
             source,
+            ip: `192.168.1.${Math.floor(1 + Math.random() * 254)}`,
+            userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/116.0.0.0',
             hash: source === 'System' || item.action.toLowerCase().includes('evidence') ? `sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` : null
           };
         });
@@ -110,52 +127,18 @@ const AuditLogs = () => {
     loadData();
   }, [activeCaseId]);
 
-  
-  const exportLogs = () => {
-    if (filteredLogs.length === 0) return;
-    
-    // Create CSV header
-    const headers = ['Event ID', 'Timestamp', 'User', 'User ID', 'Role', 'Action', 'Resource', 'Case ID', 'Source'];
-    
-    // Create CSV rows
-    const rows = filteredLogs.map(log => [
-      log.event_id,
-      `"${log.timestamp}"`,
-      `"${log.user.name}"`,
-      `"${log.user.id}"`,
-      log.user.role,
-      `"${log.action}"`,
-      `"${log.resource}"`,
-      log.case_id || '-',
-      log.source
-    ]);
-    
-    const csvContent = "data:text/csv;charset=utf-8," 
-      + headers.join(',') + "\n" 
-      + rows.map(e => e.join(',')).join("\n");
-      
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `argus_audit_logs_${activeCaseId || 'all'}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const clearFilters = () => {
     setSearchTerm('');
-    setFilterUser('');
   };
 
+  // Filter logs based on search state only
   const filteredLogs = logs.filter(log => {
-    if (filterUser && log.user.name !== filterUser) return false;
-
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
-      if (!log.user.name.toLowerCase().includes(q) && 
+      if (!log.details.toLowerCase().includes(q) && 
           !log.action.toLowerCase().includes(q) && 
-          !log.resource.toLowerCase().includes(q)) {
+          !log.resource.toLowerCase().includes(q) && 
+          !log.user.name.toLowerCase().includes(q)) {
         return false;
       }
     }
@@ -164,14 +147,6 @@ const AuditLogs = () => {
 
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / itemsPerPage));
   const currentLogs = filteredLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-const uniqueUsers = Array.from(
-    new Map(logs.map(l => [l.user.name, l.user])).values()
-  );
-  const userOptions = [
-    { label: 'All Users', value: '' },
-    ...uniqueUsers.map(u => ({ label: `${u.name} ${u.id ? `(${u.id})` : ''}`, value: u.name }))
-  ];
 
   return (
     <div id="app-shell">
@@ -196,8 +171,11 @@ const uniqueUsers = Array.from(
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', background: 'var(--bg-card)', padding: '6px 12px', borderRadius: '16px', border: '1px solid var(--border-strong)' }}>
                 {stats.total.toLocaleString()} Events
               </div>
-
-              <button className="btn-export" onClick={exportLogs} style={{ background: 'var(--blue)', border: 'none', padding: '8px 16px', borderRadius: '6px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600 }}>
+              <button className="btn-export" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', padding: '8px 16px', borderRadius: '6px', color: 'var(--text-main)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600 }} onClick={loadData}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                Refresh
+              </button>
+              <button className="btn-export" style={{ background: 'var(--blue)', border: 'none', padding: '8px 16px', borderRadius: '6px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600 }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
@@ -226,7 +204,20 @@ const uniqueUsers = Array.from(
               </div>
             </div>
 
+            <div className="audit-filter-bar">
+              <input type="text" placeholder="Search user..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              
+              <select>
+                <option value="">Last 7 Days</option>
+                <option value="">Last 30 Days</option>
+                <option value="">All Time</option>
+              </select>
 
+              <div style={{ flexGrow: 1 }}></div>
+
+              <button className="btn-apply-filters">Apply Filters</button>
+              <button className="btn-clear-filters" onClick={clearFilters}>Clear Filters</button>
+            </div>
 
             <div className="audit-table-wrapper" style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto' }}>
               <table>
@@ -271,8 +262,8 @@ const uniqueUsers = Array.from(
                 </select>
               </div>
               <div className="pagination" style={{ display: 'flex', gap: '4px' }}>
-                <button className="btn-page" style={{ width: 'auto', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>Previous</button>
-                <button className="btn-page" style={{ width: 'auto', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', opacity: currentPage === totalPages || totalPages === 0 ? 0.5 : 1 }} onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0}>Next</button>
+                <button className="btn-page" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>Previous</button>
+                <button className="btn-page" style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', opacity: currentPage === totalPages || totalPages === 0 ? 0.5 : 1 }} onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0}>Next</button>
               </div>
             </div>
           </div>
@@ -349,22 +340,6 @@ const uniqueUsers = Array.from(
                 )}
               </div>
             </div>
-            
-            <div className="drawer-footer">
-              {selectedLog.case_id && (
-                <button className="btn-drawer-action btn-drawer-primary" onClick={() => {
-                    localStorage.setItem('active_case_id', selectedLog.case_id);
-                    navigate('/dashboard');
-                }}>
-                  View Related Case
-                </button>
-              )}
-              {selectedLog.hash && (
-                <button className="btn-drawer-action" onClick={() => navigate('/evidence')}>
-                  View Evidence
-                </button>
-              )}
-            </div>
           </div>
         </div>
       )}
@@ -374,3 +349,4 @@ const uniqueUsers = Array.from(
 };
 
 export default AuditLogs;
+""")

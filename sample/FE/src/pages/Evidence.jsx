@@ -339,12 +339,17 @@ const Evidence = () => {
                   placeholder="All Sources" 
                   noSearch 
                   size="small"
-                  options={[
+                   options={[
                     { label: "All Sources", value: "" },
-                    { label: "Files", value: "File" },
-                    { label: "Logs", value: "Log" },
-                    { label: "Archives", value: "Archive" },
-                    { label: "Flagged", value: "Flagged" }
+                    { label: "Disk Image", value: "Disk Image" },
+                    { label: "Memory Dump", value: "Memory" },
+                    { label: "Network Capture", value: "PCAP" },
+                    { label: "Windows Event Log", value: "EVTX" },
+                    { label: "Linux Log", value: "Log" },
+                    { label: "Registry Hive", value: "Registry" },
+                    { label: "Script", value: "Script" },
+                    { label: "File / Document", value: "File" },
+                    { label: "Archive", value: "Archive" },
                   ]}
                 />
               </div>

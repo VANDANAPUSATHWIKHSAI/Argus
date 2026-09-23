@@ -117,7 +117,7 @@ class OllamaWrapper:
             payload["system"] = system_prompt
 
         try:
-            r = requests.post(url, json=payload, timeout=180)
+            r = requests.post(url, json=payload, timeout=300)
             if r.status_code == 200:
                 return r.json().get("response", "")
             else:

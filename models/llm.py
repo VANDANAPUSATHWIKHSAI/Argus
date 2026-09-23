@@ -91,31 +91,43 @@ class LLMLoader:
 
 class OllamaWrapper:
     """Simple wrapper to query Ollama chat/generation endpoint."""
-    def __init__(self, model_name: str, base_url: str):
+    def __init__(self, model_name: str, base_url: str, allow_mock: bool = False):
         self.model_name = model_name
         self.base_url = base_url
+        self.allow_mock = allow_mock
 
     def generate(self, prompt: str, system_prompt: str = None) -> str:
         import requests
+        import json
+
         url = f"{self.base_url}/api/generate"
+
+        model_name = self.model_name
+        if model_name in ("Qwen/Qwen3-8B", "Qwen3-8B"):
+            model_name = "qwen3:8b"
+        elif "/" in model_name:
+            model_name = model_name.split("/")[-1]
+
         payload = {
-            "model": self.model_name.split("/")[-1],  # extract name from path
+            "model": model_name,
             "prompt": prompt,
             "stream": False
         }
         if system_prompt:
             payload["system"] = system_prompt
-        
+
         try:
-            r = requests.post(url, json=payload, timeout=60)
+            r = requests.post(url, json=payload, timeout=180)
             if r.status_code == 200:
                 return r.json().get("response", "")
             else:
                 raise RuntimeError(f"Ollama returned error status: {r.status_code}")
         except Exception as e:
-            # dev mock fallback if Ollama isn't started yet
-            print(f"[OLLAMA WARNING] Connection failed: {e}. Returning mock reasoning response.")
-            return (
-                f"{{'claim': 'Suspicious PowerShell commands executed by Administrator', "
-                f"'evidence_ids': ['F-1001']}}"
-            )
+            if self.allow_mock:
+                print(f"[OLLAMA WARNING] Connection failed: {e}. Returning mock reasoning response.")
+                return json.dumps({
+                    "claim": "Suspicious PowerShell commands executed by Administrator",
+                    "evidence_ids": ["F-1001"]
+                })
+            raise RuntimeError(f"Ollama generation failed for model '{model_name}': {e}") from e
+

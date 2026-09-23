@@ -225,34 +225,98 @@ class EvidenceIntelligenceAgent(BaseAgent):
 
     def _persist_agent_output(self, output: Agent1Output):
         """
-        Optionally persists structured agent output into PostgreSQL `agent_outputs` table.
+        Persists structured agent output into PostgreSQL `agent_outputs` table.
         """
         try:
-            from databases.postgres_client import postgres
-            if postgres._pool is not None:
-                import asyncio
-                query = """
-                    INSERT INTO agent_outputs (case_id, agent_id, claim, evidence_ids, confidence, verified, flags)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7)
-                """
-                for claim in output.claims:
+            import psycopg2
+            from config.settings import settings
+            conn = psycopg2.connect(
+                host=settings.postgres_host,
+                port=settings.postgres_port,
+                database=settings.postgres_db,
+                user=settings.postgres_user,
+                password=settings.postgres_password,
+                connect_timeout=5
+            )
+            cur = conn.cursor()
+            
+            # Idempotent table column migration check
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS agent_outputs (
+                    id              SERIAL PRIMARY KEY,
+                    case_id         TEXT,
+                    agent_id        TEXT NOT NULL,
+                    claim           TEXT NOT NULL,
+                    evidence_ids    TEXT[] DEFAULT '{}',
+                    confidence      FLOAT,
+                    verified        BOOLEAN,
+                    flags           JSONB DEFAULT '{}',
+                    created_at      TIMESTAMPTZ DEFAULT NOW(),
+                    tenant_id       TEXT NOT NULL DEFAULT 'default',
+                    model_used      TEXT,
+                    execution_status TEXT DEFAULT 'SUCCESS'
+                );
+                ALTER TABLE agent_outputs DROP CONSTRAINT IF EXISTS agent_outputs_case_id_fkey;
+                ALTER TABLE agent_outputs ALTER COLUMN case_id TYPE TEXT USING case_id::text;
+                ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+                ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS model_used TEXT;
+                ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS execution_status TEXT DEFAULT 'SUCCESS';
+            """)
+
+            query = """
+                INSERT INTO agent_outputs 
+                    (case_id, tenant_id, agent_id, model_used, claim, evidence_ids, confidence, verified, execution_status, flags, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """
+
+            items_to_insert = output.claims if output.claims else []
+            if not items_to_insert:
+                flags_json = json.dumps({"error_message": output.error_message or "No claims produced"})
+                cur.execute(
+                    query,
+                    (
+                        output.case_id,
+                        output.tenant_id,
+                        output.agent_id,
+                        output.model_used,
+                        output.error_message or "Agent 1 Execution Completed",
+                        [],
+                        0.0,
+                        False,
+                        output.execution_status,
+                        flags_json,
+                        output.timestamp
+                    )
+                )
+            else:
+                for claim in items_to_insert:
                     flags_dict = {
                         "invalid_citations": claim.invalid_citations,
                         "raw_model_confidence": claim.raw_model_confidence,
                         "validation_notes": claim.validation_notes,
-                        "is_valid_confidence": claim.is_valid_confidence
+                        "is_valid_confidence": claim.is_valid_confidence,
+                        "findings_summary": claim.findings_summary,
+                        "reasoning_notes": claim.reasoning_notes
                     }
-                    asyncio.create_task(
-                        postgres.execute(
-                            query,
+                    cur.execute(
+                        query,
+                        (
                             output.case_id,
+                            output.tenant_id,
                             output.agent_id,
+                            output.model_used,
                             claim.summary,
                             claim.cited_evidence_ids,
                             claim.confidence_score,
                             claim.citation_verified,
-                            json.dumps(flags_dict)
+                            output.execution_status,
+                            json.dumps(flags_dict),
+                            output.timestamp
                         )
                     )
+            conn.commit()
+            conn.close()
+            logger.info("Agent 1 output persisted to PostgreSQL agent_outputs table for case %s", output.case_id)
         except Exception as exc:
-            logger.debug("PostgreSQL async persist skipped/deferred: %s", exc)
+            logger.warning("PostgreSQL agent_outputs persist error: %s", exc)
+

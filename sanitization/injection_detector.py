@@ -114,9 +114,9 @@ class InjectionDetector:
             # Fast trigger pre-check to bypass heavy CPU PyTorch model inference for clean telemetry text
             text_lower = text.lower()
             TRIGGERS = (
-                "ignore", "disregard", "override", "instruction", "prompt", "system",
-                "message", "jailbreak", "bypass", "assistant", "developer", "cdata",
-                "benign", "legitimate", "authorized", "malware", "say no", "report as"
+                "ignore", "disregard", "override", "instruction", "prompt", "jailbreak", "bypass",
+                "cdata", "say no", "report as", "flag as", "mark as", "system prompt", "system message",
+                "developer message", "user message", "assistant instructions", "new instructions"
             )
             if not any(trig in text_lower for trig in TRIGGERS):
                 return False, 0.0

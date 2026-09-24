@@ -204,3 +204,19 @@ def test_missing_fir_findings_fail_closed(sanitization_gateway):
     assert result["execution_status"] == "FAILED"
     assert result["claims"] == []
     assert "No FIR findings found" in result["error_message"]
+
+
+def test_malformed_json_fails_closed(fir_repo, sanitization_gateway):
+    """Verify that malformed/unparseable model output fails closed with FAILED execution_status and no claims."""
+    malformed_model = MockQwen3_8B(mock_response="Not a JSON output; random unparsed model reasoning text...")
+    agent = EvidenceIntelligenceAgent(
+        model=malformed_model,
+        fir_repo=fir_repo,
+        sanitization_gateway=sanitization_gateway
+    )
+
+    result = agent.run("CASE-2026-001")
+    assert result["execution_status"] == "FAILED"
+    assert result["claims"] == []
+    assert "Malformed LLM JSON output" in result["error_message"]
+

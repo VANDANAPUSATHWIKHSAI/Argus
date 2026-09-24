@@ -19,6 +19,8 @@ class FIRRepository:
     """
     _shared_findings: Dict[str, FIRFinding] = {}
     _shared_fingerprints: Dict[str, Dict[str, str]] = {}
+    _db_unreachable: bool = False
+    _table_initialized: bool = False
 
     def __init__(self):
         self.findings = FIRRepository._shared_findings
@@ -65,6 +67,9 @@ class FIRRepository:
         )
 
         # 4. Attempt Postgres write to authoritative 'fir_findings' table
+        if FIRRepository._db_unreachable:
+            return finding
+
         try:
             import psycopg2
             from config.settings import settings
@@ -74,7 +79,7 @@ class FIRRepository:
                 database=settings.postgres_db,
                 user=settings.postgres_user,
                 password=settings.postgres_password,
-                connect_timeout=3
+                connect_timeout=1
             )
             cur = conn.cursor()
             # Idempotent table creation
@@ -163,7 +168,8 @@ class FIRRepository:
             conn.commit()
             conn.close()
         except Exception as e:
-            logger.error("Postgres insert error in FIRRepository.insert: %s", e, exc_info=True)
+            FIRRepository._db_unreachable = True
+            logger.error("Postgres insert error in FIRRepository.insert: %s. Switching to in-memory repository fallback.", e)
 
         return finding
 

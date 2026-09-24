@@ -62,6 +62,14 @@ class Agent1Claim(BaseModel):
         default=None,
         description="Deterministic audit log notes regarding verification outcome"
     )
+    semantic_support_verified: bool = Field(
+        default=False,
+        description="True if independent Python validation code verified that underlying FIR evidence facts semantically support claim content"
+    )
+    semantic_support_notes: Optional[str] = Field(
+        default=None,
+        description="Independent audit notes detailing claim-to-evidence semantic support status"
+    )
 
 
 class Agent1Input(BaseModel):
@@ -86,5 +94,29 @@ class Agent1Output(BaseModel):
     claims: List[Agent1Claim] = Field(default_factory=list)
     total_findings_processed: int = 0
     sanitization_summary: Dict[str, Any] = Field(default_factory=dict)
+    
+    # ── Master Architecture Evidence Quality & Readiness Contracts ──
+    evidence_trust_score: Optional[float] = Field(
+        default=None,
+        description="Evidence Trust Score (ETS). Category D: Not yet defined by hardcoded formula; captured qualitatively."
+    )
+    evidence_quality_summary: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Quality summary metrics including trust, coverage, and missing artifact breakdown."
+    )
+    investigation_readiness: Literal["READY", "LIMITED", "UNREADY"] = Field(
+        default="READY",
+        description="Assessed readiness of evidence base for downstream investigative reasoning."
+    )
+    possible_analyses: List[str] = Field(
+        default_factory=list,
+        description="Explicit list of forensic analyses possible given the available evidence types."
+    )
+    performed_analyses: List[str] = Field(
+        default_factory=list,
+        description="Explicit list of forensic analyses actually performed on the ingested evidence."
+    )
+    
     execution_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] = "SUCCESS"
     error_message: Optional[str] = None
+

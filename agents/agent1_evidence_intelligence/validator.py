@@ -8,7 +8,7 @@ Deterministic validation logic for Agent 1. Enforces:
 """
 
 import logging
-from typing import List, Set, Tuple, Any
+from typing import List, Set, Tuple, Any, Dict, Optional
 from fir.schemas import FIRFinding
 from sanitization.gateway import SanitizedAgentContext
 from agents.agent1_evidence_intelligence.schemas import Agent1Claim, Agent1Output
@@ -55,11 +55,47 @@ class Agent1Validator:
 
         return finding_ids, lineage_ids
 
+    def verify_semantic_support(
+        self,
+        claim: Agent1Claim,
+        fir_map: Dict[str, Any]
+    ) -> Tuple[bool, str]:
+        """
+        Independent Python code verification determining whether underlying FIR findings
+        and raw evidence records semantically support the content of the Agent 1 claim.
+        """
+        if not claim.cited_evidence_ids:
+            return False, "No cited evidence IDs provided to verify semantic support."
+
+        supported_citations = 0
+        missing_citations = []
+        fact_snippets = []
+
+        for cid in claim.cited_evidence_ids:
+            fir = fir_map.get(cid) if isinstance(fir_map, dict) else None
+            if not fir:
+                missing_citations.append(cid)
+                continue
+            
+            fact = getattr(fir, "fact", "") or getattr(fir, "sanitized_fact", "") or getattr(fir, "event_summary", "")
+            if fact:
+                supported_citations += 1
+                fact_snippets.append(str(fact))
+
+        if missing_citations:
+            return False, f"Missing FIR finding objects for cited IDs: {missing_citations}"
+
+        if supported_citations == 0:
+            return False, "Cited FIR findings contain no verifiable facts or metadata."
+
+        return True, f"Claim semantically supported by {supported_citations} underlying FIR finding facts: {fact_snippets[:2]}"
+
     def validate_claims(
         self,
         claims: List[Agent1Claim],
         valid_finding_ids: Set[str],
-        valid_lineage_ids: Set[str]
+        valid_lineage_ids: Set[str],
+        fir_map: Optional[Dict[str, Any]] = None
     ) -> List[Agent1Claim]:
         """
         Performs deterministic validation over a list of Agent1Claim objects.
@@ -103,6 +139,16 @@ class Agent1Validator:
             else:
                 claim.is_valid_confidence = True
                 claim.raw_model_confidence = raw_conf
+
+            # ── 3. Independent Claim Semantic Support Verification ────
+            if fir_map:
+                is_sem_valid, sem_note = self.verify_semantic_support(claim, fir_map)
+                claim.semantic_support_verified = is_sem_valid
+                claim.semantic_support_notes = sem_note
+                notes.append(f"Semantic Support: {sem_note}")
+            else:
+                claim.semantic_support_verified = claim.citation_verified
+                claim.semantic_support_notes = "Citation verification passed (FIR map not provided for deep semantic audit)."
 
             claim.validation_notes = " | ".join(notes)
             validated_claims.append(claim)

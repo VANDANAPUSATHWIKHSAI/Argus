@@ -70,11 +70,10 @@ const SeniorDashboard = () => {
     <>
       <header className="topbar" style={{ justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', padding: '16px 40px', background: 'var(--bg-app)' }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-            Senior Analyst Workspace
+          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            Welcome, {userName}
           </div>
-          <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Review and Validate Case Findings</div>
+          <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Senior Analyst Workspace &middot; Review and Validate Case Findings</div>
         </div>
         <div className="topbar-actions">
           <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -195,7 +194,7 @@ const SeniorDashboard = () => {
                 <span style={{ color: '#f59e0b' }}>{evidenceStats.partial} Partial</span>
                 <span style={{ color: '#ef4444' }}>{evidenceStats.missing} Missing</span>
               </div>
-              <button style={{ width: '100%', padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={() => navigate('/evidence-coverage')} style={{ width: '100%', padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
                 View Coverage
               </button>
             </div>

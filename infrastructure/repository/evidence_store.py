@@ -439,7 +439,7 @@ def close_case(tenant_id: str, case_id: str) -> bool:
             )
             cur = conn.cursor()
             cur.execute(
-                "UPDATE cases SET status = 'closed' WHERE case_id = %s AND tenant_id = %s;",
+                "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s AND tenant_id = %s;",
                 (case_id, tenant_id)
             )
             conn.commit()

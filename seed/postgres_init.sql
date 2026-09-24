@@ -98,3 +98,19 @@ CREATE TABLE IF NOT EXISTS ism_state (
 INSERT INTO cases (case_id, tenant_id, created_by)
 VALUES ('00000000-0000-0000-0000-000000000001', 'dev-team', 'team-lead')
 ON CONFLICT DO NOTHING;
+
+-- -- Case Notes ------------------------------------------------
+CREATE TABLE IF NOT EXISTS case_notes (
+    note_id VARCHAR PRIMARY KEY,
+    case_id VARCHAR REFERENCES cases(case_id),
+    tenant_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    type TEXT NOT NULL,
+    priority TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    related_evidence_id TEXT,
+    related_finding_id TEXT
+);

@@ -28,11 +28,8 @@ const Sidebar = () => {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-icon">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
+        <div className="logo-icon" style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
+          <img src="/argus_logo.jpg" alt="ARGUS Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
         </div>
         <div className="logo-text">
           <h1>ARGUS</h1>

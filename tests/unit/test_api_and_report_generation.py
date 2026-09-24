@@ -20,8 +20,11 @@ from fir.service import AnalystFindingService
 from fir.schemas import FIRFinding, ReviewStatus
 from report_generation.generator import ReportGenerator
 
+from api.routes.auth import get_current_user
+
 client = TestClient(app)
 
+app.dependency_overrides[get_current_user] = lambda: {"username": "test_user"}
 
 class TestApiAndReportGeneration:
 

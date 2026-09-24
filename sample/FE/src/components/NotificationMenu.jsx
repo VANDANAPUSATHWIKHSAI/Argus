@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { API_BASE_URL } from '../js/api';
 
 const NotificationMenu = () => {
@@ -44,7 +44,14 @@ const NotificationMenu = () => {
           return { id: `${a.case_id}-${i}`, title, time };
         });
 
-        setNotifications(mapped);
+        const finalNotifs = [
+          { id: 'mock-1', title: 'Evidence processing failed — memdump.raw', time: '5m ago' },
+          { id: 'mock-2', title: 'Evidence uploaded successfully — PC-01-Security.evtx', time: '12m ago' },
+          { id: 'mock-3', title: 'Evidence parsing started — firewall.log', time: '15m ago' },
+          ...mapped
+        ];
+
+        setNotifications(finalNotifs);
       } catch (e) {
         console.error('Notification load failed:', e);
       }

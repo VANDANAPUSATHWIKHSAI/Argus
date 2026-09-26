@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-09-26T06:55:37.084646+00:00",
+  "fixture_fir_count": 20,
+  "model_used": "qwen3:8b",
+  "ollama_format_setting": "json",
+  "wall_clock_sec": 43.0,
+  "response_char_count": 1417,
+  "is_empty": false,
+  "is_markdown_prose": false,
+  "is_truncated": false,
+  "json_parse_success": true,
+  "parse_error": null,
+  "schema_compatible": true,
+  "parsed_claims_count": 1,
+  "validated_claims_count": 1,
+  "total_cited_ids_count": 5,
+  "citation_verification_pass": true,
+  "semantic_support_verification_pass": true,
+  "verdict": "A. PASS_20FIR_JSON",
+  "raw_response": "{\"investigation_readiness\": \"READY\", \"possible_analyses\": [\"Filesystem analysis\", \"Log analysis\", \"Registry analysis\"], \"performed_analyses\": [\"Filesystem timeline extraction\", \"Artifact entity extraction\"], \"claims\": [{\"claim_id\": \"CLM-AG1-001\", \"summary\": \"File system activity detected for user-related directories\", \"findings_summary\": \"Multiple NTFS USN change journal records indicate file activity in user directories (Users, Jimmy Wilson, AppData, Local, Adobe) around 2015-05-26. The timestamps cluster between 12:45:54 and 12:52:18 UTC, with some entries showing repeated activity in the same directories.\", \"cited_evidence_ids\": [\"da2c8653-6488-4064-8b65-9be97b3503b6\", \"ec729017-262a-49e1-8098-d5146f5a39c0\", \"d4059d67-8c67-4b45-b7c1-acec13722945\", \"15f35c1a-9bca-4d86-859b-7a9eeaca2c3c\", \"f2fbda42-d7ed-487c-ac4a-6f3bda50defe\"], \"assessed_importance\": \"high\", \"confidence_score\": 0.92, \"missing_evidence_noted\": [\"Missing memory artifact for process PID 4412\"], \"uncertainties_or_conflicts\": [\"Timestamp conflict between EVTX and registry hive\"], \"reasoning_notes\": \"The clustered timestamps and repeated directory activity suggest potential user interaction or automated process activity. The presence of multiple entries for 'Jimmy Wilson' and 'AppData' indicates focused activity on user-specific directories. The timestamps align with a single time window, suggesting a possible event or process.\"}]}"
+}

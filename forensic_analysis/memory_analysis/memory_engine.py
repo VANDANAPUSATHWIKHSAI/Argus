@@ -80,39 +80,82 @@ class MemoryAnalysisEngine:
             if not resolved_artifacts:
                 continue
 
-            # Dispatch artifacts to all 7 sub-analyzers safely
+            # Taxonomy pre-filtering to optimize memory sub-analyzer dispatch
+            process_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("process", "pslist", "psscan", "pstree", "cmdline"))
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            dll_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("dll", "modules", "ldrmodules"))
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            net_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("netscan", "netstat", "conn"))
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            injection_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("malfind", "vadinfo", "vaddump", "injection"))
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            rootkit_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("rootkit", "hidden_modules"))
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            cred_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("lsass", "credentials", "hashdump", "lsadump"))
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            timeline_arts = [
+                a for a in resolved_artifacts
+                if "timeline" in (a.artifact_type or "").lower()
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            # Dispatch artifacts to 7 sub-analyzers
             try:
-                raw_findings.extend(self.process_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if process_arts:
+                    raw_findings.extend(self.process_analyzer.analyze(process_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("ProcessAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.dll_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if dll_arts:
+                    raw_findings.extend(self.dll_analyzer.analyze(dll_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("DLLAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.network_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if net_arts:
+                    raw_findings.extend(self.network_analyzer.analyze(net_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("MemoryNetworkAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.injection_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if injection_arts:
+                    raw_findings.extend(self.injection_analyzer.analyze(injection_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("InjectionAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.rootkit_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if rootkit_arts:
+                    raw_findings.extend(self.rootkit_analyzer.analyze(rootkit_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("RootkitAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.credential_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if cred_arts:
+                    raw_findings.extend(self.credential_analyzer.analyze(cred_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("CredentialAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.timeline_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if timeline_arts:
+                    raw_findings.extend(self.timeline_analyzer.analyze(timeline_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("TimelineAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 

@@ -62,6 +62,8 @@ def process_fcr_batch(
     all_findings: List[Finding] = []
     logger.info("Orchestrator: process_fcr_batch started for case '%s' with %d FCR objects and %d total artifacts.", case_id, len(fcr_objects), len(artifacts_by_id))
 
+    sanitizer = SanitizationGateway() if fir_repo is not None else None
+
     for fcr in fcr_objects:
         engine_names = route_fcr(fcr, artifacts_by_id)
         logger.info("Orchestrator: FCR '%s' (rel: %s, art_ids: %s) routed to engines: %s", getattr(fcr, "correlation_id", "UNKNOWN"), getattr(fcr, "relationship_type", []), getattr(fcr, "artifact_ids", []), engine_names)
@@ -87,8 +89,7 @@ def process_fcr_batch(
                     target_store.write_finding(finding)
 
                     # Adapt & Insert into FIR Repository with SanitizationGateway
-                    if fir_repo is not None:
-                        sanitizer = SanitizationGateway()
+                    if fir_repo is not None and sanitizer is not None:
                         ctx = sanitizer.sanitize_finding(finding)
                         fir_finding = finding_to_fir(finding)
                         fir_finding.sanitized_fact = ctx.sanitized_fact

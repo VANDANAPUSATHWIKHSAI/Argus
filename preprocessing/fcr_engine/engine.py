@@ -179,6 +179,15 @@ class FCREngine:
         # Map (ioc_key, ioc_value) -> set(artifact_id)
         ioc_groups: dict[tuple[str, str], set[str]] = {}
 
+        GENERIC_STOPWORDS = {
+            "0.0.0.0", "127.0.0.1", "none", "null", "true", "false", "0", "1", "n/a", "unknown",
+            "default", "local", "user", "microsoft", "exe", "dll", "sys", "txt", "xml", "json",
+            "log", "admin", "administrator", "domain", "host", "pc", "workstation", "cmd", "powershell",
+            "temp", "tmp", "success", "failed", "information", "path", "value", "file", "system",
+            "windows", "system32", "program files", "program files (x86)", "appdata", "roaming",
+            "users", "public", "desktop", "documents", "downloads"
+        }
+
         for art in artifacts:
             nf = art.normalized_fields
             # 1. From NormalizedFields
@@ -198,8 +207,8 @@ class FCREngine:
             for key_name, val in candidates:
                 if val and str(val).strip():
                     norm_val = str(val).strip().lower()
-                    # Exclude trivial values
-                    if len(norm_val) > 2 and norm_val not in ("0.0.0.0", "127.0.0.1", "none", "null"):
+                    # Exclude trivial/generic values
+                    if len(norm_val) > 2 and norm_val not in GENERIC_STOPWORDS:
                         ioc_groups.setdefault(norm_val, set()).add(art.artifact_id)
                         if getattr(art, "source_artifact_id", None):
                             ioc_groups.setdefault(norm_val, set()).add(art.source_artifact_id)
@@ -209,7 +218,7 @@ class FCREngine:
                 for ent in entities_by_artifact[art.artifact_id]:
                     if ent.value and ent.value.strip():
                         val_str = ent.value.strip().lower()
-                        if len(val_str) > 2 and val_str not in ("0.0.0.0", "127.0.0.1"):
+                        if len(val_str) > 2 and val_str not in GENERIC_STOPWORDS:
                             ioc_groups.setdefault(val_str, set()).add(art.artifact_id)
                             if getattr(art, "source_artifact_id", None):
                                 ioc_groups.setdefault(val_str, set()).add(art.source_artifact_id)
@@ -217,7 +226,7 @@ class FCREngine:
         art_dict = {a.artifact_id: a for a in artifacts}
 
         for ioc_value, art_id_set in ioc_groups.items():
-            if len(art_id_set) < 2:
+            if len(art_id_set) < 2 or len(art_id_set) > 200:
                 continue
 
             art_ids = sorted(list(art_id_set))

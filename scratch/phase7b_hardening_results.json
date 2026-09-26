@@ -1,0 +1,272 @@
+{
+  "timestamp": "2026-09-26T08:50:10.861170+00:00",
+  "ollama_version": "0.17.1",
+  "dataset_verified": true,
+  "candidate_a": {
+    "candidate_id": "CANDIDATE A",
+    "candidate_name": "OUTPUT BOUND (num_predict = 1536)",
+    "payload_kwargs": {
+      "format": "json",
+      "options": {
+        "num_predict": 1536
+      }
+    },
+    "start_timestamp": "2026-09-26T08:47:22.431440+00:00",
+    "end_timestamp": "2026-09-26T08:49:07.131015+00:00",
+    "wall_clock_sec": 104.7,
+    "output_char_count": 4873,
+    "prompt_tokens": 1749,
+    "output_tokens": 1536,
+    "json_parse_success": false,
+    "exact_parse_error": "Unterminated string starting at: line 1 column 4641 (char 4640)",
+    "err_msg": "JSON Parse Error: Unterminated string starting at: line 1 column 4641 (char 4640)",
+    "claims_count": 0,
+    "cited_evidence_ids": [],
+    "citation_verification_passed": false,
+    "semantic_support_passed": false,
+    "investigation_readiness": null,
+    "repetition_analysis": {
+      "repetition_detected": true,
+      "key_phrase_counts": {
+        "\"investigation_readiness\"": 4,
+        "\"claims\"": 4,
+        "CLM-AG1-001": 1
+      },
+      "max_key_phrase_count": 4,
+      "raw_char_len": 4873
+    },
+    "decision": "FAIL",
+    "raw_response": "{\"investigation_readiness\":\"READY\",\"possible_analyses\":[\"Filesystem analysis\",\"Log analysis\",\"Registry analysis\"],\"performed_analyses\":[\"Filesystem timeline extraction\",\"Artifact entity extraction\"],\"claims\":[{\"claim_id\":\"CLM-AG1-001\",\"summary\":\"File system activity detected for Jimmy Wilson user account\",\"findings_summary\":\"The NTFS USN change journal records indicate multiple FILE_ACTIVITY events for the 'Jimmy Wilson' user account and related directories (including 'Users ($FILE_NAME)' and 'AppData ($FILE_NAME)') between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:52:18+00:00. These events suggest recent file system modifications associated with the user account.\",\"cited_evidence_ids\":[\"da2c8653-6488-4064-8b65-9be97b3503b6\",\"ec729017-262a-49e1-8098-d5146f5a39c0\",\"51d11b01-626e-46b2-b434-08b41a5fec47\",\"1f3357ba-311d-4b54-8a4c-ab33ca14527c\",\"f2fbda42-d7ed-487c-ac4a-6f3bda50defe\"],\"assessed_importance\":\"high\",\"confidence_score\":0.92,\"missing_evidence_noted\":[\"Missing memory artifact for process PID 4412\"],\"uncertainties_or_conflicts\":[\"Timestamp conflict between EVTX and registry hive\"],\"reasoning_notes\":\"The FILE_ACTIVITY events in the NTFS USN journal for 'Jimmy Wilson' and related directories (Users ($FILE_NAME), AppData ($FILE_NAME)) suggest file system modifications. The timestamps across these events are consistent within the NTFS journal but may conflict with other log sources like EVTX or registry hives.\"}],\"investigation_readiness\":\"READY\",\"possible_analyses\":[\"Filesystem analysis\",\"Log analysis\",\"Registry analysis\"],\"performed_analyses\":[\"Filesystem timeline extraction\",\"Artifact entity extraction\"],\"claims\":[{\"claim_id\":\"CLM-AG1-002\",\"summary\":\"File system activity detected for Jimmy Wilson user account\",\"findings_summary\":\"The NTFS USN change journal records indicate multiple FILE_ACTIVITY events for the 'Jimmy Wilson' user account and related directories (including 'Users ($FILE_NAME)' and 'AppData ($FILE_NAME)') between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:52:18+00:00. These events suggest recent file system modifications associated with the user account.\",\"cited_evidence_ids\":[\"da2c8653-6488-4064-8b65-9be97b3503b6\",\"ec729017-262a-49e1-8098-d5146f5a39c0\",\"51d11b01-626e-46b2-b434-08b41a5fec47\",\"1f3357ba-311d-4b54-8a4c-ab33ca14527c\",\"f2fbda42-d7ed-487c-ac4a-6f3bda50defe\"],\"assessed_importance\":\"high\",\"confidence_score\":0.92,\"missing_evidence_noted\":[\"Missing memory artifact for process PID 4412\"],\"uncertainties_or_conflicts\":[\"Timestamp conflict between EVTX and registry hive\"],\"reasoning_notes\":\"The FILE_ACTIVITY events in the NTFS USN journal for 'Jimmy Wilson' and related directories (Users ($FILE_NAME), AppData ($FILE_NAME)) suggest file system modifications. The timestamps across these events are consistent within the NTFS journal but may conflict with other log sources like EVTX or registry hives.\"}],\"investigation_readiness\":\"READY\",\"possible_analyses\":[\"Filesystem analysis\",\"Log analysis\",\"Registry analysis\"],\"performed_analyses\":[\"Filesystem timeline extraction\",\"Artifact entity extraction\"],\"claims\":[{\"claim_id\":\"CLM-AG1-003\",\"summary\":\"File system activity detected for Jimmy Wilson user account\",\"findings_summary\":\"The NTFS USN change journal records indicate multiple FILE_ACTIVITY events for the 'Jimmy Wilson' user account and related directories (including 'Users ($FILE_NAME)' and 'AppData ($FILE_NAME)') between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:52:18+00:00. These events suggest recent file system modifications associated with the user account.\",\"cited_evidence_ids\":[\"da2c8653-6488-4064-8b65-9be97b3503b6\",\"ec729017-262a-49e1-8098-d5146f5a39c0\",\"51d11b01-626e-46b2-b434-08b41a5fec47\",\"1f3357ba-311d-4b54-8a4c-ab33ca14527c\",\"f2fbda42-d7ed-487c-ac4a-6f3bda50defe\"],\"assessed_importance\":\"high\",\"confidence_score\":0.92,\"missing_evidence_noted\":[\"Missing memory artifact for process PID 4412\"],\"uncertainties_or_conflicts\":[\"Timestamp conflict between EVTX and registry hive\"],\"reasoning_notes\":\"The FILE_ACTIVITY events in the NTFS USN journal for 'Jimmy Wilson' and related directories (Users ($FILE_NAME), AppData ($FILE_NAME)) suggest file system modifications. The timestamps across these events are consistent within the NTFS journal but may conflict with other log sources like EVTX or registry hives.\"}],\"investigation_readiness\":\"READY\",\"possible_analyses\":[\"Filesystem analysis\",\"Log analysis\",\"Registry analysis\"],\"performed_analyses\":[\"Filesystem timeline extraction\",\"Artifact entity extraction\"],\"claims\":[{\"claim_id\":\"CLM-AG1-004\",\"summary\":\"File system activity detected for Jimmy Wilson user account\",\"findings_summary\":\"The NTFS USN change journal records indicate multiple FILE_ACTIVITY events for the 'Jimmy Wilson' user account and related directories (including 'Users ($FILE_NAME)' and 'AppData ($FILE_NAME)') between 2015-05-26T12:45:54+00:00 and",
+    "validated_claims": []
+  },
+  "candidate_b": {
+    "candidate_id": "CANDIDATE B",
+    "candidate_name": "NATIVE JSON SCHEMA (format = JSON Schema)",
+    "payload_kwargs": {
+      "format": {
+        "type": "object",
+        "properties": {
+          "investigation_readiness": {
+            "type": "string",
+            "enum": [
+              "READY",
+              "LIMITED",
+              "UNREADY"
+            ]
+          },
+          "possible_analyses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "performed_analyses": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "claims": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "claim_id": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "findings_summary": {
+                  "type": "string"
+                },
+                "cited_evidence_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "assessed_importance": {
+                  "type": "string",
+                  "enum": [
+                    "critical",
+                    "high",
+                    "medium",
+                    "low",
+                    "informational"
+                  ]
+                },
+                "confidence_score": {
+                  "type": "number"
+                },
+                "missing_evidence_noted": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "uncertainties_or_conflicts": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "reasoning_notes": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "claim_id",
+                "summary",
+                "findings_summary",
+                "cited_evidence_ids",
+                "assessed_importance",
+                "confidence_score"
+              ]
+            }
+          }
+        },
+        "required": [
+          "investigation_readiness",
+          "possible_analyses",
+          "performed_analyses",
+          "claims"
+        ]
+      }
+    },
+    "start_timestamp": "2026-09-26T08:49:07.131683+00:00",
+    "end_timestamp": "2026-09-26T08:49:36.633493+00:00",
+    "wall_clock_sec": 29.5,
+    "output_char_count": 1312,
+    "prompt_tokens": 1749,
+    "output_tokens": 440,
+    "json_parse_success": true,
+    "exact_parse_error": null,
+    "err_msg": null,
+    "claims_count": 1,
+    "cited_evidence_ids": [
+      "da2c8653-6488-4064-8b65-9be97b3503b6",
+      "ec729017-262a-49e1-8098-d5146f5a39c0",
+      "51d11b01-626e-46b2-b434-08b41a5fec47",
+      "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+      "f2fbda42-d7ed-487c-ac4a-6f3bda50defe"
+    ],
+    "citation_verification_passed": true,
+    "semantic_support_passed": true,
+    "investigation_readiness": "READY",
+    "repetition_analysis": {
+      "repetition_detected": false,
+      "key_phrase_counts": {
+        "\"investigation_readiness\"": 1,
+        "\"claims\"": 1,
+        "CLM-AG1-001": 1
+      },
+      "max_key_phrase_count": 1,
+      "raw_char_len": 1312
+    },
+    "decision": "PASS",
+    "raw_response": "{\"investigation_readiness\":\"READY\",\"possible_analyses\":[\"Filesystem analysis\",\"Log analysis\",\"Registry analysis\"],\"performed_analyses\":[\"Filesystem timeline extraction\",\"Artifact entity extraction\"],\"claims\":[{\"claim_id\":\"CLM-AG1-001\",\"summary\":\"File system activity detected for Jimmy Wilson's user profile\",\"findings_summary\":\"The NTFS USN change journal records multiple FILE_ACTIVITY events for Jimmy Wilson's user profile and related directories between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:52:18+00:00. These events include activity on 'Jimmy Wilson ($FILE_NAME)', 'Jimmy Wilson', 'Users ($FILE_NAME)', and 'AppData ($FILE_NAME)'.\",\"cited_evidence_ids\":[\"da2c8653-6488-4064-8b65-9be97b3503b6\",\"ec729017-262a-49e1-8098-d5146f5a39c0\",\"51d11b01-626e-46b2-b434-08b41a5fec47\",\"1f3357ba-311d-4b54-8a4c-ab33ca14527c\",\"f2fbda42-d7ed-487c-ac4a-6f3bda50defe\"],\"assessed_importance\":\"high\",\"confidence_score\":0.92,\"missing_evidence_noted\":[\"Missing memory artifact for process PID 4412\"],\"uncertainties_or_conflicts\":[],\"reasoning_notes\":\"The FILE_ACTIVITY events for Jimmy Wilson's user profile and related directories indicate potential user activity or system changes. The timestamps suggest a sequence of events within a short time window, which could indicate automated processes or user interaction.\"}]}\n",
+    "validated_claims": [
+      {
+        "claim_id": "CLM-AG1-001",
+        "summary": "File system activity detected for Jimmy Wilson's user profile",
+        "findings_summary": "The NTFS USN change journal records multiple FILE_ACTIVITY events for Jimmy Wilson's user profile and related directories between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:52:18+00:00. These events include activity on 'Jimmy Wilson ($FILE_NAME)', 'Jimmy Wilson', 'Users ($FILE_NAME)', and 'AppData ($FILE_NAME)'.",
+        "cited_evidence_ids": [
+          "da2c8653-6488-4064-8b65-9be97b3503b6",
+          "ec729017-262a-49e1-8098-d5146f5a39c0",
+          "51d11b01-626e-46b2-b434-08b41a5fec47",
+          "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+          "f2fbda42-d7ed-487c-ac4a-6f3bda50defe"
+        ],
+        "assessed_importance": "high",
+        "confidence_score": 0.92,
+        "missing_evidence_noted": [
+          "Missing memory artifact for process PID 4412"
+        ],
+        "uncertainties_or_conflicts": [],
+        "reasoning_notes": "The FILE_ACTIVITY events for Jimmy Wilson's user profile and related directories indicate potential user activity or system changes. The timestamps suggest a sequence of events within a short time window, which could indicate automated processes or user interaction.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.92,
+        "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 5 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Users ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Jimmy Wilson ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\"]",
+        "semantic_support_verified": true,
+        "semantic_support_notes": "Claim semantically supported by 5 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Users ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Jimmy Wilson ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\"]"
+      }
+    ]
+  },
+  "candidate_c": {
+    "candidate_id": "CANDIDATE C",
+    "candidate_name": "REPETITION CONTROL (repeat_penalty = 1.15)",
+    "payload_kwargs": {
+      "format": "json",
+      "options": {
+        "repeat_penalty": 1.15
+      }
+    },
+    "start_timestamp": "2026-09-26T08:49:36.641492+00:00",
+    "end_timestamp": "2026-09-26T08:50:10.860695+00:00",
+    "wall_clock_sec": 34.22,
+    "output_char_count": 1426,
+    "prompt_tokens": 1749,
+    "output_tokens": 511,
+    "json_parse_success": true,
+    "exact_parse_error": null,
+    "err_msg": null,
+    "claims_count": 1,
+    "cited_evidence_ids": [
+      "da2c8653-6488-4064-8b65-9be97b3503b6",
+      "ec729017-262a-49e1-8098-d5146f5a39c0",
+      "51d11b01-626e-46b2-b434-08b41a5fec47",
+      "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+      "e68b1bdc-5bbd-4667-9e0e-80f04ac20970",
+      "c46a00a3-11cd-42b6-ad88-f3937b9b617d",
+      "f2fbda42-d7ed-487c-ac4a-6f3bda50defe"
+    ],
+    "citation_verification_passed": true,
+    "semantic_support_passed": true,
+    "investigation_readiness": "READY",
+    "repetition_analysis": {
+      "repetition_detected": false,
+      "key_phrase_counts": {
+        "\"investigation_readiness\"": 1,
+        "\"claims\"": 1,
+        "CLM-AG1-001": 1
+      },
+      "max_key_phrase_count": 1,
+      "raw_char_len": 1426
+    },
+    "decision": "PASS",
+    "raw_response": "{\"investigation_readiness\":\"READY\",\"possible_analyses\":[\"Filesystem analysis\",\"Log analysis\",\"Registry analysis\"],\"performed_analyses\":[\"Filesystem timeline extraction\",\"Artifact entity extraction\"],\"claims\":[{\"claim_id\":\"CLM-AG1-001\",\"summary\":\"File system activity observed for Jimmy Wilson's user profile\",\"findings_summary\":\"NTFS USN change journal records indicate file system activity related to Jimmy Wilson's user profile, including multiple FILE_ACTIVITY events between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:47:29+00:00. These events include entries for 'Jimmy Wilson ($FILE_NAME)', 'Jimmy Wilson', and related directories like 'Users ($FILE_NAME)' and 'AppData ($FILE_NAME)'.\",\"cited_evidence_ids\":[\"da2c8653-6488-4064-8b65-9be97b3503b6\",\"ec729017-262a-49e1-8098-d5146f5a39c0\",\"51d11b01-626e-46b2-b434-08b41a5fec47\",\"1f3357ba-311d-4b54-8a4c-ab33ca14527c\",\"e68b1bdc-5bbd-4667-9e0e-80f04ac20970\",\"c46a00a3-11cd-42b6-ad88-f3937b9b617d\",\"f2fbda42-d7ed-487c-ac4a-6f3bda50defe\"],\"assessed_importance\":\"high\",\"confidence_score\":0.92,\"missing_evidence_noted\":[\"Missing memory artifact for process PID 4412\"],\"uncertainties_or_conflicts\":[],\"reasoning_notes\":\"The multiple FILE_ACTIVITY events across related directories suggest user activity related to Jimmy Wilson's profile. The timestamps show a sequence of file system changes within a short timeframe, indicating potential user interaction or system activity.\"}]}",
+    "validated_claims": [
+      {
+        "claim_id": "CLM-AG1-001",
+        "summary": "File system activity observed for Jimmy Wilson's user profile",
+        "findings_summary": "NTFS USN change journal records indicate file system activity related to Jimmy Wilson's user profile, including multiple FILE_ACTIVITY events between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:47:29+00:00. These events include entries for 'Jimmy Wilson ($FILE_NAME)', 'Jimmy Wilson', and related directories like 'Users ($FILE_NAME)' and 'AppData ($FILE_NAME)'.",
+        "cited_evidence_ids": [
+          "da2c8653-6488-4064-8b65-9be97b3503b6",
+          "ec729017-262a-49e1-8098-d5146f5a39c0",
+          "51d11b01-626e-46b2-b434-08b41a5fec47",
+          "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+          "e68b1bdc-5bbd-4667-9e0e-80f04ac20970",
+          "c46a00a3-11cd-42b6-ad88-f3937b9b617d",
+          "f2fbda42-d7ed-487c-ac4a-6f3bda50defe"
+        ],
+        "assessed_importance": "high",
+        "confidence_score": 0.92,
+        "missing_evidence_noted": [
+          "Missing memory artifact for process PID 4412"
+        ],
+        "uncertainties_or_conflicts": [],
+        "reasoning_notes": "The multiple FILE_ACTIVITY events across related directories suggest user activity related to Jimmy Wilson's profile. The timestamps show a sequence of file system changes within a short timeframe, indicating potential user interaction or system activity.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.92,
+        "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 7 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Users ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Jimmy Wilson ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\"]",
+        "semantic_support_verified": true,
+        "semantic_support_notes": "Claim semantically supported by 7 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Users ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Jimmy Wilson ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\"]"
+      }
+    ]
+  }
+}

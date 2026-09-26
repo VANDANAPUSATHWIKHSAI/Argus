@@ -21,6 +21,7 @@ class LLMLoader:
     def __init__(self):
         self.use_ollama = os.getenv("USE_OLLAMA", "true").lower() == "true"
         self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+        self.ollama_timeout = int(os.getenv("OLLAMA_TIMEOUT", "600"))
 
     def load_primary(self) -> Any:
         """
@@ -50,7 +51,7 @@ class LLMLoader:
 
     def _get_ollama_client(self, model_name: str) -> "OllamaWrapper":
         """Returns a helper wrapper to call local Ollama endpoint."""
-        return OllamaWrapper(model_name, self.ollama_url)
+        return OllamaWrapper(model_name, self.ollama_url, timeout=self.ollama_timeout)
 
     def _load_hf_model(self, model_id: str, quantize: bool = True) -> Any:
         """
@@ -91,10 +92,11 @@ class LLMLoader:
 
 class OllamaWrapper:
     """Simple wrapper to query Ollama chat/generation endpoint."""
-    def __init__(self, model_name: str, base_url: str, allow_mock: bool = False):
+    def __init__(self, model_name: str, base_url: str, allow_mock: bool = False, timeout: int = 600):
         self.model_name = model_name
         self.base_url = base_url
         self.allow_mock = allow_mock
+        self.timeout = timeout
 
     def generate(self, prompt: str, system_prompt: str = None) -> str:
         import requests
@@ -117,7 +119,7 @@ class OllamaWrapper:
             payload["system"] = system_prompt
 
         try:
-            r = requests.post(url, json=payload, timeout=300)
+            r = requests.post(url, json=payload, timeout=self.timeout)
             if r.status_code == 200:
                 return r.json().get("response", "")
             else:

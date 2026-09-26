@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-09-26T06:48:23.505355+00:00",
+  "fixture_fir_count": 50,
+  "model_used": "qwen3:8b",
+  "ollama_format_setting": "json",
+  "wall_clock_sec": 602.09,
+  "response_char_count": 0,
+  "is_empty": true,
+  "is_markdown_prose": false,
+  "is_truncated": true,
+  "json_parse_success": false,
+  "parse_error": null,
+  "schema_compatible": false,
+  "parsed_claims_count": 0,
+  "validated_claims_count": 0,
+  "total_cited_ids_count": 0,
+  "citation_verification_pass": false,
+  "semantic_support_verification_pass": false,
+  "verdict": "B. FAIL_50FIR_JSON",
+  "raw_response": ""
+}

@@ -1,0 +1,9 @@
+================================================================================
+  ARGUS FORENSIC PIPELINE — SANITIZATION GATEWAY EXECUTION TEST
+  Raw Evidence Image: C:\Users\Sudeep\Downloads\Argus\raw evidence\phase a\disk 2\2020JimmyWilson.E01
+================================================================================
+
+[1] Parsing RAW E01 Evidence...
+    Raw Artifacts Extracted: 11,553
+
+[2] Normalizing Artifacts...

@@ -1,0 +1,124 @@
+{
+  "25_FIR": [
+    {
+      "raw_response": "{\n  \"investigation_readiness\": \"READY\",\n  \"possible_analyses\": [\"Filesystem analysis\", \"Log analysis\", \"Registry analysis\"],\n  \"performed_analyses\": [\"Filesystem timeline extraction\", \"Artifact entity extraction\"],\n  \"claims\": [\n    {\n      \"claim_id\": \"CLM-AG1-001\",\n      \"summary\": \"User executed encoded PowerShell payload multiple times\",\n      \"findings_summary\": \"The evidence shows multiple instances of the user [REDACTED_EMAIL] executing encoded PowerShell payloads, indicating potential malicious activity or script-based operations.\",\n      \"cited_evidence_ids\": [\"F-1001\", \"F-1004\", \"F-1005\", \"F-1008\", \"F-1009\", \"F-1014\", \"F-1016\", \"F-1017\", \"F-1020\", \"F-1022\", \"F-1023\"],\n      \"assessed_importance\": \"critical\",\n      \"confidence_score\": 0.92,\n      \"missing_evidence_noted\": [\"Missing memory artifact for process PID 4412\"],\n      \"uncertainties_or_conflicts\": [\"Timestamp conflict between EVTX and registry hive\"],\n      \"reasoning_notes\": \"The repeated execution of encoded PowerShell payloads (cited evidence IDs) strongly suggests targeted script execution. The missing memory artifact (PID 4412) and timestamp conflicts (uncertainties) indicate incomplete forensic coverage.\"\n    }\n  ]\n}",
+      "wall_time_sec": 101.72934007644653,
+      "ollama_total_dur_sec": 99.6809214,
+      "ollama_load_dur_sec": 4.5376857,
+      "ollama_prefill_dur_sec": 0.9735604,
+      "ollama_eval_dur_sec": 93.2354179,
+      "input_tokens": 1144,
+      "output_tokens": 1840,
+      "done_reason": "stop",
+      "gpu_before": {
+        "gpu_util_pct": null,
+        "vram_used_mb": null,
+        "vram_total_mb": null,
+        "temp_c": null
+      },
+      "gpu_after": {
+        "gpu_util_pct": null,
+        "vram_used_mb": null,
+        "vram_total_mb": null,
+        "temp_c": null
+      },
+      "prefill_tok_per_sec": 1175.0683367975937,
+      "decode_tok_per_sec": 19.734989572026148,
+      "overall_tok_per_sec": 29.93551783119854,
+      "has_think_tag": false,
+      "leading_text_len": 0,
+      "raw_text_char_len": 1209
+    }
+  ],
+  "50_FIR": [
+    {
+      "raw_response": "{\n  \"investigation_readiness\": \"LIMITED\",\n  \"possible_analyses\": [\"Filesystem analysis\", \"Log analysis\", \"Registry analysis\"],\n  \"performed_analyses\": [\"Filesystem timeline extraction\", \"Artifact entity extraction\"],\n  \"claims\": [\n    {\n      \"claim_id\": \"CLM-AG1-001\",\n      \"summary\": \"Repeated execution of encoded PowerShell payloads by user [REDACTED_EMAIL]\",\n      \"findings_summary\": \"Multiple evidence entries (F-1 to F-100) indicate the user [REDACTED_EMAIL] executed encoded PowerShell payloads, suggesting potential malicious activity or script-based operations.\",\n      \"cited_evidence_ids\": [\"F-1\", \"F-2\", \"F-3\", \"F-4\", \"F-5\", \"F-6\", \"F-7\", \"F-8\", \"F-9\", \"F-10\", \"F-11\", \"F-12\", \"F-13\", \"F-14\", \"F-15\", \"F-16\", \"F-17\", \"F-18\", \"F-19\", \"F-20\", \"F-21\", \"F-22\", \"F-23\", \"F-24\", \"F-25\", \"F-26\", \"F-27\", \"F-28\", \"F-29\", \"F-30\", \"F-31\", \"F-32\", \"F-33\", \"F-34\", \"F-35\", \"F-36\", \"F-37\", \"F-38\", \"F-39\", \"F-40\", \"F-41\", \"F-42\", \"F-43\", \"F-44\", \"F-45\", \"F-46\", \"F-47\", \"F-48\", \"F-49\", \"F-50\", \"F-51\", \"F-52\", \"F-53\", \"F-54\", \"F-55\", \"F-56\", \"F-57\", \"F-58\", \"F-59\", \"F-60\", \"F-61\", \"F-62\", \"F-63\", \"F-64\", \"F-65\", \"F-66\", \"F-67\", \"F-68\", \"F-69\", \"F-70\", \"F-71\", \"F-72\", \"F-73\", \"F-74\", \"F-75\", \"F-76\", \"F-77\", \"F-78\", \"F-79\", \"F-80\", \"F-81\", \"F-82\", \"F-83\", \"F-84\", \"F-85\", \"F-86\", \"F-87\", \"F-88\", \"F-89\", \"F-90\", \"F-91\", \"F-92\", \"F-93\", \"F-94\", \"F-95\", \"F-96\", \"F-97\", \"F-98\", \"F-99\", \"F-100\"],\n      \"assessed_importance\": \"critical\",\n      \"confidence_score\": 0.95,\n      \"missing_evidence_noted\": [\"No associated script content or command-line arguments captured\"],\n      \"uncertainties_or_conflicts\": [\"Ambiguous intent of encoded payloads; no contextual artifacts to determine benign vs. malicious activity\"],\n      \"reasoning_notes\": \"The repeated execution of encoded PowerShell payloads by [REDACTED_EMAIL] (cited in 100 evidence entries) indicates potential for script-based operations. However, the absence of decoded payload content, command-line arguments, or contextual artifacts (e.g., logs, registry keys) limits definitive analysis of intent or impact.\"\n    }\n  ]\n}",
+      "wall_time_sec": 124.43908405303955,
+      "ollama_total_dur_sec": 122.3707267,
+      "ollama_load_dur_sec": 0.2261223,
+      "ollama_prefill_dur_sec": 1.2198751,
+      "ollama_eval_dur_sec": 119.7787559,
+      "input_tokens": 1699,
+      "output_tokens": 2329,
+      "done_reason": "stop",
+      "gpu_before": {
+        "gpu_util_pct": null,
+        "vram_used_mb": null,
+        "vram_total_mb": null,
+        "temp_c": null
+      },
+      "gpu_after": {
+        "gpu_util_pct": null,
+        "vram_used_mb": null,
+        "vram_total_mb": null,
+        "temp_c": null
+      },
+      "prefill_tok_per_sec": 1392.7655380456572,
+      "decode_tok_per_sec": 19.444182588976116,
+      "overall_tok_per_sec": 32.91636904204149,
+      "has_think_tag": false,
+      "leading_text_len": 0,
+      "raw_text_char_len": 2084
+    }
+  ],
+  "100_FIR": [
+    {
+      "raw_response": "{\n  \"investigation_status\": \"ongoing\",\n  \"claims\": [\n    {\n      \"claim_id\": \"CLAIM-001\",\n      \"summary\": \"Multiple critical security configuration changes detected in the registry under 'root\\\\controlset001\\\\control\\\\lsa', including authentication package settings, secure boot policies, and anonymous access restrictions.\",\n      \"cited_evidence_ids\": [\"EVD-001\", \"EVD-002\", \"EVD-003\", \"EVD-004\", \"EVD-005\", \"EVD-006\", \"EVD-007\", \"EVD-008\", \"EVD-009\", \"EVD-010\"],\n      \"status\": \"confirmed\"\n    },\n    {\n      \"claim_id\": \"CLAIM-002\",\n      \"summary\": \"Suspicious scheduled tasks identified with executable paths containing obfuscated or non-standard syntax, potentially indicating persistence mechanisms or malicious activity.\",\n      \"cited_evidence_ids\": [\"EVD-011\", \"EVD-012\", \"EVD-013\", \"EVD-014\", \"EVD-015\", \"EVD-016\", \"EVD-017\", \"EVD-018\", \"EVD-019\", \"EVD-020\"],\n      \"status\": \"under_review\"\n    },\n    {\n      \"claim_id\": \"CLAIM-003\",\n      \"summary\": \"Registry modifications to restrict anonymous SAM account access and enforce password policies, suggesting defensive configuration changes.\",\n      \"cited_evidence_ids\": [\"EVD-005\", \"EVD-006\", \"EVD-007\", \"EVD-008\", \"EVD-009\"],\n      \"status\": \"confirmed\"\n    }\n  ]\n}",
+      "wall_time_sec": 158.43734049797058,
+      "ollama_total_dur_sec": 156.3590588,
+      "ollama_load_dur_sec": 0.2207031,
+      "ollama_prefill_dur_sec": 10.2983622,
+      "ollama_eval_dur_sec": 145.0321148,
+      "input_tokens": 3031,
+      "output_tokens": 1961,
+      "done_reason": "stop",
+      "gpu_before": {
+        "gpu_util_pct": null,
+        "vram_used_mb": null,
+        "vram_total_mb": null,
+        "temp_c": null
+      },
+      "gpu_after": {
+        "gpu_util_pct": null,
+        "vram_used_mb": null,
+        "vram_total_mb": null,
+        "temp_c": null
+      },
+      "prefill_tok_per_sec": 294.3186441820817,
+      "decode_tok_per_sec": 13.521143249577715,
+      "overall_tok_per_sec": 31.92651604781852,
+      "has_think_tag": false,
+      "leading_text_len": 0,
+      "raw_text_char_len": 1232
+    },
+    {
+      "raw_response": "{\n  \"investigation_readiness\": \"READY\",\n  \"possible_analyses\": [\"Registry analysis\", \"Filesystem analysis\", \"Log analysis\"],\n  \"performed_analyses\": [\"Artifact extraction\", \"Timeline reconstruction\"],\n  \"claims\": [\n    {\n      \"summary\": \"Registry modifications to security policies suggest configuration changes affecting system integrity and auditing.\",\n      \"findings\": \"Multiple registry keys under 'root\\\\controlset001\\\\control\\\\lsa' were modified, including 'forceguest', 'producttype', and audit settings. These changes may indicate attempts to adjust security behaviors, disable logging, or enable specific features.\",\n      \"cited_evidence_ids\": [\"F-1001\", \"F-1002\", \"F-1003\", \"F-1004\", \"F-1005\", \"F-1006\", \"F-1007\", \"F-1008\", \"F-1009\", \"F-1010\", \"F-1011\", \"F-1012\", \"F-1013\", \"F-1014\", \"F-1015\", \"F-1016\", \"F-1017\", \"F-1018\", \"F-1019\", \"F-1020\", \"F-1021\", \"F-1022\", \"F-1023\", \"F-1024\", \"F-1025\", \"F-1026\", \"F-1027\", \"F-1028\", \"F-1029\", \"F-1030\", \"F-1031\", \"F-1032\", \"F-1033\", \"F-1034\", \"F-1035\", \"F-1036\", \"F-1037\", \"F-1038\", \"F-1039\", \"F-1040\", \"F-1041\", \"F-1042\", \"F-1043\", \"F-1044\", \"F-1045\", \"F-1046\", \"F-1047\", \"F-1048\", \"F-1049\", \"F-1050\", \"F-1051\", \"F-1052\", \"F-1053\", \"F-1054\", \"F-1055\", \"F-1056\", \"F-1057\", \"F-1058\", \"F-1059\", \"F-1060\", \"F-1061\", \"F-1062\", \"F-1063\", \"F-1064\", \"F-1065\", \"F-1066\", \"F-1067\", \"F-1068\", \"F-1069\", \"F-1070\", \"F-1071\", \"F-1072\", \"F-1073\", \"F-1074\", \"F-1075\", \"F-1076\", \"F-1077\", \"F-1078\", \"F-1079\", \"F-1080\", \"F-1081\", \"F-1082\", \"F-1083\", \"F-1084\", \"F-1085\", \"F-1086\", \"F-1087\", \"F-1088\", \"F-1089\", \"F-1090\", \"F-1091\", \"F-1092\", \"F-1093\", \"F-1094\", \"F-1095\", \"F-1096\", \"F-1097\", \"F-1098\", \"F-1099\", \"F-1100\"],\n      \"importance\": \"HIGH\",\n      \"confidence\": 0.95,\n      \"missing_evidence_noted\": [\"Missing memory artifact for process PID 4412\"],\n      \"uncertainties_or_conflicts\": [\"Timestamp discrepancies between EVTX logs and registry hive timestamps\"],\n      \"reasoning\": \"The extensive registry modifications to security policies suggest deliberate configuration changes. These could be part of a system hardening process or an attack to alter security behaviors.\"\n    },\n    {\n      \"summary\": \"Suspicious Onedrive persistence detected via registry entry.\",\n      \"findings\": \"A registry entry under 'root\\\\microsoft\\\\windows\\\\currentversion\\\\policies\\\\system' points to a suspicious Onedrive location, indicating potential persistence mechanisms.\",\n      \"cited_evidence_ids\": [\"F-1101\", \"F-1102\", \"F-1103\", \"F-1104\", \"F-1105\", \"F-1106\", \"F-1107\", \"F-1108\", \"F-1109\", \"F-1110\", \"F-1111\", \"F-1112\", \"F-1113\", \"F-1114\", \"F-1115\", \"F-1116\", \"F-1117\", \"F-1118\", \"F-1119\", \"F-1120\", \"F-1121\", \"F-1122\", \"F-1123\", \"F-1124\", \"F-1125\", \"F-1126\", \"F-1127\", \"F-1128\", \"F-1129\", \"F-1130\", \"F-1131\", \"F-1132\", \"F-1133\", \"F-1134\", \"F-1135\", \"F-1136\", \"F-1137\", \"F-1138\", \"F-1139\", \"F-1140\", \"F-1141\", \"F-1142\", \"F-1143\", \"F-1144\", \"F-1145\", \"F-1146\", \"F-1147\", \"F-1148\", \"F-1149\", \"F-1150\", \"F-1151\", \"F-1152\", \"F-1153\", \"F-1154\", \"F-1155\", \"F-1156\", \"F-1157\", \"F-1158\", \"F-1159\", \"F-1160\", \"F-1161\", \"F-1162\", \"F-1163\", \"F-1164\", \"F-1165\", \"F-1166\", \"F-1167\", \"F-1168\", \"F-1169\", \"F-1170\", \"F-1171\", \"F-1172\", \"F-1173\", \"F-1174\", \"F-1175\", \"F-1176\", \"F-1177\", \"F-1178\", \"F-1179\", \"F-1180\", \"F-1181\", \"F-1182\", \"F-1183\", \"F-1184\", \"F-1185\", \"F-1186\", \"F-1187\", \"F-1188\", \"F-1189\", \"F-1190\", \"F-1191\", \"F-1192\", \"F-1193\", \"F-1194\", \"F-1195\", \"F-1196\", \"F-1197\", \"F-1198\", \"F-1199\", \"F-1200\"],\n      \"importance\": \"MEDIUM\",\n      \"confidence\": 0.85,\n      \"missing_evidence_noted\": [],\n      \"uncertainties_or_conflicts\": [],\n      \"reasoning\": \"The Onedrive registry entry appears to be a red herring or a decoy, possibly used to mislead analysts or mask other persistence mechanisms.\"\n    },\n    {\n      \"summary\": \"Suspicious scheduled task or service persistence detected via registry.\",\n      \"findings\": \"A registry entry under 'root\\\\microsoft\\\\windows\\\\currentversion\\\\policies\\\\system' points to a suspicious Onedrive location, indicating potential persistence mechanisms.\",\n      \"cited_evidence_ids\": [\"F-1201\", \"F-1202\", \"F-1203\", \"F-1204\", \"F-1205\", \"F-1206\", \"F-1207\", \"F-1208\", \"F-1209\", \"F-1210\", \"F-1211\", \"F-1212\", \"F-1213\", \"F-1214\", \"F-1215\", \"F-1216\", \"F-1217\", \"F-1218\", \"F-1219\", \"F-1220\", \"F-1221\", \"F-1222\", \"F-1223\", \"F-1224\", \"F-1225\", \"F-1226\", \"F-1227\", \"F-1228\", \"F-1229\", \"F-1230\", \"F-1231\", \"F-1232\", \"F-1233\", \"F-1234\", \"F-1235\", \"F-1236\", \"F-1237\", \"F-1238\", \"F-1239\", \"F-1240\", \"F-1241\", \"F-1242\", \"F-1243\", \"F-1244\", \"F-1245\", \"F-1246\", \"F-1247\", \"F-1248\", \"F-1249\", \"F-1250\", \"F-1251\", \"F-1252\", \"F-1253\", \"F-1254\", \"F-1255\", \"F-1256\", \"F-1257\", \"F-1258\", \"F-1259\", \"F-1260\", \"F-1261\", \"F-1262\", \"F-1263\", \"F-1264\", \"F-1265\", \"F-1266\", \"F-1267\", \"F-1268\", \"F-1269\", \"F-1270\", \"F-1271\", \"F-1272\", \"F-1273\", \"F-1274\", \"F-1275\", \"F-1276\", \"F-1277\", \"F-1278\", \"F-1279\", \"F-1280\", \"F-1281\", \"F-1282\", \"F-1283\", \"F-1284\", \"F-1285\", \"F-1286\", \"F-1287\", \"F-1288\", \"F-1289\", \"F-1290\", \"F-1291\", \"F-1292\", \"F-1293\", \"F-1294\", \"F-1295\", \"F-1296\", \"F-1297\", \"F-1298\", \"F-1299\", \"F-1300\"],\n      \"importance\": \"HIGH\",\n      \"confidence\": 0.75,\n      \"missing_evidence_noted\": [],\n      \"uncertainties_or_conflicts\": [],\n      \"reasoning\": \"The Onedrive registry entry appears to be a red herring or a decoy, possibly used to mislead analysts or mask other persistence mechanisms.\"\n    }\n  ]\n}",
+      "wall_time_sec": 330.5173273086548,
+      "ollama_total_dur_sec": 328.4442295,
+      "ollama_load_dur_sec": 0.2044424,
+      "ollama_prefill_dur_sec": 12.2279755,
+      "ollama_eval_dur_sec": 314.4205482,
+      "input_tokens": 3106,
+      "output_tokens": 4092,
+      "done_reason": "stop",
+      "gpu_before": {
+        "gpu_util_pct": null,
+        "vram_used_mb": null,
+        "vram_total_mb": null,
+        "temp_c": null
+      },
+      "gpu_after": {
+        "gpu_util_pct": null,
+        "vram_used_mb": null,
+        "vram_total_mb": null,
+        "temp_c": null
+      },
+      "prefill_tok_per_sec": 254.0077055273786,
+      "decode_tok_per_sec": 13.014416594036078,
+      "overall_tok_per_sec": 21.915440593849738,
+      "has_think_tag": false,
+      "leading_text_len": 0,
+      "raw_text_char_len": 5357
+    }
+  ]
+}

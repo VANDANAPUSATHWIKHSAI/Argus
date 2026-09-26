@@ -1,0 +1,29 @@
+{
+  "run_id": "PHASE8B-PILOT-RUN-1790417246",
+  "is_resume_run": true,
+  "qwen_calls_count": 0,
+  "skipped_count": 3,
+  "telemetry_list": [
+    {
+      "batch_id": "BATCH-001",
+      "batch_number": 1,
+      "status": "SKIPPED_ALREADY_COMPLETED",
+      "qwen_call_performed": false,
+      "fir_count": 10
+    },
+    {
+      "batch_id": "BATCH-002",
+      "batch_number": 2,
+      "status": "SKIPPED_ALREADY_COMPLETED",
+      "qwen_call_performed": false,
+      "fir_count": 10
+    },
+    {
+      "batch_id": "BATCH-003",
+      "batch_number": 3,
+      "status": "SKIPPED_ALREADY_COMPLETED",
+      "qwen_call_performed": false,
+      "fir_count": 10
+    }
+  ]
+}

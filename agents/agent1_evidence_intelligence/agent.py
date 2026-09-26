@@ -55,6 +55,8 @@ def _ensure_agent_outputs_table_initialized(conn):
         ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
         ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS model_used TEXT;
         ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS execution_status TEXT DEFAULT 'SUCCESS';
+        CREATE UNIQUE INDEX IF NOT EXISTS agent_outputs_case_agent_claim_idx 
+        ON agent_outputs (case_id, agent_id, claim);
     """)
     conn.commit()
     _AGENT_OUTPUTS_TABLE_INITIALIZED = True
@@ -129,17 +131,38 @@ class EvidenceIntelligenceAgent(BaseAgent):
             )
             return output.model_dump()
 
-        # ── 2. Pass findings through Evidence Sanitization Gateway ──────────
-        sanitized_contexts: List[SanitizedAgentContext] = []
+        # ── 2. Build XML evidence blocks directly from findings ──────────
+        xml_blocks_list = []
+        injections_flagged_count = 0
         for finding in fir_findings:
             if isinstance(finding, SanitizedAgentContext):
-                sanitized_contexts.append(finding)
+                xml_blocks_list.append(finding.xml_evidence_block)
+                if finding.injection_flagged:
+                    injections_flagged_count += 1
+            elif isinstance(finding, dict):
+                fid = finding.get("finding_id", "UNKNOWN")
+                layer = finding.get("layer", "endpoint")
+                fact_text = finding.get("sanitized_fact") or finding.get("fact", "")
+                is_inj = finding.get("injection_flagged", False)
+                if not is_inj and hasattr(self, "injection_gate"):
+                    gate_res = self.injection_gate.check(fact_text, field_name="unstructured")
+                    is_inj = gate_res.injection_flagged
+                if is_inj:
+                    injections_flagged_count += 1
+                xml_blocks_list.append(f'<evidence_item><finding_id>{fid}</finding_id><layer>{layer}</layer><fact>{fact_text}</fact></evidence_item>')
             else:
-                sanitized_ctx = self.gateway.sanitize_finding(finding)
-                sanitized_contexts.append(sanitized_ctx)
+                fid = getattr(finding, "finding_id", "UNKNOWN")
+                layer = getattr(finding, "layer", "endpoint")
+                fact_text = getattr(finding, "sanitized_fact", None) or getattr(finding, "fact", "")
+                is_inj = getattr(finding, "injection_flagged", False)
+                if not is_inj and hasattr(self, "injection_gate"):
+                    gate_res = self.injection_gate.check(fact_text, field_name="unstructured")
+                    is_inj = gate_res.injection_flagged
+                if is_inj:
+                    injections_flagged_count += 1
+                xml_blocks_list.append(f'<evidence_item><finding_id>{fid}</finding_id><layer>{layer}</layer><fact>{fact_text}</fact></evidence_item>')
 
-        # Build XML evidence blocks for LLM prompt
-        xml_blocks = "\n".join(ctx.xml_evidence_block for ctx in sanitized_contexts)
+        xml_blocks = "\n".join(xml_blocks_list)
 
         # ── 3. Construct Prompt & Invoke Qwen3-8B ───────────────────────────
         user_prompt = build_agent1_user_prompt(case_id, xml_blocks)
@@ -159,7 +182,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 model_used=self.model_name,
                 claims=[],
                 total_findings_processed=len(fir_findings),
-                sanitization_summary={"findings_sanitized": len(sanitized_contexts)},
+                sanitization_summary={"findings_sanitized": len(fir_findings)},
                 execution_status="FAILED",
                 error_message=f"LLM invocation error: {str(exc)}"
             )
@@ -175,7 +198,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 model_used=self.model_name,
                 claims=[],
                 total_findings_processed=len(fir_findings),
-                sanitization_summary={"findings_sanitized": len(sanitized_contexts)},
+                sanitization_summary={"findings_sanitized": len(fir_findings)},
                 execution_status="FAILED",
                 error_message=f"Malformed LLM JSON output: {parse_err}"
             )
@@ -202,15 +225,15 @@ class EvidenceIntelligenceAgent(BaseAgent):
             claims=validated_claims,
             total_findings_processed=len(fir_findings),
             sanitization_summary={
-                "findings_sanitized": len(sanitized_contexts),
-                "injections_flagged": sum(1 for c in sanitized_contexts if c.injection_flagged)
+                "findings_sanitized": len(fir_findings),
+                "injections_flagged": injections_flagged_count
             },
             evidence_trust_score=extra_meta.get("evidence_trust_score"),
             evidence_quality_summary={
                 "total_processed": len(fir_findings),
-                "injections_flagged": sum(1 for c in sanitized_contexts if c.injection_flagged)
+                "injections_flagged": injections_flagged_count
             },
-            investigation_readiness=extra_meta.get("investigation_readiness", "READY"),
+            investigation_readiness=extra_meta.get("investigation_readiness") if extra_meta.get("investigation_readiness") in ("READY", "LIMITED", "UNREADY") else "READY",
             possible_analyses=extra_meta.get("possible_analyses", ["Filesystem analysis", "Log analysis"]),
             performed_analyses=extra_meta.get("performed_analyses", ["Filesystem extraction", "Artifact extraction"]),
             execution_status=status
@@ -243,7 +266,15 @@ class EvidenceIntelligenceAgent(BaseAgent):
 
         extra_meta = {}
         if isinstance(data, dict):
-            extra_meta["investigation_readiness"] = data.get("investigation_readiness", "READY")
+            readiness = str(data.get("investigation_readiness", "READY")).upper()
+            if readiness not in ("READY", "LIMITED", "UNREADY"):
+                if "PART" in readiness or "LIMIT" in readiness:
+                    readiness = "LIMITED"
+                elif "UNREADY" in readiness or "NOT" in readiness:
+                    readiness = "UNREADY"
+                else:
+                    readiness = "READY"
+            extra_meta["investigation_readiness"] = readiness
             extra_meta["possible_analyses"] = data.get("possible_analyses", [])
             extra_meta["performed_analyses"] = data.get("performed_analyses", [])
             extra_meta["evidence_trust_score"] = data.get("evidence_trust_score")
@@ -272,6 +303,18 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 except (ValueError, TypeError):
                     conf = -1.0
 
+                missing_ev = item.get("missing_evidence_noted", [])
+                if isinstance(missing_ev, str):
+                    missing_ev = [missing_ev.strip()] if missing_ev.strip() else []
+                elif not isinstance(missing_ev, list):
+                    missing_ev = []
+
+                uncertainties = item.get("uncertainties_or_conflicts", [])
+                if isinstance(uncertainties, str):
+                    uncertainties = [uncertainties.strip()] if uncertainties.strip() else []
+                elif not isinstance(uncertainties, list):
+                    uncertainties = []
+
                 claim_obj = Agent1Claim(
                     claim_id=cid,
                     summary=summary,
@@ -279,8 +322,8 @@ class EvidenceIntelligenceAgent(BaseAgent):
                     cited_evidence_ids=cited_ids,
                     assessed_importance=importance,
                     confidence_score=conf,
-                    missing_evidence_noted=item.get("missing_evidence_noted", []),
-                    uncertainties_or_conflicts=item.get("uncertainties_or_conflicts", []),
+                    missing_evidence_noted=missing_ev,
+                    uncertainties_or_conflicts=uncertainties,
                     reasoning_notes=item.get("reasoning_notes", "")
                 )
                 parsed_claims.append(claim_obj)
@@ -289,7 +332,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
 
     def _persist_agent_output(self, output: Agent1Output):
         """
-        Persists structured agent output into PostgreSQL `agent_outputs` table.
+        Persists structured agent output into PostgreSQL `agent_outputs` table using idempotent UPSERT.
         """
         try:
             import psycopg2
@@ -309,6 +352,15 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 INSERT INTO agent_outputs 
                     (case_id, tenant_id, agent_id, model_used, claim, evidence_ids, confidence, verified, execution_status, flags, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (case_id, agent_id, claim) DO UPDATE SET
+                    tenant_id = EXCLUDED.tenant_id,
+                    model_used = EXCLUDED.model_used,
+                    evidence_ids = EXCLUDED.evidence_ids,
+                    confidence = EXCLUDED.confidence,
+                    verified = EXCLUDED.verified,
+                    execution_status = EXCLUDED.execution_status,
+                    flags = EXCLUDED.flags,
+                    created_at = EXCLUDED.created_at;
             """
 
             items_to_insert = output.claims if output.claims else []
@@ -361,4 +413,5 @@ class EvidenceIntelligenceAgent(BaseAgent):
             logger.info("Agent 1 output persisted to PostgreSQL agent_outputs table for case %s", output.case_id)
         except Exception as exc:
             logger.warning("PostgreSQL agent_outputs persist error: %s", exc)
+
 

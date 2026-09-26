@@ -1,0 +1,159 @@
+{
+  "timestamp": "2026-09-26T07:07:00.660024+00:00",
+  "total_firs": 40,
+  "batch_a": {
+    "batch_name": "Batch A (FIR 1-20)",
+    "fir_count": 20,
+    "wall_clock_sec": 119.7,
+    "resp_char_count": 4402,
+    "is_empty": false,
+    "is_markdown_prose": false,
+    "json_parse_success": false,
+    "err_msg": "Expecting ',' delimiter: line 54 column 1 (char 4402)",
+    "parsed_json": null,
+    "raw_claims_count": 0,
+    "validated_claims": [],
+    "extra_meta": {},
+    "fir_ids": [
+      "da2c8653-6488-4064-8b65-9be97b3503b6",
+      "42c5a1ee-4c28-4e3e-97c1-cb362650f744",
+      "ee1ca311-c86f-4509-8ced-c9a584f1faa3",
+      "ec729017-262a-49e1-8098-d5146f5a39c0",
+      "098db7dd-5a91-42c7-a6ab-81fbf67e999f",
+      "51d11b01-626e-46b2-b434-08b41a5fec47",
+      "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+      "e68b1bdc-5bbd-4667-9e0e-80f04ac20970",
+      "c46a00a3-11cd-42b6-ad88-f3937b9b617d",
+      "f2fbda42-d7ed-487c-ac4a-6f3bda50defe",
+      "59a75338-fb6d-4762-afa9-b6aed421b94e",
+      "d4059d67-8c67-4b45-b7c1-acec13722945",
+      "da94bcf1-5457-4028-b425-e6b9476f5c77",
+      "991f0ef0-3def-4259-81e0-823f8dbd9eeb",
+      "ade13dcb-c27d-41e9-85f9-6de95a7ece88",
+      "15f35c1a-9bca-4d86-859b-7a9eeaca2c3c",
+      "b49aa48d-b96c-41b9-be2c-034dd3df3e85",
+      "7dd4bbd1-a759-4aa3-87c3-e4e808b4eb0e",
+      "02b1fcb0-3f6c-4f39-8010-fdf8152ac7da",
+      "84b3b850-7556-460f-a0a6-2b439476a53c"
+    ]
+  },
+  "batch_b": {
+    "batch_name": "Batch B (FIR 21-40)",
+    "fir_count": 20,
+    "wall_clock_sec": 48.83,
+    "resp_char_count": 1615,
+    "is_empty": false,
+    "is_markdown_prose": false,
+    "json_parse_success": true,
+    "err_msg": null,
+    "parsed_json": {
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "claims": [
+        {
+          "claim_id": "CLM-AG1-001",
+          "summary": "File system activity detected for multiple user-specific directories",
+          "findings_summary": "The NTFS USN change journal records indicate FILE_ACTIVITY for multiple user-specific directories including 'Acrobat', '11.0', 'Cache', 'Profiles', and 'Application Data' between 2014-01-25 and 2015-05-26. These entries show consistent activity patterns across different file system locations, suggesting potential user or application activity.",
+          "cited_evidence_ids": [
+            "d50d9737-38af-4e7b-b370-6601f2d262e9",
+            "67db1a94-b456-4244-b52c-d3d40cb41037",
+            "9fb120d0-469c-4533-9ef2-08cc8b71ed33",
+            "32b6f55a-17cd-4a5e-8112-e01271161919",
+            "73c1c79e-b9f2-4506-9ba0-01f5addd859c",
+            "71c73f3d-2ed3-487f-a7e5-0dd0e1fb19c6",
+            "97a3e275-e408-47c6-a20f-577b3c9b54b6",
+            "d67b4109-e128-45a3-96c9-51b07f652119"
+          ],
+          "assessed_importance": "high",
+          "confidence_score": 0.85,
+          "missing_evidence_noted": [
+            "Missing memory artifact for process PID 4412"
+          ],
+          "uncertainties_or_conflicts": [
+            "Timestamp conflict between EVTX and registry hive"
+          ],
+          "reasoning_notes": "The multiple FILE_ACTIVITY entries across different user directories suggest potential user or application activity. The timestamps span from 2014-01-25 to 2015-05-26, indicating a prolonged period of file system changes. The presence of both $FILE_NAME and non-$FILE_NAME entries suggests possible file renaming or reorganization."
+        }
+      ]
+    },
+    "raw_claims_count": 1,
+    "validated_claims": [
+      {
+        "claim_id": "CLM-AG1-001",
+        "summary": "File system activity detected for multiple user-specific directories",
+        "findings_summary": "The NTFS USN change journal records indicate FILE_ACTIVITY for multiple user-specific directories including 'Acrobat', '11.0', 'Cache', 'Profiles', and 'Application Data' between 2014-01-25 and 2015-05-26. These entries show consistent activity patterns across different file system locations, suggesting potential user or application activity.",
+        "cited_evidence_ids": [
+          "d50d9737-38af-4e7b-b370-6601f2d262e9",
+          "67db1a94-b456-4244-b52c-d3d40cb41037",
+          "9fb120d0-469c-4533-9ef2-08cc8b71ed33",
+          "32b6f55a-17cd-4a5e-8112-e01271161919",
+          "73c1c79e-b9f2-4506-9ba0-01f5addd859c",
+          "71c73f3d-2ed3-487f-a7e5-0dd0e1fb19c6",
+          "97a3e275-e408-47c6-a20f-577b3c9b54b6",
+          "d67b4109-e128-45a3-96c9-51b07f652119"
+        ],
+        "assessed_importance": "high",
+        "confidence_score": 0.85,
+        "missing_evidence_noted": [
+          "Missing memory artifact for process PID 4412"
+        ],
+        "uncertainties_or_conflicts": [
+          "Timestamp conflict between EVTX and registry hive"
+        ],
+        "reasoning_notes": "The multiple FILE_ACTIVITY entries across different user directories suggest potential user or application activity. The timestamps span from 2014-01-25 to 2015-05-26, indicating a prolonged period of file system changes. The presence of both $FILE_NAME and non-$FILE_NAME entries suggests possible file renaming or reorganization.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.85,
+        "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 8 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Acrobat ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:56+00:00.\", \"NTFS USN change journal / File system record observed for 'Acrobat': reason='FILE_ACTIVITY' at 2014-02-10T14:57:11+00:00.\"]",
+        "semantic_support_verified": true,
+        "semantic_support_notes": "Claim semantically supported by 8 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Acrobat ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:56+00:00.\", \"NTFS USN change journal / File system record observed for 'Acrobat': reason='FILE_ACTIVITY' at 2014-02-10T14:57:11+00:00.\"]"
+      }
+    ],
+    "extra_meta": {
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "evidence_trust_score": null
+    },
+    "fir_ids": [
+      "d50d9737-38af-4e7b-b370-6601f2d262e9",
+      "67db1a94-b456-4244-b52c-d3d40cb41037",
+      "9fb120d0-469c-4533-9ef2-08cc8b71ed33",
+      "698fbfd7-c457-47d3-911a-23081846a31c",
+      "32b6f55a-17cd-4a5e-8112-e01271161919",
+      "73c1c79e-b9f2-4506-9ba0-01f5addd859c",
+      "c6606bf1-a0ed-4632-86ae-f712dad976a2",
+      "a6e5ed63-f3eb-4de9-84c5-f2996d30c56f",
+      "b7b58d6a-db5c-48e6-b3a7-a928207076b6",
+      "007962e3-cdd5-4f53-b00d-8309ac77efee",
+      "71c73f3d-2ed3-487f-a7e5-0dd0e1fb19c6",
+      "72553e0e-a2a5-47dc-8f6c-78518d951f26",
+      "60de544c-59c8-4b1d-8d2b-71e3780fbd6d",
+      "b7108902-cee2-42e2-875d-d006eb618e7f",
+      "97a3e275-e408-47c6-a20f-577b3c9b54b6",
+      "e644f062-9bec-4488-9f0c-593041bd3e12",
+      "d67b4109-e128-45a3-96c9-51b07f652119",
+      "a4fdc52a-7567-4cbc-b52a-6cc70730c990",
+      "01b8ee6f-1525-4bd5-87db-31da7ebf5e40",
+      "fc9c1829-6a4c-40bb-baa5-bf0bf0c5ac54"
+    ]
+  },
+  "total_inference_time_sec": 168.53,
+  "avg_batch_latency_sec": 84.27
+}

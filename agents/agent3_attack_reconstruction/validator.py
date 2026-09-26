@@ -1,34 +1,20 @@
 """
 Agent 3 — Attack Reconstruction Validator
 ==========================================
-Deterministic validation logic for Agent 3. Enforces:
-  1. Citation verification against FIR finding_ids and source evidence lineage.
-  2. Confidence range validation (rejects invalid values, preserving raw model output).
-  3. Structured schema completeness.
+Deterministic validation logic for Agent 3. Enforces citation verification.
 """
 
 import logging
 from typing import List, Set, Tuple, Any
-from fir.schemas import FIRFinding
-from sanitization.gateway import SanitizedAgentContext
-from agents.agent3_attack_reconstruction.schemas import Agent3Claim, Agent3Output
+from agents.agent3_attack_reconstruction.schemas import (
+    Agent3Output, InfectionPath, AttackTimelineEvent, AttackChainStage, LateralMovement
+)
 
 logger = logging.getLogger(__name__)
 
-
 class Agent3Validator:
-    """
-    Deterministic validator wrapping LLM output for Agent 3.
-    Prevents hallucinated evidence references and invalid confidence values from entering system of record.
-    """
-
     @staticmethod
     def extract_valid_id_universe(findings: List[Any]) -> Tuple[Set[str], Set[str]]:
-        """
-        Extracts all valid finding_ids and valid source evidence_ids from supplied FIR findings or SanitizedAgentContexts.
-        Returns:
-            (valid_finding_ids, valid_evidence_lineage_ids)
-        """
         finding_ids: Set[str] = set()
         lineage_ids: Set[str] = set()
 
@@ -37,12 +23,10 @@ class Agent3Validator:
             if fid:
                 finding_ids.add(str(fid).strip())
 
-            # Source artifact ID
             src_art = getattr(f, "source_artifact_id", None)
             if src_art:
                 lineage_ids.add(str(src_art).strip())
 
-            # Evidence reference list / string
             ev_ref = getattr(f, "evidence_reference", [])
             if isinstance(ev_ref, str):
                 for item in ev_ref.split(","):
@@ -55,57 +39,41 @@ class Agent3Validator:
 
         return finding_ids, lineage_ids
 
-    def validate_claims(
+    def validate_citations(
         self,
-        claims: List[Agent3Claim],
+        component: Any,
+        valid_universe: Set[str]
+    ):
+        """Validates citations in a single component and updates its flags."""
+        cited_ids = getattr(component, "evidence_ids", [])
+        invalid_ids = [cid for cid in cited_ids if cid not in valid_universe]
+        
+        if invalid_ids:
+            component.citation_verified = False
+            component.invalid_citations = invalid_ids
+            logger.warning("Agent 3 cited non-existent evidence IDs: %s", invalid_ids)
+        else:
+            component.citation_verified = True
+            component.invalid_citations = []
+            
+        raw_conf = getattr(component, "confidence", 0.0)
+        if raw_conf is None or raw_conf < 0.0 or raw_conf > 1.0:
+            component.confidence = 0.0
+            
+    def validate_output(
+        self,
+        output: Agent3Output,
         valid_finding_ids: Set[str],
         valid_lineage_ids: Set[str]
-    ) -> List[Agent3Claim]:
-        """
-        Performs deterministic validation over a list of Agent3Claim objects.
-        """
+    ) -> Agent3Output:
         valid_universe = valid_finding_ids.union(valid_lineage_ids)
-        validated_claims: List[Agent3Claim] = []
-
-        for idx, claim in enumerate(claims):
-            notes = []
+        
+        self.validate_citations(output.infection_path, valid_universe)
+        for evt in output.attack_timeline:
+            self.validate_citations(evt, valid_universe)
+        for stg in output.attack_chain:
+            self.validate_citations(stg, valid_universe)
+        for lm in output.lateral_movement:
+            self.validate_citations(lm, valid_universe)
             
-            # ── 1. Citation Validation ─────────────────────────────────
-            cited_ids = claim.cited_evidence_ids or []
-            invalid_ids = [cid for cid in cited_ids if cid not in valid_universe]
-
-            if invalid_ids:
-                claim.citation_verified = False
-                claim.invalid_citations = invalid_ids
-                notes.append(f"Invalid cited IDs not in evidence lineage: {invalid_ids}")
-                logger.warning(
-                    "Claim %s cited non-existent evidence IDs: %s", claim.claim_id, invalid_ids
-                )
-            else:
-                claim.citation_verified = True
-                claim.invalid_citations = []
-                notes.append("Citation verification passed.")
-
-            # ── 2. Confidence Validation (No silent clamping!) ─────────
-            raw_conf = claim.confidence_score
-            if raw_conf is None or raw_conf < 0.0 or raw_conf > 1.0:
-                claim.is_valid_confidence = False
-                claim.raw_model_confidence = raw_conf
-                notes.append(
-                    f"Out-of-bounds confidence_score {raw_conf} detected (must be in [0.0, 1.0])."
-                )
-                logger.warning(
-                    "Claim %s produced out-of-bounds confidence %s. Preserving raw value without silent clamping.",
-                    claim.claim_id, raw_conf
-                )
-                # Set confidence to 0.0 for safety downstream while preserving raw_model_confidence
-                claim.confidence_score = 0.0
-            else:
-                claim.is_valid_confidence = True
-                claim.raw_model_confidence = raw_conf
-
-            claim.validation_notes = " | ".join(notes)
-            validated_claims.append(claim)
-
-        return validated_claims
-
+        return output

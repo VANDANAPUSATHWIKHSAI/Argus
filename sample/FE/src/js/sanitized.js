@@ -27,7 +27,7 @@ class SanitizedApp {
 
   async fetchFindings(caseId) {
     try {
-      const response = await fetch(`http://localhost:8000/cases/${caseId}/findings`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + ''}/cases/${caseId}/findings`, {
         headers: { 'X-Tenant-ID': 'dev-team' }
       });
       if (!response.ok) throw new Error('Failed to fetch sanitized findings');

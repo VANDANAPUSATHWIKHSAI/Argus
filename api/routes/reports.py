@@ -14,7 +14,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Response, Depends
+from api.routes.auth import get_current_user
 
 from fir.repository import FIRRepository
 from fir.service import AnalystFindingService
@@ -49,7 +50,8 @@ async def get_report(
     case_id: str,
     format: str = Query("html", description="Report format: 'html', 'json', or 'pdf'"),
     allow_unreviewed: bool = Query(False, description="Whether to include unreviewed findings"),
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Generate and download a forensic case report package in HTML, JSON, or PDF format.

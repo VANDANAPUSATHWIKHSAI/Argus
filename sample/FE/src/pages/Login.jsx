@@ -297,7 +297,7 @@ const Login = () => {
       }
       setIsSendingReset(true);
       try {
-        const response = await fetch('http://localhost:8000/auth/forgot-password', {
+        const response = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/auth/forgot-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userid })
@@ -329,7 +329,7 @@ const Login = () => {
       }
       setIsSendingReset(true);
       try {
-        const response = await fetch('http://localhost:8000/auth/verify-otp', {
+        const response = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/auth/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userid, otp, new_password: newPassword })

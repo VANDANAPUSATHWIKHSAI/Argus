@@ -317,7 +317,8 @@ async def upload_evidence(
 @router.get("/case/{case_id}")
 async def get_evidence_by_case(
     case_id: str,
-    tenant_id: str = Header("default", alias="X-Tenant-ID")
+    tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Retrieve all evidence records for a given case ID.

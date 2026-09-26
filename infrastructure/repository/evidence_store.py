@@ -98,7 +98,7 @@ def create_case_session(tenant_id: str, created_by: str, case_id: Optional[str] 
             conn.commit()
             conn.close()
         except Exception as e:
-            print(f"  [DB WARNING] Failed to persist case session: {e}")
+            raise RuntimeError(f"Database persistence failed: {str(e)}")
     else:
         print(f"  [DB NOTICE] PostgreSQL offline on port {settings.postgres_port}; using local repository fallback.")
 

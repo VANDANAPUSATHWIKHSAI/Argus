@@ -86,8 +86,8 @@ const AuditLogs = () => {
           else tUsers++;
 
           return {
-            id: idx + 1000,
-            event_id: `EVT-${Math.floor(10000 + Math.random() * 90000)}`,
+            id: item.id || (idx + 1000),
+            event_id: item.event_id || 'Not recorded',
             timestamp_raw: dt,
             timestamp: formatDate(item.created_at),
             user: { name: item.created_by || 'System', id: item.created_by_id || '', role: item.created_by === 'System' ? 'System' : 'Analyst' },
@@ -96,7 +96,7 @@ const AuditLogs = () => {
             case_id: item.case_id,
             resource,
             source,
-            hash: source === 'System' || item.action.toLowerCase().includes('evidence') ? `sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` : null
+            hash: item.sha256_hash || (source === 'System' || item.action.toLowerCase().includes('evidence') ? 'Unavailable' : null)
           };
         });
         

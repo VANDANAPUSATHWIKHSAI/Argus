@@ -553,12 +553,12 @@ window.onload = async () => {
 
     // Fetch case stats dynamically
     try {
-      const response = await fetch(`http://localhost:8000/cases/${caseId}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + ''}/cases/${caseId}`, {
         headers: { 'X-Tenant-ID': 'dev-team' }
       });
       if (response.ok) {
         const stats = await response.json();
-        const findingsResponse = await fetch(`http://localhost:8000/cases/${caseId}/findings`, {
+        const findingsResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + ''}/cases/${caseId}/findings`, {
           headers: { 'X-Tenant-ID': 'dev-team' }
         });
         let findingsCount = 0;
@@ -717,7 +717,7 @@ window.onload = async () => {
     }
     
     try {
-      const res = await fetch('http://localhost:8000/auth/update-password', {
+      const res = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/auth/update-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -150,7 +150,7 @@ class CaseManager {
     if (btn) btn.innerHTML = 'Creating...';
     
     try {
-      const response = await fetch('http://localhost:8000/cases', {
+      const response = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/cases', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -197,7 +197,7 @@ class CaseManager {
             formData.append('relative_path', file.webkitRelativePath);
           }
           
-          await fetch('http://localhost:8000/evidence/upload', {
+          await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/evidence/upload', {
             method: 'POST',
             headers: {
               'X-Tenant-ID': 'dev-team'

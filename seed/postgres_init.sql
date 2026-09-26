@@ -6,7 +6,7 @@
 
 -- ── Cases (one row per investigation) ──────────────────────────
 CREATE TABLE IF NOT EXISTS cases (
-    case_id      UUID        PRIMARY KEY,
+    case_id      TEXT        PRIMARY KEY,
     tenant_id    TEXT        NOT NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_by   TEXT        NOT NULL,
@@ -15,8 +15,8 @@ CREATE TABLE IF NOT EXISTS cases (
 
 -- ── Evidence (one row per uploaded file) ───────────────────────
 CREATE TABLE IF NOT EXISTS evidence (
-    evidence_id       UUID        PRIMARY KEY,
-    case_id           UUID        REFERENCES cases(case_id),
+    evidence_id       TEXT        PRIMARY KEY,
+    case_id           TEXT        REFERENCES cases(case_id),
     filename          TEXT        NOT NULL,
     uploaded_by       TEXT        NOT NULL,
     upload_timestamp  TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS evidence (
 -- ── Chain-of-Custody Log (append-only, evidentiary) ────────────
 CREATE TABLE IF NOT EXISTS custody_log (
     id          SERIAL      PRIMARY KEY,
-    evidence_id UUID        REFERENCES evidence(evidence_id),
+    evidence_id TEXT        REFERENCES evidence(evidence_id),
     actor       TEXT        NOT NULL,
     action      TEXT        NOT NULL,
     timestamp   TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -41,8 +41,8 @@ CREATE TABLE IF NOT EXISTS custody_log (
 -- ── Audit Log (operational, not evidentiary) ───────────────────
 CREATE TABLE IF NOT EXISTS audit_log (
     id          SERIAL      PRIMARY KEY,
-    case_id     UUID,
-    evidence_id UUID,
+    case_id     TEXT,
+    evidence_id TEXT,
     tenant_id   TEXT,
     event       TEXT        NOT NULL,
     actor       TEXT,
@@ -58,8 +58,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
 --   USING CASE WHEN evidence_reference LIKE '%,%' THEN string_to_array(evidence_reference, ', ') ELSE ARRAY[evidence_reference] END;
 CREATE TABLE IF NOT EXISTS fir_findings (
     finding_id         TEXT        PRIMARY KEY,
-    evidence_id        UUID        REFERENCES evidence(evidence_id),
-    case_id            UUID        REFERENCES cases(case_id),
+    evidence_id        TEXT        REFERENCES evidence(evidence_id),
+    case_id            TEXT        REFERENCES cases(case_id),
     source_engine      TEXT        NOT NULL,   -- e.g. "log_analysis", "network_analysis"
     fact               TEXT        NOT NULL,
     confidence         FLOAT,
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS fir_findings (
 -- ── Agent Outputs (structured claims per agent, per case) ───────
 CREATE TABLE IF NOT EXISTS agent_outputs (
     id           SERIAL      PRIMARY KEY,
-    case_id      UUID        REFERENCES cases(case_id),
+    case_id      TEXT        REFERENCES cases(case_id),
     agent_id     TEXT        NOT NULL,   -- e.g. "agent1", "agent7_call1"
     claim        TEXT        NOT NULL,
     evidence_ids TEXT[]      DEFAULT '{}',
@@ -85,7 +85,7 @@ CREATE TABLE IF NOT EXISTS agent_outputs (
 
 -- ── ISM State (per-case stage tracking) ────────────────────────
 CREATE TABLE IF NOT EXISTS ism_state (
-    case_id      UUID        REFERENCES cases(case_id),
+    case_id      TEXT        REFERENCES cases(case_id),
     stage        TEXT        NOT NULL,
     status       TEXT        NOT NULL,
     retry_count  INT         DEFAULT 0,

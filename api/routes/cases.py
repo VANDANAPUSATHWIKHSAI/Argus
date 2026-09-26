@@ -165,30 +165,9 @@ async def create_case(
             (req.name, req.analyst_id, req.senior_analyst_id, session.case_id)
         )
         conn.commit()
-        
-        # 4. Case Notes
-        cur.execute(
-            """
-            SELECT note_id, case_id, created_by, created_at, title, type
-            FROM case_notes
-            WHERE tenant_id = %s
-            """,
-            (x_tenant_id,)
-        )
-        for row in cur.fetchall():
-            note_id, case_id, created_by, created_at, title, note_type = row
-            activity.append({
-                "action": "Created Note",
-                "case_id": case_id,
-                "created_by": user_map.get(created_by, created_by),
-                "created_by_id": created_by,
-                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
-                "details": f"{title} ({note_type})"
-            })
-
         conn.close()
     except Exception as e:
-        print(f"[DB WARNING] Could not store case name: {e}")
+        raise HTTPException(status_code=500, detail=f"Database persistence failed: {str(e)}")
     
     # Send emails in background
     if req.analyst_id:
@@ -499,7 +478,8 @@ async def assign_senior_analyst(
 @router.get("/{case_id}", response_model=CaseSummaryResponse)
 async def get_case(
     case_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Retrieve structured case summary, severity metrics, and review status breakdown.

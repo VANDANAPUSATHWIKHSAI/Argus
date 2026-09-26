@@ -721,7 +721,8 @@ class CaseNoteModel(BaseModel):
     title: str
     content: str
     type: str
-    priority: str
+    priority: str = "Normal"
+    status: str = "Open"
     related_evidence_id: Optional[str] = None
     related_finding_id: Optional[str] = None
 

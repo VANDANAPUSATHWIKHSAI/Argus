@@ -20,7 +20,7 @@ const formatDate = (isoStr) => {
   }
 };
 
-const getActionDetails = (action, details, case_id) => {
+const getActionDetails = (action, details, case_id, user_name) => {
   let source = 'Web';
   let resource = details || '-';
 
@@ -30,6 +30,8 @@ const getActionDetails = (action, details, case_id) => {
     resource = details || 'Evidence File';
   } else if (lower.includes('finding')) {
     resource = 'Finding';
+  } else if (lower.includes('created case')) {
+    resource = user_name || 'Admin';
   } else if (lower.includes('case')) {
     resource = case_id || '-';
   } else if (lower.includes('updated user') || lower.includes('role')) {
@@ -76,7 +78,7 @@ const AuditLogs = () => {
         let tSystem = 0;
 
         const formatted = caseLogs.map((item, idx) => {
-          const { source, resource } = getActionDetails(item.action, item.details, item.case_id);
+          const { source, resource } = getActionDetails(item.action, item.details, item.case_id, item.created_by);
           
           const dt = new Date(item.created_at);
           if (dt.toDateString() === now.toDateString()) tToday++;
@@ -206,49 +208,51 @@ const uniqueUsers = Array.from(
             </div>
           </div>
 
-          <div style={{ padding: '0 24px' }}>
-            <div className="audit-stats-grid">
-              <div className="audit-stat-card">
-                <div className="stat-label">Total Events</div>
-                <div className="stat-value">{stats.total}</div>
+          <div style={{ padding: '0 48px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '32px' }}>
+              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Total Events</div>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.total}</div>
               </div>
-              <div className="audit-stat-card">
-                <div className="stat-label">Today</div>
-                <div className="stat-value">{stats.today}</div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Today</div>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.today}</div>
               </div>
-              <div className="audit-stat-card">
-                <div className="stat-label">User Actions</div>
-                <div className="stat-value">{stats.users}</div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>User Actions</div>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.users}</div>
               </div>
-              <div className="audit-stat-card">
-                <div className="stat-label">System Events</div>
-                <div className="stat-value">{stats.system}</div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>System Events</div>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.system}</div>
               </div>
             </div>
 
-
-
-            <div className="audit-table-wrapper" style={{ maxHeight: 'calc(100vh - 400px)', overflowY: 'auto' }}>
-              <table>
+            <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', marginBottom: '24px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>User</th>
-                    <th>Action</th>
-                    <th>Resource</th>
-                    <th>Case ID</th>
-                    <th>Details</th>
+                  <tr style={{ borderBottom: '1px solid var(--border-strong)', background: 'var(--bg-surface)' }}>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Timestamp</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>User</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Action</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Resource</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Case ID</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>Details</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentLogs.length > 0 ? currentLogs.map((log) => (
-                    <tr key={log.id} onClick={() => setSelectedLog(log)}>
-                      <td style={{ whiteSpace: 'nowrap' }}>{log.timestamp}</td>
-                      <td>{log.user.name}</td>
-                      <td>{log.action}</td>
-                      <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{log.resource}</td>
-                      <td>{log.case_id || '-'}</td>
-                      <td style={{ color: '#3b82f6', textDecoration: 'underline' }}>View</td>
+                    <tr key={log.id} onClick={() => setSelectedLog(log)} style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background='var(--bg-surface)'} onMouseOut={e => e.currentTarget.style.background='transparent'}>
+                      <td style={{ padding: '16px 24px', whiteSpace: 'nowrap', fontSize: '13px', color: 'var(--text-main)' }}>{log.timestamp}</td>
+                      <td style={{ padding: '16px 24px', fontWeight: 500, color: 'var(--text-main)' }}>{log.user.name}</td>
+                      <td style={{ padding: '16px 24px' }}>
+                        <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 500, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+                          {log.action}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 24px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '13px' }}>{log.resource}</td>
+                      <td style={{ padding: '16px 24px', color: 'var(--text-muted)', fontSize: '13px' }}>{log.case_id || '-'}</td>
+                      <td style={{ padding: '16px 24px', textAlign: 'right', color: 'var(--blue)', fontSize: '13px', fontWeight: 600 }}>View</td>
                     </tr>
                   )) : (
                     <tr>

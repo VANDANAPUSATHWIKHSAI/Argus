@@ -28,8 +28,8 @@ const Sidebar = () => {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-icon" style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'hidden', flexShrink: 0 }}>
-          <img src="/argus_logo.jpg" alt="ARGUS Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        <div className="logo-wrapper" style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'visible', flexShrink: 0, background: 'transparent' }}>
+          <img src="/argus_logo_new.png" alt="ARGUS Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }} />
         </div>
         <div className="logo-text">
           <h1>ARGUS</h1>

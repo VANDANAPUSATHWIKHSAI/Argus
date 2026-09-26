@@ -245,7 +245,7 @@ const Dashboard = () => {
               {/* ADMIN TOPBAR */}
               <header className="topbar" style={{ justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', padding: '16px 40px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px' }}>Welcome, Admin</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px' }}>Welcome, {currentUser?.name || 'Admin'}</div>
                   <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Manage people, cases, and ensure compliance.</div>
                 </div>
                 <div className="topbar-actions">
@@ -259,12 +259,12 @@ const Dashboard = () => {
                   <NotificationMenu />
                   <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)} style={{ cursor: 'pointer' }}>
                     <div className="avatar" style={{ background: '#4b5563' }}>A</div>
-                    <span style={{ fontWeight: 500 }}>Admin</span>
+                    <span style={{ fontWeight: 500 }}>{currentUser?.name || 'Admin'}</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     {showUserDropdown && (
                       <div className="user-dropdown" style={{ display: 'block' }}>
                         <div className="user-dropdown-header">
-                          <div className="ud-name">Admin</div>
+                          <div className="ud-name">{currentUser?.name || 'Admin'}</div>
                           <div className="ud-role">System Administrator</div>
                         </div>
                       </div>
@@ -310,12 +310,12 @@ const Dashboard = () => {
               {/* User profile */}
               <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
                 <div className="avatar">A</div>
-                <span style={{ fontWeight: 500 }}>Analyst</span>
+                <span style={{ fontWeight: 500 }}>{currentUser?.name || 'Analyst'}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 {showUserDropdown && (
                   <div className="user-dropdown" style={{ display: 'block' }}>
                     <div className="user-dropdown-header">
-                      <div className="ud-name">Analyst</div>
+                      <div className="ud-name">{currentUser?.name || 'Analyst'}</div>
                       <div className="ud-role">Digital Forensics Investigator</div>
                     </div>
                   </div>
@@ -567,8 +567,6 @@ const Dashboard = () => {
                                   background: isDone ? 'var(--blue)' : isActive ? 'var(--blue)' : 'var(--bg-app)',
                                   border: isPending ? '2.5px solid var(--border-strong)' : '2.5px solid var(--blue)',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  boxShadow: isActive ? '0 0 0 5px rgba(59,130,246,0.18)' : 'none',
-                                  animation: isActive ? 'stepPulse 2s ease-in-out infinite' : 'none',
                                   transition: 'all 0.3s ease', flexShrink: 0
                                 }}>
                                   {isDone && (

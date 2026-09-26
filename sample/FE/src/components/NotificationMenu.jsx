@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../js/api';
 
 const NotificationMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const navigate = useNavigate();
   const menuRef = useRef(null);
   const [notifications, setNotifications] = useState([]);
   const [readIds, setReadIds] = useState(() => {
@@ -44,10 +46,29 @@ const NotificationMenu = () => {
           return { id: `${a.case_id}-${i}`, title, time };
         });
 
+        let mockNotifs = [];
+        if (isAdmin) {
+          mockNotifs = [
+            { id: 'mock-a1', title: 'System health check completed successfully', time: '10m ago' },
+            { id: 'mock-a2', title: 'New analyst account created: Jane Doe', time: '1h ago' },
+            { id: 'mock-a3', title: 'Weekly compliance report generated', time: '2h ago' }
+          ];
+        } else if (currentUser?.role === 'senior_analyst') {
+          mockNotifs = [
+            { id: 'mock-s1', title: 'Case ARGUS_952 is ready for final review', time: '5m ago' },
+            { id: 'mock-s2', title: 'High severity finding detected in PC-01', time: '20m ago' },
+            { id: 'mock-s3', title: 'Agent consensus reached on lateral movement', time: '45m ago' }
+          ];
+        } else {
+          mockNotifs = [
+            { id: 'mock-1', title: 'Evidence processing failed — memdump.raw', time: '5m ago' },
+            { id: 'mock-2', title: 'Evidence uploaded successfully — PC-01-Security.evtx', time: '12m ago' },
+            { id: 'mock-3', title: 'Evidence parsing started — firewall.log', time: '15m ago' }
+          ];
+        }
+
         const finalNotifs = [
-          { id: 'mock-1', title: 'Evidence processing failed — memdump.raw', time: '5m ago' },
-          { id: 'mock-2', title: 'Evidence uploaded successfully — PC-01-Security.evtx', time: '12m ago' },
-          { id: 'mock-3', title: 'Evidence parsing started — firewall.log', time: '15m ago' },
+          ...mockNotifs,
           ...mapped
         ];
 
@@ -117,7 +138,7 @@ const NotificationMenu = () => {
             ))}
           </div>
           <div style={{ padding: '12px', textAlign: 'center', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 500 }}>View all notifications</span>
+            <span onClick={() => { setIsOpen(false); navigate('/notifications'); }} style={{ fontSize: '13px', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 500 }}>View all notifications</span>
           </div>
         </div>
       )}

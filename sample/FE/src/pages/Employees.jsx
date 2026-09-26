@@ -227,13 +227,17 @@ const Employees = () => {
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           <button 
                             onClick={() => { setEditEmp(emp); setShowEditModal(true); }}
-                            style={{ background: 'none', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}
+                            style={{ background: 'rgba(59, 130, 246, 0.1)', border: 'none', color: '#3b82f6', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, transition: 'all 0.2s' }}
+                            onMouseOver={(e) => e.target.style.background = 'rgba(59, 130, 246, 0.2)'}
+                            onMouseOut={(e) => e.target.style.background = 'rgba(59, 130, 246, 0.1)'}
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => handleDeleteEmployee(emp.id)}
-                            style={{ background: 'none', border: '1px solid var(--border-strong)', color: 'var(--danger)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}
+                            style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, transition: 'all 0.2s' }}
+                            onMouseOver={(e) => e.target.style.background = 'rgba(239, 68, 68, 0.2)'}
+                            onMouseOut={(e) => e.target.style.background = 'rgba(239, 68, 68, 0.1)'}
                           >
                             Delete
                           </button>

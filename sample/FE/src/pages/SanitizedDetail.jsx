@@ -1,72 +1,63 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ProfileModal from '../components/ProfileModal';
 
-const syntaxHighlight = (json) => {
-  if (typeof json === 'string') {
-    try {
-      json = JSON.parse(json);
-    } catch(e) {}
-  }
-  if (typeof json !== 'string') {
-    json = JSON.stringify(json, undefined, 2);
-  }
-  
-  // Make literal \n in JSON strings display as actual newlines for readability
-  json = json.replace(/\\n/g, '\n');
-  
-  json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
-    let cls = 'var(--text-main)';
-    if (/^"/.test(match)) {
-      if (/:$/.test(match)) {
-        cls = 'var(--blue)'; // Key
-      } else {
-        cls = 'var(--orange)'; // String
-      }
-    } else if (/true|false/.test(match)) {
-      cls = 'var(--teal)'; // boolean
-    } else if (/null/.test(match)) {
-      cls = 'var(--red)'; // null
-    } else {
-      cls = 'var(--green)'; // number
-    }
-    return '<span style="color:' + cls + '">' + match + '</span>';
-  });
+const SEVERITY_STYLES = {
+  critical: { bg: '#fee2e2', color: '#dc2626' },
+  high:     { bg: '#fef3c7', color: '#d97706' },
+  medium:   { bg: '#dbeafe', color: '#2563eb' },
+  low:      { bg: '#d1fae5', color: '#059669' },
 };
 
 const SeverityBadge = ({ severity }) => {
-  const styles = {
-    critical: { bg: '#fee2e2', text: '#ef4444' },
-    high: { bg: '#fef3c7', text: '#f59e0b' },
-    medium: { bg: '#e0f2fe', text: '#0ea5e9' },
-    low: { bg: '#f1f5f9', text: '#64748b' }
-  };
-  const s = styles[severity?.toLowerCase()] || styles.low;
+  const s = SEVERITY_STYLES[severity?.toLowerCase()] || SEVERITY_STYLES.low;
   return (
-    <span style={{ backgroundColor: s.bg, color: s.text, padding: '4px 10px', borderRadius: 'var(--radius-full)', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+    <span style={{ background: s.bg, color: s.color, padding: '4px 12px', borderRadius: 20, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
       {severity}
     </span>
   );
 };
 
+const Field = ({ label, value, mono = false, full = false }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: full ? '1 / -1' : undefined }}>
+    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</span>
+    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-main)', fontFamily: mono ? '"Courier New", monospace' : undefined }}>
+      {value ?? '—'}
+    </span>
+  </div>
+);
+
+const TABS = [
+  { id: 'output',    label: 'Sanitized Output' },
+  { id: 'redaction', label: 'Redaction Details' },
+  { id: 'evidence',  label: 'Evidence Block' },
+  { id: 'metadata',  label: 'Metadata' },
+];
+
 const SanitizedDetail = () => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const [detailTab, setDetailTab] = useState('overview');
+  const location  = useLocation();
+  const navigate  = useNavigate();
+  const [tab, setTab] = useState('output');
   const [showProfileModal, setShowProfileModal] = useState(false);
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
-  
-  const selected = location.state?.item;
-  
-  if (!selected) {
+
+  const item = location.state?.item;
+
+  if (!item) {
     return (
-      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
-        No fact data found. <button onClick={() => navigate('/sanitized')} style={{ marginLeft: 8, color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>Go back</button>
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 12, color: 'var(--text-muted)' }}>
+        <span>No fact data found.</span>
+        <button onClick={() => navigate('/sanitized')} style={{ color: 'var(--blue)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', fontSize: 14 }}>
+          Back to Sanitized Output
+        </button>
       </div>
     );
   }
+
+  const redactionMap  = item.redactionMetadata || {};
+  const actions       = item.sanitizationActions || [];
+  const xmlBlock      = item.xmlEvidenceBlock || null;
+  const severityStyle = SEVERITY_STYLES[item.severity?.toLowerCase()] || SEVERITY_STYLES.low;
 
   return (
     <>
@@ -74,124 +65,143 @@ const SanitizedDetail = () => {
         <Sidebar />
         <main className="main-content">
           <header className="topbar">
-            <div className="search-container" style={{ flex: '0 1 400px' }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-muted)', marginRight: 8 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input type="text" id="global-search-input" placeholder="Search cases, evidence, or findings..." />
-              <span className="search-shortcut">⌘ K</span>
-            </div>
-            
-            <div className="topbar-actions" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
-              <button className="btn btn-outline" onClick={() => navigate('/sanitized')} style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-                Back to List
+            <div style={{ flex: 1 }} />
+            <div className="topbar-actions" style={{ justifyContent: 'flex-end', display: 'flex' }}>
+              <button onClick={() => navigate('/sanitized')} style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                Back
               </button>
-              
-              <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
+              <div className="user-profile" onClick={() => setShowProfileModal(true)}>
                 <div className="avatar">A</div>
                 <span style={{ fontWeight: 500 }}>Analyst</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
-                {showUserDropdown && (
-                  <div className="user-dropdown" style={{ display: 'block' }}>
-                    <div className="user-dropdown-header">
-                      <div className="ud-name">Analyst</div>
-                      <div className="ud-role">Digital Forensics Investigator</div>
-                    </div>
-                    <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowProfileModal(true); setShowUserDropdown(false); }}>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                      My Profile
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </header>
 
-          <div className="dashboard-scroll">
-            <div style={{ padding: '24px 24px 0 24px', flexShrink: 0 }}>
-              <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-main)', marginBottom: 24 }}>Fact Details</h1>
-            </div>
+          <div className="dashboard-scroll" style={{ padding: '32px 40px' }}>
 
-            <div className="main-grid" style={{ flexShrink: 0, padding: '0 24px 24px 24px', display: 'block' }}>
-              <div className="panel-card" style={{ backgroundColor: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ padding: 32, display: 'flex', flexDirection: 'column', flex: 1 }}>
-                  {/* Header */}
-                  <div style={{ display: 'flex', gap: 20, marginBottom: 32 }}>
-                    <div style={{ width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: 'var(--blue-light)', color: 'var(--blue)', border: '2px solid var(--blue)' }}>
-                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-main)', lineHeight: 1.3, marginBottom: 8 }}>{selected.ref}</h2>
-                      <p style={{ fontSize: 14, color: 'var(--text-muted)', marginBottom: 12 }}>{selected.layer} Layer</p>
-                      <SeverityBadge severity={selected.severity} />
-                    </div>
-                  </div>
-
-                  {/* Tabs */}
-                  <div style={{ display: 'flex', borderBottom: '1px solid var(--border-strong)', marginBottom: 32 }}>
-                    {['overview', 'metadata', 'json'].map(tab => (
-                      <div key={tab} onClick={() => setDetailTab(tab)} style={{ padding: '12px 24px', fontSize: 15, fontWeight: 600, cursor: 'pointer', color: detailTab === tab ? 'var(--blue)' : 'var(--text-muted)', borderBottom: detailTab === tab ? '2px solid var(--blue)' : 'none', textTransform: 'capitalize' }}>{tab}</div>
-                    ))}
-                  </div>
-
-                  {detailTab === 'overview' && (
-                    <>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-main)', marginBottom: 12 }}>Sanitized Fact</div>
-                      <div style={{ fontSize: 15, fontFamily: 'monospace', color: 'var(--text-main)', lineHeight: 1.6, marginBottom: 32, background: 'var(--bg-surface)', padding: 24, borderRadius: 8, border: '1px solid var(--border-strong)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'normal', overflowWrap: 'break-word' }}>
-                        {selected.fact}
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, marginBottom: 24 }}>
-                        {[
-                          { label: 'Evidence Ref', value: selected.ref },
-                          { label: 'Layer', value: selected.layer },
-                          { label: 'Timestamp', value: selected.timestamp },
-                          { label: 'Confidence', value: `${selected.confidence}%` },
-                          { label: 'Severity', value: selected.severity.charAt(0).toUpperCase() + selected.severity.slice(1) },
-                        ].map(row => (
-                          <div key={row.label} style={{ display: 'flex', flexDirection: 'column', fontSize: 14, paddingBottom: 16, borderBottom: '1px dashed var(--border-subtle)' }}>
-                            <span style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{row.label}</span>
-                            <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: 15 }}>{row.value}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </>
+            {/* Header Card */}
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '24px 28px', marginBottom: 24, display: 'flex', alignItems: 'flex-start', gap: 20, flexShrink: 0 }}>
+              <div style={{ width: 52, height: 52, borderRadius: 12, background: severityStyle.bg, color: severityStyle.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontFamily: '"Courier New", monospace', fontWeight: 700, fontSize: 18, color: 'var(--text-main)' }}>{item.ref}</span>
+                  <SeverityBadge severity={item.severity} />
+                  {item.injectionFlagged && (
+                    <span style={{ background: '#fee2e2', color: '#dc2626', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>INJECTION FLAGGED</span>
                   )}
-
-                  {detailTab === 'metadata' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-                      {[
-                        { label: 'Evidence Ref', value: selected.evidenceRef || 'N/A' },
-                        { label: 'Injection Flag', value: selected.injectionFlagged ? 'Yes' : 'No' },
-                        { label: 'Injection Score', value: `${((selected.injectionScore || 0) * 100).toFixed(1)}%` },
-                        { label: 'Actions Applied', value: selected.sanitizationActions?.join(', ') || 'None' },
-                        { label: 'MITRE Mapping', value: selected.mitreMapping || 'None' },
-                      ].map(row => (
-                        <div key={row.label} style={{ display: 'flex', flexDirection: 'column', fontSize: 14, paddingBottom: 16, borderBottom: '1px dashed var(--border-subtle)' }}>
-                          <span style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{row.label}</span>
-                          <span style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: 15 }}>{row.value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {detailTab === 'json' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        Sanitized Context (stored JSON)
-                      </div>
-                      <pre 
-                        style={{ whiteSpace: 'pre-wrap', fontFamily: '"Courier New", monospace', fontSize: '15px', background: 'var(--bg-app)', padding: 24, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', overflowY: 'visible', color: 'var(--text-main)', lineHeight: 1.8 }}
-                        dangerouslySetInnerHTML={{ __html: syntaxHighlight(selected.sanitizedContext || {}) }}
-                      />
-                    </div>
-                  )}
-
+                </div>
+                <div style={{ display: 'flex', gap: 24, fontSize: 13, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                  <span><strong style={{ color: 'var(--text-main)' }}>Layer:</strong> {item.layer}</span>
+                  <span><strong style={{ color: 'var(--text-main)' }}>Timestamp:</strong> {item.timestamp}</span>
+                  <span><strong style={{ color: 'var(--text-main)' }}>Confidence:</strong> {item.confidence}%</span>
+                  {item.mitreMapping && <span><strong style={{ color: 'var(--text-main)' }}>MITRE:</strong> {item.mitreMapping}</span>}
                 </div>
               </div>
             </div>
+
+            {/* Tab Bar */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border-strong)', marginBottom: 24, flexShrink: 0 }}>
+              {TABS.map(t => (
+                <button key={t.id} onClick={() => setTab(t.id)} style={{ background: 'none', border: 'none', borderBottom: tab === t.id ? '2px solid var(--blue)' : '2px solid transparent', color: tab === t.id ? 'var(--blue)' : 'var(--text-muted)', fontWeight: 600, fontSize: 14, padding: '12px 20px', cursor: 'pointer', transition: 'color 0.2s', marginBottom: -1 }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Sanitized Output Tab */}
+            {tab === 'output' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 20, flexShrink: 0 }}>
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
+                  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card-alt)' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Sanitized Fact</span>
+                  </div>
+                  <div style={{ padding: '24px 28px', fontSize: 15, lineHeight: 1.8, color: 'var(--text-main)', fontWeight: 500 }}>
+                    {item.fact}
+                  </div>
+                </div>
+                {actions.length > 0 && (
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
+                    <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card-alt)' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Sanitization Actions Applied</span>
+                    </div>
+                    <div style={{ padding: '20px 24px', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                      {actions.map((a, i) => (
+                        <span key={i} style={{ background: 'var(--blue-light)', color: 'var(--blue)', padding: '6px 16px', borderRadius: 20, fontSize: 13, fontWeight: 600 }}>
+                          {a}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Redaction Details Tab */}
+            {tab === 'redaction' && (
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card-alt)' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Redacted Fields</span>
+                </div>
+                {Object.keys(redactionMap).length === 0 ? (
+                  <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No redactions were applied to this finding.</div>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-app)' }}>
+                        <th style={{ padding: '12px 24px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', textAlign: 'left' }}>Field</th>
+                        <th style={{ padding: '12px 24px', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', textAlign: 'left' }}>Redacted Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {Object.entries(redactionMap).map(([key, val]) => (
+                        <tr key={key} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '14px 24px', fontSize: 13, fontWeight: 600, color: 'var(--text-main)', textTransform: 'capitalize' }}>{key.replace(/_/g, ' ')}</td>
+                          <td style={{ padding: '14px 24px' }}>
+                            <code style={{ background: '#fee2e2', color: '#dc2626', padding: '4px 12px', borderRadius: 6, fontSize: 13, fontFamily: '"Courier New", monospace', fontWeight: 700 }}>{val}</code>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            )}
+
+            {/* Evidence Block Tab */}
+            {tab === 'evidence' && (
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden', flexShrink: 0 }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card-alt)' }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Raw Evidence Block (XML)</span>
+                </div>
+                {xmlBlock ? (
+                  <pre style={{ margin: 0, padding: '28px 32px', fontFamily: '"Courier New", monospace', fontSize: 13, color: 'var(--text-main)', lineHeight: 1.9, overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', background: 'var(--bg-app)' }}>{xmlBlock}</pre>
+                ) : (
+                  <div style={{ padding: '48px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No XML evidence block available for this finding.</div>
+                )}
+              </div>
+            )}
+
+            {/* Metadata Tab */}
+            {tab === 'metadata' && (
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, padding: '28px 32px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px 48px', flexShrink: 0 }}>
+                <Field label="Evidence Reference" value={item.ref} mono />
+                <Field label="Layer" value={item.layer} />
+                <Field label="Timestamp" value={item.timestamp} />
+                <Field label="Confidence" value={`${item.confidence}%`} />
+                <Field label="Severity" value={item.severity?.charAt(0).toUpperCase() + item.severity?.slice(1)} />
+                <Field label="MITRE Mapping" value={item.mitreMapping} mono />
+                <Field label="Injection Flagged" value={item.injectionFlagged ? 'Yes' : 'No'} />
+                <Field label="Injection Score" value={`${((item.injectionScore || 0) * 100).toFixed(1)}%`} />
+                <Field label="Actions Applied" value={actions.join(', ') || 'None'} full />
+              </div>
+            )}
+
           </div>
         </main>
       </div>
-
       <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </>
   );

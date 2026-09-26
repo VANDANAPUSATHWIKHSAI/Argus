@@ -320,7 +320,7 @@ const Evidence = () => {
           <div className="evidence-tabs" style={{display: 'flex', borderBottom: '1px solid var(--border-strong)', padding: '0 24px', background: 'var(--bg-app)'}}>
             <div className="evidence-tab active" style={{padding: '16px 20px', fontWeight: '600', fontSize: '14px', color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'pointer'}}>Evidence Items</div>
             <Link to="/upload" className="evidence-tab" style={{padding: '16px 20px', fontWeight: '500', fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none'}}>Upload Evidence</Link>
-            <div className="evidence-tab" onClick={() => setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Coverage view is not yet implemented in this prototype.', type: 'info'})} style={{padding: '16px 20px', fontWeight: '500', fontSize: '14px', color: 'var(--text-muted)', cursor: 'pointer'}}>Coverage</div>
+            <Link to="/evidence-coverage" className="evidence-tab" style={{padding: '16px 20px', fontWeight: '500', fontSize: '14px', color: 'var(--text-muted)', textDecoration: 'none', cursor: 'pointer'}}>Coverage</Link>
           </div>
 
           {/* Search & Filters */}
@@ -339,12 +339,17 @@ const Evidence = () => {
                   placeholder="All Sources" 
                   noSearch 
                   size="small"
-                  options={[
+                   options={[
                     { label: "All Sources", value: "" },
-                    { label: "Files", value: "File" },
-                    { label: "Logs", value: "Log" },
-                    { label: "Archives", value: "Archive" },
-                    { label: "Flagged", value: "Flagged" }
+                    { label: "Disk Image", value: "Disk Image" },
+                    { label: "Memory Dump", value: "Memory" },
+                    { label: "Network Capture", value: "PCAP" },
+                    { label: "Windows Event Log", value: "EVTX" },
+                    { label: "Linux Log", value: "Log" },
+                    { label: "Registry Hive", value: "Registry" },
+                    { label: "Script", value: "Script" },
+                    { label: "File / Document", value: "File" },
+                    { label: "Archive", value: "Archive" },
                   ]}
                 />
               </div>

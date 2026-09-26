@@ -120,56 +120,6 @@ const Sanitized = () => {
           return true;
         });
 
-        if (deduped.length === 0) {
-          // Provide mock data if no findings exist, so the user can see the UI
-          deduped.push(
-            {
-              id: 'mock-1',
-              fact: 'Execution of PowerShell script with hidden window style detected. Potential defense evasion.',
-              layer: 'Endpoint',
-              severity: 'high',
-              confidence: 92,
-              timestamp: new Date().toLocaleString(),
-              ref: 'EV-1029-PS',
-              injectionFlagged: false,
-              injectionScore: 0.1,
-              sanitizationActions: ['Redacted username', 'Redacted IP address'],
-              redactionMetadata: { user: '[REDACTED_USER]', ip: '[REDACTED_IP]' },
-              xmlEvidenceBlock: '<Process>\n  <Name>powershell.exe</Name>\n  <Args>-WindowStyle Hidden</Args>\n</Process>',
-              mitreMapping: 'T1059.001',
-              sanitizedContext: {
-                sanitized_fact: 'Execution of PowerShell script with hidden window style detected. Potential defense evasion.',
-                redaction_metadata: { user: '[REDACTED_USER]', ip: '[REDACTED_IP]' },
-                sanitization_actions: ['Redacted username', 'Redacted IP address'],
-                xml_evidence_block: '<Process>\n  <Name>powershell.exe</Name>\n  <Args>-WindowStyle Hidden</Args>\n</Process>'
-              }
-            },
-            {
-              id: 'mock-2',
-              fact: 'Multiple failed login attempts from external IP address followed by successful login.',
-              layer: 'Network',
-              severity: 'critical',
-              confidence: 98,
-              timestamp: new Date(Date.now() - 3600000).toLocaleString(),
-              ref: 'EV-1030-NET',
-              injectionFlagged: true,
-              injectionScore: 0.85,
-              sanitizationActions: ['Redacted external IP'],
-              redactionMetadata: { ip: '[REDACTED_IP]' },
-              xmlEvidenceBlock: '<NetworkEvent>\n  <Type>Login</Type>\n  <Status>Failed</Status>\n  <Count>45</Count>\n</NetworkEvent>',
-              mitreMapping: 'T1110.001',
-              sanitizedContext: {
-                sanitized_fact: 'Multiple failed login attempts from external IP address followed by successful login.',
-                redaction_metadata: { ip: '[REDACTED_IP]' },
-                sanitization_actions: ['Redacted external IP'],
-                xml_evidence_block: '<NetworkEvent>\n  <Type>Login</Type>\n  <Status>Failed</Status>\n  <Count>45</Count>\n</NetworkEvent>',
-                injection_flagged: true,
-                injection_score: 0.85
-              }
-            }
-          );
-        }
-
         setData(deduped);
       } catch (err) {
         console.error('Failed to fetch sanitized findings:', err);

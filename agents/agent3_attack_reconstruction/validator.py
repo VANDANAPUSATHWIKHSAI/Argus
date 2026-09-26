@@ -51,6 +51,7 @@ class Agent3Validator:
         if invalid_ids:
             component.citation_verified = False
             component.invalid_citations = invalid_ids
+            component.evidence_ids = [cid for cid in cited_ids if cid not in invalid_ids]
             logger.warning("Agent 3 cited non-existent evidence IDs: %s", invalid_ids)
         else:
             component.citation_verified = True

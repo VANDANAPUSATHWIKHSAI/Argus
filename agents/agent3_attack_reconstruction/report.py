@@ -5,8 +5,10 @@ class Agent3ReportGenerator:
     """Generates the investigator-facing report from a validated Agent3Output."""
 
     @staticmethod
-    def format_citations(evidence_ids: list[str]) -> str:
-        """Formats evidence IDs into a comma-separated string."""
+    def format_citations(evidence_ids: list[str], invalid_citations: list[str] = None) -> str:
+        """Formats evidence IDs into a comma-separated string, filtering out invalid ones."""
+        if invalid_citations:
+            evidence_ids = [eid for eid in evidence_ids if eid not in invalid_citations]
         if not evidence_ids:
             return "No supporting evidence"
         return ", ".join(evidence_ids)
@@ -53,7 +55,7 @@ class Agent3ReportGenerator:
                 report_lines.append(f"{evt.timestamp}")
                 report_lines.append(f"{evt.event}")
                 report_lines.append(f"Stage: {evt.stage}")
-                report_lines.append(f"Evidence: {Agent3ReportGenerator.format_citations(evt.evidence_ids)}")
+                report_lines.append(f"Evidence: {Agent3ReportGenerator.format_citations(evt.evidence_ids, evt.invalid_citations)}")
 
             for missing in output.missing_expected_events:
                 report_lines.append("")
@@ -75,7 +77,7 @@ class Agent3ReportGenerator:
         if output.lateral_movement:
             report_lines.append("\nLATERAL MOVEMENT:")
             for lm in output.lateral_movement:
-                report_lines.append(f"- {lm.source_host} -> {lm.destination_host} via {lm.method} (Evidence: {Agent3ReportGenerator.format_citations(lm.evidence_ids)})")
+                report_lines.append(f"- {lm.source_host} -> {lm.destination_host} via {lm.method} (Evidence: {Agent3ReportGenerator.format_citations(lm.evidence_ids, lm.invalid_citations)})")
                 
         report_lines.append(f"\nOVERALL CONFIDENCE: {output.overall_confidence:.2f}")
 

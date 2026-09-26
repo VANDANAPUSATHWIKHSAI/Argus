@@ -7,7 +7,7 @@
 
 
 :root {
-  /* Typography & Geometry Shared Tokens */
+  /* Typography & Geometry Shared Tokens — theme-neutral */
   --font-sans: 'Poppins', -apple-system, sans-serif;
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -15,15 +15,16 @@
   --radius-full: 9999px;
 }
 
-[data-theme="dark"], :root {
-  /* Dedicated Dark Mode Color System (Continuous Deep Black Canvas) */
-  --bg-app: radial-gradient(ellipse at 50% 0%, #1e1e1e 0%, #121212 100%);
+/* ── DARK THEME (default on load via JS in App.jsx) ── */
+[data-theme="dark"] {
+  /* Deep Black Canvas */
+  --bg-app: #121212;
   --bg-body: #121212;
   --bg-sidebar: transparent;
   --bg-header: transparent;
   --bg-card: #1e1e1e;
   --bg-card-elevated: #2c2c2c;
-  --bg-input: #121212;
+  --bg-input: #1a1a1a;
   --bg-input-focus: #18181b;
   --bg-card-modal: #1e1e1e;
   --bg-surface: #1e1e1e;
@@ -43,14 +44,6 @@
   --blue: #3B82F6;
   --blue-hover: #60A5FA;
 
-  /* Entity Colors (Dark Mode Only) */
-  --entity-evidence: #60A5FA;
-  --entity-device: #34D399;
-  --entity-user: #A78BFA;
-  --entity-process: #F59E0B;
-  --entity-network: #22D3EE;
-  --entity-finding: #EF4444;
-
   --blue-light: rgba(96, 165, 250, 0.12);
   --purple-light: rgba(167, 139, 250, 0.12);
   --teal-light: rgba(52, 211, 153, 0.12);
@@ -58,8 +51,10 @@
   --orange-light: rgba(245, 158, 11, 0.12);
   --cyan-light: rgba(34, 211, 238, 0.12);
   --red-light: rgba(239, 68, 68, 0.12);
+  --red: #EF4444;
+  --orange: #F59E0B;
+  --green: #34D399;
 
-  /* Severity Colors (Dark Mode Only) */
   --severity-critical: #EF4444;
   --severity-critical-bg: rgba(239, 68, 68, 0.12);
   --severity-high: #F97316;
@@ -91,6 +86,8 @@
   --bg-surface: #ffffff;
   --bg-surface-2: #f1f5f9;
   --bg-card-modal: #ffffff;
+  --bg-input: #ffffff;
+  --bg-input-focus: #f8fafc;
   
   --border-subtle: #f1f5f9;
   --border-strong: #e2e8f0;
@@ -100,6 +97,10 @@
   --text-light: #94a3b8;
   --bg-card-glass: rgba(255, 255, 255, 1);
   
+  /* Primary */
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+
   /* Node & Accent Colors (Pastel & Soft) */
   --blue: #3b82f6;
   --blue-light: #eff6ff;
@@ -134,12 +135,16 @@
 html, body {
   width: 100%;
   height: 100%;
-  background: var(--bg-app);
+  background-color: var(--bg-body, #121212);
   color: var(--text-main);
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.5;
   overflow: hidden;
+}
+#root {
+  height: 100%;
+  width: 100%;
 }
 
 /* Custom Scrollbar */
@@ -159,7 +164,7 @@ html, body {
 }
 
 input, textarea, select, button {
-  background: var(--bg-app);
+  background: var(--bg-input, #1a1a1a);
   color: var(--text-main);
   border: 1px solid var(--border-strong);
   font-family: inherit;
@@ -176,7 +181,9 @@ input::placeholder, textarea::placeholder {
 /* ── LIGHT MODE EXPLICIT OVERRIDES ── */
 /* These guarantee correct colors even if CSS variable cascade is delayed */
 [data-theme="light"] body,
-[data-theme="light"] html { background: #f8fafc !important; color: #0f172a !important; }
+[data-theme="light"] html { background-color: #f8fafc !important; color: #0f172a !important; }
+[data-theme="dark"] body,
+[data-theme="dark"] html { background-color: #121212 !important; color: #F1F5F9 !important; }
 [data-theme="light"] .sidebar { background: #ffffff !important; border-right-color: #e2e8f0 !important; }
 [data-theme="light"] .topbar { background: #ffffff !important; border-bottom-color: #e2e8f0 !important; }
 [data-theme="light"] .main-content { background: #f8fafc !important; }
@@ -214,7 +221,13 @@ input::placeholder, textarea::placeholder {
 [data-theme="light"] .user-dropdown-header .ud-role { color: #64748b !important; }
 [data-theme="light"] .user-dropdown-item { color: #0f172a !important; }
 [data-theme="light"] .user-dropdown-item:hover { background: #f8fafc !important; color: #3b82f6 !important; }
-
+/* Buttons in light mode */
+[data-theme="light"] button:not(.btn-primary):not(.nav-item):not(.icon-btn) { background: #ffffff !important; color: #0f172a !important; border-color: #e2e8f0 !important; }
+/* App shell bg */
+[data-theme="light"] #app-shell,
+[data-theme="light"] #root { background-color: #f8fafc !important; }
+[data-theme="dark"] #app-shell,
+[data-theme="dark"] #root { background-color: #121212 !important; }
 
 .sidebar-logo, .nav-menu, .sidebar-footer { z-index: 1; position: relative; }
 .sidebar-logo { display: flex; align-items: center; gap: 12px; padding: 0 24px 32px; }

@@ -96,6 +96,10 @@ def test_integration():
             flags = row[3]
             full_report = json.loads(flags.get("full_report", "{}"))
             print(f"    Re-parsed Timeline Length: {len(full_report.get('attack_timeline', []))}")
+            
+            print("\n--- GENERATED INVESTIGATOR REPORT ---")
+            print(full_report.get("investigator_report", "").encode("utf-8", errors="replace").decode("utf-8"))
+            print("-------------------------------------")
         else:
             print("    PostgreSQL Persistence: FAILED (No rows found)")
         conn.close()

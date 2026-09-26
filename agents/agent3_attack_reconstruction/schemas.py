@@ -70,3 +70,4 @@ class Agent3Output(BaseModel):
     sanitization_summary: Dict[str, Any] = Field(default_factory=dict)
     execution_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] = "SUCCESS"
     error_message: Optional[str] = None
+    investigator_report: Optional[str] = Field(None, description="Human readable forensic report")

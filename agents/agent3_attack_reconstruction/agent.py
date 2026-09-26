@@ -89,6 +89,8 @@ class AttackReconstructionAgent(BaseAgent):
                 execution_status="FAILED",
                 error_message=f"No FIR findings found for case {case_id}"
             )
+            from agents.agent3_attack_reconstruction.report import Agent3ReportGenerator
+            output.investigator_report = Agent3ReportGenerator.generate(output)
             return output.model_dump()
 
         sanitized_contexts: List[SanitizedAgentContext] = []
@@ -149,6 +151,8 @@ class AttackReconstructionAgent(BaseAgent):
                 execution_status="FAILED",
                 error_message=f"LLM invocation error: {str(exc)}"
             )
+            from agents.agent3_attack_reconstruction.report import Agent3ReportGenerator
+            output.investigator_report = Agent3ReportGenerator.generate(output)
             return output.model_dump()
 
         output = self._parse_json_to_output(llm_response, case_id, tenant_id)
@@ -161,6 +165,10 @@ class AttackReconstructionAgent(BaseAgent):
             "findings_sanitized": len(sanitized_contexts),
             "injections_flagged": sum(1 for c in sanitized_contexts if c.injection_flagged)
         }
+
+        # Generate Human-Readable Investigator-Facing Report
+        from agents.agent3_attack_reconstruction.report import Agent3ReportGenerator
+        output.investigator_report = Agent3ReportGenerator.generate(output)
 
         self._persist_agent_output(output)
 

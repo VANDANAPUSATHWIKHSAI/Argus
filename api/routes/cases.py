@@ -165,6 +165,27 @@ async def create_case(
             (req.name, req.analyst_id, req.senior_analyst_id, session.case_id)
         )
         conn.commit()
+        
+        # 4. Case Notes
+        cur.execute(
+            """
+            SELECT note_id, case_id, created_by, created_at, title, type
+            FROM case_notes
+            WHERE tenant_id = %s
+            """,
+            (x_tenant_id,)
+        )
+        for row in cur.fetchall():
+            note_id, case_id, created_by, created_at, title, note_type = row
+            activity.append({
+                "action": "Created Note",
+                "case_id": case_id,
+                "created_by": user_map.get(created_by, created_by),
+                "created_by_id": created_by,
+                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+                "details": f"{title} ({note_type})"
+            })
+
         conn.close()
     except Exception as e:
         print(f"[DB WARNING] Could not store case name: {e}")
@@ -189,7 +210,8 @@ async def create_case(
 
 @router.get("/", response_model=Dict[str, Any])
 async def get_all_cases(
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
 ):
     cases = list_cases(tenant_id=x_tenant_id)
     
@@ -210,25 +232,41 @@ async def get_all_cases(
         cur.execute("SELECT case_id, name, analyst_id, senior_analyst_id FROM cases WHERE tenant_id = %s", (x_tenant_id,))
         for row in cur.fetchall():
             case_names[row[0]] = {"name": row[1], "analyst_id": row[2], "senior_analyst_id": row[3]}
+            
+        cur.execute("SELECT id, name FROM users")
+        user_map = {}
+        for row in cur.fetchall():
+            user_map[str(row[0])] = row[1]
+        
         conn.close()
     except Exception as e:
         print(f"[DB WARNING] Could not fetch case names: {e}")
-    
-    return {
-        "status": "SUCCESS",
-        "data": [
-            {
-                "case_id": c.case_id,
-                "created_by": c.created_by,
-                "created_at": c.created_at,
-                "status": c.status,
-                "name": case_names.get(c.case_id, {}).get("name", ""),
-                "analyst_id": case_names.get(c.case_id, {}).get("analyst_id"),
-                "senior_analyst_id": case_names.get(c.case_id, {}).get("senior_analyst_id")
-            }
-            for c in cases
-        ]
-    }
+
+    user_id = str(current_user.get("id", ""))
+    is_admin = current_user.get("role") == "admin"
+
+    result = []
+    for c in cases:
+        info = case_names.get(c.case_id, {})
+        analyst_id = str(info.get("analyst_id") or "")
+        senior_id  = str(info.get("senior_analyst_id") or "")
+        assigned = is_admin or analyst_id == user_id or senior_id == user_id
+        
+        analyst_name = user_map.get(analyst_id, analyst_id) if 'user_map' in locals() else analyst_id
+        
+        result.append({
+            "case_id": c.case_id,
+            "created_by": c.created_by,
+            "created_at": c.created_at,
+            "status": c.status,
+            "name": info.get("name", ""),
+            "analyst_id": info.get("analyst_id"),
+            "analyst_name": analyst_name,
+            "senior_analyst_id": info.get("senior_analyst_id"),
+            "assigned_to_you": assigned,
+        })
+
+    return {"status": "SUCCESS", "data": result}
 
 @router.get("/activity", response_model=Dict[str, Any])
 async def get_recent_activity(
@@ -252,52 +290,108 @@ async def get_recent_activity(
         cur.execute("SELECT id, name FROM users")
         for row in cur.fetchall():
             user_map[str(row[0])] = row[1]
-    except Exception as e:
-        print(f"[DB WARNING] Could not fetch users: {e}")
-        conn = None
-    
-    # 1. Get Cases (Excluding closed cases)
-    cases = list_cases(tenant_id=x_tenant_id)
-    active_case_ids = set()
-    for c in cases:
-        active_case_ids.add(c.case_id)
-        c_by = c.created_by if c.created_by else ""
-        mapped_name = user_map.get(c_by, c_by)
-        
-        activity.append({
-            "action": "Created Case",
-            "case_id": c.case_id,
-            "created_by": mapped_name,
-            "created_at": c.created_at.isoformat() if hasattr(c.created_at, "isoformat") else str(c.created_at),
-            "details": c.case_id
-        })
             
-    # 2. Get Evidence from DB (Only for active cases)
-    try:
-        if conn and not conn.closed:
-            cur.execute(
-                """
-                SELECT e.evidence_id, e.case_id, e.filename, e.uploaded_by, e.upload_timestamp
-                FROM evidence e
-                INNER JOIN cases c ON e.case_id = c.case_id
-                WHERE c.tenant_id = %s
-                """, 
-                (x_tenant_id,)
-            )
-            for row in cur.fetchall():
-                u_by = row[3] if row[3] else ""
+        # 1. Case Creation
+        cur.execute("SELECT case_id, created_by, created_at, closed_at, closed_by FROM cases WHERE tenant_id = %s", (x_tenant_id,))
+        for row in cur.fetchall():
+            case_id, c_by, created_at, closed_at, closed_by = row
+            mapped_name = user_map.get(c_by, c_by)
+            activity.append({
+                "action": "Created Case",
+                "case_id": case_id,
+                "created_by": mapped_name,
+                "created_by_id": c_by,
+                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+                "details": case_id
+            })
+            if closed_at:
+                c_by_name = user_map.get(closed_by, closed_by) if closed_by else "Admin User"
                 activity.append({
-                    "action": "Uploaded Evidence",
-                    "case_id": row[1],
-                    "created_by": user_map.get(u_by, u_by),
-                    "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
-                    "details": row[2]
+                    "action": "Closed Case",
+                    "case_id": case_id,
+                    "created_by": c_by_name,
+                    "created_by_id": closed_by if closed_by else c_by,
+                    "created_at": closed_at.isoformat() if hasattr(closed_at, "isoformat") else str(closed_at),
+                    "details": f"Case {case_id} was closed"
                 })
-            conn.close()
-    except Exception as e:
-        print(f"[DB WARNING] Could not fetch evidence activity: {e}")
+
+        # 2. Uploaded Evidence
+        cur.execute(
+            """
+            SELECT e.evidence_id, e.case_id, e.filename, e.uploaded_by, e.upload_timestamp
+            FROM evidence e
+            INNER JOIN cases c ON e.case_id = c.case_id
+            WHERE c.tenant_id = %s
+            """, 
+            (x_tenant_id,)
+        )
+        for row in cur.fetchall():
+            u_by = row[3] if row[3] else ""
+            activity.append({
+                "action": "Uploaded Evidence",
+                "case_id": row[1],
+                "created_by": user_map.get(u_by, u_by),
+                "created_by_id": u_by,
+                "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
+                "details": row[2]
+            })
+
+        # 3. Analyst Findings
+        cur.execute(
+            """
+            SELECT f.case_id, f.created_at, f.fact, f.source_engine, f.reviewed_by, f.review_status, f.timestamp
+            FROM fir_findings f
+            INNER JOIN cases c ON f.case_id = c.case_id
+            WHERE c.tenant_id = %s
+            ORDER BY f.timestamp DESC
+            """,
+            (x_tenant_id,)
+        )
         
-    # Sort by created_at descending
+        # Deduplicate findings by action, case, user, and approximate minute
+        finding_events = {}
+        for row in cur.fetchall():
+            case_id, created_at, fact, source_engine, reviewed_by, review_status, review_time = row
+            
+            action_name = None
+            evt_time = None
+            if review_status in ('analyst_confirmed', 'analyst_rejected') and review_time:
+                action_name = "Confirmed Finding" if review_status == 'analyst_confirmed' else "Rejected Finding"
+                evt_time = review_time
+            elif source_engine == 'manual' or review_status == 'manual_entry':
+                action_name = "Created Finding"
+                evt_time = created_at
+                
+            if action_name and evt_time:
+                # Group by minute
+                minute_key = evt_time.replace(second=0, microsecond=0)
+                user_name = user_map.get(reviewed_by, reviewed_by) if reviewed_by else "Analyst"
+                group_key = (action_name, case_id, user_name, minute_key)
+                
+                if group_key not in finding_events:
+                    finding_events[group_key] = {
+                        "action": action_name,
+                        "case_id": case_id,
+                        "created_by": user_name,
+                        "created_by_id": reviewed_by if reviewed_by else "system",
+                        "created_at": evt_time,
+                        "details": fact[:50] + "..." if fact and len(fact) > 50 else fact,
+                        "count": 1
+                    }
+                else:
+                    finding_events[group_key]["count"] += 1
+
+        for grp, evt in finding_events.items():
+            if evt["count"] > 1:
+                evt["action"] = f"{evt['action']} ({evt['count']})"
+                evt["details"] = f"Multiple findings ({evt['count']}) updated"
+            evt["created_at"] = evt["created_at"].isoformat() if hasattr(evt["created_at"], "isoformat") else str(evt["created_at"])
+            activity.append(evt)
+            
+        conn.close()
+    except Exception as e:
+        print(f"[DB WARNING] Could not fetch comprehensive activity: {e}")
+        
     activity.sort(key=lambda x: x["created_at"], reverse=True)
     
     return {
@@ -310,13 +404,34 @@ async def get_recent_activity(
 @router.put("/{case_id}/close")
 async def close_case_endpoint(
     case_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
 ):
     """
     Close an active case globally.
     """
     from api.routes.evidence import sanitize_uuid
     clean_case_id = sanitize_uuid(case_id)
+    
+    # Custom db update to add closed_by
+    from config.settings import settings
+    import psycopg2
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password, connect_timeout=2
+        )
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s WHERE case_id = %s AND tenant_id = %s;",
+            (current_user["id"], clean_case_id, x_tenant_id)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"[DB] Error closing case directly: {e}")
+        
     success = close_case(tenant_id=x_tenant_id, case_id=clean_case_id)
     if not success and clean_case_id != case_id:
         success = close_case(tenant_id=x_tenant_id, case_id=case_id)
@@ -325,6 +440,60 @@ async def close_case_endpoint(
         raise HTTPException(status_code=404, detail="Case not found or could not be closed.")
         
     return {"status": "SUCCESS", "message": f"Case {case_id} closed."}
+
+
+class AssignSeniorRequest(BaseModel):
+    senior_analyst_id: int
+
+
+@router.put("/{case_id}/assign-senior")
+async def assign_senior_analyst(
+    case_id: str,
+    req: AssignSeniorRequest,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Assign a senior analyst to an existing case. Admin only.
+    """
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can assign a senior analyst.")
+    try:
+        from config.settings import settings
+        import psycopg2
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password, connect_timeout=2
+        )
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE cases SET senior_analyst_id = %s WHERE case_id = %s AND tenant_id = %s",
+            (req.senior_analyst_id, case_id, x_tenant_id)
+        )
+        if cur.rowcount == 0:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Case not found.")
+        conn.commit()
+        
+        # Send assignment email in background
+        senior = get_user_by_id(req.senior_analyst_id)
+        if senior and senior.get("email"):
+            case_name = case_id
+            try:
+                cur.execute("SELECT name FROM cases WHERE case_id = %s", (case_id,))
+                row = cur.fetchone()
+                if row and row[0]: case_name = row[0]
+            except Exception: pass
+            send_assignment_email(senior["email"], case_id, case_name, "Senior Analyst")
+        
+        conn.close()
+        return {"status": "SUCCESS", "message": f"Senior Analyst {req.senior_analyst_id} assigned to {case_id}."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to assign senior analyst: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/{case_id}", response_model=CaseSummaryResponse)
@@ -488,13 +657,40 @@ async def get_case(
 @router.get("/{case_id}/findings")
 async def get_case_findings(
     case_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Retrieve all parsed output findings for a specific case.
+    Access restricted: only assigned analyst, senior analyst, or admin.
     """
     if not case_id or not case_id.strip():
         raise HTTPException(status_code=400, detail="case_id path parameter cannot be empty.")
+
+    # Enforce access control — check DB assignment
+    if current_user.get("role") != "admin":
+        try:
+            from config.settings import settings
+            import psycopg2
+            conn = psycopg2.connect(
+                host=settings.postgres_host, port=settings.postgres_port,
+                database=settings.postgres_db, user=settings.postgres_user,
+                password=settings.postgres_password, connect_timeout=2
+            )
+            cur = conn.cursor()
+            cur.execute("SELECT analyst_id, senior_analyst_id FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
+            row = cur.fetchone()
+            conn.close()
+            if row:
+                uid = str(current_user.get("id", ""))
+                analyst_id   = str(row[0] or "")
+                senior_id    = str(row[1] or "")
+                if uid != analyst_id and uid != senior_id:
+                    raise HTTPException(status_code=403, detail="Access denied. This case is not assigned to you.")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Could not verify case assignment: {e}")
     
     findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
     
@@ -518,3 +714,311 @@ async def get_case_findings(
         sanitized_results.append(f_dict)
         
     return sanitized_results
+
+
+
+class CaseNoteModel(BaseModel):
+    title: str
+    content: str
+    type: str
+    priority: str = "Normal"
+    status: str = "Open"
+    related_evidence_id: Optional[str] = None
+    related_finding_id: Optional[str] = None
+
+
+class ReviewNoteModel(BaseModel):
+    title: str
+    content: str
+    type: str
+    status: str = "Open"
+    related_type: Optional[str] = None
+    related_id: Optional[str] = None
+@router.get("/{case_id}/notes")
+async def get_case_notes(
+    case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    from config.settings import settings
+    import psycopg2
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password
+        )
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT note_id, title, content, type, priority, created_by, created_at, updated_at, related_evidence_id, related_finding_id
+            FROM case_notes
+            WHERE case_id = %s AND tenant_id = %s
+            ORDER BY updated_at DESC
+            """,
+            (case_id, x_tenant_id)
+        )
+        notes = []
+        for row in cur.fetchall():
+            notes.append({
+                "noteId": row[0],
+                "caseId": case_id,
+                "title": row[1],
+                "content": row[2],
+                "type": row[3],
+                "priority": row[4],
+                "createdBy": row[5],
+                "createdAt": row[6].isoformat() if hasattr(row[6], "isoformat") else str(row[6]),
+                "updatedAt": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
+                "relatedEvidenceId": row[8],
+                "relatedFindingId": row[9]
+            })
+        conn.close()
+        return {"status": "SUCCESS", "data": notes}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{case_id}/notes")
+async def create_case_note(
+    case_id: str,
+    note: CaseNoteModel,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    from config.settings import settings
+    import psycopg2
+    import uuid
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password
+        )
+        cur = conn.cursor()
+        note_id = f"NOTE-{str(uuid.uuid4())[:8].upper()}"
+        cur.execute(
+            """
+            INSERT INTO case_notes (note_id, case_id, tenant_id, title, content, type, priority, created_by, related_evidence_id, related_finding_id)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (note_id, case_id, x_tenant_id, note.title, note.content, note.type, note.priority, current_user.get("name", "Analyst"), note.related_evidence_id, note.related_finding_id)
+        )
+        conn.commit()
+        conn.close()
+        return {"status": "SUCCESS", "noteId": note_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{case_id}/notes/{note_id}")
+async def update_case_note(
+    case_id: str,
+    note_id: str,
+    note: CaseNoteModel,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    from config.settings import settings
+    import psycopg2
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password
+        )
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE case_notes 
+            SET title = %s, content = %s, type = %s, priority = %s, updated_at = now(), related_evidence_id = %s, related_finding_id = %s
+            WHERE note_id = %s AND case_id = %s AND tenant_id = %s
+            """,
+            (note.title, note.content, note.type, note.priority, note.related_evidence_id, note.related_finding_id, note_id, case_id, x_tenant_id)
+        )
+        conn.commit()
+        conn.close()
+        return {"status": "SUCCESS"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/{case_id}/notes/{note_id}")
+async def delete_case_note(
+    case_id: str,
+    note_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    from config.settings import settings
+    import psycopg2
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password
+        )
+        cur = conn.cursor()
+        cur.execute("DELETE FROM case_notes WHERE note_id = %s AND case_id = %s AND tenant_id = %s", (note_id, case_id, x_tenant_id))
+        conn.commit()
+        conn.close()
+        return {"status": "SUCCESS"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{case_id}/review-notes")
+async def get_review_notes(
+    case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    from config.settings import settings
+    import psycopg2
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password
+        )
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS review_notes (
+                note_id VARCHAR(50) PRIMARY KEY,
+                case_id VARCHAR(50),
+                tenant_id VARCHAR(50),
+                title VARCHAR(255),
+                content TEXT,
+                type VARCHAR(50),
+                status VARCHAR(50),
+                related_type VARCHAR(50),
+                related_id VARCHAR(50),
+                created_by VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+
+        cur.execute(
+            """
+            SELECT note_id, title, content, type, status, related_type, related_id, created_by, created_at, updated_at
+            FROM review_notes
+            WHERE case_id = %s AND tenant_id = %s
+            ORDER BY created_at DESC
+            """,
+            (case_id, x_tenant_id)
+        )
+        notes = []
+        for row in cur.fetchall():
+            notes.append({
+                "noteId": row[0],
+                "caseId": case_id,
+                "title": row[1],
+                "content": row[2],
+                "type": row[3],
+                "status": row[4],
+                "relatedType": row[5],
+                "relatedId": row[6],
+                "createdBy": row[7],
+                "createdAt": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8]),
+                "updatedAt": row[9].isoformat() if hasattr(row[9], "isoformat") else str(row[9])
+            })
+        conn.close()
+        return {"status": "SUCCESS", "data": notes}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{case_id}/review-notes")
+async def create_review_note(
+    case_id: str,
+    note: ReviewNoteModel,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    from config.settings import settings
+    import psycopg2
+    import uuid
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password
+        )
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS review_notes (
+                note_id VARCHAR(50) PRIMARY KEY,
+                case_id VARCHAR(50),
+                tenant_id VARCHAR(50),
+                title VARCHAR(255),
+                content TEXT,
+                type VARCHAR(50),
+                status VARCHAR(50),
+                related_type VARCHAR(50),
+                related_id VARCHAR(50),
+                created_by VARCHAR(100),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        note_id = f"RN-{str(uuid.uuid4())[:8].upper()}"
+        cur.execute(
+            """
+            INSERT INTO review_notes (note_id, case_id, tenant_id, title, content, type, status, related_type, related_id, created_by)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """,
+            (note_id, case_id, x_tenant_id, note.title, note.content, note.type, note.status, note.related_type, note.related_id, current_user.get("name", "Senior Analyst"))
+        )
+        
+        # Log to audit log
+        cur.execute(
+            """
+            INSERT INTO audit_log (tenant_id, case_id, user_id, action, target_type, target_id, details)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (x_tenant_id, case_id, current_user.get("user_id", "admin"), "Created Review Note", "review_note", note_id, f"{note.title}")
+        )
+        conn.commit()
+        conn.close()
+        return {"status": "SUCCESS", "noteId": note_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{case_id}/review-notes/{note_id}")
+async def update_review_note(
+    case_id: str,
+    note_id: str,
+    note: ReviewNoteModel,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    from config.settings import settings
+    import psycopg2
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password
+        )
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE review_notes 
+            SET title = %s, content = %s, type = %s, status = %s, related_type = %s, related_id = %s, updated_at = CURRENT_TIMESTAMP
+            WHERE note_id = %s AND case_id = %s AND tenant_id = %s
+            """,
+            (note.title, note.content, note.type, note.status, note.related_type, note.related_id, note_id, case_id, x_tenant_id)
+        )
+        
+        # Log to audit log
+        action_name = "Resolved Review Note" if note.status == "Resolved" else "Updated Review Note"
+        cur.execute(
+            """
+            INSERT INTO audit_log (tenant_id, case_id, user_id, action, target_type, target_id, details)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (x_tenant_id, case_id, current_user.get("user_id", "admin"), action_name, "review_note", note_id, f"{note.title}")
+        )
+        conn.commit()
+        conn.close()
+        return {"status": "SUCCESS"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

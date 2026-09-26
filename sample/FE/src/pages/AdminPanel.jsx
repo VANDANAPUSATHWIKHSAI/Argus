@@ -174,7 +174,7 @@ const AdminPanel = () => {
                       <td style={{ padding: '16px 24px', textAlign: 'right' }}>
                         <button 
                           onClick={() => handleDeleteEmployee(emp.id)}
-                          style={{ background: 'none', border: '1px solid var(--border-strong)', color: 'var(--danger)', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 500 }}
+                          style={{ background: '#ef4444', border: 'none', color: '#fff', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600 }}
                         >
                           Delete
                         </button>

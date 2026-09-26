@@ -14,6 +14,7 @@ import json
 import logging
 import re
 import subprocess
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
@@ -213,7 +214,10 @@ class MemoryParser:
         self, dump_path: Path, plugin: str, *, json_output: bool
     ) -> str:
         """Execute `vol -f <dump> <plugin> [--output=json]` and return stdout."""
-        vol_exe = str(Path(sys.exec_prefix) / "Scripts" / "vol.exe")
+        if sys.platform == "win32":
+            vol_exe = str(Path(sys.exec_prefix) / "Scripts" / "vol.exe")
+        else:
+            vol_exe = str(Path(sys.exec_prefix) / "bin" / "vol")
         if json_output:
             cmd = [vol_exe, "-r", "json", "-f", str(dump_path), plugin]
         else:

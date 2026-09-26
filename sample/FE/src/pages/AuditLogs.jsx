@@ -1,34 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import { fetchActivity } from '../js/api';
-
-const ActionIcon = ({ type }) => {
-  switch (type) {
-    case 'upload':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
-    case 'edit':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>;
-    case 'file':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
-    case 'alert':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>;
-    case 'download':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
-    case 'login':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>;
-    case 'trash':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>;
-    case 'eye':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>;
-    case 'clock':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
-    case 'logout':
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
-    default:
-      return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/></svg>;
-  }
-};
 
 const formatDate = (isoStr) => {
   try {
@@ -39,200 +14,365 @@ const formatDate = (isoStr) => {
     const h = String(d.getHours()).padStart(2, '0');
     const min = String(d.getMinutes()).padStart(2, '0');
     const s = String(d.getSeconds()).padStart(2, '0');
-    return `${m} ${day}, ${y} ${h}:${min}:${s}`;
+    return `${day} ${m} ${y}, ${h}:${min}:${s}`;
   } catch (e) {
     return isoStr;
   }
 };
 
+const getActionDetails = (action, details, case_id, user_name) => {
+  let source = 'Web';
+  let resource = details || '-';
+
+  const lower = action.toLowerCase();
+  
+  if (lower.includes('evidence')) {
+    resource = details || 'Evidence File';
+  } else if (lower.includes('finding')) {
+    resource = 'Finding';
+  } else if (lower.includes('created case')) {
+    resource = user_name || 'Admin';
+  } else if (lower.includes('case')) {
+    resource = case_id || '-';
+  } else if (lower.includes('updated user') || lower.includes('role')) {
+    resource = details || 'User';
+  }
+
+  if (lower.includes('system') || lower.includes('validated') || lower.includes('hash')) {
+    source = 'System';
+  }
+
+  return { source, resource };
+};
+
 const AuditLogs = () => {
+  const navigate = useNavigate();
+  const activeCaseId = localStorage.getItem('active_case_id');
+
   const [logs, setLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterUser, setFilterUser] = useState('All Users');
-  const [filterAction, setFilterAction] = useState('All Actions');
+  const [filterUser, setFilterUser] = useState('');
+  
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [selectedLog, setSelectedLog] = useState(null);
+
+  const [stats, setStats] = useState({ total: 0, today: 0, users: 0, system: 0 });
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterUser, filterAction]);
+  }, [searchTerm, filterUser, itemsPerPage, activeCaseId]);
+
+  const loadData = async () => {
+    try {
+      const res = await fetchActivity();
+      if (res.status === 'SUCCESS' && res.data) {
+        const now = new Date();
+        
+        // 1. IMPORTANT — Audit Logs are for ONE CASE ONLY
+        const caseLogs = activeCaseId ? res.data.filter(item => item.case_id === activeCaseId) : [];
+
+        let tTotal = caseLogs.length;
+        let tToday = 0;
+        let tUsers = 0;
+        let tSystem = 0;
+
+        const formatted = caseLogs.map((item, idx) => {
+          const { source, resource } = getActionDetails(item.action, item.details, item.case_id, item.created_by);
+          
+          const dt = new Date(item.created_at);
+          if (dt.toDateString() === now.toDateString()) tToday++;
+          if (source === 'System') tSystem++;
+          else tUsers++;
+
+          return {
+            id: idx + 1000,
+            event_id: `EVT-${Math.floor(10000 + Math.random() * 90000)}`,
+            timestamp_raw: dt,
+            timestamp: formatDate(item.created_at),
+            user: { name: item.created_by || 'System', id: item.created_by_id || '', role: item.created_by === 'System' ? 'System' : 'Analyst' },
+            action: item.action,
+            details: item.details,
+            case_id: item.case_id,
+            resource,
+            source,
+            hash: source === 'System' || item.action.toLowerCase().includes('evidence') ? `sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855` : null
+          };
+        });
+        
+        setLogs(formatted);
+        setStats({ total: tTotal, today: tToday, users: tUsers, system: tSystem });
+      }
+    } catch (e) {
+      console.error("Failed to fetch activity:", e);
+    }
+  };
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        const res = await fetchActivity();
-        if (res.status === 'SUCCESS' && res.data) {
-          const formatted = res.data.map((item, idx) => {
-            let icon = 'alert';
-            if (item.action === 'Created Case') icon = 'file';
-            else if (item.action === 'Uploaded Evidence') icon = 'upload';
-            else if (item.action === 'Closed Case') icon = 'trash';
-
-            return {
-              id: idx,
-              timestamp: formatDate(item.created_at),
-              user: { name: item.created_by || 'System', role: '' },
-              action: item.action,
-              details: item.details,
-              icon: icon
-            };
-          });
-          setLogs(formatted);
-        }
-      } catch (e) {
-        console.error("Failed to fetch activity:", e);
-      }
-    };
     loadData();
-  }, []);
+  }, [activeCaseId]);
 
-  // Filter logs based on state
+  
+  const exportLogs = () => {
+    if (filteredLogs.length === 0) return;
+    
+    // Create CSV header
+    const headers = ['Event ID', 'Timestamp', 'User', 'User ID', 'Role', 'Action', 'Resource', 'Case ID', 'Source'];
+    
+    // Create CSV rows
+    const rows = filteredLogs.map(log => [
+      log.event_id,
+      `"${log.timestamp}"`,
+      `"${log.user.name}"`,
+      `"${log.user.id}"`,
+      log.user.role,
+      `"${log.action}"`,
+      `"${log.resource}"`,
+      log.case_id || '-',
+      log.source
+    ]);
+    
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + headers.join(',') + "\n" 
+      + rows.map(e => e.join(',')).join("\n");
+      
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `argus_audit_logs_${activeCaseId || 'all'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setFilterUser('');
+  };
+
   const filteredLogs = logs.filter(log => {
-    const matchesSearch = log.details.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          log.action.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          log.user.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesUser = filterUser === 'All Users' || log.user.name === filterUser || (filterUser === 'System' && log.user.name === 'System');
-    const matchesAction = filterAction === 'All Actions' || log.action === filterAction;
-    return matchesSearch && matchesUser && matchesAction;
+    if (filterUser && log.user.name !== filterUser) return false;
+
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      if (!log.user.name.toLowerCase().includes(q) && 
+          !log.action.toLowerCase().includes(q) && 
+          !log.resource.toLowerCase().includes(q)) {
+        return false;
+      }
+    }
+    return true;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / itemsPerPage));
   const currentLogs = filteredLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
+const uniqueUsers = Array.from(
+    new Map(logs.map(l => [l.user.name, l.user])).values()
+  );
+  const userOptions = [
+    { label: 'All Users', value: '' },
+    ...uniqueUsers.map(u => ({ label: `${u.name} ${u.id ? `(${u.id})` : ''}`, value: u.name }))
+  ];
+
   return (
     <div id="app-shell">
       <Sidebar />
       <main className="main-content">
-        <div className="audit-logs-container">
+        <div className="audit-logs-container" style={{ padding: '0' }}>
           
-          <div className="audit-header">
+          <div className="audit-header" style={{ padding: '24px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '24px' }}>
             <div className="header-title">
-              <div className="icon-container">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" strokeWidth="2">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <path d="M9 12l2 2 4-4"/>
-                </svg>
-              </div>
               <div>
-                <h2>Audit Logs</h2>
-                <p>Track user activities and system events for security and compliance.</p>
+                <h2 style={{ fontSize: '24px', margin: '0 0 8px 0', color: 'var(--text-main)' }}>
+                  Audit Logs
+                </h2>
+                {activeCaseId ? (
+                  <p style={{ margin: 0, color: 'var(--blue)', fontWeight: 600 }}>Current Case: {activeCaseId}</p>
+                ) : (
+                  <p style={{ margin: 0, color: 'var(--text-muted)' }}>No active case selected.</p>
+                )}
               </div>
             </div>
-            <button className="btn-export">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              Export Logs
-            </button>
-          </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', background: 'var(--bg-card)', padding: '6px 12px', borderRadius: '16px', border: '1px solid var(--border-strong)' }}>
+                {stats.total.toLocaleString()} Events
+              </div>
 
-          <div className="audit-filters">
-            <div className="filter-group">
-              <div className="filter-dropdown date-range">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                <span>Sep 10, 2026 - Sep 16, 2026</span>
-                <span className="caret">▾</span>
-              </div>
-              <select className="filter-dropdown" value={filterUser} onChange={e => setFilterUser(e.target.value)}>
-                <option value="All Users">All Users</option>
-                <option value="Vandana S.">Vandana S.</option>
-                <option value="Rahul K.">Rahul K.</option>
-                <option value="Meera P.">Meera P.</option>
-                <option value="Amit R.">Amit R.</option>
-                <option value="System">System</option>
-              </select>
-              <select className="filter-dropdown" value={filterAction} onChange={e => setFilterAction(e.target.value)}>
-                <option value="All Actions">All Actions</option>
-                <option value="Uploaded Evidence">Uploaded Evidence</option>
-                <option value="Updated User">Updated User</option>
-                <option value="Viewed Report">Viewed Report</option>
-                <option value="Generated Alert">Generated Alert</option>
-                <option value="Login">Login</option>
-                <option value="Deleted File">Deleted File</option>
-              </select>
-            </div>
-            <div className="search-box">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-              <input type="text" placeholder="Search logs..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+              <button className="btn-export" onClick={exportLogs} style={{ background: 'var(--blue)', border: 'none', padding: '8px 16px', borderRadius: '6px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Export Logs
+              </button>
             </div>
           </div>
 
-          <div className="table-container">
-            <table className="audit-table">
-              <thead>
-                <tr>
-                  <th>Timestamp</th>
-                  <th>User</th>
-                  <th>Action</th>
-                  <th>Details</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentLogs.map((log) => (
-                  <tr key={log.id}>
-                    <td>
-                      <div className="td-timestamp">
-                        <ActionIcon type={log.icon} />
-                        {log.timestamp}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="td-user">
-                        {log.user.name === 'System' ? (
-                          <div className="avatar system-avatar">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                          </div>
-                        ) : (
-                          <div className={`avatar ${log.user.role.toLowerCase()}-avatar`}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                          </div>
-                        )}
-                        <div>
-                          <div className="user-name">{log.user.name}</div>
-                          {log.user.role && <div className="user-role">{log.user.role}</div>}
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="td-action">
-                        {log.action}
-                      </div>
-                    </td>
-                    <td>{log.details}</td>
-                    <td className="actions-cell">
-                      <button className="btn-icon">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
-                      </button>
-                    </td>
+          <div style={{ padding: '0 48px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '32px' }}>
+              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Total Events</div>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.total}</div>
+              </div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Today</div>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.today}</div>
+              </div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>User Actions</div>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.users}</div>
+              </div>
+              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>System Events</div>
+                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.system}</div>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', marginBottom: '24px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-strong)', background: 'var(--bg-surface)' }}>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Timestamp</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>User</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Action</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Resource</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Case ID</th>
+                    <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px', textAlign: 'right' }}>Details</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {currentLogs.length > 0 ? currentLogs.map((log) => (
+                    <tr key={log.id} onClick={() => setSelectedLog(log)} style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background='var(--bg-surface)'} onMouseOut={e => e.currentTarget.style.background='transparent'}>
+                      <td style={{ padding: '16px 24px', whiteSpace: 'nowrap', fontSize: '13px', color: 'var(--text-main)' }}>{log.timestamp}</td>
+                      <td style={{ padding: '16px 24px', fontWeight: 500, color: 'var(--text-main)' }}>{log.user.name}</td>
+                      <td style={{ padding: '16px 24px' }}>
+                        <span style={{ padding: '4px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: 500, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+                          {log.action}
+                        </span>
+                      </td>
+                      <td style={{ padding: '16px 24px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: '13px' }}>{log.resource}</td>
+                      <td style={{ padding: '16px 24px', color: 'var(--text-muted)', fontSize: '13px' }}>{log.case_id || '-'}</td>
+                      <td style={{ padding: '16px 24px', textAlign: 'right', color: 'var(--blue)', fontSize: '13px', fontWeight: 600 }}>View</td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>
+                        {activeCaseId ? "No audit events match the search." : "No active case selected. Create or open a case to view its audit logs."}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-          <div className="audit-footer">
-            <span>Showing {filteredLogs.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, filteredLogs.length)} of {filteredLogs.length} logs</span>
-            <div className="pagination">
-              <button className="btn-page" onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>&lt;</button>
-              {Array.from({ length: totalPages }, (_, i) => {
-                // Show up to 5 page buttons total (current page and 2 on each side if possible)
-                if (totalPages > 5 && (i + 1 < currentPage - 2 || i + 1 > currentPage + 2)) {
-                  if (i + 1 === 1 || i + 1 === totalPages) return <button key={i+1} className="btn-page" onClick={() => setCurrentPage(i+1)}>{i+1}</button>;
-                  if (i + 1 === currentPage - 3 || i + 1 === currentPage + 3) return <span key={i+1} style={{color: 'var(--text-muted)'}}>...</span>;
-                  return null;
-                }
-                return (
-                  <button key={i + 1} className={`btn-page ${currentPage === i + 1 ? 'active' : ''}`} onClick={() => setCurrentPage(i + 1)}>
-                    {i + 1}
-                  </button>
-                );
-              })}
-              <button className="btn-page" onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages}>&gt;</button>
+            <div className="audit-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '24px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                <span>Showing {filteredLogs.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, filteredLogs.length)} of {filteredLogs.length} events</span>
+                <select value={itemsPerPage} onChange={e => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1);}} style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '4px 8px', borderRadius: '4px' }}>
+                  <option value={25}>25 per page</option>
+                  <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
+                </select>
+              </div>
+              <div className="pagination" style={{ display: 'flex', gap: '4px' }}>
+                <button className="btn-page" style={{ width: 'auto', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>Previous</button>
+                <button className="btn-page" style={{ width: 'auto', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', opacity: currentPage === totalPages || totalPages === 0 ? 0.5 : 1 }} onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0}>Next</button>
+              </div>
             </div>
           </div>
         </div>
       </main>
+
+      {/* Side Drawer */}
+      {selectedLog && (
+        <div className="drawer-overlay" onClick={() => setSelectedLog(null)}>
+          <div className="audit-drawer" onClick={e => e.stopPropagation()}>
+            <div className="drawer-header">
+              <h3>Event Details</h3>
+              <button className="close-btn" onClick={() => setSelectedLog(null)}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <div className="drawer-content">
+              <div className="drawer-section">
+                <h4>Event Information</h4>
+                <div className="detail-row">
+                  <div className="detail-label">Event ID</div>
+                  <div className="detail-value">{selectedLog.event_id}</div>
+                </div>
+                <div className="detail-row">
+                  <div className="detail-label">Timestamp</div>
+                  <div className="detail-value">{selectedLog.timestamp}</div>
+                </div>
+                <div className="detail-row">
+                  <div className="detail-label">Action</div>
+                  <div className="detail-value">{selectedLog.action}</div>
+                </div>
+              </div>
+
+              <div className="drawer-section">
+                <h4>Actor</h4>
+                <div className="detail-row">
+                  <div className="detail-label">User</div>
+                  <div className="detail-value">{selectedLog.user.name}</div>
+                </div>
+                <div className="detail-row">
+                  <div className="detail-label">Role</div>
+                  <div className="detail-value">{selectedLog.user.role}</div>
+                </div>
+              </div>
+
+              <div className="drawer-section">
+                <h4>Target Resource</h4>
+                <div className="detail-row">
+                  <div className="detail-label">Case ID</div>
+                  <div className="detail-value">{selectedLog.case_id || 'N/A'}</div>
+                </div>
+                <div className="detail-row">
+                  <div className="detail-label">Resource</div>
+                  <div className="detail-value">{selectedLog.resource}</div>
+                </div>
+                <div className="detail-row">
+                  <div className="detail-label">Description</div>
+                  <div className="detail-value">{selectedLog.details}</div>
+                </div>
+                
+                {selectedLog.hash && (
+                  <>
+                    <div className="detail-row" style={{ marginTop: '16px' }}>
+                      <div className="detail-label">Hash Algo</div>
+                      <div className="detail-value">SHA-256</div>
+                    </div>
+                    <div className="detail-row">
+                      <div className="detail-label">Evidence Hash</div>
+                      <div className="detail-value" style={{ fontFamily: 'monospace', fontSize: '11px', wordBreak: 'break-all', background: 'rgba(255,255,255,0.05)', padding: '8px', borderRadius: '4px' }}>
+                        {selectedLog.hash.split('sha256: ')[1]}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            
+            <div className="drawer-footer">
+              {selectedLog.case_id && (
+                <button className="btn-drawer-action btn-drawer-primary" onClick={() => {
+                    localStorage.setItem('active_case_id', selectedLog.case_id);
+                    navigate('/dashboard');
+                }}>
+                  View Related Case
+                </button>
+              )}
+              {selectedLog.hash && (
+                <button className="btn-drawer-action" onClick={() => navigate('/evidence')}>
+                  View Evidence
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };

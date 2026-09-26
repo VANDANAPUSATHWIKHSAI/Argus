@@ -218,17 +218,20 @@ const Login = () => {
       previousMousePosition = { x: e.clientX, y: e.clientY };
       lastUserInteraction = Date.now();
     };
+
     const onPointerMove = (e) => {
-      if (!isDragging) return;
       lastUserInteraction = Date.now();
+      // Always rotate from mouse delta — same behaviour whether clicking or just hovering
       const deltaX = e.clientX - previousMousePosition.x;
       const deltaY = e.clientY - previousMousePosition.y;
       targetRotation.y += deltaX * 0.004;
       targetRotation.x += deltaY * 0.004;
-      targetRotation.x = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, targetRotation.x));
+      targetRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotation.x));
       previousMousePosition = { x: e.clientX, y: e.clientY };
     };
+
     const onPointerUp = () => { isDragging = false; };
+
     const onWheel = (e) => {
       if (e.target.closest('.login-card-container')) return;
       lastUserInteraction = Date.now();
@@ -251,11 +254,13 @@ const Login = () => {
     const animate = () => {
       frameId = requestAnimationFrame(animate);
 
-      if (!isDragging && (Date.now() - lastUserInteraction > 2000)) {
-        targetRotation.y += 0.002;
+      // Auto-spin only when user hasn't moved the mouse recently
+      if (Date.now() - lastUserInteraction > 3000) {
+        targetRotation.y += 0.003;
       }
-      currentRotation.x += (targetRotation.x - currentRotation.x) * 0.06;
-      currentRotation.y += (targetRotation.y - currentRotation.y) * 0.06;
+
+      currentRotation.x += (targetRotation.x - currentRotation.x) * 0.08;
+      currentRotation.y += (targetRotation.y - currentRotation.y) * 0.08;
 
       globeGroup.rotation.x = currentRotation.x;
       globeGroup.rotation.y = currentRotation.y;
@@ -379,15 +384,8 @@ const Login = () => {
       {/* HEADER */}
       <header className="argus-header" style={{zIndex: 10, position: 'relative'}}>
         <div className="header-left">
-          <div className="header-logo-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <circle cx="12" cy="12" r="9"/>
-              <circle cx="12" cy="12" r="3"/>
-              <line x1="12" y1="3" x2="12" y2="6"/>
-              <line x1="12" y1="18" x2="12" y2="21"/>
-              <line x1="3" y1="12" x2="6" y2="12"/>
-              <line x1="18" y1="12" x2="21" y2="12"/>
-            </svg>
+          <div className="header-logo-wrapper" style={{ padding: 0, overflow: 'visible', border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', alignItems: 'center' }}>
+            <img src="/argus_logo_new.png" alt="ARGUS Logo" style={{ width: '44px', height: '44px', objectFit: 'contain', display: 'block', mixBlendMode: 'multiply' }} />
           </div>
           <div className="header-brand-title">
             <span className="brand-name">ARGUS</span>
@@ -500,15 +498,8 @@ const Login = () => {
           <div className="login-card">
             
             {/* CARD TOP LOGO */}
-            <div className="card-logo-circle">
-              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <circle cx="12" cy="12" r="9"/>
-                <circle cx="12" cy="12" r="3"/>
-                <line x1="12" y1="3" x2="12" y2="6"/>
-                <line x1="12" y1="18" x2="12" y2="21"/>
-                <line x1="3" y1="12" x2="6" y2="12"/>
-                <line x1="18" y1="12" x2="21" y2="12"/>
-              </svg>
+            <div className="card-logo-wrapper" style={{ overflow: 'visible', border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', justifyContent: 'center' }}>
+              <img src="/argus_logo_new.png" alt="ARGUS Logo" style={{ width: '90px', height: '90px', objectFit: 'contain', display: 'block', mixBlendMode: 'multiply' }} />
             </div>
 
             <div className="card-title-group">

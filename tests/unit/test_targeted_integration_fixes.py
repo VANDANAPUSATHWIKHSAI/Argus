@@ -22,7 +22,12 @@ from forensic_analysis.schemas import Finding
 from preprocessing.fcr_engine.schemas import CorrelationRecord
 from preprocessing.schemas import Artifact
 
+from api.routes.auth import get_current_user
+
 client = TestClient(app)
+
+app.dependency_overrides[get_current_user] = lambda: {"username": "test_user"}
+
 
 
 def test_fix1_fir_repository_sql_syntax():

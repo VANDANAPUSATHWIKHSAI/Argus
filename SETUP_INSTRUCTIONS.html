@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; padding: 40px; max-width: 800px; margin: 0 auto; color: #333; }
+  h1, h2, h3 { color: #111; }
+  code { background-color: #f4f4f4; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
+  pre { background-color: #f4f4f4; padding: 16px; border-radius: 8px; overflow-x: auto; }
+  pre code { background-color: transparent; padding: 0; }
+  hr { border: 0; border-top: 1px solid #ddd; margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<h1>ARGUS Project Setup Instructions</h1>
+<p>To run this project on another machine, you will need to set up both the backend (Python API) and the frontend (React app), along with the necessary background services (PostgreSQL and MinIO).</p>
+
+<h2>Prerequisites</h2>
+<p>Make sure the new machine has the following installed:</p>
+<ul>
+  <li><strong>Python 3.10+</strong></li>
+  <li><strong>Node.js</strong> (v18 or higher recommended)</li>
+  <li><strong>PostgreSQL</strong> (for the database)</li>
+  <li><strong>MinIO</strong> (for evidence storage)</li>
+</ul>
+<hr>
+
+<h2>1. Database &amp; Services Setup</h2>
+<ol>
+  <li>Create a PostgreSQL database (e.g., named <code>argus_db</code>).</li>
+  <li>Set up a MinIO bucket for evidence uploads.</li>
+  <li>In the root of the project, create an <code>.env</code> file (you can copy <code>.env.example</code> if it exists) and fill in your local Postgres and MinIO credentials.</li>
+</ol>
+
+<h2>2. Backend Setup (FastAPI)</h2>
+<p>Open a terminal in the root directory of the project (<code>argus/</code>) and run the following commands:</p>
+<pre><code># 1. Create a virtual environment
+python -m venv venv
+
+# 2. Activate the virtual environment
+# On Windows:
+.\venv\Scripts\activate
+# On Mac/Linux:
+source venv/bin/activate
+
+# 3. Install backend dependencies
+pip install -r requirements.txt
+
+# 4. Run the database seed/initialization scripts if necessary
+# (e.g., importing seed/postgres_init.sql into your database)
+
+# 5. Start the backend server
+uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
+</code></pre>
+<p>The backend API will now be running on <code>http://127.0.0.1:8000</code>.</p>
+<hr>
+
+<h2>3. Frontend Setup (React / Vite)</h2>
+<p>Open a <strong>new</strong> terminal window, navigate to the frontend folder, and start the app:</p>
+<pre><code># 1. Navigate to the frontend directory
+cd sample/FE
+
+# 2. Install Node dependencies
+npm install
+
+# 3. Start the development server
+npm run dev
+</code></pre>
+<p>The frontend will start up and provide you with a localhost URL (usually <code>http://localhost:5173</code>). Open this URL in your browser to access the application.</p>
+
+<script>
+  // Automatically trigger print dialog to save as PDF
+  window.onload = function() { window.print(); }
+</script>
+</body>
+</html>

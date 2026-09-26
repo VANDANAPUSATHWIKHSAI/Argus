@@ -6,6 +6,7 @@ import ProfileModal from '../components/ProfileModal';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import AdminDashboard from './AdminDashboard';
+import SeniorDashboard from './SeniorDashboard';
 import { fetchCases, fetchCaseSummary, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
 const Dashboard = () => {
@@ -17,6 +18,7 @@ const Dashboard = () => {
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
   const isAdmin = currentUser?.role === 'admin';
+  const isSeniorAnalyst = currentUser?.role === 'senior_analyst';
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -45,16 +47,29 @@ const Dashboard = () => {
       const res = await fetchCases();
       const caseList = res.data || [];
       setCases(caseList);
-      // Synchronize global active case for all analysts
-      const globalActive = caseList.find(c => c.status === 'open');
-      if (globalActive) {
-        localStorage.setItem('active_case_id', globalActive.case_id);
-        if (globalActive.name) localStorage.setItem('active_case_name', globalActive.name);
+
+      if (isAdmin) {
+        // Admin sees all — sync active case to first open case
+        const globalActive = caseList.find(c => c.status === 'open');
+        if (globalActive) {
+          localStorage.setItem('active_case_id', globalActive.case_id);
+          if (globalActive.name) localStorage.setItem('active_case_name', globalActive.name);
+        } else {
+          localStorage.removeItem('active_case_id');
+          localStorage.removeItem('active_case_name');
+          localStorage.removeItem('active_case_desc');
+        }
       } else {
-        // Clear it if no open cases exist globally
-        localStorage.removeItem('active_case_id');
-        localStorage.removeItem('active_case_name');
-        localStorage.removeItem('active_case_desc');
+        // Analyst — only activate the case assigned to them
+        const myCase = caseList.find(c => c.status === 'open' && c.assigned_to_you);
+        if (myCase) {
+          localStorage.setItem('active_case_id', myCase.case_id);
+          if (myCase.name) localStorage.setItem('active_case_name', myCase.name);
+        } else {
+          localStorage.removeItem('active_case_id');
+          localStorage.removeItem('active_case_name');
+          localStorage.removeItem('active_case_desc');
+        }
       }
 
       const activeCaseId = localStorage.getItem('active_case_id');
@@ -62,12 +77,8 @@ const Dashboard = () => {
         const summaryData = await fetchCaseSummary(activeCaseId).catch(() => null);
         if (summaryData) {
           setActiveSummary(summaryData);
-          if (summaryData.name) {
-            localStorage.setItem('active_case_name', summaryData.name);
-          }
-          if (summaryData.description) {
-            localStorage.setItem('active_case_desc', summaryData.description);
-          }
+          if (summaryData.name) localStorage.setItem('active_case_name', summaryData.name);
+          if (summaryData.description) localStorage.setItem('active_case_desc', summaryData.description);
         } else {
           setActiveSummary(null);
         }
@@ -226,13 +237,15 @@ const Dashboard = () => {
         <Sidebar />
 
         {/* ── MAIN CONTENT ── */}
-        <main className="main-content">
-          {isAdmin ? (
+        <main className="main-content" style={{ padding: isSeniorAnalyst ? 0 : undefined }}>
+          {isSeniorAnalyst ? (
+            <SeniorDashboard />
+          ) : isAdmin ? (
             <>
               {/* ADMIN TOPBAR */}
               <header className="topbar" style={{ justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', padding: '16px 40px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px' }}>Welcome, Admin</div>
+                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px' }}>Welcome, {currentUser?.name || 'Admin'}</div>
                   <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Manage people, cases, and ensure compliance.</div>
                 </div>
                 <div className="topbar-actions">
@@ -246,12 +259,12 @@ const Dashboard = () => {
                   <NotificationMenu />
                   <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)} style={{ cursor: 'pointer' }}>
                     <div className="avatar" style={{ background: '#4b5563' }}>A</div>
-                    <span style={{ fontWeight: 500 }}>Admin</span>
+                    <span style={{ fontWeight: 500 }}>{currentUser?.name || 'Admin'}</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     {showUserDropdown && (
                       <div className="user-dropdown" style={{ display: 'block' }}>
                         <div className="user-dropdown-header">
-                          <div className="ud-name">Admin</div>
+                          <div className="ud-name">{currentUser?.name || 'Admin'}</div>
                           <div className="ud-role">System Administrator</div>
                         </div>
                       </div>
@@ -297,12 +310,12 @@ const Dashboard = () => {
               {/* User profile */}
               <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
                 <div className="avatar">A</div>
-                <span style={{ fontWeight: 500 }}>Analyst</span>
+                <span style={{ fontWeight: 500 }}>{currentUser?.name || 'Analyst'}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 {showUserDropdown && (
                   <div className="user-dropdown" style={{ display: 'block' }}>
                     <div className="user-dropdown-header">
-                      <div className="ud-name">Analyst</div>
+                      <div className="ud-name">{currentUser?.name || 'Analyst'}</div>
                       <div className="ud-role">Digital Forensics Investigator</div>
                     </div>
                   </div>
@@ -320,14 +333,42 @@ const Dashboard = () => {
 
             {!loading && (
               <>
-                {/* EMPTY STATE — uses standard CSS variables so it switches properly */}
+                {/* Cases assigned to OTHER analysts — locked banner (analyst view only) */}
+                {!isAdmin && (() => {
+                  const lockedCases = cases.filter(c => c.status === 'open' && !c.assigned_to_you);
+                  if (lockedCases.length === 0) return null;
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16, flexShrink: 0 }}>
+                      {lockedCases.map(c => (
+                        <div key={c.case_id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14, opacity: 0.75 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--bg-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)' }}>
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-main)', marginBottom: 2 }}>{c.name || c.case_id}</div>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>In Progress — being investigated by another analyst</div>
+                          </div>
+                          <span style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>LOCKED</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* EMPTY STATE */}
                 {!activeSummary && (
                   <div id="dashboard-empty-state" style={{ display: 'block', textAlign: 'center', padding: '100px 20px', background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', marginBottom: '24px', border: '1px dashed var(--border-strong)' }}>
                     <div style={{ width: '64px', height: '64px', background: 'var(--blue-light)', color: 'var(--blue)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
                     </div>
-                    <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>No Active Case Selected</h2>
-                    <p style={{ fontSize: '14px', color: 'var(--text-muted)', maxWidth: '400px', margin: '0 auto' }}>Select an existing case or create a new one to begin your investigation and view insights.</p>
+                    <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-main)', marginBottom: '8px' }}>
+                      {isAdmin ? 'No Active Case Selected' : 'No Case Assigned'}
+                    </h2>
+                    <p style={{ fontSize: '14px', color: 'var(--text-muted)', maxWidth: '400px', margin: '0 auto' }}>
+                      {isAdmin
+                        ? 'Select an existing case or create a new one to begin your investigation.'
+                        : 'You have not been assigned to any active case. Please contact your administrator.'}
+                    </p>
                   </div>
                 )}
 
@@ -427,7 +468,7 @@ const Dashboard = () => {
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                               Graph View
                             </button>
-                            <button className="btn btn-outline" onClick={() => setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Timeline View is not yet implemented in this prototype.', type: 'info'})}>
+                            <button className="btn btn-outline" onClick={() => navigate('/timeline')}>
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                               Timeline View
                             </button>
@@ -526,8 +567,6 @@ const Dashboard = () => {
                                   background: isDone ? 'var(--blue)' : isActive ? 'var(--blue)' : 'var(--bg-app)',
                                   border: isPending ? '2.5px solid var(--border-strong)' : '2.5px solid var(--blue)',
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  boxShadow: isActive ? '0 0 0 5px rgba(59,130,246,0.18)' : 'none',
-                                  animation: isActive ? 'stepPulse 2s ease-in-out infinite' : 'none',
                                   transition: 'all 0.3s ease', flexShrink: 0
                                 }}>
                                   {isDone && (

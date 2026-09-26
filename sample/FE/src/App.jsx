@@ -9,6 +9,12 @@ import Sanitized from './pages/Sanitized';
 import SanitizedDetail from './pages/SanitizedDetail';
 import Employees from './pages/Employees';
 import AuditLogs from './pages/AuditLogs';
+import CaseNotes from './pages/CaseNotes';
+import Chatbot from './pages/Chatbot';
+import Findings from './pages/Findings';
+import TimelineDetail from './pages/TimelineDetail';
+import EvidenceCoverage from './pages/EvidenceCoverage';
+import Notifications from './pages/Notifications';
 import ProtectedRoute from './components/ProtectedRoute';// Global styles for the app (can also just import individual ones in components)
 import './App.css';
 
@@ -26,9 +32,15 @@ function App() {
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
+        <Route path="/case-notes" element={<ProtectedRoute><CaseNotes /></ProtectedRoute>} />
+        <Route path="/chatbot" element={<ProtectedRoute><Chatbot /></ProtectedRoute>} />
+        <Route path="/findings" element={<ProtectedRoute><Findings /></ProtectedRoute>} />
+        <Route path="/timeline" element={<ProtectedRoute><TimelineDetail /></ProtectedRoute>} />
+        <Route path="/evidence-coverage" element={<ProtectedRoute><EvidenceCoverage /></ProtectedRoute>} />
         <Route path="/index.html" element={<Navigate to="/dashboard" replace />} />
         <Route path="/evidence" element={<ProtectedRoute><Evidence /></ProtectedRoute>} />
         <Route path="/evidence.html" element={<Navigate to="/evidence" replace />} />
+        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/settings.html" element={<Navigate to="/settings" replace />} />
         <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />

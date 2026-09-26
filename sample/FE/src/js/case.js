@@ -150,11 +150,12 @@ class CaseManager {
     if (btn) btn.innerHTML = 'Creating...';
     
     try {
-      const response = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/cases', {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/cases/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Tenant-ID': 'dev-team'
+          'X-Tenant-ID': 'dev-team',
+          'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         },
         body: JSON.stringify(payload)
       });
@@ -197,10 +198,11 @@ class CaseManager {
             formData.append('relative_path', file.webkitRelativePath);
           }
           
-          await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/evidence/upload', {
+          await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/evidence/upload`, {
             method: 'POST',
             headers: {
-              'X-Tenant-ID': 'dev-team'
+              'X-Tenant-ID': 'dev-team',
+              'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
             },
             body: formData
           });

@@ -249,7 +249,8 @@ async def get_all_cases(
 
 @router.get("/activity", response_model=Dict[str, Any])
 async def get_recent_activity(
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
 ):
     activity = []
     
@@ -366,6 +367,26 @@ async def get_recent_activity(
                 evt["details"] = f"Multiple findings ({evt['count']}) updated"
             evt["created_at"] = evt["created_at"].isoformat() if hasattr(evt["created_at"], "isoformat") else str(evt["created_at"])
             activity.append(evt)
+            
+        # 4. Case Notes
+        cur.execute(
+            """
+            SELECT note_id, case_id, created_by, created_at, title, type
+            FROM case_notes
+            WHERE tenant_id = %s
+            """,
+            (x_tenant_id,)
+        )
+        for row in cur.fetchall():
+            note_id, case_id, created_by, created_at, title, note_type = row
+            activity.append({
+                "action": "Created Note",
+                "case_id": case_id,
+                "created_by": user_map.get(created_by, created_by),
+                "created_by_id": created_by,
+                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+                "details": f"{title} ({note_type})"
+            })
             
         conn.close()
     except Exception as e:

@@ -553,13 +553,19 @@ window.onload = async () => {
 
     // Fetch case stats dynamically
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + ''}/cases/${caseId}`, {
-        headers: { 'X-Tenant-ID': 'dev-team' }
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/cases/${caseId}`, {
+        headers: { 
+          'X-Tenant-ID': 'dev-team',
+          'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
+        }
       });
       if (response.ok) {
         const stats = await response.json();
-        const findingsResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + ''}/cases/${caseId}/findings`, {
-          headers: { 'X-Tenant-ID': 'dev-team' }
+        const findingsResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/cases/${caseId}/findings`, {
+          headers: { 
+            'X-Tenant-ID': 'dev-team',
+            'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
+          }
         });
         let findingsCount = 0;
         if (findingsResponse.ok) {
@@ -704,7 +710,7 @@ window.onload = async () => {
       return;
     }
     
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('argus_token');
     if (!token) {
       showError('You must be logged in to update your password.');
       return;
@@ -717,7 +723,7 @@ window.onload = async () => {
     }
     
     try {
-      const res = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/auth/update-password', {
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/auth/update-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

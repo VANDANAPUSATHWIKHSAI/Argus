@@ -100,8 +100,11 @@ class EvidenceApp {
       if (elCaseId)   elCaseId.textContent   = `Case ${formatId(caseId)}`;
       if (elCaseName) elCaseName.textContent = caseName || 'Investigation';
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + ''}/evidence/case/${caseId}`, {
-        headers: { 'X-Tenant-ID': 'dev-team' }
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/evidence/case/${caseId}`, {
+        headers: { 
+          'X-Tenant-ID': 'dev-team',
+          'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
+        }
       });
       if (!response.ok) throw new Error('Failed to fetch evidence');
       const result = await response.json();

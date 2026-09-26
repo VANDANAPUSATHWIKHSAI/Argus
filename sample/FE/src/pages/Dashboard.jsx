@@ -168,9 +168,13 @@ const Dashboard = () => {
     
     try {
       if (activeCaseId) {
+        const token = localStorage.getItem('argus_token');
         await fetch(`${API_BASE_URL}/cases/${activeCaseId}/close`, {
           method: 'PUT',
-          headers: { 'X-Tenant-ID': DEFAULT_TENANT_ID }
+          headers: { 
+            'X-Tenant-ID': DEFAULT_TENANT_ID,
+            'Authorization': `Bearer ${token}`
+          }
         });
       }
     } catch (e) {

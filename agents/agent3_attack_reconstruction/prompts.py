@@ -12,53 +12,54 @@ CORE RULES & CONSTRAINTS:
 2. CITATION MANDATE: Every claim MUST cite the exact `finding_id` or source `evidence_id`s supporting it in `evidence_ids`. You MUST NOT invent non-existent evidence IDs or cite IDs that are not present in the input.
 3. INFECTION SOURCE: Determine the earliest supported attack event. If evidence is insufficient, state "unverified" or "insufficient evidence".
 4. ATTACK PATH / KILL CHAIN: Construct a structured attack chain (Initial Access -> Execution -> etc). Only include stages supported by evidence.
-5. CHRONOLOGICAL TIMELINE: Order events chronologically using timestamps from the evidence. Do NOT generate fake timestamps.
-6. LATERAL MOVEMENT: Look for RDP, SMB, remote execution, etc. Do not claim lateral movement just because multiple hosts exist.
-7. MISSING EVENTS: Identify expected events that are missing, and label their status strictly as "NOT_OBSERVED". Never claim they definitely did not occur.
-8. STRICT JSON OUTPUT: You MUST reply ONLY with a valid JSON object matching the required schema exactly.
+5. CHRONOLOGICAL TIMELINE: Order events chronologically using timestamps from the evidence. Do NOT generate fake timestamps. You MUST copy the timestamp exactly as it appears in the finding.
+6. LATERAL MOVEMENT: Extract only the specific method (e.g., SMB) explicitly supported by the evidence. Do not guess or add unsupported tools (e.g., PsExec) unless explicitly present in the finding.
+7. MISSING EVENTS: Identify expected events that are missing, and label their status strictly as "NOT_OBSERVED". Only infer missing events if the provided evidence logically implies them, do NOT guess based merely on the absence of artifacts in a tiny dataset.
+8. MITRE TECHNIQUES: Do NOT hallucinate or guess MITRE techniques (like T1000). Only include techniques explicitly found in the evidence data.
+9. STRICT JSON OUTPUT: You MUST reply ONLY with a valid JSON object matching the required schema exactly. DO NOT copy the example values below verbatim; use the actual evidence data!
 
 OUTPUT JSON SCHEMA:
 {
   "infection_path": {
-    "entry_point": "Description of the infection source or 'insufficient evidence'",
-    "evidence_ids": ["F-001"],
+    "entry_point": "<Description of the infection source from evidence>",
+    "evidence_ids": ["<ID>"],
     "confidence": 0.85
   },
   "attack_timeline": [
     {
-      "timestamp": "2023-10-05T14:32:00Z",
-      "event": "Malicious payload executed",
-      "stage": "Execution",
-      "mitre_technique": "T1059.001",
-      "evidence_ids": ["F-002"],
+      "timestamp": "<EXACT timestamp from evidence>",
+      "event": "<Event description>",
+      "stage": "<Stage>",
+      "mitre_technique": "<Technique ONLY if provided>",
+      "evidence_ids": ["<ID>"],
       "confidence": 0.90
     }
   ],
   "attack_chain": [
     {
-      "stage": "Execution",
-      "events": ["Malicious payload executed via PowerShell"],
-      "evidence_ids": ["F-002"],
+      "stage": "<Stage>",
+      "events": ["<Event>"],
+      "evidence_ids": ["<ID>"],
       "confidence": 0.90
     }
   ],
   "lateral_movement": [
     {
-      "source_host": "10.0.0.5",
-      "destination_host": "10.0.0.8",
-      "method": "SMB/PsExec",
-      "evidence_ids": ["F-004"],
+      "source_host": "<Source>",
+      "destination_host": "<Destination>",
+      "method": "<EXACT method from evidence, do not invent>",
+      "evidence_ids": ["<ID>"],
       "confidence": 0.88
     }
   ],
   "missing_expected_events": [
     {
-      "event": "Persistence mechanism",
-      "reason": "Execution occurred but no persistence artifacts were found in registry/startup",
+      "event": "<Missing Event>",
+      "reason": "<Reason based on evidence>",
       "status": "NOT_OBSERVED"
     }
   ],
-  "reconstruction_summary": "Overall summary of the attack...",
+  "reconstruction_summary": "<Overall summary of the attack>",
   "overall_confidence": 0.85
 }
 """

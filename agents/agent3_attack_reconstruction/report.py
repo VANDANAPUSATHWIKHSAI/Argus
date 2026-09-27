@@ -36,7 +36,9 @@ class Agent3ReportGenerator:
             path_events.append(output.infection_path.entry_point)
             
         for stage in output.attack_chain:
-            path_events.extend(stage.events)
+            for event in stage.events:
+                if not path_events or path_events[-1] != event:
+                    path_events.append(event)
             
         if path_events:
             report_lines.append("\n      ↓\n".join(path_events))

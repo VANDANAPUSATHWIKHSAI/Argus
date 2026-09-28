@@ -94,3 +94,22 @@ export async function updatePassword(currentPassword, newPassword) {
 export async function fetchActivity() {
   return fetchWithAuth('/cases/activity');
 }
+
+export async function fetchReviewNotes(caseId) {
+  return fetchWithAuth(`/cases/${caseId}/review-notes`);
+}
+
+export async function createReviewNote(caseId, noteData) {
+  return fetchWithAuth(`/cases/${caseId}/review-notes`, {
+    method: 'POST',
+    body: JSON.stringify(noteData),
+  });
+}
+
+export async function updateReviewNote(caseId, noteId, noteData) {
+  return fetchWithAuth(`/cases/${caseId}/review-notes/${noteId}`, {
+    method: 'PUT',
+    body: JSON.stringify(noteData),
+  });
+}
+

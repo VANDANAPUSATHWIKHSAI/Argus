@@ -70,9 +70,11 @@ class ClassifierLoader:
             if "injection_detector" in _CLASSIFIER_CACHE:
                 self._injection_detector = _CLASSIFIER_CACHE["injection_detector"]
             else:
+                import torch
                 model_id = "protectai/deberta-v3-base-prompt-injection-v2"
-                print(f"[Classifier] Loading prompt injection classifier: {model_id}...")
-                self._injection_detector = pipeline("text-classification", model=model_id)
+                device = 0 if torch.cuda.is_available() else -1
+                print(f"[Classifier] Loading prompt injection classifier: {model_id} (device={device})...")
+                self._injection_detector = pipeline("text-classification", model=model_id, device=device)
                 _CLASSIFIER_CACHE["injection_detector"] = self._injection_detector
         return self._injection_detector
 

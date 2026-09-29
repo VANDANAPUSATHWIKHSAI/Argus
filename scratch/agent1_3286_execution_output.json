@@ -1,0 +1,124 @@
+{
+  "case_id": "CASE-2020JIMMYWILSON-E01",
+  "tenant_id": "default",
+  "agent_id": "agent1_evidence_intelligence",
+  "model_used": "Qwen3-8B",
+  "timestamp": "2026-09-26 05:30:58.163074+00:00",
+  "claims": [
+    {
+      "claim_id": "CLM-AG1-3286-001",
+      "summary": "NTFS USN Change Journal & MFT File Activity Timeline Analysis",
+      "findings_summary": "Ingested and analyzed 3,286 NTFS USN Change Journal and MFT file system records from 2020JimmyWilson.E01 (partition offset 65664). Verified rapid file creation, allocation, and directory access activities across system and user directories.",
+      "cited_evidence_ids": [
+        "da2c8653-6488-4064-8b65-9be97b3503b6",
+        "42c5a1ee-4c28-4e3e-97c1-cb362650f744",
+        "ee1ca311-c86f-4509-8ced-c9a584f1faa3",
+        "ec729017-262a-49e1-8098-d5146f5a39c0",
+        "098db7dd-5a91-42c7-a6ab-81fbf67e999f",
+        "51d11b01-626e-46b2-b434-08b41a5fec47",
+        "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+        "e68b1bdc-5bbd-4667-9e0e-80f04ac20970",
+        "c46a00a3-11cd-42b6-ad88-f3937b9b617d",
+        "f2fbda42-d7ed-487c-ac4a-6f3bda50defe"
+      ],
+      "assessed_importance": "high",
+      "confidence_score": 0.95,
+      "missing_evidence_noted": [
+        "Unallocated cluster carver raw payload"
+      ],
+      "uncertainties_or_conflicts": [],
+      "reasoning_notes": "Correlated 3,286 distinct file system records against SleuthKit FLS bodyfile records and USN reason flags.",
+      "citation_verified": true,
+      "invalid_citations": [],
+      "is_valid_confidence": true,
+      "raw_model_confidence": 0.95,
+      "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Users ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'USERS ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:37+00:00.\"]",
+      "semantic_support_verified": true,
+      "semantic_support_notes": "Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Users ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'USERS ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:37+00:00.\"]"
+    },
+    {
+      "claim_id": "CLM-AG1-3286-002",
+      "summary": "Sanitization Gateway Evidence Integrity & Injection Firewall Audit",
+      "findings_summary": "Passed all 3,286 findings through the Evidence Sanitization Gateway. 100% of context payloads were sanitized, XML-encoded, and scanned for prompt injection vectors. 0 prompt injection attacks were detected, and 0 findings were quarantined.",
+      "cited_evidence_ids": [
+        "59a75338-fb6d-4762-afa9-b6aed421b94e",
+        "d4059d67-8c67-4b45-b7c1-acec13722945",
+        "da94bcf1-5457-4028-b425-e6b9476f5c77",
+        "991f0ef0-3def-4259-81e0-823f8dbd9eeb",
+        "ade13dcb-c27d-41e9-85f9-6de95a7ece88",
+        "15f35c1a-9bca-4d86-859b-7a9eeaca2c3c",
+        "b49aa48d-b96c-41b9-be2c-034dd3df3e85",
+        "7dd4bbd1-a759-4aa3-87c3-e4e808b4eb0e",
+        "02b1fcb0-3f6c-4f39-8010-fdf8152ac7da",
+        "84b3b850-7556-460f-a0a6-2b439476a53c"
+      ],
+      "assessed_importance": "informational",
+      "confidence_score": 0.99,
+      "missing_evidence_noted": [],
+      "uncertainties_or_conflicts": [],
+      "reasoning_notes": "Sanitization Gateway firewall verified 100% pass-through clean state with 0 policy violations.",
+      "citation_verified": true,
+      "invalid_citations": [],
+      "is_valid_confidence": true,
+      "raw_model_confidence": 0.99,
+      "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'AppData ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:47:27+00:00.\", \"NTFS USN change journal / File system record observed for 'AppData ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\"]",
+      "semantic_support_verified": true,
+      "semantic_support_notes": "Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'AppData ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:47:27+00:00.\", \"NTFS USN change journal / File system record observed for 'AppData ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\"]"
+    },
+    {
+      "claim_id": "CLM-AG1-3286-003",
+      "summary": "Deterministic Artifact Provenance & Lineage Verification",
+      "findings_summary": "Validated deterministic composite provenance keys across all 3,286 findings (Case ID: CASE-2020JIMMYWILSON-E01). All findings map to source artifact UUIDs and distinct correlation handoffs.",
+      "cited_evidence_ids": [
+        "d50d9737-38af-4e7b-b370-6601f2d262e9",
+        "67db1a94-b456-4244-b52c-d3d40cb41037",
+        "9fb120d0-469c-4533-9ef2-08cc8b71ed33",
+        "698fbfd7-c457-47d3-911a-23081846a31c",
+        "32b6f55a-17cd-4a5e-8112-e01271161919",
+        "73c1c79e-b9f2-4506-9ba0-01f5addd859c",
+        "c6606bf1-a0ed-4632-86ae-f712dad976a2",
+        "a6e5ed63-f3eb-4de9-84c5-f2996d30c56f",
+        "b7b58d6a-db5c-48e6-b3a7-a928207076b6",
+        "007962e3-cdd5-4f53-b00d-8309ac77efee"
+      ],
+      "assessed_importance": "high",
+      "confidence_score": 0.94,
+      "missing_evidence_noted": [],
+      "uncertainties_or_conflicts": [],
+      "reasoning_notes": "Matched source_artifact_id fields and evidence_reference lists against disk image intake manifests.",
+      "citation_verified": true,
+      "invalid_citations": [],
+      "is_valid_confidence": true,
+      "raw_model_confidence": 0.94,
+      "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Acrobat ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:56+00:00.\", \"NTFS USN change journal / File system record observed for 'Acrobat': reason='FILE_ACTIVITY' at 2014-02-10T14:57:11+00:00.\"]",
+      "semantic_support_verified": true,
+      "semantic_support_notes": "Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Acrobat ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:56+00:00.\", \"NTFS USN change journal / File system record observed for 'Acrobat': reason='FILE_ACTIVITY' at 2014-02-10T14:57:11+00:00.\"]"
+    }
+  ],
+  "total_findings_processed": 3286,
+  "sanitization_summary": {
+    "findings_sanitized": 3286,
+    "injections_flagged": 0,
+    "redaction_actions_taken": 0,
+    "gateway_duration_sec": 1.558
+  },
+  "evidence_trust_score": 0.96,
+  "evidence_quality_summary": {
+    "total_processed": 3286,
+    "injections_flagged": 0,
+    "verified_claims": 3
+  },
+  "investigation_readiness": "READY",
+  "possible_analyses": [
+    "Filesystem USN journal timeline analysis",
+    "MFT file record metadata examination",
+    "Artifact provenance & lineage validation"
+  ],
+  "performed_analyses": [
+    "Sanitization Gateway injection & PII filtering",
+    "Agent 1 Evidence Intelligence reasoning",
+    "Independent deterministic claim validation"
+  ],
+  "execution_status": "SUCCESS",
+  "error_message": null
+}

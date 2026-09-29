@@ -8,6 +8,7 @@ Supports:
 """
 
 import os
+import json
 from typing import Any
 from config.settings import settings
 
@@ -21,6 +22,7 @@ class LLMLoader:
     def __init__(self):
         self.use_ollama = os.getenv("USE_OLLAMA", "true").lower() == "true"
         self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+        self.ollama_timeout = int(os.getenv("OLLAMA_TIMEOUT", "600"))
 
     def load_primary(self) -> Any:
         """
@@ -50,7 +52,7 @@ class LLMLoader:
 
     def _get_ollama_client(self, model_name: str) -> "OllamaWrapper":
         """Returns a helper wrapper to call local Ollama endpoint."""
-        return OllamaWrapper(model_name, self.ollama_url)
+        return OllamaWrapper(model_name, self.ollama_url, timeout=self.ollama_timeout)
 
     def _load_hf_model(self, model_id: str, quantize: bool = True) -> Any:
         """
@@ -91,10 +93,11 @@ class LLMLoader:
 
 class OllamaWrapper:
     """Simple wrapper to query Ollama chat/generation endpoint."""
-    def __init__(self, model_name: str, base_url: str, allow_mock: bool = False):
+    def __init__(self, model_name: str, base_url: str, allow_mock: bool = False, timeout: int = 600):
         self.model_name = model_name
         self.base_url = base_url
         self.allow_mock = allow_mock
+        self.timeout = timeout
 
     def generate(self, prompt: str, system_prompt: str = None) -> str:
         import requests
@@ -115,9 +118,9 @@ class OllamaWrapper:
         }
         if system_prompt:
             payload["system"] = system_prompt
-
+        timeout = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", str(self.timeout)))
         try:
-            r = requests.post(url, json=payload, timeout=1200)
+            r = requests.post(url, json=payload, timeout=timeout)
             if r.status_code == 200:
                 return r.json().get("response", "")
             else:
@@ -125,14 +128,12 @@ class OllamaWrapper:
         except Exception as e:
             if self.allow_mock:
                 print(f"[OLLAMA WARNING] Connection failed: {e}. Returning smart mock reasoning response.")
-                # Basic mock logic to parse some IDs from the prompt to make valid citations
                 import re
                 finding_ids = re.findall(r'<finding id=[\'"]([^\'"]+)[\'"]>', prompt)
                 if not finding_ids:
-                    finding_ids = ["F-1001"]
+                    finding_ids = re.findall(r'Finding \[([a-f0-9\-]+)\]', prompt) or ["F-1001", "F-1002"]
                     
                 claims = []
-                # Chunk into claims to simulate bulk processing
                 chunk_size = 50
                 for i in range(0, len(finding_ids), chunk_size):
                     chunk = finding_ids[i:i+chunk_size]
@@ -146,6 +147,18 @@ class OllamaWrapper:
                     })
                 
                 return json.dumps({
+                    "claims": [
+                        {
+                            "claim_id": "CLM-AG-EML-001",
+                            "summary": "Phishing Email and Executable Attachment Correlation",
+                            "findings_summary": "Suspicious phishing email received with executable attachment security_update.bat.",
+                            "cited_evidence_ids": finding_ids[:5],
+                            "correlation_type": "shared_artifact",
+                            "assessed_importance": "critical",
+                            "confidence_score": 0.95,
+                            "reasoning_notes": "Correlated email header headers and payload observables with executable file activity."
+                        }
+                    ],
                     "infection_path": {
                         "entry_point": "Bulk simulated infection",
                         "evidence_ids": finding_ids[:1],
@@ -166,4 +179,3 @@ class OllamaWrapper:
                     "overall_confidence": 0.95
                 })
             raise RuntimeError(f"Ollama generation failed for model '{model_name}': {e}") from e
-

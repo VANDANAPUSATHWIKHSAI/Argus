@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import '../css/style.css';
 
 const SEVERITY_MAP = {
   critical: { color: '#dc2626', bg: '#fee2e2', label: 'Critical' },

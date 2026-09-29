@@ -1,0 +1,41 @@
+{
+  "25_FIR": {
+    "fir_count": 25,
+    "batch_count": 1,
+    "total_wall_sec": 80.60830330848694,
+    "qwen_total_sec": 80.601815700531,
+    "qwen_avg_latency_sec": 80.601815700531,
+    "input_tokens": 632,
+    "output_tokens": 130,
+    "tokens_per_sec": 1.6128668922670877,
+    "fir_per_min": 18.60850481196111,
+    "forensic_equivalence": "PASS",
+    "claims_count": 0
+  },
+  "50_FIR": {
+    "fir_count": 50,
+    "batch_count": 1,
+    "total_wall_sec": 81.71164131164551,
+    "qwen_total_sec": 81.70180320739746,
+    "qwen_avg_latency_sec": 81.70180320739746,
+    "input_tokens": 875,
+    "output_tokens": 130,
+    "tokens_per_sec": 1.5911521520522514,
+    "fir_per_min": 36.714474851362965,
+    "forensic_equivalence": "PASS",
+    "claims_count": 0
+  },
+  "100_FIR": {
+    "fir_count": 100,
+    "batch_count": 2,
+    "total_wall_sec": 191.85623359680176,
+    "qwen_total_sec": 182.99782180786133,
+    "qwen_avg_latency_sec": 91.49891090393066,
+    "input_tokens": 4536,
+    "output_tokens": 283,
+    "tokens_per_sec": 1.546466494541864,
+    "fir_per_min": 31.27341701395737,
+    "forensic_equivalence": "PASS",
+    "claims_count": 0
+  }
+}

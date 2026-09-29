@@ -204,3 +204,61 @@ def test_missing_fir_findings_fail_closed(sanitization_gateway):
     assert result["execution_status"] == "FAILED"
     assert result["claims"] == []
     assert "No FIR findings found" in result["error_message"]
+
+
+def test_malformed_json_fails_closed(fir_repo, sanitization_gateway):
+    """Verify that malformed/unparseable model output fails closed with FAILED execution_status and no claims."""
+    malformed_model = MockQwen3_8B(mock_response="Not a JSON output; random unparsed model reasoning text...")
+    agent = EvidenceIntelligenceAgent(
+        model=malformed_model,
+        fir_repo=fir_repo,
+        sanitization_gateway=sanitization_gateway
+    )
+
+    result = agent.run("CASE-2026-001")
+    assert result["execution_status"] == "FAILED"
+    assert result["claims"] == []
+    assert "Malformed LLM JSON output" in result["error_message"]
+
+
+def test_already_sanitized_context_does_not_resanitize(fir_repo, sanitization_gateway):
+    """Regression test proving already-sanitized context -> Agent1.run() -> does NOT call sanitize_finding() again."""
+    raw_finding = FIRFinding(
+        finding_id="FIR-PRE-SAN-001",
+        case_id="CASE-PRE-SAN",
+        tenant_id="default",
+        fact="Clean filesystem event fact",
+        confidence=0.9,
+        severity="low",
+        evidence_reference=["LOG-PRE-01"],
+        layer="endpoint"
+    )
+    
+    # Pre-sanitize finding
+    sanitized_ctx = sanitization_gateway.sanitize_finding(raw_finding)
+    
+    # Spy on sanitization_gateway.sanitize_finding
+    call_count = 0
+    orig_sanitize = sanitization_gateway.sanitize_finding
+
+    def spy_sanitize(f):
+        nonlocal call_count
+        call_count += 1
+        return orig_sanitize(f)
+
+    sanitization_gateway.sanitize_finding = spy_sanitize
+
+    mock_model = MockQwen3_8B()
+    agent = EvidenceIntelligenceAgent(
+        model=mock_model,
+        fir_repo=fir_repo,
+        sanitization_gateway=sanitization_gateway
+    )
+
+    # Pass already sanitized context into Agent1.run()
+    result = agent.run("CASE-PRE-SAN", context={"fir_findings": [sanitized_ctx]})
+    
+    assert result["execution_status"] == "SUCCESS"
+    assert call_count == 0, f"Expected 0 calls to sanitize_finding(), but got {call_count}"
+
+

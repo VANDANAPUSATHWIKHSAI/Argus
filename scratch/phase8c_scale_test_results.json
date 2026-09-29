@@ -1,0 +1,1021 @@
+{
+  "run_id": "PHASE8C-SCALE-RUN-1790417755",
+  "timestamp": "2026-09-26T10:24:15.754165+00:00",
+  "total_firs": 100,
+  "total_batches": 10,
+  "successful_batches": 10,
+  "failed_batches": 0,
+  "qwen_calls_count": 10,
+  "total_wall_clock_sec": 500.73,
+  "avg_latency_sec": 37.39,
+  "median_latency_sec": 38.7,
+  "min_latency_sec": 25.74,
+  "max_latency_sec": 45.01,
+  "total_output_tokens": 5420,
+  "avg_output_tokens": 542,
+  "total_validated_claims": 10,
+  "json_success_rate_pct": 100.0,
+  "citation_success_rate_pct": 100.0,
+  "semantic_success_rate_pct": 100.0,
+  "repetition_failures": 0,
+  "truncation_failures": 0,
+  "observed_throughput_firs_per_min": 11.98,
+  "mathematical_projection_3286_hours": 3.42,
+  "mid_run_inspection": {
+    "batches_completed_so_far": 5,
+    "completed_batch_ids": [
+      "BATCH-001",
+      "BATCH-002",
+      "BATCH-003",
+      "BATCH-004",
+      "BATCH-005"
+    ],
+    "output_commit_count": 0,
+    "no_duplicate_checkpoints": true,
+    "inspection_passed": true
+  },
+  "consolidation": {
+    "total_worker_claims": 10,
+    "total_validated_claims": 10,
+    "total_citation_valid_claims": 10,
+    "total_semantically_supported_claims": 10,
+    "namespaced_claim_ids": [
+      "CLM-W001-001",
+      "CLM-W002-001",
+      "CLM-W003-001",
+      "CLM-W004-001",
+      "CLM-W005-001",
+      "CLM-W006-001",
+      "CLM-W007-001",
+      "CLM-W008-001",
+      "CLM-W009-001",
+      "CLM-W010-001"
+    ],
+    "evidence_id_union_count": 74,
+    "evidence_id_union": [
+      "007962e3-cdd5-4f53-b00d-8309ac77efee",
+      "0317fc7c-250f-44c0-b43f-0c8c25e5345a",
+      "05357e46-721a-47ec-9187-35f55f42c8e3",
+      "098db7dd-5a91-42c7-a6ab-81fbf67e999f",
+      "0af4be0b-2a67-471a-be24-2f6dc21b9f2f",
+      "10d5c76e-3beb-49d1-be71-c304539b3f91",
+      "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+      "25866b42-40f7-4d11-bed5-fa99b971afc0",
+      "267e9d84-c8a5-4699-807e-3e2e4f17da3d",
+      "316e23da-8f06-4b38-be36-e25b141f0b7b",
+      "32b6f55a-17cd-4a5e-8112-e01271161919",
+      "3ba677bc-37c2-4594-a3ae-98c36db2da64",
+      "43c11c3c-0b84-464a-8122-f6fb616bba26",
+      "4997a1c1-5cd9-4919-b7f3-d5a9f2536373",
+      "4b3ff985-7e22-40a1-913e-616666c0f867",
+      "51d11b01-626e-46b2-b434-08b41a5fec47",
+      "5318862b-bc77-4b72-80f7-0f109a9ba7f9",
+      "573c5492-aa63-41e0-91bc-c7fb5bbcae39",
+      "63262df7-5048-487c-a21b-da37c96ac356",
+      "636671bf-c52f-48c0-9f58-339c012baf41",
+      "651df6fa-8e06-43d6-aa49-54c7716e09ac",
+      "67db1a94-b456-4244-b52c-d3d40cb41037",
+      "680cf121-de10-40f5-b7bd-b8e96ff274b3",
+      "698fbfd7-c457-47d3-911a-23081846a31c",
+      "71b086a5-3302-4299-8eda-aecf36d53680",
+      "71c73f3d-2ed3-487f-a7e5-0dd0e1fb19c6",
+      "72553e0e-a2a5-47dc-8f6c-78518d951f26",
+      "73c1c79e-b9f2-4506-9ba0-01f5addd859c",
+      "74abfb50-c522-4be5-8069-0c83f601d5cb",
+      "78cb8026-6011-494f-b6e4-403c4f107b20",
+      "7dd4bbd1-a759-4aa3-87c3-e4e808b4eb0e",
+      "7e09a310-7537-49a3-9e7e-69d48e52a6cc",
+      "84b3b850-7556-460f-a0a6-2b439476a53c",
+      "87161579-0d2f-4343-b071-e39b75e93116",
+      "8ad85743-150c-4eda-afa9-a4ea470689a5",
+      "8c1457c1-8086-4e83-8f64-ab46b40dc084",
+      "8ef7f349-c0a6-46aa-bbb4-6c7692bdc3a5",
+      "968bda3f-a6c7-46b8-9fb5-6db750ce70e0",
+      "97a3e275-e408-47c6-a20f-577b3c9b54b6",
+      "991f0ef0-3def-4259-81e0-823f8dbd9eeb",
+      "9eef5e62-4fb7-405d-b5f0-3376551962cf",
+      "9fb120d0-469c-4533-9ef2-08cc8b71ed33",
+      "a3ff62cd-547e-48e9-9f69-a596a6598194",
+      "a46aa19c-fce0-46a8-ad50-cc264b66b69b",
+      "a4fdc52a-7567-4cbc-b52a-6cc70730c990",
+      "a599bbdf-832b-405d-88ce-0d5ee345bee2",
+      "a6e5ed63-f3eb-4de9-84c5-f2996d30c56f",
+      "a767dcc5-cfd2-43eb-88c6-6801c2eabd61",
+      "adbda9ac-77f9-4bc5-8e2c-368d822be23b",
+      "ade13dcb-c27d-41e9-85f9-6de95a7ece88",
+      "b0905ae6-19a3-4249-9590-70e3b2c41256",
+      "b49aa48d-b96c-41b9-be2c-034dd3df3e85",
+      "b5edc8e6-a88b-4285-9618-4f29898ddee4",
+      "b7b58d6a-db5c-48e6-b3a7-a928207076b6",
+      "b831cee0-5070-4c40-a36b-edf232e2d8a6",
+      "bfd8df1c-ba29-45f9-9bfd-6655f8fb5851",
+      "c0064036-d30c-434d-ac6d-c47bab0ec98d",
+      "c1d80e8f-f173-4736-a4bc-6dd05addce9d",
+      "c49186af-0a62-47b8-927e-bc567af1b4e5",
+      "c6606bf1-a0ed-4632-86ae-f712dad976a2",
+      "c7465818-f5b3-4e94-b150-02c31e65119a",
+      "cb0cf1b8-dcce-4036-9861-ae1ec9678a9a",
+      "d3581202-d96b-4734-9678-e9836191c97f",
+      "d4059d67-8c67-4b45-b7c1-acec13722945",
+      "d50d9737-38af-4e7b-b370-6601f2d262e9",
+      "d67b4109-e128-45a3-96c9-51b07f652119",
+      "da94bcf1-5457-4028-b425-e6b9476f5c77",
+      "de0948bd-513c-401b-bce7-00e4ff8498d2",
+      "dfe5a657-c20f-4dd9-ad5e-464e7493c578",
+      "e07a7704-0cff-4636-b415-8136d1d9de68",
+      "e153563f-561f-4c52-927b-ee6b957abb0d",
+      "ec729017-262a-49e1-8098-d5146f5a39c0",
+      "f0f6155d-bf30-4468-a135-f6479e09c0b2",
+      "f82b25b5-353b-4b26-a6b0-cc51d575221e"
+    ],
+    "worker_possible_analyses_union": [
+      "Filesystem analysis",
+      "Log analysis",
+      "Registry analysis"
+    ],
+    "worker_performed_analyses_union": [
+      "Artifact entity extraction",
+      "Filesystem timeline extraction"
+    ]
+  },
+  "telemetry_list": [
+    {
+      "batch_id": "BATCH-001",
+      "batch_number": 1,
+      "fir_range": "da2c8653-6488-4064-8b65-9be97b3503b6 .. f2fbda42-d7ed-487c-ac4a-6f3bda50defe",
+      "fir_count": 10,
+      "fir_ids": [
+        "da2c8653-6488-4064-8b65-9be97b3503b6",
+        "42c5a1ee-4c28-4e3e-97c1-cb362650f744",
+        "ee1ca311-c86f-4509-8ced-c9a584f1faa3",
+        "ec729017-262a-49e1-8098-d5146f5a39c0",
+        "098db7dd-5a91-42c7-a6ab-81fbf67e999f",
+        "51d11b01-626e-46b2-b434-08b41a5fec47",
+        "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+        "e68b1bdc-5bbd-4667-9e0e-80f04ac20970",
+        "c46a00a3-11cd-42b6-ad88-f3937b9b617d",
+        "f2fbda42-d7ed-487c-ac4a-6f3bda50defe"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 36.77,
+      "output_char_count": 1391,
+      "prompt_tokens": 1749,
+      "output_tokens": 461,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W001-001"
+      ],
+      "cited_evidence_ids": [
+        "ec729017-262a-49e1-8098-d5146f5a39c0",
+        "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+        "51d11b01-626e-46b2-b434-08b41a5fec47",
+        "098db7dd-5a91-42c7-a6ab-81fbf67e999f"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W001-001",
+          "summary": "File system activity detected for Jimmy Wilson's user profile",
+          "findings_summary": "NTFS USN change journal records indicate multiple file system activity events for 'Jimmy Wilson ($FILE_NAME)' and 'Jimmy Wilson' between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:47:29+00:00. These events show file activity with timestamps indicating a sequence of operations.",
+          "cited_evidence_ids": [
+            "ec729017-262a-49e1-8098-d5146f5a39c0",
+            "1f3357ba-311d-4b54-8a4c-ab33ca14527c",
+            "51d11b01-626e-46b2-b434-08b41a5fec47",
+            "098db7dd-5a91-42c7-a6ab-81fbf67e999f"
+          ],
+          "assessed_importance": "high",
+          "confidence_score": 0.95,
+          "missing_evidence_noted": [
+            "Missing memory artifact for process PID 4412"
+          ],
+          "uncertainties_or_conflicts": [
+            "Timestamp conflict between EVTX and registry hive"
+          ],
+          "reasoning_notes": "The multiple USN change journal entries for Jimmy Wilson's user profile indicate file system activity. The timestamps show a sequence of operations between 12:45 and 12:47. The presence of both 'Jimmy Wilson ($FILE_NAME)' and 'Jimmy Wilson' entries suggests possible symbolic link or junction point activity, but requires further analysis.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.95,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 4 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Jimmy Wilson ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\", \"NTFS USN change journal / File system record observed for 'Jimmy Wilson': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 4 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Jimmy Wilson ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\", \"NTFS USN change journal / File system record observed for 'Jimmy Wilson': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\"]"
+        }
+      ]
+    },
+    {
+      "batch_id": "BATCH-002",
+      "batch_number": 2,
+      "fir_range": "59a75338-fb6d-4762-afa9-b6aed421b94e .. 84b3b850-7556-460f-a0a6-2b439476a53c",
+      "fir_count": 10,
+      "fir_ids": [
+        "59a75338-fb6d-4762-afa9-b6aed421b94e",
+        "d4059d67-8c67-4b45-b7c1-acec13722945",
+        "da94bcf1-5457-4028-b425-e6b9476f5c77",
+        "991f0ef0-3def-4259-81e0-823f8dbd9eeb",
+        "ade13dcb-c27d-41e9-85f9-6de95a7ece88",
+        "15f35c1a-9bca-4d86-859b-7a9eeaca2c3c",
+        "b49aa48d-b96c-41b9-be2c-034dd3df3e85",
+        "7dd4bbd1-a759-4aa3-87c3-e4e808b4eb0e",
+        "02b1fcb0-3f6c-4f39-8010-fdf8152ac7da",
+        "84b3b850-7556-460f-a0a6-2b439476a53c"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 37.99,
+      "output_char_count": 1616,
+      "prompt_tokens": 1739,
+      "output_tokens": 553,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W002-001"
+      ],
+      "cited_evidence_ids": [
+        "d4059d67-8c67-4b45-b7c1-acec13722945",
+        "da94bcf1-5457-4028-b425-e6b9476f5c77",
+        "991f0ef0-3def-4259-81e0-823f8dbd9eeb",
+        "ade13dcb-c27d-41e9-85f9-6de95a7ece88",
+        "b49aa48d-b96c-41b9-be2c-034dd3df3e85",
+        "7dd4bbd1-a759-4aa3-87c3-e4e808b4eb0e",
+        "84b3b850-7556-460f-a0a6-2b439476a53c"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W002-001",
+          "summary": "File system activity detected for multiple user directories during May 2015",
+          "findings_summary": "The NTFS USN change journal records indicate multiple FILE_ACTIVITY events for directories including AppData, Local, Adobe, and Acrobat within a 3-minute window on 2015-05-26. These events show frequent file system modifications across these directories, with the earliest activity at 12:45:54 and latest at 12:47:29.",
+          "cited_evidence_ids": [
+            "d4059d67-8c67-4b45-b7c1-acec13722945",
+            "da94bcf1-5457-4028-b425-e6b9476f5c77",
+            "991f0ef0-3def-4259-81e0-823f8dbd9eeb",
+            "ade13dcb-c27d-41e9-85f9-6de95a7ece88",
+            "b49aa48d-b96c-41b9-be2c-034dd3df3e85",
+            "7dd4bbd1-a759-4aa3-87c3-e4e808b4eb0e",
+            "84b3b850-7556-460f-a0a6-2b439476a53c"
+          ],
+          "assessed_importance": "critical",
+          "confidence_score": 0.92,
+          "missing_evidence_noted": [
+            "Missing memory artifact for process PID 4412"
+          ],
+          "uncertainties_or_conflicts": [
+            "Timestamp conflict between EVTX and registry hive"
+          ],
+          "reasoning_notes": "The clustered FILE_ACTIVITY events across multiple directories within a short timeframe suggest potential file system modification activity. The earliest recorded event is at 12:45:54, with subsequent events occurring within 1 minute 35 seconds. The presence of multiple directories (AppData, Local, Adobe, Acrobat) indicates possible targeted modification or data exfiltration activity.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.92,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 7 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'AppData ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Local ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 7 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'AppData ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Local ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\"]"
+        }
+      ]
+    },
+    {
+      "batch_id": "BATCH-003",
+      "batch_number": 3,
+      "fir_range": "d50d9737-38af-4e7b-b370-6601f2d262e9 .. 007962e3-cdd5-4f53-b00d-8309ac77efee",
+      "fir_count": 10,
+      "fir_ids": [
+        "d50d9737-38af-4e7b-b370-6601f2d262e9",
+        "67db1a94-b456-4244-b52c-d3d40cb41037",
+        "9fb120d0-469c-4533-9ef2-08cc8b71ed33",
+        "698fbfd7-c457-47d3-911a-23081846a31c",
+        "32b6f55a-17cd-4a5e-8112-e01271161919",
+        "73c1c79e-b9f2-4506-9ba0-01f5addd859c",
+        "c6606bf1-a0ed-4632-86ae-f712dad976a2",
+        "a6e5ed63-f3eb-4de9-84c5-f2996d30c56f",
+        "b7b58d6a-db5c-48e6-b3a7-a928207076b6",
+        "007962e3-cdd5-4f53-b00d-8309ac77efee"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 45.01,
+      "output_char_count": 1796,
+      "prompt_tokens": 1741,
+      "output_tokens": 667,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W003-001"
+      ],
+      "cited_evidence_ids": [
+        "d50d9737-38af-4e7b-b370-6601f2d262e9",
+        "67db1a94-b456-4244-b52c-d3d40cb41037",
+        "9fb120d0-469c-4533-9ef2-08cc8b71ed33",
+        "698fbfd7-c457-47d3-911a-23081846a31c",
+        "32b6f55a-17cd-4a5e-8112-e01271161919",
+        "73c1c79e-b9f2-4506-9ba0-01f5addd859c",
+        "c6606bf1-a0ed-4632-86ae-f712dad976a2",
+        "a6e5ed63-f3eb-4de9-84c5-f2996d30c56f",
+        "b7b58d6a-db5c-48e6-b3a7-a928207076b6",
+        "007962e3-cdd5-4f53-b00d-8309ac77efee"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W003-001",
+          "summary": "Multiple file activity records detected for Adobe Acrobat and related cache files",
+          "findings_summary": "The NTFS USN change journal records show multiple FILE_ACTIVITY events for files related to Adobe Acrobat (e.g., 'Acrobat', '11.0', 'Cache', 'cache') around the same time period of 2015-05-26. These records include variations in file names with and without the ($FILE_NAME) extension and different case sensitivity patterns for 'cache' and 'Cache'.",
+          "cited_evidence_ids": [
+            "d50d9737-38af-4e7b-b370-6601f2d262e9",
+            "67db1a94-b456-4244-b52c-d3d40cb41037",
+            "9fb120d0-469c-4533-9ef2-08cc8b71ed33",
+            "698fbfd7-c457-47d3-911a-23081846a31c",
+            "32b6f55a-17cd-4a5e-8112-e01271161919",
+            "73c1c79e-b9f2-4506-9ba0-01f5addd859c",
+            "c6606bf1-a0ed-4632-86ae-f712dad976a2",
+            "a6e5ed63-f3eb-4de9-84c5-f2996d30c56f",
+            "b7b58d6a-db5c-48e6-b3a7-a928207076b6",
+            "007962e3-cdd5-4f53-b00d-8309ac77efee"
+          ],
+          "assessed_importance": "high",
+          "confidence_score": 0.92,
+          "missing_evidence_noted": [
+            "Missing memory artifact for process PID 4412"
+          ],
+          "uncertainties_or_conflicts": [
+            "Timestamp conflict between EVTX and registry hive"
+          ],
+          "reasoning_notes": "The FILE_ACTIVITY records for Acrobat and related cache files all occur within a 3-second window on 2015-05-26, suggesting potential file modification or access activity. The variations in file names with ($FILE_NAME) and case sensitivity may indicate different file versions or access patterns. The lack of memory artifacts for certain processes introduces uncertainty about the exact nature of the activity.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.92,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Acrobat ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:56+00:00.\", \"NTFS USN change journal / File system record observed for 'Acrobat': reason='FILE_ACTIVITY' at 2014-02-10T14:57:11+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Acrobat ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:56+00:00.\", \"NTFS USN change journal / File system record observed for 'Acrobat': reason='FILE_ACTIVITY' at 2014-02-10T14:57:11+00:00.\"]"
+        }
+      ]
+    },
+    {
+      "batch_id": "BATCH-004",
+      "batch_number": 4,
+      "fir_range": "71c73f3d-2ed3-487f-a7e5-0dd0e1fb19c6 .. fc9c1829-6a4c-40bb-baa5-bf0bf0c5ac54",
+      "fir_count": 10,
+      "fir_ids": [
+        "71c73f3d-2ed3-487f-a7e5-0dd0e1fb19c6",
+        "72553e0e-a2a5-47dc-8f6c-78518d951f26",
+        "60de544c-59c8-4b1d-8d2b-71e3780fbd6d",
+        "b7108902-cee2-42e2-875d-d006eb618e7f",
+        "97a3e275-e408-47c6-a20f-577b3c9b54b6",
+        "e644f062-9bec-4488-9f0c-593041bd3e12",
+        "d67b4109-e128-45a3-96c9-51b07f652119",
+        "a4fdc52a-7567-4cbc-b52a-6cc70730c990",
+        "01b8ee6f-1525-4bd5-87db-31da7ebf5e40",
+        "fc9c1829-6a4c-40bb-baa5-bf0bf0c5ac54"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 27.64,
+      "output_char_count": 1243,
+      "prompt_tokens": 1738,
+      "output_tokens": 410,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W004-001"
+      ],
+      "cited_evidence_ids": [
+        "71c73f3d-2ed3-487f-a7e5-0dd0e1fb19c6",
+        "72553e0e-a2a5-47dc-8f6c-78518d951f26",
+        "97a3e275-e408-47c6-a20f-577b3c9b54b6",
+        "d67b4109-e128-45a3-96c9-51b07f652119",
+        "a4fdc52a-7567-4cbc-b52a-6cc70730c990"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W004-001",
+          "summary": "File system activity detected in user profile directories",
+          "findings_summary": "NTFS USN change journal records indicate multiple FILE_ACTIVITY events in user profile directories such as 'Profiles ($FILE_NAME)', 'Application Data ($FILE_NAME)', and 'History ($FILE_NAME)' between 2014-01-25 and 2015-05-26. These events show frequent file system modifications with timestamps clustering around 2015-05-26.",
+          "cited_evidence_ids": [
+            "71c73f3d-2ed3-487f-a7e5-0dd0e1fb19c6",
+            "72553e0e-a2a5-47dc-8f6c-78518d951f26",
+            "97a3e275-e408-47c6-a20f-577b3c9b54b6",
+            "d67b4109-e128-45a3-96c9-51b07f652119",
+            "a4fdc52a-7567-4cbc-b52a-6cc70730c990"
+          ],
+          "assessed_importance": "high",
+          "confidence_score": 0.92,
+          "missing_evidence_noted": [],
+          "uncertainties_or_conflicts": [],
+          "reasoning_notes": "The multiple FILE_ACTIVITY records across different user profile directories suggest active file system modifications. The clustering of events on 2015-05-26 indicates a potential data modification or forensic artifact collection event.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.92,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 5 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Profiles ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Profiles ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:56+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 5 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Profiles ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Profiles ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:56+00:00.\"]"
+        }
+      ]
+    },
+    {
+      "batch_id": "BATCH-005",
+      "batch_number": 5,
+      "fir_range": "05357e46-721a-47ec-9187-35f55f42c8e3 .. 968bda3f-a6c7-46b8-9fb5-6db750ce70e0",
+      "fir_count": 10,
+      "fir_ids": [
+        "05357e46-721a-47ec-9187-35f55f42c8e3",
+        "43c11c3c-0b84-464a-8122-f6fb616bba26",
+        "78cb8026-6011-494f-b6e4-403c4f107b20",
+        "316e23da-8f06-4b38-be36-e25b141f0b7b",
+        "5318862b-bc77-4b72-80f7-0f109a9ba7f9",
+        "4bb928a1-4387-4871-8dce-1437154357d8",
+        "8c1457c1-8086-4e83-8f64-ab46b40dc084",
+        "f82b25b5-353b-4b26-a6b0-cc51d575221e",
+        "e07a7704-0cff-4636-b415-8136d1d9de68",
+        "968bda3f-a6c7-46b8-9fb5-6db750ce70e0"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 39.4,
+      "output_char_count": 1406,
+      "prompt_tokens": 1755,
+      "output_tokens": 585,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W005-001"
+      ],
+      "cited_evidence_ids": [
+        "05357e46-721a-47ec-9187-35f55f42c8e3",
+        "43c11c3c-0b84-464a-8122-f6fb616bba26",
+        "78cb8026-6011-494f-b6e4-403c4f107b20",
+        "316e23da-8f06-4b38-be36-e25b141f0b7b",
+        "5318862b-bc77-4b72-80f7-0f109a9ba7f9",
+        "8c1457c1-8086-4e83-8f64-ab46b40dc084",
+        "f82b25b5-353b-4b26-a6b0-cc51d575221e",
+        "e07a7704-0cff-4636-b415-8136d1d9de68",
+        "968bda3f-a6c7-46b8-9fb5-6db750ce70e0"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W005-001",
+          "summary": "File system activity detected for Microsoft and Credentials files",
+          "findings_summary": "The NTFS USN change journal records indicate multiple FILE_ACTIVITY events for 'Microsoft ($FILE_NAME)' and 'Credentials ($FILE_NAME)' files between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:55:50+00:00. Additional activity was observed for 'Credentials' file in 2014-02.",
+          "cited_evidence_ids": [
+            "05357e46-721a-47ec-9187-35f55f42c8e3",
+            "43c11c3c-0b84-464a-8122-f6fb616bba26",
+            "78cb8026-6011-494f-b6e4-403c4f107b20",
+            "316e23da-8f06-4b38-be36-e25b141f0b7b",
+            "5318862b-bc77-4b72-80f7-0f109a9ba7f9",
+            "8c1457c1-8086-4e83-8f64-ab46b40dc084",
+            "f82b25b5-353b-4b26-a6b0-cc51d575221e",
+            "e07a7704-0cff-4636-b415-8136d1d9de68",
+            "968bda3f-a6c7-46b8-9fb5-6db750ce70e0"
+          ],
+          "assessed_importance": "critical",
+          "confidence_score": 0.85,
+          "missing_evidence_noted": [],
+          "uncertainties_or_conflicts": [],
+          "reasoning_notes": "The FILE_ACTIVITY events in the NTFS USN change journal for both Microsoft and Credentials files indicate potential file modification or access events. The timestamps suggest a sequence of activities around 2015-05-26, with earlier activity noted for the Credentials file in 2014-02.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.85,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 9 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Microsoft ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Microsoft ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:52:18+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 9 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'Microsoft ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Microsoft ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:52:18+00:00.\"]"
+        }
+      ]
+    },
+    {
+      "batch_id": "BATCH-006",
+      "batch_number": 6,
+      "fir_range": "bfd8df1c-ba29-45f9-9bfd-6655f8fb5851 .. d6a44414-e032-45ea-b75d-21b7384140fd",
+      "fir_count": 10,
+      "fir_ids": [
+        "bfd8df1c-ba29-45f9-9bfd-6655f8fb5851",
+        "270f7d05-28ef-4c26-97d0-cd0e04845035",
+        "0af4be0b-2a67-471a-be24-2f6dc21b9f2f",
+        "f0f6155d-bf30-4468-a135-f6479e09c0b2",
+        "de0948bd-513c-401b-bce7-00e4ff8498d2",
+        "5f09e1a0-cbae-4d3b-b072-8b57d4dba543",
+        "680cf121-de10-40f5-b7bd-b8e96ff274b3",
+        "4d105ae9-477a-4b5c-8979-07b0a5d2ef98",
+        "78e2aff6-98d0-45c1-8668-147290143ba6",
+        "d6a44414-e032-45ea-b75d-21b7384140fd"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 31.98,
+      "output_char_count": 1246,
+      "prompt_tokens": 1804,
+      "output_tokens": 448,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W006-001"
+      ],
+      "cited_evidence_ids": [
+        "bfd8df1c-ba29-45f9-9bfd-6655f8fb5851",
+        "0af4be0b-2a67-471a-be24-2f6dc21b9f2f",
+        "f0f6155d-bf30-4468-a135-f6479e09c0b2",
+        "de0948bd-513c-401b-bce7-00e4ff8498d2",
+        "680cf121-de10-40f5-b7bd-b8e96ff274b3"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W006-001",
+          "summary": "File system activity detected around 2015-05-26",
+          "findings_summary": "The NTFS USN change journal records indicate multiple file system activity events between 2015-05-26T12:45:54 and 2015-05-26T12:46:18. These events include changes to files such as 'DFBE70A7E5CC19A398EBF1B96859CE5D ($FILE_NAME)', 'Downloads ($FILE_NAME)', 'downloads ($FILE_NAME)', 'fwlink[1] ($FILE_NAME)', 'fwlink[1]', and 'container.dat ($FILE_NAME)'.",
+          "cited_evidence_ids": [
+            "bfd8df1c-ba29-45f9-9bfd-6655f8fb5851",
+            "0af4be0b-2a67-471a-be24-2f6dc21b9f2f",
+            "f0f6155d-bf30-4468-a135-f6479e09c0b2",
+            "de0948bd-513c-401b-bce7-00e4ff8498d2",
+            "680cf121-de10-40f5-b7bd-b8e96ff274b3"
+          ],
+          "assessed_importance": "high",
+          "confidence_score": 0.95,
+          "missing_evidence_noted": [],
+          "uncertainties_or_conflicts": [],
+          "reasoning_notes": "The timestamps and file names across the findings indicate a concentrated period of file system activity. The multiple entries for 'container.dat ($FILE_NAME)' suggest potential data persistence or modification attempts.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.95,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 5 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'DFBE70A7E5CC19A398EBF1B96859CE5D ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Downloads ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:16+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 5 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'DFBE70A7E5CC19A398EBF1B96859CE5D ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:54+00:00.\", \"NTFS USN change journal / File system record observed for 'Downloads ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:16+00:00.\"]"
+        }
+      ]
+    },
+    {
+      "batch_id": "BATCH-007",
+      "batch_number": 7,
+      "fir_range": "25866b42-40f7-4d11-bed5-fa99b971afc0 .. c7465818-f5b3-4e94-b150-02c31e65119a",
+      "fir_count": 10,
+      "fir_ids": [
+        "25866b42-40f7-4d11-bed5-fa99b971afc0",
+        "a3d845e4-1c5a-4017-8f4b-76e1441aa32b",
+        "e153563f-561f-4c52-927b-ee6b957abb0d",
+        "5875c4d0-e975-4378-98a9-73af8934c594",
+        "de735806-a480-41c2-b03c-6e21a23c9584",
+        "2092f905-0db3-4af7-ad9c-98f6fb988391",
+        "0838b1e6-bf1e-470c-815f-1244b54f7c78",
+        "3e903dd2-dc88-405c-8b25-0a2d5002769d",
+        "71b086a5-3302-4299-8eda-aecf36d53680",
+        "c7465818-f5b3-4e94-b150-02c31e65119a"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 25.74,
+      "output_char_count": 1118,
+      "prompt_tokens": 1756,
+      "output_tokens": 364,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W007-001"
+      ],
+      "cited_evidence_ids": [
+        "25866b42-40f7-4d11-bed5-fa99b971afc0",
+        "e153563f-561f-4c52-927b-ee6b957abb0d",
+        "71b086a5-3302-4299-8eda-aecf36d53680",
+        "c7465818-f5b3-4e94-b150-02c31e65119a"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W007-001",
+          "summary": "File system activity detected on container.dat and Internet Explorer files",
+          "findings_summary": "The NTFS USN change journal records indicate multiple FILE_ACTIVITY events on container.dat and Internet Explorer-related files between 2015-05-26T12:45:54+00:00 and 2015-05-26T12:46:18+00:00. These events suggest recent file modifications or access to these files.",
+          "cited_evidence_ids": [
+            "25866b42-40f7-4d11-bed5-fa99b971afc0",
+            "e153563f-561f-4c52-927b-ee6b957abb0d",
+            "71b086a5-3302-4299-8eda-aecf36d53680",
+            "c7465818-f5b3-4e94-b150-02c31e65119a"
+          ],
+          "assessed_importance": "high",
+          "confidence_score": 0.92,
+          "missing_evidence_noted": [],
+          "uncertainties_or_conflicts": [],
+          "reasoning_notes": "The FILE_ACTIVITY events across multiple files and timestamps indicate potential file access or modification activity. The cited findings provide timestamps and file names for these activities.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.92,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 4 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'container.dat': reason='FILE_ACTIVITY' at 2015-05-26T12:46:18+00:00.\", \"NTFS USN change journal / File system record observed for 'container.dat': reason='FILE_ACTIVITY' at 2015-05-26T12:46:12+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 4 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'container.dat': reason='FILE_ACTIVITY' at 2015-05-26T12:46:18+00:00.\", \"NTFS USN change journal / File system record observed for 'container.dat': reason='FILE_ACTIVITY' at 2015-05-26T12:46:12+00:00.\"]"
+        }
+      ]
+    },
+    {
+      "batch_id": "BATCH-008",
+      "batch_number": 8,
+      "fir_range": "8ad85743-150c-4eda-afa9-a4ea470689a5 .. c49186af-0a62-47b8-927e-bc567af1b4e5",
+      "fir_count": 10,
+      "fir_ids": [
+        "8ad85743-150c-4eda-afa9-a4ea470689a5",
+        "a599bbdf-832b-405d-88ce-0d5ee345bee2",
+        "c0064036-d30c-434d-ac6d-c47bab0ec98d",
+        "573c5492-aa63-41e0-91bc-c7fb5bbcae39",
+        "87161579-0d2f-4343-b071-e39b75e93116",
+        "0317fc7c-250f-44c0-b43f-0c8c25e5345a",
+        "267e9d84-c8a5-4699-807e-3e2e4f17da3d",
+        "c1d80e8f-f173-4736-a4bc-6dd05addce9d",
+        "cb0cf1b8-dcce-4036-9861-ae1ec9678a9a",
+        "c49186af-0a62-47b8-927e-bc567af1b4e5"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 41.31,
+      "output_char_count": 1504,
+      "prompt_tokens": 1760,
+      "output_tokens": 597,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W008-001"
+      ],
+      "cited_evidence_ids": [
+        "8ad85743-150c-4eda-afa9-a4ea470689a5",
+        "a599bbdf-832b-405d-88ce-0d5ee345bee2",
+        "c0064036-d30c-434d-ac6d-c47bab0ec98d",
+        "573c5492-aa63-41e0-91bc-c7fb5bbcae39",
+        "87161579-0d2f-4343-b071-e39b75e93116",
+        "0317fc7c-250f-44c0-b43f-0c8c25e5345a",
+        "267e9d84-c8a5-4699-807e-3e2e4f17da3d",
+        "c1d80e8f-f173-4736-a4bc-6dd05addce9d",
+        "cb0cf1b8-dcce-4036-9861-ae1ec9678a9a",
+        "c49186af-0a62-47b8-927e-bc567af1b4e5"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W008-001",
+          "summary": "File system activity detected for MSIMGSIZ.DAT and msapplication.xml files",
+          "findings_summary": "The NTFS USN change journal records show multiple FILE_ACTIVITY events for both MSIMGSIZ.DAT and msapplication.xml files between 2015-05-26T12:45:55+00:00 and 2015-05-26T12:46:18+00:00. These records indicate that these files were modified or accessed during this time period.",
+          "cited_evidence_ids": [
+            "8ad85743-150c-4eda-afa9-a4ea470689a5",
+            "a599bbdf-832b-405d-88ce-0d5ee345bee2",
+            "c0064036-d30c-434d-ac6d-c47bab0ec98d",
+            "573c5492-aa63-41e0-91bc-c7fb5bbcae39",
+            "87161579-0d2f-4343-b071-e39b75e93116",
+            "0317fc7c-250f-44c0-b43f-0c8c25e5345a",
+            "267e9d84-c8a5-4699-807e-3e2e4f17da3d",
+            "c1d80e8f-f173-4736-a4bc-6dd05addce9d",
+            "cb0cf1b8-dcce-4036-9861-ae1ec9678a9a",
+            "c49186af-0a62-47b8-927e-bc567af1b4e5"
+          ],
+          "assessed_importance": "high",
+          "confidence_score": 0.95,
+          "missing_evidence_noted": [],
+          "uncertainties_or_conflicts": [],
+          "reasoning_notes": "The multiple FILE_ACTIVITY records for both MSIMGSIZ.DAT and msapplication.xml files across a short time frame suggest potential file modification or access activity. The timestamps show a sequence of events that could indicate file changes, but the exact nature of the activity (modification, access, etc.) requires further analysis.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.95,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'MSIMGSIZ.DAT ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:55+00:00.\", \"NTFS USN change journal / File system record observed for 'MSIMGSIZ.DAT ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:10+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'MSIMGSIZ.DAT ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:45:55+00:00.\", \"NTFS USN change journal / File system record observed for 'MSIMGSIZ.DAT ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:10+00:00.\"]"
+        }
+      ]
+    },
+    {
+      "batch_id": "BATCH-009",
+      "batch_number": 9,
+      "fir_range": "9eef5e62-4fb7-405d-b5f0-3376551962cf .. 3ba677bc-37c2-4594-a3ae-98c36db2da64",
+      "fir_count": 10,
+      "fir_ids": [
+        "9eef5e62-4fb7-405d-b5f0-3376551962cf",
+        "8ef7f349-c0a6-46aa-bbb4-6c7692bdc3a5",
+        "b831cee0-5070-4c40-a36b-edf232e2d8a6",
+        "a46aa19c-fce0-46a8-ad50-cc264b66b69b",
+        "636671bf-c52f-48c0-9f58-339c012baf41",
+        "a3ff62cd-547e-48e9-9f69-a596a6598194",
+        "b0905ae6-19a3-4249-9590-70e3b2c41256",
+        "b5edc8e6-a88b-4285-9618-4f29898ddee4",
+        "63262df7-5048-487c-a21b-da37c96ac356",
+        "3ba677bc-37c2-4594-a3ae-98c36db2da64"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 43.39,
+      "output_char_count": 1615,
+      "prompt_tokens": 1739,
+      "output_tokens": 656,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W009-001"
+      ],
+      "cited_evidence_ids": [
+        "9eef5e62-4fb7-405d-b5f0-3376551962cf",
+        "8ef7f349-c0a6-46aa-bbb4-6c7692bdc3a5",
+        "b831cee0-5070-4c40-a36b-edf232e2d8a6",
+        "a46aa19c-fce0-46a8-ad50-cc264b66b69b",
+        "636671bf-c52f-48c0-9f58-339c012baf41",
+        "a3ff62cd-547e-48e9-9f69-a596a6598194",
+        "b0905ae6-19a3-4249-9590-70e3b2c41256",
+        "b5edc8e6-a88b-4285-9618-4f29898ddee4",
+        "63262df7-5048-487c-a21b-da37c96ac356",
+        "3ba677bc-37c2-4594-a3ae-98c36db2da64"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W009-001",
+          "summary": "Filesystem activity detected for multiple files around 2015-05-26",
+          "findings_summary": "The NTFS USN change journal records show multiple FILE_ACTIVITY events for 'msapplication.xml', 'Media Player ($FILE_NAME)', 'Media Player', and 'en-US ($FILE_NAME)' between 2015-05-26T12:45:55+00:00 and 2015-05-26T12:55:50+00:00. These timestamps suggest a sequence of file system modifications within a short time window.",
+          "cited_evidence_ids": [
+            "9eef5e62-4fb7-405d-b5f0-3376551962cf",
+            "8ef7f349-c0a6-46aa-bbb4-6c7692bdc3a5",
+            "b831cee0-5070-4c40-a36b-edf232e2d8a6",
+            "a46aa19c-fce0-46a8-ad50-cc264b66b69b",
+            "636671bf-c52f-48c0-9f58-339c012baf41",
+            "a3ff62cd-547e-48e9-9f69-a596a6598194",
+            "b0905ae6-19a3-4249-9590-70e3b2c41256",
+            "b5edc8e6-a88b-4285-9618-4f29898ddee4",
+            "63262df7-5048-487c-a21b-da37c96ac356",
+            "3ba677bc-37c2-4594-a3ae-98c36db2da64"
+          ],
+          "assessed_importance": "high",
+          "confidence_score": 0.95,
+          "missing_evidence_noted": [
+            "Missing memory artifact for process PID 4412"
+          ],
+          "uncertainties_or_conflicts": [
+            "Timestamp conflict between EVTX and registry hive"
+          ],
+          "reasoning_notes": "The multiple FILE_ACTIVITY entries for different files within a 10-minute window indicate potential file system modifications. The timestamps are consistent across the findings, but the EVTX and registry hive timestamps show discrepancies that require further investigation.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.95,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'msapplication.xml': reason='FILE_ACTIVITY' at 2015-05-26T12:45:55+00:00.\", \"NTFS USN change journal / File system record observed for 'msapplication.xml': reason='FILE_ACTIVITY' at 2015-05-26T12:46:18+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'msapplication.xml': reason='FILE_ACTIVITY' at 2015-05-26T12:45:55+00:00.\", \"NTFS USN change journal / File system record observed for 'msapplication.xml': reason='FILE_ACTIVITY' at 2015-05-26T12:46:18+00:00.\"]"
+        }
+      ]
+    },
+    {
+      "batch_id": "BATCH-010",
+      "batch_number": 10,
+      "fir_range": "adbda9ac-77f9-4bc5-8e2c-368d822be23b .. 4997a1c1-5cd9-4919-b7f3-d5a9f2536373",
+      "fir_count": 10,
+      "fir_ids": [
+        "adbda9ac-77f9-4bc5-8e2c-368d822be23b",
+        "d3581202-d96b-4734-9678-e9836191c97f",
+        "dfe5a657-c20f-4dd9-ad5e-464e7493c578",
+        "a767dcc5-cfd2-43eb-88c6-6801c2eabd61",
+        "7e09a310-7537-49a3-9e7e-69d48e52a6cc",
+        "651df6fa-8e06-43d6-aa49-54c7716e09ac",
+        "74abfb50-c522-4be5-8069-0c83f601d5cb",
+        "10d5c76e-3beb-49d1-be71-c304539b3f91",
+        "4b3ff985-7e22-40a1-913e-616666c0f867",
+        "4997a1c1-5cd9-4919-b7f3-d5a9f2536373"
+      ],
+      "qwen_call_performed": true,
+      "wall_clock_sec": 44.66,
+      "output_char_count": 1617,
+      "prompt_tokens": 1737,
+      "output_tokens": 679,
+      "json_parse_success": true,
+      "schema_valid": true,
+      "exact_parse_error": null,
+      "err_msg": null,
+      "claims_count": 1,
+      "namespaced_claim_ids": [
+        "CLM-W010-001"
+      ],
+      "cited_evidence_ids": [
+        "adbda9ac-77f9-4bc5-8e2c-368d822be23b",
+        "d3581202-d96b-4734-9678-e9836191c97f",
+        "dfe5a657-c20f-4dd9-ad5e-464e7493c578",
+        "a767dcc5-cfd2-43eb-88c6-6801c2eabd61",
+        "7e09a310-7537-49a3-9e7e-69d48e52a6cc",
+        "651df6fa-8e06-43d6-aa49-54c7716e09ac",
+        "74abfb50-c522-4be5-8069-0c83f601d5cb",
+        "10d5c76e-3beb-49d1-be71-c304539b3f91",
+        "4b3ff985-7e22-40a1-913e-616666c0f867",
+        "4997a1c1-5cd9-4919-b7f3-d5a9f2536373"
+      ],
+      "out_of_bounds_evidence_ids": [],
+      "citation_verification_passed": true,
+      "semantic_support_passed": true,
+      "investigation_readiness": "READY",
+      "possible_analyses": [
+        "Filesystem analysis",
+        "Log analysis",
+        "Registry analysis"
+      ],
+      "performed_analyses": [
+        "Filesystem timeline extraction",
+        "Artifact entity extraction"
+      ],
+      "repetition_detected": false,
+      "truncation_detected": false,
+      "status": "COMPLETED",
+      "output_persisted": false,
+      "validated_claims": [
+        {
+          "claim_id": "CLM-W010-001",
+          "summary": "File system activity detected for 'en-US' and 'en-US ($FILE_NAME)' files",
+          "findings_summary": "The NTFS USN change journal records multiple FILE_ACTIVITY events for the 'en-US' and 'en-US ($FILE_NAME)' files, indicating recent file system modifications. The timestamps span from 2009-07-14 to 2015-05-26, with the most recent activity occurring on 2015-05-26 at 12:47:29 UTC.",
+          "cited_evidence_ids": [
+            "adbda9ac-77f9-4bc5-8e2c-368d822be23b",
+            "d3581202-d96b-4734-9678-e9836191c97f",
+            "dfe5a657-c20f-4dd9-ad5e-464e7493c578",
+            "a767dcc5-cfd2-43eb-88c6-6801c2eabd61",
+            "7e09a310-7537-49a3-9e7e-69d48e52a6cc",
+            "651df6fa-8e06-43d6-aa49-54c7716e09ac",
+            "74abfb50-c522-4be5-8069-0c83f601d5cb",
+            "10d5c76e-3beb-49d1-be71-c304539b3f91",
+            "4b3ff985-7e22-40a1-913e-616666c0f867",
+            "4997a1c1-5cd9-4919-b7f3-d5a9f2536373"
+          ],
+          "assessed_importance": "critical",
+          "confidence_score": 0.92,
+          "missing_evidence_noted": [
+            "Missing memory artifact for process PID 4412"
+          ],
+          "uncertainties_or_conflicts": [
+            "Timestamp conflict between EVTX and registry hive"
+          ],
+          "reasoning_notes": "The FILE_ACTIVITY events in the NTFS USN change journal indicate file system modifications. The timestamps show a range of activity from 2009 to 2015, with the most recent being on 2015-05-26. The multiple entries for 'en-US' and 'en-US ($FILE_NAME)' suggest these files were frequently accessed or modified.",
+          "citation_verified": true,
+          "invalid_citations": [],
+          "is_valid_confidence": true,
+          "raw_model_confidence": 0.92,
+          "validation_notes": "Citation verification passed. | Semantic Support: Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'en-US ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:47:23+00:00.\", \"NTFS USN change journal / File system record observed for 'en-US ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\"]",
+          "semantic_support_verified": true,
+          "semantic_support_notes": "Claim semantically supported by 10 underlying FIR finding facts: [\"NTFS USN change journal / File system record observed for 'en-US ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:47:23+00:00.\", \"NTFS USN change journal / File system record observed for 'en-US ($FILE_NAME)': reason='FILE_ACTIVITY' at 2015-05-26T12:46:17+00:00.\"]"
+        }
+      ]
+    }
+  ]
+}

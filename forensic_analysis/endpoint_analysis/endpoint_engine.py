@@ -77,36 +77,76 @@ class EndpointAnalysisEngine:
             if not resolved_artifacts:
                 continue
 
-            # Dispatch artifacts to all 6 sub-analyzers safely
+            # Taxonomy pre-filtering to optimize sub-analyzer dispatch
+            persistence_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("registry", "run", "startup", "task", "service", "wmi", "evasion", "persistence"))
+                or (a.normalized_fields and (a.normalized_fields.registry_key or a.normalized_fields.registry_value))
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            filesystem_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("file", "mft", "usn", "recycle", "directory", "prefetch", "amcache", "shimcache"))
+                or (a.normalized_fields and a.normalized_fields.file_path)
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            registry_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("registry", "amcache", "shimcache", "shellbag", "userassist"))
+                or (a.normalized_fields and a.normalized_fields.registry_key)
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            browser_arts = [
+                a for a in resolved_artifacts
+                if "browser" in (a.artifact_type or "").lower()
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            usb_arts = [
+                a for a in resolved_artifacts
+                if "usb" in (a.artifact_type or "").lower()
+                or (a.normalized_fields and a.normalized_fields.usb_serial_number)
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            user_activity_arts = [
+                a for a in resolved_artifacts
+                if any(k in (a.artifact_type or "").lower() for k in ("prefetch", "lnk", "jumplist", "srum", "timeline", "search", "sticky", "notification", "wer", "userassist", "shellbag"))
+            ] or (resolved_artifacts if len(resolved_artifacts) <= 20 else [])
+
+            # Dispatch artifacts to 6 sub-analyzers
             try:
-                raw_findings.extend(self.persistence_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if persistence_arts:
+                    raw_findings.extend(self.persistence_analyzer.analyze(persistence_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("PersistenceAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.filesystem_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if filesystem_arts:
+                    raw_findings.extend(self.filesystem_analyzer.analyze(filesystem_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("FilesystemAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                res = self.registry_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id)
-                print(f"DEBUG RegistryAnalyzer inside EndpointAnalysisEngine returned {len(res)} findings for fcr {fcr_id}")
-                raw_findings.extend(res)
+                if registry_arts:
+                    res = self.registry_analyzer.analyze(registry_arts, case_id, fcr_ref=fcr_id)
+                    raw_findings.extend(res)
             except Exception as e:
                 logger.error("RegistryAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.browser_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if browser_arts:
+                    raw_findings.extend(self.browser_analyzer.analyze(browser_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("BrowserAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.usb_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if usb_arts:
+                    raw_findings.extend(self.usb_analyzer.analyze(usb_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("USBAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
-                raw_findings.extend(self.user_activity_analyzer.analyze(resolved_artifacts, case_id, fcr_ref=fcr_id))
+                if user_activity_arts:
+                    raw_findings.extend(self.user_activity_analyzer.analyze(user_activity_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("UserActivityAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
 

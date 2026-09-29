@@ -864,16 +864,14 @@ class ArtifactExtractor:
         ner_entities: List[Artifact] = []
 
         for art in all_extracted:
-            if art.artifact_type in ("extracted_ioc", "yara_match"):
-                norm_val = art.raw_fields.get("normalized_value", "").lower()
-                key = (art.artifact_type, norm_val)
-                groups.setdefault(key, []).append(art)
-            else:
-                ner_entities.append(art)
+            norm_val = str(art.raw_fields.get("normalized_value") or art.raw_fields.get("value") or "").lower().strip()
+            sub_type = str(art.raw_fields.get("entity_type") or art.raw_fields.get("ioc_type") or art.artifact_type or "").replace("-", "_").lower().strip()
+            key = (sub_type, norm_val)
+            groups.setdefault(key, []).append(art)
 
         merged_artifacts: List[Artifact] = []
         for key, group in groups.items():
-            art_type, norm_val = key
+            sub_type, norm_val = key
             first = group[0]
             
             # Combine tools and occurrences
@@ -881,7 +879,7 @@ class ArtifactExtractor:
             occurrences = []
             for art in group:
                 occ = {
-                    "raw_value": art.raw_fields.get("raw_value", art.raw_fields.get("rule_name")),
+                    "raw_value": art.raw_fields.get("raw_value", art.raw_fields.get("value", art.raw_fields.get("rule_name"))),
                     "source_artifact_id": art.raw_fields.get("source_artifact_id"),
                     "source_field": art.raw_fields.get("source_field"),
                     "char_start": art.raw_fields.get("char_start", 0),
@@ -900,11 +898,13 @@ class ArtifactExtractor:
                 artifact_id=first.artifact_id,
                 evidence_id=evidence_id,
                 source_tool="ioc_finder" if len(unique_tools) == 1 and "ioc_finder" in unique_tools else "+".join(sorted(unique_tools)),
-                artifact_type=art_type,
+                artifact_type=first.artifact_type,
                 timestamp=first.timestamp,
                 raw_fields={
                     "ioc_type": first.raw_fields.get("ioc_type"),
+                    "entity_type": sub_type if first.raw_fields.get("entity_type") else None,
                     "rule_name": first.raw_fields.get("rule_name"),
+                    "value": first.raw_fields.get("value"),
                     "raw_value": first.raw_fields.get("raw_value"),
                     "normalized_value": first.raw_fields.get("normalized_value"),
                     "defanged": first.raw_fields.get("defanged", False),
@@ -920,8 +920,7 @@ class ArtifactExtractor:
 
             merged_artifacts.append(merged_art)
 
-        # Re-include NER entities
-        all_final = merged_artifacts + ner_entities
+        all_final = merged_artifacts
 
         # 5. Confidence Scoring Layer
         for art in all_final:
@@ -1082,13 +1081,16 @@ class ArtifactExtractor:
 
             elif art.artifact_type == "extracted_entity":
                 val = art.raw_fields.get("value")
+                occs = art.raw_fields.get("occurrences", [art.raw_fields])
+                src_field = art.raw_fields.get("source_field") or (occs[0].get("source_field") if occs else None) or "raw_fields"
+                src_art_id = art.raw_fields.get("source_artifact_id") or (occs[0].get("source_artifact_id") if occs else None) or art.artifact_id
                 ent = ExtractedEntity(
-                    artifact_id=art.raw_fields.get("source_artifact_id", art.artifact_id),
+                    artifact_id=src_art_id,
                     evidence_id=evidence_id,
                     case_id=case_id,
                     entity_type=art.raw_fields.get("entity_type"),
                     value=val,
-                    source_field=art.raw_fields.get("source_field"),
+                    source_field=src_field,
                     char_start=art.raw_fields.get("char_start", 0),
                     char_end=art.raw_fields.get("char_end", 0),
                     extraction_method="gliner",
@@ -1207,7 +1209,15 @@ class ArtifactExtractor:
         if not include_suppressed:
             processed_entities = [e for e in processed_entities if e.validation_status != "suppressed"]
 
-        return processed_entities
+        final_ents: List[ExtractedEntity] = []
+        seen_ents = set()
+        for e in processed_entities:
+            key = (e.artifact_id, e.entity_type, e.value.strip().lower())
+            if key not in seen_ents:
+                seen_ents.add(key)
+                final_ents.append(e)
+
+        return final_ents
 
     def _is_valid_filler(self, s: str) -> bool:
         s_clean = s.strip().lower()

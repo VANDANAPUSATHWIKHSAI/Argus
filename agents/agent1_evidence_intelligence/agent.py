@@ -27,6 +27,41 @@ from agents.agent1_evidence_intelligence.validator import Agent1Validator
 logger = logging.getLogger(__name__)
 
 
+_AGENT_OUTPUTS_TABLE_INITIALIZED = False
+
+
+def _ensure_agent_outputs_table_initialized(conn):
+    global _AGENT_OUTPUTS_TABLE_INITIALIZED
+    if _AGENT_OUTPUTS_TABLE_INITIALIZED:
+        return
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS agent_outputs (
+            id              SERIAL PRIMARY KEY,
+            case_id         TEXT,
+            agent_id        TEXT NOT NULL,
+            claim           TEXT NOT NULL,
+            evidence_ids    TEXT[] DEFAULT '{}',
+            confidence      FLOAT,
+            verified        BOOLEAN,
+            flags           JSONB DEFAULT '{}',
+            created_at      TIMESTAMPTZ DEFAULT NOW(),
+            tenant_id       TEXT NOT NULL DEFAULT 'default',
+            model_used      TEXT,
+            execution_status TEXT DEFAULT 'SUCCESS'
+        );
+        ALTER TABLE agent_outputs DROP CONSTRAINT IF EXISTS agent_outputs_case_id_fkey;
+        ALTER TABLE agent_outputs ALTER COLUMN case_id TYPE TEXT USING case_id::text;
+        ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+        ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS model_used TEXT;
+        ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS execution_status TEXT DEFAULT 'SUCCESS';
+        CREATE UNIQUE INDEX IF NOT EXISTS agent_outputs_case_agent_claim_idx 
+        ON agent_outputs (case_id, agent_id, claim);
+    """)
+    conn.commit()
+    _AGENT_OUTPUTS_TABLE_INITIALIZED = True
+
+
 class EvidenceIntelligenceAgent(BaseAgent):
     """
     Agent 1 — Evidence Intelligence Agent.
@@ -71,6 +106,17 @@ class EvidenceIntelligenceAgent(BaseAgent):
             else:
                 fir_findings = []
 
+        allow_unreviewed = context.get("allow_unreviewed_findings", True)
+        if not allow_unreviewed and fir_findings:
+            filtered = []
+            for f in fir_findings:
+                status_val = getattr(f, "review_status", "unreviewed")
+                if hasattr(status_val, "value"):
+                    status_val = status_val.value
+                if str(status_val).lower() != "unreviewed":
+                    filtered.append(f)
+            fir_findings = filtered
+
         if not fir_findings:
             logger.warning("Agent 1: No FIR findings found for case_id=%s", case_id)
             output = Agent1Output(
@@ -85,17 +131,38 @@ class EvidenceIntelligenceAgent(BaseAgent):
             )
             return output.model_dump()
 
-        # ── 2. Pass findings through Evidence Sanitization Gateway ──────────
-        sanitized_contexts: List[SanitizedAgentContext] = []
+        # ── 2. Build XML evidence blocks directly from findings ──────────
+        xml_blocks_list = []
+        injections_flagged_count = 0
         for finding in fir_findings:
             if isinstance(finding, SanitizedAgentContext):
-                sanitized_contexts.append(finding)
+                xml_blocks_list.append(finding.xml_evidence_block)
+                if finding.injection_flagged:
+                    injections_flagged_count += 1
+            elif isinstance(finding, dict):
+                fid = finding.get("finding_id", "UNKNOWN")
+                layer = finding.get("layer", "endpoint")
+                fact_text = finding.get("sanitized_fact") or finding.get("fact", "")
+                is_inj = finding.get("injection_flagged", False)
+                if not is_inj and hasattr(self, "injection_gate"):
+                    gate_res = self.injection_gate.check(fact_text, field_name="unstructured")
+                    is_inj = gate_res.injection_flagged
+                if is_inj:
+                    injections_flagged_count += 1
+                xml_blocks_list.append(f'<evidence_item><finding_id>{fid}</finding_id><layer>{layer}</layer><fact>{fact_text}</fact></evidence_item>')
             else:
-                sanitized_ctx = self.gateway.sanitize_finding(finding)
-                sanitized_contexts.append(sanitized_ctx)
+                fid = getattr(finding, "finding_id", "UNKNOWN")
+                layer = getattr(finding, "layer", "endpoint")
+                fact_text = getattr(finding, "sanitized_fact", None) or getattr(finding, "fact", "")
+                is_inj = getattr(finding, "injection_flagged", False)
+                if not is_inj and hasattr(self, "injection_gate"):
+                    gate_res = self.injection_gate.check(fact_text, field_name="unstructured")
+                    is_inj = gate_res.injection_flagged
+                if is_inj:
+                    injections_flagged_count += 1
+                xml_blocks_list.append(f'<evidence_item><finding_id>{fid}</finding_id><layer>{layer}</layer><fact>{fact_text}</fact></evidence_item>')
 
-        # Build XML evidence blocks for LLM prompt
-        xml_blocks = "\n".join(ctx.xml_evidence_block for ctx in sanitized_contexts)
+        xml_blocks = "\n".join(xml_blocks_list)
 
         # ── 3. Construct Prompt & Invoke Qwen3-8B ───────────────────────────
         user_prompt = build_agent1_user_prompt(case_id, xml_blocks)
@@ -115,21 +182,37 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 model_used=self.model_name,
                 claims=[],
                 total_findings_processed=len(fir_findings),
-                sanitization_summary={"findings_sanitized": len(sanitized_contexts)},
+                sanitization_summary={"findings_sanitized": len(fir_findings)},
                 execution_status="FAILED",
                 error_message=f"LLM invocation error: {str(exc)}"
             )
             return output.model_dump()
 
-        # ── 4. Parse Structured JSON Response ──────────────────────────────
-        raw_claims = self._parse_json_claims(llm_response)
+        # ── 4. Parse Structured JSON Response (Fail-Closed) ───────────────
+        raw_claims, extra_meta, parse_err = self._parse_json_claims_and_meta(llm_response)
+        if parse_err and not raw_claims:
+            logger.error("Agent 1: Fail-closed due to malformed JSON response: %s", parse_err)
+            output = Agent1Output(
+                case_id=case_id,
+                tenant_id=tenant_id,
+                model_used=self.model_name,
+                claims=[],
+                total_findings_processed=len(fir_findings),
+                sanitization_summary={"findings_sanitized": len(fir_findings)},
+                execution_status="FAILED",
+                error_message=f"Malformed LLM JSON output: {parse_err}"
+            )
+            self._persist_agent_output(output)
+            return output.model_dump()
 
-        # ── 5. Deterministic Validation Gate ───────────────────────────────
+        # ── 5. Independent Deterministic Validation Gate ─────────────────
+        fir_map = {getattr(f, "finding_id"): f for f in fir_findings if getattr(f, "finding_id", None)}
         valid_finding_ids, valid_lineage_ids = self.validator.extract_valid_id_universe(fir_findings)
         validated_claims = self.validator.validate_claims(
             claims=raw_claims,
             valid_finding_ids=valid_finding_ids,
-            valid_lineage_ids=valid_lineage_ids
+            valid_lineage_ids=valid_lineage_ids,
+            fir_map=fir_map
         )
 
         status = "SUCCESS" if validated_claims else "PARTIAL_SUCCESS"
@@ -142,9 +225,17 @@ class EvidenceIntelligenceAgent(BaseAgent):
             claims=validated_claims,
             total_findings_processed=len(fir_findings),
             sanitization_summary={
-                "findings_sanitized": len(sanitized_contexts),
-                "injections_flagged": sum(1 for c in sanitized_contexts if c.injection_flagged)
+                "findings_sanitized": len(fir_findings),
+                "injections_flagged": injections_flagged_count
             },
+            evidence_trust_score=extra_meta.get("evidence_trust_score"),
+            evidence_quality_summary={
+                "total_processed": len(fir_findings),
+                "injections_flagged": injections_flagged_count
+            },
+            investigation_readiness=extra_meta.get("investigation_readiness") if extra_meta.get("investigation_readiness") in ("READY", "LIMITED", "UNREADY") else "READY",
+            possible_analyses=extra_meta.get("possible_analyses", ["Filesystem analysis", "Log analysis"]),
+            performed_analyses=extra_meta.get("performed_analyses", ["Filesystem extraction", "Artifact extraction"]),
             execution_status=status
         )
 
@@ -153,15 +244,15 @@ class EvidenceIntelligenceAgent(BaseAgent):
 
         return output.model_dump()
 
-    def _parse_json_claims(self, raw_text: str) -> List[Agent1Claim]:
+    def _parse_json_claims_and_meta(self, raw_text: str) -> tuple[List[Agent1Claim], dict, Optional[str]]:
         """
-        Extracts JSON from LLM output string and constructs Agent1Claim objects.
+        Extracts JSON from LLM output string and constructs Agent1Claim objects + meta dict.
+        Fails closed on malformed JSON without creating fake pseudo-claims.
         """
         if not raw_text:
-            return []
+            return [], {}, "Empty LLM output"
 
         cleaned = raw_text.strip()
-        # Handle markdown code fences
         if "```json" in cleaned:
             cleaned = cleaned.split("```json")[1].split("```")[0].strip()
         elif "```" in cleaned:
@@ -171,18 +262,22 @@ class EvidenceIntelligenceAgent(BaseAgent):
             data = json.loads(cleaned)
         except Exception as err:
             logger.warning("Failed to parse LLM response as JSON: %s. Raw text: %s", err, raw_text[:200])
-            # Construct a safe fallback claim capturing raw text
-            return [
-                Agent1Claim(
-                    claim_id="CLM-AG1-FALLBACK-001",
-                    summary="Raw unparsed model reasoning",
-                    findings_summary=raw_text[:500],
-                    cited_evidence_ids=[],
-                    assessed_importance="informational",
-                    confidence_score=0.5,
-                    reasoning_notes="JSON parsing failed; returned raw text in fallback claim."
-                )
-            ]
+            return [], {}, f"JSON parse error: {str(err)}"
+
+        extra_meta = {}
+        if isinstance(data, dict):
+            readiness = str(data.get("investigation_readiness", "READY")).upper()
+            if readiness not in ("READY", "LIMITED", "UNREADY"):
+                if "PART" in readiness or "LIMIT" in readiness:
+                    readiness = "LIMITED"
+                elif "UNREADY" in readiness or "NOT" in readiness:
+                    readiness = "UNREADY"
+                else:
+                    readiness = "READY"
+            extra_meta["investigation_readiness"] = readiness
+            extra_meta["possible_analyses"] = data.get("possible_analyses", [])
+            extra_meta["performed_analyses"] = data.get("performed_analyses", [])
+            extra_meta["evidence_trust_score"] = data.get("evidence_trust_score")
 
         claims_list = data.get("claims", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         parsed_claims: List[Agent1Claim] = []
@@ -206,7 +301,19 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 try:
                     conf = float(conf)
                 except (ValueError, TypeError):
-                    conf = -1.0  # Invalid indicator for validator
+                    conf = -1.0
+
+                missing_ev = item.get("missing_evidence_noted", [])
+                if isinstance(missing_ev, str):
+                    missing_ev = [missing_ev.strip()] if missing_ev.strip() else []
+                elif not isinstance(missing_ev, list):
+                    missing_ev = []
+
+                uncertainties = item.get("uncertainties_or_conflicts", [])
+                if isinstance(uncertainties, str):
+                    uncertainties = [uncertainties.strip()] if uncertainties.strip() else []
+                elif not isinstance(uncertainties, list):
+                    uncertainties = []
 
                 claim_obj = Agent1Claim(
                     claim_id=cid,
@@ -215,17 +322,17 @@ class EvidenceIntelligenceAgent(BaseAgent):
                     cited_evidence_ids=cited_ids,
                     assessed_importance=importance,
                     confidence_score=conf,
-                    missing_evidence_noted=item.get("missing_evidence_noted", []),
-                    uncertainties_or_conflicts=item.get("uncertainties_or_conflicts", []),
+                    missing_evidence_noted=missing_ev,
+                    uncertainties_or_conflicts=uncertainties,
                     reasoning_notes=item.get("reasoning_notes", "")
                 )
                 parsed_claims.append(claim_obj)
 
-        return parsed_claims
+        return parsed_claims, extra_meta, None
 
     def _persist_agent_output(self, output: Agent1Output):
         """
-        Persists structured agent output into PostgreSQL `agent_outputs` table.
+        Persists structured agent output into PostgreSQL `agent_outputs` table using idempotent UPSERT.
         """
         try:
             import psycopg2
@@ -238,35 +345,22 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 password=settings.postgres_password,
                 connect_timeout=5
             )
+            _ensure_agent_outputs_table_initialized(conn)
             cur = conn.cursor()
-            
-            # Idempotent table column migration check
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS agent_outputs (
-                    id              SERIAL PRIMARY KEY,
-                    case_id         TEXT,
-                    agent_id        TEXT NOT NULL,
-                    claim           TEXT NOT NULL,
-                    evidence_ids    TEXT[] DEFAULT '{}',
-                    confidence      FLOAT,
-                    verified        BOOLEAN,
-                    flags           JSONB DEFAULT '{}',
-                    created_at      TIMESTAMPTZ DEFAULT NOW(),
-                    tenant_id       TEXT NOT NULL DEFAULT 'default',
-                    model_used      TEXT,
-                    execution_status TEXT DEFAULT 'SUCCESS'
-                );
-                ALTER TABLE agent_outputs DROP CONSTRAINT IF EXISTS agent_outputs_case_id_fkey;
-                ALTER TABLE agent_outputs ALTER COLUMN case_id TYPE TEXT USING case_id::text;
-                ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
-                ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS model_used TEXT;
-                ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS execution_status TEXT DEFAULT 'SUCCESS';
-            """)
 
             query = """
                 INSERT INTO agent_outputs 
                     (case_id, tenant_id, agent_id, model_used, claim, evidence_ids, confidence, verified, execution_status, flags, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (case_id, agent_id, claim) DO UPDATE SET
+                    tenant_id = EXCLUDED.tenant_id,
+                    model_used = EXCLUDED.model_used,
+                    evidence_ids = EXCLUDED.evidence_ids,
+                    confidence = EXCLUDED.confidence,
+                    verified = EXCLUDED.verified,
+                    execution_status = EXCLUDED.execution_status,
+                    flags = EXCLUDED.flags,
+                    created_at = EXCLUDED.created_at;
             """
 
             items_to_insert = output.claims if output.claims else []
@@ -319,4 +413,5 @@ class EvidenceIntelligenceAgent(BaseAgent):
             logger.info("Agent 1 output persisted to PostgreSQL agent_outputs table for case %s", output.case_id)
         except Exception as exc:
             logger.warning("PostgreSQL agent_outputs persist error: %s", exc)
+
 

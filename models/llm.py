@@ -117,13 +117,13 @@ class OllamaWrapper:
             payload["system"] = system_prompt
 
         try:
-            r = requests.post(url, json=payload, timeout=300)
+            r = requests.post(url, json=payload, timeout=1200)
             if r.status_code == 200:
                 return r.json().get("response", "")
             else:
                 raise RuntimeError(f"Ollama returned error status: {r.status_code}")
         except Exception as e:
-            if self.allow_mock or True:
+            if self.allow_mock:
                 print(f"[OLLAMA WARNING] Connection failed: {e}. Returning smart mock reasoning response.")
                 # Basic mock logic to parse some IDs from the prompt to make valid citations
                 import re

@@ -540,6 +540,21 @@ def list_evidence_by_case(tenant_id: str, case_id: str) -> list[Evidence]:
         if case_dir.exists() and case_dir.is_dir():
             for ev_id_dir in case_dir.iterdir():
                 if ev_id_dir.is_dir():
+                    metadata_file = ev_id_dir / "metadata.json"
+                    if metadata_file.exists():
+                        try:
+                            import json
+                            with open(metadata_file, "r", encoding="utf-8") as f:
+                                data = json.load(f)
+                                data["evidence_id"] = ev_id_dir.name
+                                data["case_id"] = case_id
+                                # Ensure status is available, default to Processing
+                                if not data.get("status"):
+                                    data["status"] = "processing"
+                                evidence_list.append(Evidence(**data))
+                            continue
+                        except Exception as e:
+                            logger.error("Failed to read metadata.json: %s", e)
                     orig_dir = ev_id_dir / "original"
                     if orig_dir.exists() and orig_dir.is_dir():
                         files = list(orig_dir.iterdir())

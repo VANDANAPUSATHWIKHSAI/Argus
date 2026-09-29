@@ -1,0 +1,45 @@
+OUTPUT
+------
+
+INFECTION PATH
+--------------
+F-E2E-001
+      ↓
+F-E2E-001
+
+ATTACK TIMELINE
+---------------
+
+2026-10-01T08:15:00Z
+Suspicious email attachment opened
+Stage: Initial Access
+Evidence: F-E2E-001
+
+2026-10-01T08:16:22Z
+PowerShell execution via Word
+Stage: Execution
+Evidence: F-E2E-002
+
+2026-10-01T08:35:00Z
+Credential dumping via LSASS
+Stage: Credential Access
+Evidence: F-E2E-005
+
+2026-10-01T09:12:30Z
+SMB lateral movement to SERVER-02
+Stage: Lateral Movement
+Evidence: F-E2E-006
+
+Missing expected event:
+Network Discovery / Port Scan
+Reason: Missing expected discovery phase between credential dumping and lateral movement.
+
+ATTACK RECONSTRUCTION REPORT
+----------------------------
+CONFIRMED RECONSTRUCTION:
+Confirmed infection path starts with a malicious email (F-E2E-001) leading to code execution. The attacker dumped credentials and moved laterally to SERVER-02 (F-E2E-006). INFERRED: An unusual RDP login from an external IP (F-E2E-008) is highly suspicious but its direct causal link is uncertain.
+
+LATERAL MOVEMENT:
+- WORKSTATION-01 -> SERVER-02 via SMB Admin credentials (Evidence: F-E2E-006)
+
+OVERALL CONFIDENCE: 0.92

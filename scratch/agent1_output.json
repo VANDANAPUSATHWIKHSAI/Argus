@@ -1,0 +1,38 @@
+{
+  "case_id": "CASE-VERIFY-2026-001",
+  "tenant_id": "default",
+  "agent_id": "agent1_evidence_intelligence",
+  "model_used": "Qwen3-8B",
+  "timestamp": "2026-09-29 10:22:35.070185+00:00",
+  "claims": [
+    {
+      "claim_id": "CLM-AG-EML-001",
+      "summary": "Phishing Email and Executable Attachment Correlation",
+      "findings_summary": "Suspicious phishing email received with executable attachment security_update.bat.",
+      "cited_evidence_ids": [
+        "F-1001",
+        "F-1002"
+      ],
+      "assessed_importance": "critical",
+      "confidence_score": 0.95,
+      "missing_evidence_noted": [],
+      "uncertainties_or_conflicts": [],
+      "reasoning_notes": "Correlated email header headers and payload observables with executable file activity.",
+      "citation_verified": false,
+      "invalid_citations": [
+        "F-1001",
+        "F-1002"
+      ],
+      "is_valid_confidence": true,
+      "raw_model_confidence": 0.95,
+      "validation_notes": "Invalid cited IDs not in evidence lineage: ['F-1001', 'F-1002']"
+    }
+  ],
+  "total_findings_processed": 4,
+  "sanitization_summary": {
+    "findings_sanitized": 4,
+    "injections_flagged": 0
+  },
+  "execution_status": "SUCCESS",
+  "error_message": null
+}

@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     # ── LLM ──────────────────────────────────────
     llm_model_name: str = "Qwen/Qwen3-14B"
     llm_fallback_model: str = "Qwen/Qwen3-8B"
+    threat_intel_model_name: str = "Qwen/Qwen3-8B"
+    threat_intel_model_path: Optional[str] = r"D:\ARGUS\models\Qwen3-8B"
     embedding_model: str = "Qwen/Qwen3-Embedding-4B"
 
     # ── PostgreSQL (structured data) ─────────────
@@ -57,4 +59,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

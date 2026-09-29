@@ -15,6 +15,9 @@ langgraph
 
 # ── LLM / Embeddings (HuggingFace) ───────────────
 transformers>=4.40
+huggingface_hub
+openvino
+optimum-intel
 torch
 bitsandbytes          # 4-bit quantization (nf4 / double quant)
 accelerate
@@ -78,4 +81,3 @@ cryptography          # Evidence encryption (Fernet)
 python-multipart      # FastAPI file uploads
 httpx                 # Async HTTP client
 rfc3161ng             # RFC 3161 timestamping support
-

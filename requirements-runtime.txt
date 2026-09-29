@@ -16,6 +16,9 @@ pyclamd
 google-re2
 torch
 transformers>=4.40
+huggingface_hub
+openvino
+optimum-intel
 gliner
 tldextract
 rfc3161ng

@@ -39,6 +39,15 @@ class LLMLoader:
             return self._get_ollama_client(settings.llm_fallback_model)
         return self._load_hf_model(settings.llm_fallback_model, quantize=True)
 
+    def load_threat_intelligence(self) -> Any:
+        """Load the Qwen3-8B model assigned to Agent 5a reasoning."""
+        if settings.threat_intel_model_path and os.path.isdir(settings.threat_intel_model_path):
+            return self._load_hf_model(settings.threat_intel_model_path, quantize=True)
+        if self.use_ollama:
+            return self._get_ollama_client(settings.threat_intel_model_name)
+        model_id = settings.threat_intel_model_name
+        return self._load_hf_model(model_id, quantize=True)
+
     def _get_ollama_client(self, model_name: str) -> "OllamaWrapper":
         """Returns a helper wrapper to call local Ollama endpoint."""
         return OllamaWrapper(model_name, self.ollama_url)
@@ -64,6 +73,17 @@ class LLMLoader:
                 bnb_4bit_compute_dtype=torch.bfloat16
             )
             kwargs["quantization_config"] = bnb_config
+        elif hasattr(torch, "xpu") and torch.xpu.is_available():
+            # Iris Xe has limited shared memory; let Accelerate keep most
+            # weights on CPU and spill to D: rather than forcing XPU OOM.
+            kwargs["dtype"] = torch.float16
+            # Accelerate represents the first non-CPU accelerator by index
+            # when constructing a mixed device map.
+            kwargs["max_memory"] = {0: "5GiB", "cpu": "24GiB", "disk": "100GiB"}
+            kwargs["offload_folder"] = os.path.join(
+                os.getenv("ARGUS_MODEL_OFFLOAD_DIR", r"D:\ARGUS\models\offload"),
+                "hf",
+            )
         elif not torch.cuda.is_available():
             print("[LLM WARNING] CUDA not available, loading model on CPU (unquantized/slow).")
 

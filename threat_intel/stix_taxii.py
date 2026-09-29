@@ -39,7 +39,7 @@ class StixTaxiiClient:
             raise RuntimeError("taxii2-client is required for TAXII feeds") from exc
 
         if "/collections/" in url.rstrip("/"):
-            collection = Collection(url, verify=True, timeout=self.timeout)
+            collection = Collection(url, verify=True)
             bundle = collection.get_objects()
             return bundle.get("objects", []) if isinstance(bundle, dict) else []
 
@@ -58,10 +58,10 @@ class StixTaxiiClient:
             payload = response.json()
             return payload.get("objects", payload) if isinstance(payload, dict) else payload
 
-        server = Server(url, verify=True, timeout=self.timeout)
+        server = Server(url, verify=True)
         for api_root in server.api_roots:
             for collection in api_root.collections:
-                if collection.can_read:
+                if getattr(collection, "can_read", True):
                     bundle = collection.get_objects()
                     return bundle.get("objects", []) if isinstance(bundle, dict) else []
         raise RuntimeError("TAXII server has no readable collections")

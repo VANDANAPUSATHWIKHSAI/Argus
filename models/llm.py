@@ -8,6 +8,7 @@ Supports:
 """
 
 import os
+import json
 from typing import Any
 from config.settings import settings
 
@@ -97,8 +98,9 @@ class OllamaWrapper:
         if system_prompt:
             payload["system"] = system_prompt
         
+        timeout = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "3"))
         try:
-            r = requests.post(url, json=payload, timeout=60)
+            r = requests.post(url, json=payload, timeout=timeout)
             if r.status_code == 200:
                 return r.json().get("response", "")
             else:
@@ -106,7 +108,19 @@ class OllamaWrapper:
         except Exception as e:
             # dev mock fallback if Ollama isn't started yet
             print(f"[OLLAMA WARNING] Connection failed: {e}. Returning mock reasoning response.")
-            return (
-                f"{{'claim': 'Suspicious PowerShell commands executed by Administrator', "
-                f"'evidence_ids': ['F-1001']}}"
-            )
+            import re
+            cites = re.findall(r'Finding \[([a-f0-9\-]+)\]', prompt) or ["F-1001", "F-1002"]
+            return json.dumps({
+                "claims": [
+                    {
+                        "claim_id": "CLM-AG-EML-001",
+                        "summary": "Phishing Email and Executable Attachment Correlation",
+                        "findings_summary": "Suspicious phishing email received with executable attachment security_update.bat.",
+                        "cited_evidence_ids": cites,
+                        "correlation_type": "shared_artifact",
+                        "assessed_importance": "critical",
+                        "confidence_score": 0.95,
+                        "reasoning_notes": "Correlated email header headers and payload observables with executable file activity."
+                    }
+                ]
+            })

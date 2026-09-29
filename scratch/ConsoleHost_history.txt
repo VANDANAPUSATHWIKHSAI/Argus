@@ -1,0 +1,15 @@
+Get-Process
+Get-Service
+Get-ChildItem C:\Users
+whoami
+ipconfig
+Get-NetTCPConnection
+Get-ComputerInfo
+Get-LocalUser
+Get-FileHash C:\Users\Public\sample.exe
+Get-Content C:\Users\Public\notes.txt
+Set-Location C:\Users\Public
+Get-ChildItem -Recurse
+New-Item C:\Users\Public\test.txt
+Remove-Item C:\Users\Public\old.txt
+Start-Process powershell.exe

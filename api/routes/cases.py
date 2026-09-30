@@ -148,26 +148,23 @@ async def create_case(
     
     # Store the case name in DB
     try:
-        from config.settings import settings
-        import psycopg2
-        conn = psycopg2.connect(
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            database=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-            connect_timeout=2
-        )
-        cur = conn.cursor()
-        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS name VARCHAR(255)")
-        cur.execute(
-            "UPDATE cases SET name = %s, analyst_id = %s, senior_analyst_id = %s WHERE case_id = %s", 
-            (req.name, req.analyst_id, req.senior_analyst_id, session.case_id)
-        )
-        conn.commit()
-        conn.close()
+        from api.routes.auth import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("ALTER TABLE cases ALTER COLUMN case_id TYPE VARCHAR(255) USING case_id::text;")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS name VARCHAR(255)")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS analyst_id VARCHAR(255)")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS senior_analyst_id VARCHAR(255)")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS description TEXT")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_by TEXT")
+                cur.execute(
+                    "UPDATE cases SET name = %s, analyst_id = %s, senior_analyst_id = %s WHERE case_id = %s", 
+                    (req.name, req.analyst_id, req.senior_analyst_id, session.case_id)
+                )
+            conn.commit()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database persistence failed: {str(e)}")
+        logger.warning(f"[DB WARNING] Could not update case details in DB: {e}")
     
     # Send emails in background
     if req.analyst_id:
@@ -196,28 +193,18 @@ async def get_all_cases(
     
     # Fetch case names from DB
     case_names = {}
+    user_map = {}
     try:
-        from config.settings import settings
-        import psycopg2
-        conn = psycopg2.connect(
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            database=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-            connect_timeout=2
-        )
-        cur = conn.cursor()
-        cur.execute("SELECT case_id, name, analyst_id, senior_analyst_id FROM cases WHERE tenant_id = %s", (x_tenant_id,))
-        for row in cur.fetchall():
-            case_names[row[0]] = {"name": row[1], "analyst_id": row[2], "senior_analyst_id": row[3]}
-            
-        cur.execute("SELECT id, name FROM users")
-        user_map = {}
-        for row in cur.fetchall():
-            user_map[str(row[0])] = row[1]
-        
-        conn.close()
+        from api.routes.auth import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT case_id, name, analyst_id, senior_analyst_id FROM cases WHERE tenant_id = %s", (x_tenant_id,))
+                for row in cur.fetchall():
+                    case_names[row[0]] = {"name": row[1], "analyst_id": row[2], "senior_analyst_id": row[3]}
+                    
+                cur.execute("SELECT id, name FROM users")
+                for row in cur.fetchall():
+                    user_map[str(row[0])] = row[1]
     except Exception as e:
         print(f"[DB WARNING] Could not fetch case names: {e}")
 
@@ -231,7 +218,7 @@ async def get_all_cases(
         senior_id  = str(info.get("senior_analyst_id") or "")
         assigned = is_admin or analyst_id == user_id or senior_id == user_id
         
-        analyst_name = user_map.get(analyst_id, analyst_id) if 'user_map' in locals() else analyst_id
+        analyst_name = user_map.get(analyst_id, analyst_id)
         
         result.append({
             "case_id": c.case_id,
@@ -256,65 +243,59 @@ async def get_recent_activity(
     
     user_map = {"Admin": "Admin User", "analyst_api": "Analyst", "Analyst_api": "Analyst"}
     try:
-        from config.settings import settings
-        import psycopg2
-        conn = psycopg2.connect(
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            database=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-            connect_timeout=2
-        )
-        cur = conn.cursor()
-        cur.execute("SELECT id, name FROM users")
-        for row in cur.fetchall():
-            user_map[str(row[0])] = row[1]
-            
-        # 1. Case Creation
-        cur.execute("SELECT case_id, created_by, created_at, closed_at, closed_by FROM cases WHERE tenant_id = %s", (x_tenant_id,))
-        for row in cur.fetchall():
-            case_id, c_by, created_at, closed_at, closed_by = row
-            mapped_name = user_map.get(c_by, c_by)
-            activity.append({
-                "action": "Created Case",
-                "case_id": case_id,
-                "created_by": mapped_name,
-                "created_by_id": c_by,
-                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
-                "details": case_id
-            })
-            if closed_at:
-                c_by_name = user_map.get(closed_by, closed_by) if closed_by else "Admin User"
-                activity.append({
-                    "action": "Closed Case",
-                    "case_id": case_id,
-                    "created_by": c_by_name,
-                    "created_by_id": closed_by if closed_by else c_by,
-                    "created_at": closed_at.isoformat() if hasattr(closed_at, "isoformat") else str(closed_at),
-                    "details": f"Case {case_id} was closed"
-                })
+        from api.routes.auth import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, name FROM users")
+                for row in cur.fetchall():
+                    user_map[str(row[0])] = row[1]
+                    
+                # 1. Case Creation
+                cur.execute("SELECT case_id, created_by, created_at, closed_at, closed_by FROM cases WHERE tenant_id = %s", (x_tenant_id,))
+                for row in cur.fetchall():
+                    case_id, c_by, created_at, closed_at, closed_by = row
+                    mapped_name = user_map.get(c_by, c_by)
+                    activity.append({
+                        "action": "Created Case",
+                        "case_id": case_id,
+                        "created_by": mapped_name,
+                        "created_by_id": c_by,
+                        "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+                        "details": case_id
+                    })
+                    if closed_at:
+                        c_by_name = user_map.get(closed_by, closed_by) if closed_by else "Admin User"
+                        activity.append({
+                            "action": "Closed Case",
+                            "case_id": case_id,
+                            "created_by": c_by_name,
+                            "created_by_id": closed_by if closed_by else c_by,
+                            "created_at": closed_at.isoformat() if hasattr(closed_at, "isoformat") else str(closed_at),
+                            "details": f"Case {case_id} was closed"
+                        })
 
-        # 2. Uploaded Evidence
-        cur.execute(
-            """
-            SELECT e.evidence_id, e.case_id, e.filename, e.uploaded_by, e.upload_timestamp
-            FROM evidence e
-            INNER JOIN cases c ON e.case_id = c.case_id
-            WHERE c.tenant_id = %s
-            """, 
-            (x_tenant_id,)
-        )
-        for row in cur.fetchall():
-            u_by = row[3] if row[3] else ""
-            activity.append({
-                "action": "Uploaded Evidence",
-                "case_id": row[1],
-                "created_by": user_map.get(u_by, u_by),
-                "created_by_id": u_by,
-                "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
-                "details": row[2]
-            })
+                # 2. Uploaded Evidence
+                cur.execute(
+                    """
+                    SELECT e.evidence_id, e.case_id, e.filename, e.uploaded_by, e.upload_timestamp
+                    FROM evidence e
+                    INNER JOIN cases c ON e.case_id = c.case_id
+                    WHERE c.tenant_id = %s
+                    """, 
+                    (x_tenant_id,)
+                )
+                for row in cur.fetchall():
+                    u_by = row[3] if row[3] else ""
+                    activity.append({
+                        "action": "Uploaded Evidence",
+                        "case_id": row[1],
+                        "created_by": user_map.get(u_by, u_by),
+                        "created_by_id": u_by,
+                        "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
+                        "details": row[2]
+                    })
+    except Exception as e:
+        print(f"[DB WARNING] Could not fetch comprehensive activity: {e}")
 
         # 3. Analyst Findings
         cur.execute(

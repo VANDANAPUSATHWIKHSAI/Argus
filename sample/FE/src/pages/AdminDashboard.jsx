@@ -57,7 +57,16 @@ const AdminDashboard = () => {
           senior_analyst_id: newCaseSeniorAnalyst || null,
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        let errMsg = 'Failed to create case';
+        try {
+          const errJson = await res.json();
+          errMsg = errJson.detail || errMsg;
+        } catch {
+          errMsg = await res.text() || errMsg;
+        }
+        throw new Error(errMsg);
+      }
       const data = await res.json();
       const createdId = data.case_id || data.id;
       localStorage.setItem('active_case_id', createdId);
@@ -76,7 +85,7 @@ const AdminDashboard = () => {
       });
     } catch (err) {
       console.error(err);
-      setCustomAlert({ isOpen: true, title: 'Error', message: 'Failed to create case', type: 'error' });
+      setCustomAlert({ isOpen: true, title: 'Error', message: err.message || 'Failed to create case', type: 'error' });
     } finally {
       setCreating(false);
     }

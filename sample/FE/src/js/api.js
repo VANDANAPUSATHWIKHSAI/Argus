@@ -78,7 +78,7 @@ export async function uploadEvidenceFile(file, caseId) {
   formData.append('file', file);
   formData.append('case_id', caseId);
 
-  return fetchWithAuth('/evidence/upload', {
+  return fetchWithAuth(`/evidence/upload?case_id=${encodeURIComponent(caseId)}`, {
     method: 'POST',
     body: formData,
   });

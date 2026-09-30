@@ -87,7 +87,16 @@ def create_case_session(tenant_id: str, created_by: str, case_id: Optional[str] 
                 connect_timeout=2
             )
             cur = conn.cursor()
-            # Ensure columns exist
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS cases (
+                    case_id VARCHAR(255) PRIMARY KEY,
+                    tenant_id TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    created_by TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'open'
+                );
+            """)
+            cur.execute("ALTER TABLE cases ALTER COLUMN case_id TYPE VARCHAR(255) USING case_id::text;")
             cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS analyst_id VARCHAR(255)")
             cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS senior_analyst_id VARCHAR(255)")
             

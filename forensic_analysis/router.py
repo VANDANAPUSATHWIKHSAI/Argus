@@ -29,6 +29,8 @@ ARTIFACT_TYPE_TO_ENGINE: Dict[str, str] = {
     "network.http":         "network",
     "network.tls":          "network",
     "network_connection":   "network",
+    "network_event":        "network",
+    "network.event":        "network",
     "dns_query":            "network",
     "http_request":         "network",
     "tls_session":          "network",

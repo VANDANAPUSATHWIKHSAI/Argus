@@ -55,11 +55,41 @@ def get_db_connection():
     finally:
         db_pool.putconn(conn)
 
-def get_user_by_id(userid: str):
+def init_users_table():
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id, email, password_hash, role, name FROM users WHERE id = %s", (userid,))
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id VARCHAR(255) PRIMARY KEY,
+                        email VARCHAR(255) UNIQUE NOT NULL,
+                        password_hash VARCHAR(255) NOT NULL,
+                        role VARCHAR(50) NOT NULL,
+                        name VARCHAR(255) NOT NULL,
+                        phone VARCHAR(50),
+                        doj VARCHAR(50)
+                    );
+                """)
+                cur.execute("SELECT COUNT(*) FROM users")
+                if cur.fetchone()[0] == 0:
+                    pwd_hash = get_password_hash("123")
+                    cur.execute("""
+                        INSERT INTO users (id, email, password_hash, role, name, phone, doj) VALUES
+                        ('admin', 'admin@argus.local', %s, 'admin', 'System Administrator', '+1-555-0100', '2025-01-01'),
+                        ('analyst', 'analyst@argus.local', %s, 'analyst', 'Forensic Analyst', '+1-555-0101', '2025-01-15'),
+                        ('senior_analyst', 'senior@argus.local', %s, 'senior_analyst', 'Senior Forensic Analyst', '+1-555-0102', '2025-01-10')
+                    """, (pwd_hash, pwd_hash, pwd_hash))
+            conn.commit()
+    except Exception as e:
+        print(f"User Table Init Error: {e}")
+
+def get_user_by_id(userid: str):
+    try:
+        init_users_table()
+        clean_id = userid.strip().lower()
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, email, password_hash, role, name FROM users WHERE LOWER(id) = %s OR LOWER(email) = %s", (clean_id, clean_id))
                 row = cur.fetchone()
                 if row:
                     return {

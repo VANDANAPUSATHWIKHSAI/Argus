@@ -5,6 +5,9 @@ POST /evidence/upload
 
 In-depth REST API endpoint for uploading raw digital evidence, running cryptographic hash verification,
 executing the 4-stage ARGUS forensic pipeline, persisting findings to FIR, and returning full status telemetry.
+
+NOTE: Heavy pipeline stages (FCR, Stage-4 analysis) are run in a background thread pool so the
+event loop is never blocked, keeping login / all other endpoints responsive.
 """
 
 from __future__ import annotations
@@ -13,10 +16,12 @@ import os
 import hashlib
 import tempfile
 import logging
+import asyncio
+import concurrent.futures
 from typing import Optional, List
 from pathlib import Path
 
-from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException, Query, Depends
+from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException, Query, Depends, BackgroundTasks
 from api.routes.auth import get_current_user
 from pydantic import BaseModel, Field
 
@@ -40,9 +45,12 @@ _parser_router = ParserRouter()
 _extractor = ArtifactExtractor()
 _fcr_engine = FCREngine()
 
+# Thread pool for CPU-bound forensic pipeline work
+_pipeline_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="argus_pipeline")
+
 
 class EvidenceUploadResponse(BaseModel):
-    status: str = "SUCCESS"
+    status: str = "PROCESSING"
     case_id: str
     tenant_id: str
     evidence_id: str
@@ -68,6 +76,212 @@ def sanitize_uuid(val: Optional[str]) -> str:
     return cleaned
 
 
+def _run_forensic_pipeline(
+    evidence: Evidence,
+    session: CaseSession,
+    file_path: Path,
+    file_bytes: bytes,
+    target_case_id: str,
+    tenant_id: str,
+    host_id: str,
+    uploaded_by: str,
+    filename_original: str,
+):
+    """
+    Run the full 4-stage forensic pipeline synchronously (called in a thread pool).
+    Parse happens BEFORE store_evidence so the temp file is still present.
+    store_evidence is called after parsing to move file to MinIO.
+    Returns a dict with counts and errors.
+    """
+    parsed_artifacts = []
+    derived_observables = []
+    fcr_records = []
+    findings = []
+    errors = []
+
+    try:
+        import urllib.parse
+        temp_dir = file_path.parent
+
+        # Stage 1/2 — Parsing
+        if filename_original.lower().endswith(".zip"):
+            import zipfile
+            extract_dir = temp_dir / f"extracted_{hashlib.sha256(filename_original.encode()).hexdigest()[:8]}"
+            extract_dir.mkdir(parents=True, exist_ok=True)
+            try:
+                with zipfile.ZipFile(str(file_path), 'r') as zf:
+                    resolved_extract_dir = extract_dir.resolve()
+                    for member in zf.infolist():
+                        member_target = (extract_dir / member.filename).resolve()
+                        try:
+                            member_target.relative_to(resolved_extract_dir)
+                        except ValueError:
+                            logger.warning(f"Skipping unsafe zip entry: {member.filename}")
+                            continue
+                        zf.extract(member, extract_dir)
+
+                extracted_files = [p for p in extract_dir.rglob("*") if p.is_file() and not p.name.startswith(".") and not p.name.startswith("__MACOSX")]
+                logger.info(f"Extracted {len(extracted_files)} files from '{filename_original}'")
+
+                for ext_file in extracted_files:
+                    sub_bytes = ext_file.read_bytes()
+                    sub_ev = Evidence(
+                        case_id=target_case_id,
+                        filename=ext_file.name,
+                        file_path=str(ext_file),
+                        raw_file_path=str(ext_file),
+                        uploaded_by=uploaded_by,
+                        sha256_hash=hashlib.sha256(sub_bytes).hexdigest(),
+                        metadata={"size_bytes": len(sub_bytes)}
+                    )
+                    r_res = _parser_router.determine_routing(sub_ev)
+                    if r_res.status == "ROUTED" and r_res.parser_instance:
+                        try:
+                            sub_arts = r_res.parser_instance.parse(str(ext_file), sub_ev.evidence_id) or []
+                            for art in sub_arts:
+                                art.case_id = target_case_id
+                                art.host_id = host_id
+                                if getattr(art, "normalized_fields", None):
+                                    art.normalized_fields.host = host_id
+                            parsed_artifacts.extend(sub_arts)
+                        except Exception as pe:
+                            logger.error(f"Failed parsing '{ext_file.name}': {pe}")
+            except Exception as zip_e:
+                err_msg = f"Zip extraction error: {zip_e}"
+                logger.error(err_msg)
+                errors.append(err_msg)
+        else:
+            routing_res = _parser_router.determine_routing(evidence)
+            if routing_res.status == "ROUTED" and routing_res.parser_instance:
+                try:
+                    arts = routing_res.parser_instance.parse(str(file_path), evidence.evidence_id)
+                    if arts:
+                        for art in arts:
+                            art.case_id = target_case_id
+                            art.host_id = host_id
+                            if getattr(art, "normalized_fields", None):
+                                art.normalized_fields.host = host_id
+                        parsed_artifacts.extend(arts)
+                except Exception as parse_e:
+                    err_msg = f"Parser execution failed: {parse_e}"
+                    logger.error(err_msg)
+                    errors.append(err_msg)
+            else:
+                err_msg = f"Parser routing: no parser matched for '{filename_original}' (status: {routing_res.status})."
+                logger.warning(err_msg)
+                errors.append(err_msg)
+
+        # Store evidence into durable storage (MinIO/local) AFTER parsing
+        # so the temp file is still available during parse.
+        # store_evidence deletes the temp file after upload, which is correct.
+        try:
+            store_evidence(evidence, session)
+        except Exception as se:
+            logger.warning(f"Store evidence warning: {se}")
+
+        # Stage 2.5 — Extractor
+        if parsed_artifacts:
+            try:
+                obs_list = _extractor.extract(parsed_artifacts, evidence_id=evidence.evidence_id)
+                for obs in (obs_list or []):
+                    obs.case_id = target_case_id
+                    obs.host_id = host_id
+                    if obs.normalized_fields:
+                        obs.normalized_fields.host = host_id
+                    derived_observables.append(obs)
+            except Exception as ext_e:
+                logger.error(f"Extractor failed: {ext_e}")
+
+        all_artifacts = parsed_artifacts + list(derived_observables)
+        artifacts_map = {art.artifact_id: art for art in parsed_artifacts}
+
+        # Stage 3 — FCR Correlation
+        if all_artifacts:
+            try:
+                fcr_records = _fcr_engine.correlate(
+                    artifacts=parsed_artifacts,
+                    extracted_entities=derived_observables,
+                    allow_single_artifact=True
+                )
+            except Exception as fcr_e:
+                logger.error(f"FCR Engine failed: {fcr_e}")
+
+        # Stage 4 — Analysis & FIR Storage
+        if fcr_records:
+            try:
+                findings = process_fcr_batch(
+                    case_id=target_case_id,
+                    fcr_objects=fcr_records,
+                    artifacts_by_id=artifacts_map,
+                    fir_repo=_fir_repo,
+                    tenant_id=tenant_id
+                )
+            except Exception as batch_e:
+                logger.error(f"Stage 4 analysis failed: {batch_e}")
+
+        # Timeline
+        all_artifacts = parsed_artifacts + list(derived_observables)
+        timeline = []
+        try:
+            timeline = _analyst_service.build_case_timeline(
+                case_id=target_case_id,
+                artifacts=all_artifacts,
+                correlation_records=fcr_records,
+                tenant_id=tenant_id
+            )
+        except Exception as tl_e:
+            logger.error(f"Timeline building failed: {tl_e}")
+
+        # Persist metadata counts
+        try:
+            evidence.metadata.update({
+                "parsed_artifact_count": len(parsed_artifacts),
+                "derived_observable_count": len(derived_observables),
+                "fcr_count": len(fcr_records),
+                "finding_count": len(findings),
+                "timeline_event_count": len(timeline)
+            })
+            import json
+            import psycopg2
+            from config.settings import settings
+            conn = psycopg2.connect(
+                host=settings.postgres_host,
+                port=settings.postgres_port,
+                database=settings.postgres_db,
+                user=settings.postgres_user,
+                password=settings.postgres_password,
+                connect_timeout=2
+            )
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
+                (json.dumps(evidence.metadata), evidence.evidence_id)
+            )
+            conn.commit()
+            conn.close()
+        except Exception as db_meta_e:
+            logger.warning(f"Failed to update evidence metadata: {db_meta_e}")
+
+        return {
+            "parsed_artifact_count": len(parsed_artifacts),
+            "derived_observable_count": len(derived_observables),
+            "fcr_count": len(fcr_records),
+            "finding_count": len(findings),
+            "timeline_event_count": len(timeline),
+            "errors": errors,
+        }
+    except Exception as e:
+        logger.error(f"Forensic pipeline unhandled error: {e}")
+        return {
+            "parsed_artifact_count": 0,
+            "derived_observable_count": 0,
+            "fcr_count": 0,
+            "finding_count": 0,
+            "timeline_event_count": 0,
+            "errors": [str(e)],
+        }
+
+
 @router.post("/upload", response_model=EvidenceUploadResponse)
 async def upload_evidence(
     file: UploadFile = File(...),
@@ -80,7 +294,8 @@ async def upload_evidence(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Ingest a raw evidence file, execute the Stage 1-4 pipeline, and store findings.
+    Ingest a raw evidence file. File is stored immediately; the forensic pipeline
+    runs in a background thread so the server stays responsive.
     """
     raw_case_id = case_id or form_case_id
     if not file or not file.filename:
@@ -99,7 +314,7 @@ async def upload_evidence(
     # Save temp upload file
     temp_dir = Path(tempfile.gettempdir()) / "argus_uploads"
     temp_dir.mkdir(parents=True, exist_ok=True)
-    
+
     import urllib.parse
     raw_name = relative_path if relative_path else file.filename
     unquoted = urllib.parse.unquote(raw_name)
@@ -135,190 +350,38 @@ async def upload_evidence(
         metadata={"size_bytes": len(file_bytes)}
     )
 
-    # Stage 1 / 2 Parsing (must run BEFORE store_evidence cleans up temp file)
-    routing_res = _parser_router.determine_routing(evidence)
-    parsed_artifacts = []
-    derived_observables = []
-    fcr_records = []
-    findings = []
-    errors = []
+    # Fire-and-forget: submit pipeline to thread pool and return immediately.
+    # The pipeline calls store_evidence internally (parse → store → cleanup).
+    # The browser gets a response right away; analysis runs in the background.
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(
+        _pipeline_executor,
+        _run_forensic_pipeline,
+        evidence,
+        session,
+        file_path,
+        file_bytes,
+        target_case_id,
+        tenant_id,
+        host_id,
+        uploader_name,
+        file.filename,
+    )
 
-    # Automatic Folder Zip Archive Extraction & Recursive File Processing
-    if file.filename.lower().endswith(".zip"):
-        import zipfile
-        extract_dir = temp_dir / f"extracted_{hashlib.sha256(file.filename.encode()).hexdigest()[:8]}"
-        extract_dir.mkdir(parents=True, exist_ok=True)
-        zip_source_path = str(file_path)
-        try:
-            with zipfile.ZipFile(zip_source_path, 'r') as zf:
-                resolved_extract_dir = extract_dir.resolve()
-                for member in zf.infolist():
-                    member_target = (extract_dir / member.filename).resolve()
-                    try:
-                        member_target.relative_to(resolved_extract_dir)
-                    except ValueError:
-                        logger.warning(f"Skipping unsafe zip entry (Path Traversal / Zip Slip attempt): {member.filename}")
-                        continue
-                    zf.extract(member, extract_dir)
-            
-            extracted_files = [p for p in extract_dir.rglob("*") if p.is_file() and not p.name.startswith(".") and not p.name.startswith("__MACOSX")]
-            logger.info(f"Extracted {len(extracted_files)} files from folder archive '{file.filename}'")
-            
-            for ext_file in extracted_files:
-                sub_bytes = ext_file.read_bytes()
-                sub_ev = Evidence(
-                    case_id=target_case_id,
-                    filename=ext_file.name,
-                    file_path=str(ext_file),
-                    raw_file_path=str(ext_file),
-                    uploaded_by=uploaded_by,
-                    sha256_hash=hashlib.sha256(sub_bytes).hexdigest(),
-                    metadata={"size_bytes": len(sub_bytes)}
-                )
-                r_res = _parser_router.determine_routing(sub_ev)
-                if r_res.status == "ROUTED" and r_res.parser_instance:
-                    try:
-                        sub_arts = r_res.parser_instance.parse(str(ext_file), sub_ev.evidence_id) or []
-                        for art in sub_arts:
-                            art.case_id = target_case_id
-                            art.host_id = host_id
-                            if getattr(art, "normalized_fields", None):
-                                art.normalized_fields.host = host_id
-                        parsed_artifacts.extend(sub_arts)
-                    except Exception as pe:
-                        logger.error(f"Failed parsing file '{ext_file.name}': {pe}")
-        except Exception as zip_e:
-            err_msg = f"Zip folder extraction error: {zip_e}"
-            logger.error(err_msg)
-            errors.append(err_msg)
-    else:
-        # Single File Processing
-        routing_res = _parser_router.determine_routing(evidence)
-        if routing_res.status == "ROUTED" and routing_res.parser_instance:
-            try:
-                target_path = str(file_path)
-                arts = routing_res.parser_instance.parse(target_path, evidence.evidence_id)
-                if arts:
-                    for art in arts:
-                        art.case_id = target_case_id
-                        art.host_id = host_id
-                        if getattr(art, "normalized_fields", None):
-                            art.normalized_fields.host = host_id
-                    parsed_artifacts.extend(arts)
-            except Exception as parse_e:
-                err_msg = f"Parser execution failed: {parse_e}"
-                logger.error(err_msg)
-                errors.append(err_msg)
-        else:
-            err_msg = f"Parser routing failed or blocked for file '{file.filename}' (status: {routing_res.status})."
-            logger.warning(err_msg)
-            errors.append(err_msg)
-
-    # Store evidence into durable storage/MinIO (cleans up temp file)
-    try:
-        store_evidence(evidence, session)
-    except Exception as e:
-        logger.warning(f"Store evidence warning: {e}")
-
-    # Stage 2.5 Extractor
-    derived_observables = []
-    if parsed_artifacts:
-        try:
-            obs_list = _extractor.extract(parsed_artifacts, evidence_id=evidence.evidence_id)
-            for obs in (obs_list or []):
-                obs.case_id = target_case_id
-                obs.host_id = host_id
-                if obs.normalized_fields:
-                    obs.normalized_fields.host = host_id
-                derived_observables.append(obs)
-        except Exception as ext_e:
-            logger.error(f"Extractor execution failed: {ext_e}")
-
-    all_artifacts = parsed_artifacts + list(derived_observables)
-    # Ensure artifacts_map contains the parsed Stage 2 Artifact objects (ExtractedEntity objects share parent artifact_id and must not overwrite parent Artifacts)
-    artifacts_map = {art.artifact_id: art for art in parsed_artifacts}
-
-    # Stage 3 FCR Correlation
-    fcr_records = []
-    if all_artifacts:
-        try:
-            fcr_records = _fcr_engine.correlate(
-                artifacts=parsed_artifacts,
-                extracted_entities=derived_observables,
-                allow_single_artifact=True
-            )
-        except Exception as fcr_e:
-            logger.error(f"FCR Engine correlation failed: {fcr_e}")
-
-    # Stage 4 Analysis Engines & FIR Storage
-    findings = []
-    if fcr_records:
-        try:
-            findings = process_fcr_batch(
-                case_id=target_case_id,
-                fcr_objects=fcr_records,
-                artifacts_by_id=artifacts_map,
-                fir_repo=_fir_repo,
-                tenant_id=tenant_id
-            )
-        except Exception as batch_e:
-            logger.error(f"Stage 4 analysis batch execution failed: {batch_e}")
-
-    # Timeline calculation
-    all_artifacts = parsed_artifacts + list(derived_observables)
-    timeline = []
-    try:
-        timeline = _analyst_service.build_case_timeline(
-            case_id=target_case_id,
-            artifacts=all_artifacts,
-            correlation_records=fcr_records,
-            tenant_id=tenant_id
-        )
-    except Exception as tl_e:
-        logger.error(f"Timeline building failed: {tl_e}")
-
-    # Persist updated metadata counts to PostgreSQL evidence table
-    try:
-        evidence.metadata.update({
-            "parsed_artifact_count": len(parsed_artifacts),
-            "derived_observable_count": len(derived_observables),
-            "fcr_count": len(fcr_records),
-            "finding_count": len(findings),
-            "timeline_event_count": len(timeline)
-        })
-        import json, psycopg2
-        from config.settings import settings
-        conn = psycopg2.connect(
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            database=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-            connect_timeout=2
-        )
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
-            (json.dumps(evidence.metadata), evidence.evidence_id)
-        )
-        conn.commit()
-        conn.close()
-    except Exception as db_meta_e:
-        logger.warning(f"Failed to update evidence metadata counts in PostgreSQL: {db_meta_e}")
-
+    # Return immediately — pipeline is running in background
     return EvidenceUploadResponse(
-        status="SUCCESS" if not errors else "PARTIAL_SUCCESS",
+        status="PROCESSING",
         case_id=target_case_id,
         tenant_id=tenant_id,
         evidence_id=evidence.evidence_id,
         filename=file.filename,
         sha256_hash=sha256_digest,
-        parsed_artifact_count=len(parsed_artifacts),
-        derived_observable_count=len(derived_observables),
-        fcr_count=len(fcr_records),
-        finding_count=len(findings),
-        timeline_event_count=len(timeline),
-        errors=errors
+        parsed_artifact_count=0,
+        derived_observable_count=0,
+        fcr_count=0,
+        finding_count=0,
+        timeline_event_count=0,
+        errors=[]
     )
 
 @router.get("/case/{case_id}")

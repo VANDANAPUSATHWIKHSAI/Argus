@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../css/style.css';
-import { uploadEvidenceFile } from '../js/api';
+import { uploadEvidenceFile, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
 import Sidebar from '../components/Sidebar';
 import ProfileModal from '../components/ProfileModal';
@@ -25,36 +25,86 @@ const Upload = () => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
+  const [casesList, setCasesList] = useState([]);
+  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
+  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || '');
 
   const closeAlert = () => {
     if (customAlert.onClose) customAlert.onClose();
     setCustomAlert(prev => ({ ...prev, isOpen: false, onClose: null }));
   };
 
+  useEffect(() => {
+    const fetchCases = async () => {
+      try {
+        const token = localStorage.getItem('argus_token');
+        const res = await fetch(`${API_BASE_URL}/cases/`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'X-Tenant-ID': DEFAULT_TENANT_ID
+          }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const list = data.data || [];
+          setCasesList(list);
+
+          const currentSavedId = localStorage.getItem('active_case_id');
+          const foundSaved = list.find(c => c.case_id === currentSavedId);
+          if (foundSaved) {
+            setActiveCaseId(foundSaved.case_id);
+            setActiveCaseName(foundSaved.name || foundSaved.case_id);
+          } else if (list.length > 0) {
+            const openCase = list.find(c => c.status === 'open' || c.status === 'in_progress') || list[0];
+            setActiveCaseId(openCase.case_id);
+            setActiveCaseName(openCase.name || openCase.case_id);
+            localStorage.setItem('active_case_id', openCase.case_id);
+            localStorage.setItem('active_case_name', openCase.name || openCase.case_id);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch cases list for upload:', err);
+      }
+    };
+    fetchCases();
+  }, []);
+
+  const handleSelectCase = (cId) => {
+    const selected = casesList.find(c => c.case_id === cId);
+    if (selected) {
+      setActiveCaseId(selected.case_id);
+      setActiveCaseName(selected.name || selected.case_id);
+      localStorage.setItem('active_case_id', selected.case_id);
+      localStorage.setItem('active_case_name', selected.name || selected.case_id);
+    }
+  };
+
   const handleOpenCreateCase = () => {
-    const activeCaseId = localStorage.getItem('active_case_id');
-    const activeCaseName = localStorage.getItem('active_case_name');
-    if (activeCaseId && activeCaseId !== '00000000-0000-0000-0000-000000000001' && activeCaseName && activeCaseName !== 'Case 00000000') {
-      setCustomAlert({ isOpen: true, title: 'Notice', message: `An active case "${activeCaseName}" is currently open. Please close the active case before creating a new case.`, type: 'warning' });
+    const curId = localStorage.getItem('active_case_id');
+    const curName = localStorage.getItem('active_case_name');
+    if (curId && curId !== '00000000-0000-0000-0000-000000000001' && curName && curName !== 'Case 00000000') {
+      setCustomAlert({ isOpen: true, title: 'Notice', message: `An active case "${curName}" is currently open. Please close the active case before creating a new case.`, type: 'warning' });
       return;
     }
     setShowModal(true);
   };
 
   const handleCloseCase = () => {
-    const activeCaseName = localStorage.getItem('active_case_name') || 'Current case';
-    const activeCaseId = localStorage.getItem('active_case_id');
-    if (!activeCaseId && !localStorage.getItem('active_case_name')) {
+    const curName = localStorage.getItem('active_case_name') || 'Current case';
+    const curId = localStorage.getItem('active_case_id');
+    if (!curId && !localStorage.getItem('active_case_name')) {
       setCustomAlert({ isOpen: true, title: 'Notice', message: "There is no active case currently open.", type: 'warning' });
       return;
     }
     localStorage.removeItem('active_case_id');
     localStorage.removeItem('active_case_name');
     localStorage.removeItem('active_case_desc');
+    setActiveCaseId('');
+    setActiveCaseName('');
     setCustomAlert({
        isOpen: true,
        title: 'Success',
-       message: `${activeCaseName} has been closed successfully.`,
+       message: `${curName} has been closed successfully.`,
        type: 'success',
        onClose: () => window.location.reload()
     });
@@ -91,29 +141,59 @@ const Upload = () => {
 
   const handleUpload = async () => {
     if (queue.length === 0) return;
-    setUploading(true);
-    setQueue(prev => prev.map(i => i.status === 'ready' ? { ...i, status: 'uploading' } : i));
 
-    let caseId = localStorage.getItem('active_case_id');
-    if (!caseId || caseId === '00000000-0000-0000-0000-000000000001') {
-      setCustomAlert({ isOpen: true, title: 'Notice', message: "Please select or create an active case before uploading evidence.", type: 'warning' });
-      setUploading(false);
-      setQueue(prev => prev.map(i => i.status === 'uploading' ? { ...i, status: 'ready' } : i));
+    let caseId = activeCaseId || localStorage.getItem('active_case_id');
+    if (!caseId) {
+      setCustomAlert({ isOpen: true, title: 'No Case Selected', message: "Please select an active case from the dropdown before uploading evidence.", type: 'warning' });
       return;
     }
 
-    const uploadPromises = queue.filter(item => item.status === 'uploading' || item.status === 'ready').map(async (item) => {
+    setUploading(true);
+    setQueue(prev => prev.map(i => (i.status === 'ready' || i.status === 'error') ? { ...i, status: 'uploading' } : i));
+
+    let successCount = 0;
+    let failedCount = 0;
+    let lastErrorMsg = '';
+
+    const itemsToUpload = queue.filter(item => item.status === 'ready' || item.status === 'uploading' || item.status === 'error');
+
+    for (const item of itemsToUpload) {
       try {
         await uploadEvidenceFile(item.file, caseId);
         setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done' } : i));
+        successCount++;
       } catch (err) {
-        console.error(`Upload failed for ${item.name}`, err);
+        console.error(`Upload failed for ${item.name}:`, err);
+        lastErrorMsg = err.message || 'Upload failed';
         setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error' } : i));
+        failedCount++;
       }
-    });
+    }
 
-    await Promise.all(uploadPromises);
     setUploading(false);
+
+    if (failedCount > 0 && successCount === 0) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Upload Error',
+        message: `Failed to upload evidence file(s): ${lastErrorMsg}`,
+        type: 'error'
+      });
+    } else if (failedCount > 0 && successCount > 0) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Partial Upload Success',
+        message: `${successCount} file(s) uploaded successfully, ${failedCount} file(s) failed.`,
+        type: 'warning'
+      });
+    } else if (successCount > 0) {
+      setCustomAlert({
+        isOpen: true,
+        title: '✅ Upload Successful',
+        message: `${successCount} file(s) uploaded to Case ${caseId}. ARGUS forensic analysis is running in the background — check the Sanitized Output page in a minute.`,
+        type: 'success'
+      });
+    }
   };
 
   const statusBadge = (status) => {
@@ -206,10 +286,24 @@ const Upload = () => {
                   <div className="header-meta" style={{ marginTop: 12, gap: 12 }}>
                     <div className="meta-item" style={{ color: 'var(--text-main)', background: 'var(--bg-card)', padding: '4px 12px', borderRadius: 20, border: '1px solid var(--border-subtle)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                      <div>
-                        <span style={{ fontSize: 12, fontWeight: 600 }}>{localStorage.getItem('active_case_id') || 'Unknown ID'}</span>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>{localStorage.getItem('active_case_name') || 'Unnamed Case'}</span>
-                      </div>
+                      {casesList.length > 0 ? (
+                        <select
+                          value={activeCaseId}
+                          onChange={e => handleSelectCase(e.target.value)}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontWeight: 600, fontSize: 13, outline: 'none', cursor: 'pointer' }}
+                        >
+                          {casesList.map(c => (
+                            <option key={c.case_id} value={c.case_id} style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }}>
+                              {c.case_id} {c.name ? `— ${c.name}` : ''} ({c.status})
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div>
+                          <span style={{ fontSize: 12, fontWeight: 600 }}>{activeCaseId || 'No Active Case'}</span>
+                          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>{activeCaseName || 'Please Create Case'}</span>
+                        </div>
+                      )}
                     </div>
                     <div className="badge-danger">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -363,12 +457,37 @@ const Upload = () => {
                       </div>
                     )}
 
-                    <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border-strong)', display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 'auto', background: 'var(--bg-app)', borderBottomLeftRadius: 'var(--radius-lg)', borderBottomRightRadius: 'var(--radius-lg)' }}>
-                      <button className="btn btn-outline" style={{ padding: '12px 24px', fontWeight: 600 }}>Cancel</button>
-                      <button id="btn-upload" className="btn btn-primary" onClick={handleUpload} disabled={uploading || queue.length === 0} style={{ padding: '12px 24px', fontWeight: 600, opacity: queue.length === 0 ? 0.5 : 1 }}>
-                        {uploading ? 'Uploading...' : 'Upload & Analyze →'}
+                    {/* Status bar */}
+                    {queue.length > 0 && !activeCaseId && (
+                      <div style={{ margin: '0 24px 0 24px', padding: '10px 14px', background: 'rgba(234,88,12,0.1)', border: '1px solid var(--orange, #ea580c)', borderRadius: 8, fontSize: 13, color: 'var(--orange, #ea580c)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        No case selected. Select a case from the dropdown above before uploading.
+                      </div>
+                    )}
+                    <div style={{ padding: '16px 24px 20px', borderTop: '1px solid var(--border-strong)', display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 'auto', background: 'var(--bg-app)', borderBottomLeftRadius: 'var(--radius-lg)', borderBottomRightRadius: 'var(--radius-lg)' }}>
+                      <button className="btn btn-outline" onClick={clearAll} style={{ padding: '12px 24px', fontWeight: 600 }}>Clear Queue</button>
+                      <button
+                        id="btn-upload"
+                        className="btn btn-primary"
+                        onClick={handleUpload}
+                        disabled={uploading || queue.length === 0 || !activeCaseId}
+                        title={!activeCaseId ? 'Select a case first' : queue.length === 0 ? 'Add files to the queue first' : 'Upload and analyze'}
+                        style={{
+                          padding: '12px 24px',
+                          fontWeight: 600,
+                          opacity: (uploading || queue.length === 0 || !activeCaseId) ? 0.45 : 1,
+                          cursor: (uploading || queue.length === 0 || !activeCaseId) ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {uploading ? (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                            Uploading...
+                          </span>
+                        ) : 'Upload & Analyze →'}
                       </button>
                     </div>
+                    <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
                   </div>
                 </div>
 

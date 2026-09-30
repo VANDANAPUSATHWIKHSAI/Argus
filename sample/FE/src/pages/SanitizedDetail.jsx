@@ -1,4 +1,4 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import ProfileModal from '../components/ProfileModal';
@@ -111,21 +111,40 @@ const SanitizedDetail = () => {
               ))}
             </div>
 
-            {/* Sanitized Output Tab */}
+            {/* Sanitized Output Tab — JSON Format */}
             {tab === 'output' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20, flexShrink: 0 }}>
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
-                  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card-alt)' }}>
-                    <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Sanitized Fact</span>
+                  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card-alt)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>
+                      Sanitized Agent Context (JSON Format)
+                    </span>
+                    <button
+                      onClick={() => {
+                        const blob = new Blob([JSON.stringify(item.sanitizedContext || item, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `sanitized_context_${item.id}.json`;
+                        a.click();
+                      }}
+                      style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '6px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                      Download JSON
+                    </button>
                   </div>
-                  <div style={{ padding: '24px 28px', fontSize: 15, lineHeight: 1.8, color: 'var(--text-main)', fontWeight: 500 }}>
-                    {item.fact}
+                  <div style={{ padding: '20px 24px' }}>
+                    <pre style={{ margin: 0, fontFamily: '"Courier New", monospace', fontSize: 13, color: '#38bdf8', lineHeight: 1.7, background: '#0f172a', padding: 20, borderRadius: 8, overflowX: 'auto', border: '1px solid var(--border-strong)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                      {JSON.stringify(item.sanitizedContext || item, null, 2)}
+                    </pre>
                   </div>
                 </div>
+
                 {actions.length > 0 && (
                   <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, overflow: 'hidden' }}>
                     <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card-alt)' }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Sanitization Actions Applied</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Sanitization Gateway Security Boundary</span>
                     </div>
                     <div style={{ padding: '20px 24px', display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                       {actions.map((a, i) => (

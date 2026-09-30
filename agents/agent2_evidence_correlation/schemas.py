@@ -32,7 +32,7 @@ class GraphCommunity(BaseModel):
     entity_names: List[str] = Field(default_factory=list, description="Entities (IPs, users, files, hashes) in community")
     entity_types: List[str] = Field(default_factory=list, description="Types of entities present in community")
     relationship_types: List[str] = Field(default_factory=list, description="Types of relationships linking entities")
-    wcc_component_id: Optional[int] = Field(default=None, description="Weakly Connected Component numeric ID from Neo4j GDS or fallback")
+    wcc_component_id: Optional[int] = Field(default=None, description="Weakly Connected Component numeric ID from Neo4j GDS")
 
 
 class CorrelationConflict(BaseModel):

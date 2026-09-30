@@ -7,7 +7,7 @@ and hash collisions across FIR evidence findings without relying on LLM guesswor
 
 import re
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple, Set
 from collections import defaultdict
 
 from agents.agent2_evidence_correlation.schemas import CorrelationConflict

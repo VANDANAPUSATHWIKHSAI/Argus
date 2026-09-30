@@ -12,6 +12,12 @@ from agents.agent3_attack_reconstruction.schemas import (
 
 logger = logging.getLogger(__name__)
 
+def _get_val(obj: Any, key: str, default: Any = None) -> Any:
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
+
+
 class Agent3Validator:
     @staticmethod
     def extract_valid_id_universe(findings: List[Any]) -> Tuple[Set[str], Set[str]]:
@@ -19,15 +25,15 @@ class Agent3Validator:
         lineage_ids: Set[str] = set()
 
         for f in findings:
-            fid = getattr(f, "finding_id", None)
+            fid = _get_val(f, "finding_id")
             if fid:
                 finding_ids.add(str(fid).strip())
 
-            src_art = getattr(f, "source_artifact_id", None)
+            src_art = _get_val(f, "source_artifact_id")
             if src_art:
                 lineage_ids.add(str(src_art).strip())
 
-            ev_ref = getattr(f, "evidence_reference", [])
+            ev_ref = _get_val(f, "evidence_reference", [])
             if isinstance(ev_ref, str):
                 for item in ev_ref.split(","):
                     if item.strip():

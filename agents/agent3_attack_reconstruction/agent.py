@@ -111,9 +111,10 @@ class AttackReconstructionAgent(BaseAgent):
             try:
                 candidate_paths = self.sanitized_context_fetch(
                     neo4j_client.query,
-                    "MATCH p=(:Event)-[:NEXT_EVENT*]->(:Event) WHERE p.case_id = $case_id RETURN p LIMIT 50",
+                    "MATCH (a1:Artifact {case_id: $case_id, tenant_id: $tenant_id})-[r:CORRELATED]->(e:Entity {case_id: $case_id, tenant_id: $tenant_id})<-[:CORRELATED]-(a2:Artifact {case_id: $case_id, tenant_id: $tenant_id}) WHERE a1.id < a2.id RETURN a1.id AS source_finding, e.type AS shared_type, e.value AS shared_value, a2.id AS target_finding LIMIT 50",
                     field_name="unstructured",
-                    case_id=case_id
+                    case_id=case_id,
+                    tenant_id=tenant_id
                 )
             except Exception as e:
                 candidate_paths = f"Could not retrieve candidate paths: {e}"
@@ -302,6 +303,13 @@ class AttackReconstructionAgent(BaseAgent):
                 "error_message": output.error_message
             }
             
+            is_verified = (
+                output.execution_status == "SUCCESS"
+                and getattr(output.infection_path, "citation_verified", False)
+                and all(getattr(stage, "citation_verified", False) for stage in output.attack_chain)
+                and all(getattr(evt, "citation_verified", False) for evt in output.attack_timeline)
+            )
+
             cur.execute(
                 query,
                 (
@@ -312,7 +320,7 @@ class AttackReconstructionAgent(BaseAgent):
                     "Agent 3 Attack Reconstruction Complete",
                     [],
                     output.overall_confidence,
-                    True,
+                    is_verified,
                     output.execution_status,
                     json.dumps(flags_dict),
                     output.timestamp

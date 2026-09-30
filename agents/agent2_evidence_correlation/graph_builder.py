@@ -2,8 +2,8 @@
 Agent 2 — Deterministic Knowledge Graph & Community Engine
 ============================================================
 Extracts forensic entities (IPs, hashes, users, files, hosts, processes),
-builds deterministic relationships, interacts with Neo4j / WCC, and provides
-an in-memory graph fallback when Neo4j is offline.
+builds deterministic relationships, interacts with Neo4j / WCC, and enforces
+mandatory Neo4j + GDS execution.
 """
 
 import re
@@ -26,7 +26,7 @@ FILE_PROC_REGEX = re.compile(r'\b[a-zA-Z0-9_\-\.]+\.(?:exe|dll|ps1|bat|vbs|sys|e
 class GraphBuilder:
     """
     Deterministic Knowledge Graph builder and Community Detection (WCC) engine using Neo4j + GDS.
-    Enforces tenant and case isolation at Neo4j query boundaries.
+    Enforces tenant and case isolation at Neo4j query boundaries. Neo4j + GDS are mandatory.
     """
 
     def __init__(self, neo4j_client: Optional[Any] = None):
@@ -175,7 +175,8 @@ class GraphBuilder:
         finding_entities: Dict[str, Dict[str, Set[str]]]
     ) -> Tuple[List[GraphCommunity], bool]:
         """
-        Executes Neo4j Weakly Connected Components (WCC) graph community detection.
+        Executes Neo4j Graph Data Science (GDS) Weakly Connected Components (WCC) graph community detection.
+        No in-memory fallback: Neo4j + GDS are mandatory. Fails closed if GDS or Neo4j is unavailable.
         """
         graph_name = f"argus_{case_id}_{tenant_id}".replace("-", "_").replace(".", "_")
 
@@ -188,82 +189,117 @@ class GraphBuilder:
             exec_fn = self.neo4j_client.query
 
         if not exec_fn:
-            raise RuntimeError("No executable Cypher query function found on Neo4j client.")
+            raise RuntimeError("No executable Cypher query function found on Neo4j client. Neo4j + GDS is required.")
 
+        # Check GDS procedure availability
         try:
-            # 1. Fallback / direct Cypher traversal WCC query for Neo4j
-            cypher_wcc = """
-            MATCH (a:Artifact {case_id: $case_id, tenant_id: $tenant_id})
-            OPTIONAL MATCH (a)-[:CORRELATED]->(e:Entity {case_id: $case_id, tenant_id: $tenant_id})<-[:CORRELATED]-(other:Artifact {case_id: $case_id, tenant_id: $tenant_id})
-            RETURN a.id AS fid, collect(DISTINCT other.id) AS neighbors, collect(DISTINCT e.value) AS entities, collect(DISTINCT e.type) AS entity_types
-            """
-            res = exec_fn(cypher_wcc, {"case_id": case_id, "tenant_id": tenant_id})
-            records = [r.data() if hasattr(r, "data") else r for r in res]
-
-            # Build adjacency & components from Neo4j records
-            adj: Dict[str, Set[str]] = defaultdict(set)
-            node_entities: Dict[str, Set[str]] = defaultdict(set)
-            node_etypes: Dict[str, Set[str]] = defaultdict(set)
-
-            for rec in records:
-                fid = rec.get("fid")
-                if not fid:
-                    continue
-                for nbr in rec.get("neighbors") or []:
-                    if nbr:
-                        adj[fid].add(nbr)
-                        adj[nbr].add(fid)
-                for ent in rec.get("entities") or []:
-                    node_entities[fid].add(ent)
-                for et in rec.get("entity_types") or []:
-                    node_etypes[fid].add(et)
-
-            all_fids = list(finding_entities.keys())
-            visited: Set[str] = set()
-            components: List[Set[str]] = []
-
-            for fid in all_fids:
-                if fid not in visited:
-                    comp: Set[str] = set()
-                    q = [fid]
-                    visited.add(fid)
-                    while q:
-                        curr = q.pop(0)
-                        comp.add(curr)
-                        for nbr in adj[curr]:
-                            if nbr not in visited:
-                                visited.add(nbr)
-                                q.append(nbr)
-                    components.append(comp)
-
-            communities: List[GraphCommunity] = []
-            for idx, comp in enumerate(components, 1):
-                comp_findings = list(comp)
-                comm_entities: Set[str] = set()
-                comm_etypes: Set[str] = set()
-                for fid in comp_findings:
-                    comm_entities.update(node_entities[fid])
-                    comm_etypes.update(node_etypes[fid])
-
-                comm_rels = [f"SHARED_{et.upper()}" for et in comm_etypes]
-                communities.append(
-                    GraphCommunity(
-                        community_id=f"GC-{idx:03d}",
-                        finding_ids=sorted(comp_findings),
-                        entity_names=sorted(list(comm_entities)),
-                        entity_types=sorted(list(comm_etypes)),
-                        relationship_types=sorted(comm_rels),
-                        wcc_component_id=idx
-                    )
+            proc_check = exec_fn(
+                "SHOW PROCEDURES YIELD name WHERE name STARTS WITH 'gds.wcc' RETURN count(*) AS cnt",
+                {}
+            )
+            records = [r.data() if hasattr(r, "data") else r for r in proc_check]
+            cnt = list(records[0].values())[0] if records else 0
+            if cnt == 0:
+                raise RuntimeError("Neo4j GDS plugin (gds.wcc.stream) is not installed or available.")
+        except Exception as exc:
+            if "Neo4j GDS" in str(exc):
+                raise exc
+            try:
+                proc_check = exec_fn(
+                    "CALL dbms.procedures() YIELD name WHERE name STARTS WITH 'gds.wcc' RETURN count(*) AS cnt",
+                    {}
                 )
+                records = [r.data() if hasattr(r, "data") else r for r in proc_check]
+                cnt = list(records[0].values())[0] if records else 0
+                if cnt == 0:
+                    raise RuntimeError("Neo4j GDS plugin (gds.wcc.stream) is not installed or available.")
+            except Exception as e2:
+                raise RuntimeError(f"Neo4j GDS procedure check failed: {exc}") from exc
 
-            return communities, True
+        # Execute Neo4j GDS WCC graph projection & execution
+        try:
+            # Drop graph projection if pre-existing
+            try:
+                exec_fn("CALL gds.graph.drop($graph_name, false)", {"graph_name": graph_name})
+            except Exception:
+                pass
+
+            # Project graph via Cypher in GDS
+            project_cypher = """
+            CALL gds.graph.project.cypher(
+                $graph_name,
+                'MATCH (n) WHERE n.case_id = $case_id AND n.tenant_id = $tenant_id RETURN id(n) AS id, labels(n) AS labels',
+                'MATCH (s)-[r:CORRELATED]->(t) WHERE r.case_id = $case_id AND r.tenant_id = $tenant_id RETURN id(s) AS source, id(t) AS target, type(r) AS type',
+                {parameters: {case_id: $case_id, tenant_id: $tenant_id}}
+            )
+            """
+            exec_fn(project_cypher, {"graph_name": graph_name, "case_id": case_id, "tenant_id": tenant_id})
+
+            # Stream WCC results from GDS
+            wcc_cypher = """
+            CALL gds.wcc.stream($graph_name)
+            YIELD nodeId, componentId
+            RETURN gds.util.asNode(nodeId).id AS node_id, labels(gds.util.asNode(nodeId)) AS labels, componentId AS communityId
+            ORDER BY communityId
+            """
+            res = exec_fn(wcc_cypher, {"graph_name": graph_name})
+            wcc_records = [r.data() if hasattr(r, "data") else r for r in res]
+
+            # Cleanup projected GDS graph
+            try:
+                exec_fn("CALL gds.graph.drop($graph_name, false)", {"graph_name": graph_name})
+            except Exception:
+                pass
+        except Exception as exc:
+            try:
+                exec_fn("CALL gds.graph.drop($graph_name, false)", {"graph_name": graph_name})
+            except Exception:
+                pass
+            raise RuntimeError(f"Neo4j GDS WCC execution failed: {exc}") from exc
         finally:
-            if session_obj:
+            if session_obj and hasattr(session_obj, "close"):
                 try:
                     session_obj.close()
                 except Exception:
                     pass
+
+        # Build GraphCommunities from GDS WCC records
+        community_map = defaultdict(lambda: {"findings": set(), "entities": set(), "entity_types": set()})
+
+        for rec in wcc_records:
+            nid = rec.get("node_id")
+            lbls = rec.get("labels", [])
+            cid = rec.get("communityId")
+            if cid is None or not nid:
+                continue
+            if "Artifact" in lbls:
+                community_map[cid]["findings"].add(nid)
+            elif "Entity" in lbls:
+                if ":" in nid:
+                    etype, val = nid.split(":", 1)
+                    community_map[cid]["entities"].add(val)
+                    community_map[cid]["entity_types"].add(etype)
+
+        communities: List[GraphCommunity] = []
+        for idx, (cid, data) in enumerate(sorted(community_map.items(), key=lambda x: x[0]), 1):
+            findings_list = sorted(list(data["findings"]))
+            if not findings_list:
+                continue
+            comm_entities = sorted(list(data["entities"]))
+            comm_etypes = sorted(list(data["entity_types"]))
+            comm_rels = sorted([f"SHARED_{et.upper()}" for et in comm_etypes])
+            communities.append(
+                GraphCommunity(
+                    community_id=f"GC-{idx:03d}",
+                    finding_ids=findings_list,
+                    entity_names=comm_entities,
+                    entity_types=comm_etypes,
+                    relationship_types=comm_rels,
+                    wcc_component_id=int(cid)
+                )
+            )
+
+        return communities, True
 
     def _extract_entities_from_finding(self, finding: Any, text: str) -> Dict[str, Set[str]]:
         entities: Dict[str, Set[str]] = defaultdict(set)

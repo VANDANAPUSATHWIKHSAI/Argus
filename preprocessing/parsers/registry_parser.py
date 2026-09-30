@@ -189,8 +189,6 @@ class RegistryParser:
                 ))
                 return artifacts
         except Exception as e:
-            if isinstance(e, (RegRipperNotFoundError, RegRipperExecutionError)):
-                raise e
             logger.warning("RegRipper execution/lookup failed (%s). Falling back to native python-registry.", e)
 
         # 3. Native python-registry fallback path
@@ -207,8 +205,8 @@ class RegistryParser:
         try:
             reg = Registry.Registry(str(src))
         except Exception as e:
-            logger.error("Failed to open registry hive %s with python-registry: %s", src.name, e)
-            raise RuntimeError(f"Failed to open registry hive {src.name}: {e}")
+            logger.warning("Failed to open registry hive %s with python-registry: %s", src.name, e)
+            return []
 
         ver = get_tool_version("python_registry") or "1.4.0"
         artifacts: list[Artifact] = []

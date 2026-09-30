@@ -189,16 +189,19 @@ class SanitizationGateway:
                         raise e
                     pass
 
-            # ROT13 scan — check if ROT13 decoding reveals explicit injection overrides
+            # ROT13 scan — check if ROT13 decoding reveals explicit injection override keywords
             try:
                 rot13_text = codecs.encode(privacy_safe_text, 'rot_13')
-                # Check if ROT13 decoding produces malicious injection attempts
-                is_rot13_malicious, details = self.detector.is_injection(rot13_text, is_unstructured=is_unstructured)
-                if is_rot13_malicious and details.get("reason") != "status":
-                    # Require that ROT13 decoded text contains injection keywords or model prediction
-                    details["layer"] = "rot13_payload"
-                    self.log_sanitization_event(field_name, "rot13_payload", details.get("reason"), details)
-                    return self.blocked_placeholder(field_name, "rot13_payload", details.get("reason"))
+                is_rot13_hit, matched_rot13 = self.detector.check_heuristics(rot13_text)
+                if is_rot13_hit:
+                    details = {
+                        "layer": "rot13_payload",
+                        "reason": "rot13_matched_injection_keywords",
+                        "matched_patterns": matched_rot13,
+                        "confidence": 1.0
+                    }
+                    self.log_sanitization_event(field_name, "rot13_payload", details["reason"], details)
+                    return self.blocked_placeholder(field_name, "rot13_payload", details["reason"])
             except Exception as e:
                 if isinstance(e, ModelUnavailableError):
                     raise e

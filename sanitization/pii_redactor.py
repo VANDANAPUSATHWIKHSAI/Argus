@@ -10,8 +10,14 @@ class PIIRedactor:
     REDACTOR_VERSION = "1.0.0"
 
     PII_PATTERNS = {
+        # Credentials & Secrets (API keys, AWS secrets, passwords)
+        "CREDENTIALS": r"(?i)(?:api_key|apikey|private_key|aws_secret|client_secret|db_password|session_token|password|passwd|auth_token)\s*[:=]\s*['\"]?[A-Za-z0-9_\-\.\/\+\=]{8,}['\"]?",
+        
+        # Bearer Tokens & Private Key blocks
+        "BEARER_TOKEN": r"\bBearer\s+[A-Za-z0-9_\-\.\=\+]{16,}\b",
+        "PRIVATE_KEY": r"-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----[\s\S]*?-----END\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----",
+
         # CREDIT_CARD: 16 digits (xxxx-xxxx-xxxx-xxxx or standard spaced)
-        # Checked first to avoid overlap with 12-digit Aadhaar
         "CREDIT_CARD": r"\b(?:\d{4}[-\s]?){3}\d{4}\b",
         
         # AADHAAR: 12 digits (xxxx xxxx xxxx or xxxx-xxxx-xxxx or xxxxxxxxxxxx)
@@ -28,13 +34,6 @@ class PIIRedactor:
 
         # Names (Name: First Last format checks)
         "NAME": r"\bName:\s*[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b",
-
-        # Credentials & Secrets (API keys, AWS secrets, passwords)
-        "CREDENTIALS": r"(?i)(?:api_key|apikey|private_key|aws_secret|client_secret|db_password|session_token|password|passwd|auth_token)\s*[:=]\s*['\"]?[A-Za-z0-9_\-\.\/\+\=]{8,}['\"]?",
-
-        # Bearer Tokens & Private Key blocks
-        "BEARER_TOKEN": r"\bBearer\s+[A-Za-z0-9_\-\.\=\+]{16,}\b",
-        "PRIVATE_KEY": r"-----BEGIN\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----[\s\S]*?-----END\s+(?:RSA\s+|EC\s+|DSA\s+|OPENSSH\s+)?PRIVATE\s+KEY-----",
 
         # Internal System Artifacts (Prompts, reasoning paths, tool schemas)
         "SYSTEM_ARTIFACTS": r"(?i)(?:system_prompt|agent_instruction|thought:|reasoning:|tool_schema)"

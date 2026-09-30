@@ -24,10 +24,13 @@ class ReviewStatus(str, Enum):
     ANALYST_REJECTED  = "analyst_rejected"
 
 
+VALID_SEVERITIES = {"informational", "low", "medium", "high", "critical"}
+
+
 class FIRFinding(BaseModel):
     finding_id: str
     case_id: str
-    tenant_id: str
+    tenant_id: str = "default"
     fact: str
     sanitized_fact: Optional[str] = None
     redactor_version: Optional[str] = None
@@ -42,14 +45,41 @@ class FIRFinding(BaseModel):
     source_artifact_id: Optional[str] = None
     finding_fingerprint: Optional[str] = None
 
+    @field_validator("case_id", "fact", "tenant_id", mode="before")
+    @classmethod
+    def _validate_non_empty_strings(cls, v: Any, info) -> str:
+        if v is None or not str(v).strip():
+            raise ValueError(f"{info.field_name} cannot be empty or None.")
+        return str(v).strip()
+
+    @field_validator("confidence")
+    @classmethod
+    def _validate_confidence_bounds(cls, v: float) -> float:
+        val = float(v)
+        if val < 0.0 or val > 1.0:
+            raise ValueError(f"confidence must be between 0.0 and 1.0, got {val}")
+        return round(val, 4)
+
+    @field_validator("severity")
+    @classmethod
+    def _validate_severity_enum(cls, v: str) -> str:
+        clean = str(v).strip().lower()
+        if clean not in VALID_SEVERITIES:
+            raise ValueError(f"Invalid severity '{v}'. Must be one of {VALID_SEVERITIES}")
+        return clean
+
     @field_validator("evidence_reference", mode="before")
     @classmethod
     def _coerce_evidence_reference(cls, v: Any) -> list[str]:
         if isinstance(v, str):
             logger.warning("FIRFinding.evidence_reference received legacy scalar string; coercing to list[str].")
             if "," in v:
-                return [x.strip() for x in v.split(",") if x.strip()]
-            return [v.strip()] if v.strip() else []
+                res = [x.strip() for x in v.split(",") if x.strip()]
+            else:
+                res = [v.strip()] if v.strip() else []
+            if not res:
+                raise ValueError("evidence_reference list cannot be empty.")
+            return res
         elif isinstance(v, list):
             res = [str(x).strip() for x in v if str(x).strip()]
             if not res:

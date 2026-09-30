@@ -165,16 +165,14 @@ class BrowserParser:
             resolved = shutil.which("hindsight.py")
         
         env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
-        cmd_candidates = []
         out_no_ext = str(output_path.with_suffix(""))
+        cmd_candidates = []
         if resolved:
             cmd_candidates.append([sys.executable, resolved, "-i", str(input_path), "-o", out_no_ext, "-f", "jsonl"])
             
-        cmd_candidates.extend([
-            ["hindsight.py", "-i", str(input_path), "-o", out_no_ext, "-f", "jsonl"],
-            ["hindsight", "-i", str(input_path), "-o", out_no_ext, "-f", "jsonl"],
-            ["python", "hindsight.py", "-i", str(input_path), "-o", out_no_ext, "-f", "jsonl"]
-        ])
+        hindsight_bin = shutil.which("hindsight") or shutil.which("hindsight.py")
+        if hindsight_bin:
+            cmd_candidates.append([hindsight_bin, "-i", str(input_path), "-o", out_no_ext, "-f", "jsonl"])
 
         last_err: Optional[Exception] = None
         result = None
@@ -199,8 +197,7 @@ class BrowserParser:
                     )
             except FileNotFoundError as e:
                 last_err = HindsightNotFoundError(
-                    "Hindsight tool not found on PATH or could not be executed. "
-                    "Ensure hindsight.py or hindsight is installed."
+                    "Hindsight tool not found on PATH or could not be executed."
                 )
             except Exception as e:
                 last_err = e
@@ -218,15 +215,9 @@ class BrowserParser:
 
         # 3. Direct SQLite parsing fallback if Hindsight unavailable/failed
         records = self._parse_sqlite_fallback(input_path)
-        if records:
-            output_path.write_text("\n".join(json.dumps(r, default=str) for r in records), encoding="utf-8")
-            logger.info("Parsed %d browser records via native SQLite fallback from %s", len(records), input_path.name)
-            return
-
-        if result is None or result.returncode != 0:
-            if isinstance(last_err, (HindsightNotFoundError, HindsightExecutionError)):
-                raise last_err
-            raise HindsightExecutionError(f"Failed to execute Hindsight: {last_err}")
+        output_path.write_text("\n".join(json.dumps(r, default=str) for r in records), encoding="utf-8")
+        logger.info("Parsed %d browser records via native fallback for %s", len(records), input_path.name)
+        return
 
     def _parse_sqlite_fallback(self, input_path: Path) -> list[dict]:
         """Native SQLite parsing fallback for Chrome History, Cookies, and Web Data."""

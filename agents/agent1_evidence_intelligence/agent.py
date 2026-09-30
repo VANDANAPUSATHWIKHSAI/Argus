@@ -12,7 +12,7 @@ Flow:
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Set
 
 from agents.base_agent import BaseAgent
 from fir.repository import FIRRepository
@@ -25,6 +25,12 @@ from agents.agent1_evidence_intelligence.prompts import AGENT1_SYSTEM_PROMPT, bu
 from agents.agent1_evidence_intelligence.validator import Agent1Validator
 
 logger = logging.getLogger(__name__)
+
+
+def _get_val(obj: Any, key: str, default: Any = None) -> Any:
+    if isinstance(obj, dict):
+        return obj.get(key, default)
+    return getattr(obj, key, default)
 
 
 _AGENT_OUTPUTS_TABLE_INITIALIZED = False
@@ -55,8 +61,8 @@ def _ensure_agent_outputs_table_initialized(conn):
         ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
         ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS model_used TEXT;
         ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS execution_status TEXT DEFAULT 'SUCCESS';
-        CREATE UNIQUE INDEX IF NOT EXISTS agent_outputs_case_agent_claim_idx 
-        ON agent_outputs (case_id, agent_id, claim);
+        CREATE UNIQUE INDEX IF NOT EXISTS agent_outputs_tenant_case_agent_claim_idx 
+        ON agent_outputs (tenant_id, case_id, agent_id, claim);
     """)
     conn.commit()
     _AGENT_OUTPUTS_TABLE_INITIALIZED = True
@@ -89,7 +95,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
         self.validator = Agent1Validator()
         self.model_name = "Qwen3-8B"
 
-    def _compute_deterministic_metrics(self, fir_findings: List[Any], case_id: str, tenant_id: str) -> Dict[str, Any]:
+    def _compute_deterministic_metrics(self, fir_findings: List[Any], case_id: str, tenant_id: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Calculates evidence quality metrics, possible analyses, and readiness hard blockers deterministically.
         """
@@ -101,18 +107,18 @@ class EvidenceIntelligenceAgent(BaseAgent):
         provenance_count = 0
 
         for f in fir_findings:
-            lyr = getattr(f, "layer", None) or (f.get("layer") if isinstance(f, dict) else "unknown")
+            lyr = _get_val(f, "layer") or "unknown"
             if lyr:
                 layers_present.add(str(lyr).lower())
 
             # Check provenance completeness
-            ev_ref = getattr(f, "evidence_reference", None) or (f.get("evidence_reference") if isinstance(f, dict) else [])
-            src_art = getattr(f, "source_artifact_id", None) or (f.get("source_artifact_id") if isinstance(f, dict) else None)
+            ev_ref = _get_val(f, "evidence_reference", [])
+            src_art = _get_val(f, "source_artifact_id", None)
             if ev_ref or src_art:
                 provenance_count += 1
 
             # Check for conflict flags
-            if getattr(f, "injection_flagged", False) or (isinstance(f, dict) and f.get("injection_flagged")):
+            if _get_val(f, "injection_flagged", False):
                 conflicting_count += 1
 
         prov_ratio = (provenance_count / total_findings) if total_findings > 0 else 0.0
@@ -133,10 +139,8 @@ class EvidenceIntelligenceAgent(BaseAgent):
         if not possible_analyses:
             possible_analyses = ["General artifact analysis"]
 
-        # Determine performed analyses
-        performed_analyses = [f"{lyr.capitalize()} extraction" for lyr in sorted(list(layers_present))]
-        if not performed_analyses:
-            performed_analyses = ["Initial evidence ingestion"]
+        # Determine performed analyses from actual execution metadata in context if available
+        performed_analyses = context.get("performed_analyses", []) if context and isinstance(context, dict) else []
 
         # Deterministic Hard Blockers for Readiness
         readiness_blockers = []
@@ -197,7 +201,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
             fir_findings = filtered
 
         # Deterministic Metrics Calculation
-        metrics = self._compute_deterministic_metrics(fir_findings or [], case_id, tenant_id)
+        metrics = self._compute_deterministic_metrics(fir_findings or [], case_id, tenant_id, context)
 
         if not fir_findings:
             logger.warning("Agent 1: No FIR findings found for case_id=%s", case_id)
@@ -321,7 +325,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
             return output.model_dump()
 
         # ── 5. Independent Deterministic Validation Gate ─────────────────
-        fir_map = {getattr(f, "finding_id"): f for f in fir_findings if getattr(f, "finding_id", None)}
+        fir_map = {_get_val(f, "finding_id"): f for f in fir_findings if _get_val(f, "finding_id", None) is not None}
         valid_finding_ids, valid_lineage_ids = self.validator.extract_valid_id_universe(fir_findings)
         validated_claims = self.validator.validate_claims(
             claims=raw_claims,
@@ -468,7 +472,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 INSERT INTO agent_outputs 
                     (case_id, tenant_id, agent_id, model_used, claim, evidence_ids, confidence, verified, execution_status, flags, created_at)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (case_id, agent_id, claim) DO UPDATE SET
+                ON CONFLICT (tenant_id, case_id, agent_id, claim) DO UPDATE SET
                     tenant_id = EXCLUDED.tenant_id,
                     model_used = EXCLUDED.model_used,
                     evidence_ids = EXCLUDED.evidence_ids,

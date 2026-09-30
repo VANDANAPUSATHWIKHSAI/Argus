@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../js/api';
+import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
 const NotificationMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -22,7 +22,7 @@ const NotificationMenu = () => {
       try {
         const token = localStorage.getItem('argus_token');
         const res = await fetch(`${API_BASE_URL}/cases/activity`, {
-          headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': 'dev-team' }
+          headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': DEFAULT_TENANT_ID }
         });
         if (!res.ok) return;
         const data = await res.json();

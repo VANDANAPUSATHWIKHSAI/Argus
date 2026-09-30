@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { API_BASE_URL } from '../js/api';
+import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 import '../css/style.css';
 
 const CaseNotes = () => {
@@ -31,7 +31,7 @@ const CaseNotes = () => {
     try {
       const res = await fetch(`${API_BASE_URL}/cases/${activeCaseId}/notes`, {
         headers: {
-          'X-Tenant-ID': 'dev-team',
+          'X-Tenant-ID': DEFAULT_TENANT_ID,
           'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         }
       });
@@ -71,7 +71,7 @@ const CaseNotes = () => {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'X-Tenant-ID': 'dev-team',
+          'X-Tenant-ID': DEFAULT_TENANT_ID,
           'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         },
         body: JSON.stringify(noteData)
@@ -90,7 +90,7 @@ const CaseNotes = () => {
       const res = await fetch(`${API_BASE_URL}/cases/${activeCaseId}/notes/${noteId}`, {
         method: 'DELETE',
         headers: {
-          'X-Tenant-ID': 'dev-team',
+          'X-Tenant-ID': DEFAULT_TENANT_ID,
           'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         }
       });

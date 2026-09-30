@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../js/api';
+import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import AlertModal from '../components/AlertModal';
@@ -48,7 +48,7 @@ const AdminDashboard = () => {
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': 'dev-team'
+          'X-Tenant-ID': DEFAULT_TENANT_ID
         },
         body: JSON.stringify({ 
           name: newCaseName, 
@@ -90,7 +90,7 @@ const AdminDashboard = () => {
       // Update via PATCH — send senior_analyst_id
       const res = await fetch(`${API_BASE_URL}/cases/${currentCase.case_id}/assign-senior`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': 'dev-team' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': DEFAULT_TENANT_ID },
         body: JSON.stringify({ senior_analyst_id: assigningSenior })
       });
       if (!res.ok) throw new Error(await res.text());
@@ -113,7 +113,7 @@ const AdminDashboard = () => {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': 'dev-team'
+          'X-Tenant-ID': DEFAULT_TENANT_ID
         }
       });
       if (res.ok) {
@@ -153,7 +153,7 @@ const AdminDashboard = () => {
         const token = localStorage.getItem('argus_token');
         const headers = {
           'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': 'dev-team'
+          'X-Tenant-ID': DEFAULT_TENANT_ID
         };
 
         // Fetch Employees first, build a lookup map by id

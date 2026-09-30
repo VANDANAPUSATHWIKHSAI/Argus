@@ -1,8 +1,8 @@
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-export const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID || 'dev-team';
+export const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID || 'default';
 
 // Helper for authenticated requests
-async function fetchWithAuth(url, options = {}) {
+export async function fetchWithAuth(url, options = {}) {
   const token = localStorage.getItem('argus_token');
   const headers = {
     'Accept': 'application/json',
@@ -16,7 +16,7 @@ async function fetchWithAuth(url, options = {}) {
 
   // Only set Content-Type to application/json if it's not a FormData upload
   if (!(options.body instanceof FormData)) {
-      headers['Content-Type'] = 'application/json';
+    headers['Content-Type'] = 'application/json';
   }
 
   const response = await fetch(`${API_BASE_URL}${url}`, {
@@ -27,8 +27,8 @@ async function fetchWithAuth(url, options = {}) {
   if (!response.ok) {
     let errorMsg = `HTTP Error ${response.status}`;
     try {
-        const errData = await response.json();
-        errorMsg = errData.detail || errorMsg;
+      const errData = await response.json();
+      errorMsg = errData.detail || errorMsg;
     } catch(e) {}
     throw new Error(errorMsg);
   }
@@ -48,8 +48,8 @@ export async function login(userid, password) {
   if (!response.ok) {
     let errorMsg = 'Login failed';
     try {
-        const errData = await response.json();
-        errorMsg = errData.detail || errorMsg;
+      const errData = await response.json();
+      errorMsg = errData.detail || errorMsg;
     } catch(e) {}
     throw new Error(errorMsg);
   }
@@ -113,3 +113,40 @@ export async function updateReviewNote(caseId, noteId, noteData) {
   });
 }
 
+export async function deleteReviewNote(caseId, noteId) {
+  return fetchWithAuth(`/cases/${caseId}/review-notes/${noteId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function queryCase(caseId, queryText) {
+  return fetchWithAuth(`/cases/${caseId}/query`, {
+    method: 'POST',
+    body: JSON.stringify({ query: queryText }),
+  });
+}
+
+export async function fetchReport(caseId, format = 'html') {
+  const token = localStorage.getItem('argus_token');
+  const response = await fetch(`${API_BASE_URL}/reports/${caseId}/report?format=${format}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'X-Tenant-ID': DEFAULT_TENANT_ID,
+    }
+  });
+  if (!response.ok) {
+    let errorMsg = `HTTP Error ${response.status}`;
+    try {
+      const errData = await response.json();
+      errorMsg = errData.detail || errorMsg;
+    } catch(e) {}
+    throw new Error(errorMsg);
+  }
+  return response.text();
+}
+
+export async function closeCase(caseId) {
+  return fetchWithAuth(`/cases/${caseId}/close`, {
+    method: 'PUT',
+  });
+}

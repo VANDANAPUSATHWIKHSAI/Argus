@@ -100,12 +100,19 @@ async def upload_evidence(
     temp_dir = Path(tempfile.gettempdir()) / "argus_uploads"
     temp_dir.mkdir(parents=True, exist_ok=True)
     
-    safe_name = file.filename
-    if relative_path:
-        # avoid path traversal
-        safe_name = relative_path.replace("..", "").lstrip("\\/")
-        
-    file_path = temp_dir / safe_name
+    import urllib.parse
+    raw_name = relative_path if relative_path else file.filename
+    unquoted = urllib.parse.unquote(raw_name)
+    safe_name = os.path.basename(unquoted.replace("\\", "/"))
+    if not safe_name or safe_name in (".", ".."):
+        safe_name = "evidence_upload.bin"
+
+    resolved_temp_dir = temp_dir.resolve()
+    file_path = (temp_dir / safe_name).resolve()
+    try:
+        file_path.relative_to(resolved_temp_dir)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid filename: path traversal attempt detected.")
     file_path.parent.mkdir(parents=True, exist_ok=True)
 
     file_bytes = await file.read()

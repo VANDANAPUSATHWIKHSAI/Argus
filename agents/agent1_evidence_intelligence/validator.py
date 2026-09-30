@@ -61,15 +61,14 @@ class Agent1Validator:
         fir_map: Dict[str, Any]
     ) -> Tuple[bool, str]:
         """
-        Independent Python code verification determining whether underlying FIR findings
-        and raw evidence records semantically support the content of the Agent 1 claim.
+        Separate verification step for semantic support vs citation validity.
+        Citation existence alone does NOT constitute semantic support proof.
         """
         if not claim.cited_evidence_ids:
-            return False, "No cited evidence IDs provided to verify semantic support."
+            return False, "No cited evidence IDs provided for semantic verification."
 
         supported_citations = 0
         missing_citations = []
-        fact_snippets = []
 
         for cid in claim.cited_evidence_ids:
             fir = fir_map.get(cid) if isinstance(fir_map, dict) else None
@@ -80,7 +79,6 @@ class Agent1Validator:
             fact = getattr(fir, "fact", "") or getattr(fir, "sanitized_fact", "") or getattr(fir, "event_summary", "")
             if fact:
                 supported_citations += 1
-                fact_snippets.append(str(fact))
 
         if missing_citations:
             return False, f"Missing FIR finding objects for cited IDs: {missing_citations}"
@@ -88,7 +86,9 @@ class Agent1Validator:
         if supported_citations == 0:
             return False, "Cited FIR findings contain no verifiable facts or metadata."
 
-        return True, f"Claim semantically supported by {supported_citations} underlying FIR finding facts: {fact_snippets[:2]}"
+        # Architecture mandate A1-02: Do NOT falsely claim NLI semantic entailment has been proven merely because finding text exists.
+        # Citation validity confirms finding ID existence. Semantic entailment requires a full NLI verifier.
+        return False, f"Citation validity confirmed for {supported_citations} IDs. Full NLI semantic entailment requires Agent 7 independent verification."
 
     def validate_claims(
         self,
@@ -111,6 +111,7 @@ class Agent1Validator:
             invalid_ids = [cid for cid in cited_ids if cid not in valid_universe]
 
             if invalid_ids:
+                claim.citation_valid = False
                 claim.citation_verified = False
                 claim.invalid_citations = invalid_ids
                 notes.append(f"Invalid cited IDs not in evidence lineage: {invalid_ids}")
@@ -118,6 +119,7 @@ class Agent1Validator:
                     "Claim %s cited non-existent evidence IDs: %s", claim.claim_id, invalid_ids
                 )
             else:
+                claim.citation_valid = True
                 claim.citation_verified = True
                 claim.invalid_citations = []
                 notes.append("Citation verification passed.")
@@ -140,17 +142,22 @@ class Agent1Validator:
                 claim.is_valid_confidence = True
                 claim.raw_model_confidence = raw_conf
 
-            # ── 3. Independent Claim Semantic Support Verification ────
+            # ── 3. Priority Reason Validation ─────────────────────────
+            if claim.assessed_importance in ("critical", "high") and not claim.importance_reason:
+                claim.importance_reason = f"Assessed as {claim.assessed_importance} based on cited evidence: {claim.cited_evidence_ids}"
+
+            # ── 4. Independent Claim Semantic Support Verification ────
             if fir_map:
                 is_sem_valid, sem_note = self.verify_semantic_support(claim, fir_map)
                 claim.semantic_support_verified = is_sem_valid
                 claim.semantic_support_notes = sem_note
                 notes.append(f"Semantic Support: {sem_note}")
             else:
-                claim.semantic_support_verified = claim.citation_verified
-                claim.semantic_support_notes = "Citation verification passed (FIR map not provided for deep semantic audit)."
+                claim.semantic_support_verified = False
+                claim.semantic_support_notes = "Citation validity confirmed (FIR map not provided for deep semantic audit)."
 
             claim.validation_notes = " | ".join(notes)
             validated_claims.append(claim)
 
         return validated_claims
+

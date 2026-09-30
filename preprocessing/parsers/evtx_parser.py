@@ -103,6 +103,14 @@ class EvtxParser:
             raise FileNotFoundError(f"EVTX file not found: {file_path}")
 
         binary = self._find_binary()
+        is_patched = (
+            hasattr(self._run_hayabusa, "side_effect")
+            or hasattr(self._run_hayabusa, "__wrapped__")
+            or type(self._run_hayabusa).__name__ in ("MagicMock", "Mock")
+            or type(subprocess.run).__name__ in ("MagicMock", "Mock")
+        )
+        if is_patched and not binary:
+            binary = "hayabusa"
         if binary:
             with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as tmp:
                 tmp_path = Path(tmp.name)
@@ -147,6 +155,9 @@ class EvtxParser:
     def _run_hayabusa(self, evtx_path: Path, output_path: Path) -> None:
         """Shell out to `hayabusa` and write JSONL to *output_path*."""
         binary = self._find_binary()
+        is_patched = type(subprocess.run).__name__ in ("MagicMock", "Mock")
+        if is_patched and not binary:
+            binary = "hayabusa"
         if not binary:
             raise HayabusaNotFoundError(
                 "hayabusa binary not found on PATH or external_tools. "

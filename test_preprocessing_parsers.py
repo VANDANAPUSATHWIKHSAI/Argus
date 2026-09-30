@@ -1531,7 +1531,7 @@ class TestParserRouter(unittest.TestCase):
 
     def test_unroutable_raises_error(self):
         self._write_bytes(b"arbitrarynonmagicbytes")
-        evidence = self._make_evidence("random.txt", ext=".txt", mime="text/plain")
+        evidence = self._make_evidence("random.bin", ext=".bin", mime="application/octet-stream")
         with self.assertRaises(UnroutableEvidenceError) as ctx:
             self.router.route(evidence)
         self.assertEqual(ctx.exception.evidence_id, evidence.evidence_id)

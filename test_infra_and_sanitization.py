@@ -204,7 +204,7 @@ def test_model_failure():
         # Restore original class methods and state
         ClassifierLoader.load_injection_detector = original_load
         ClassifierLoader._startup_checked = False
-        ClassifierLoader._semantic_layer_active = False
+        ClassifierLoader._semantic_layer_active = True
 
     print("\n" + "=" * 75)
     print("  MODEL FAILURE TEST PASSED SUCCESSFULLY!")

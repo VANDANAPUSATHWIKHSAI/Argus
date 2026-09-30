@@ -6,6 +6,7 @@ Protects against path traversal.
 
 import os
 import uuid
+from typing import Optional
 from pathlib import Path
 from infrastructure.schemas import Evidence, EvidenceStatus, CustodyLogEntry
 
@@ -24,7 +25,7 @@ def sanitize_segment(val: str, name: str) -> str:
     return cleaned
 
 
-def upload_evidence(file_bytes: bytes, filename: str, case_id: str, uploaded_by: str) -> Evidence:
+def upload_evidence(file_bytes: bytes, filename: str, case_id: str, uploaded_by: str, tenant_id: Optional[str] = None) -> Evidence:
     """
     Write the raw bytes to a temp intake location using streaming chunks and return an Evidence object.
     Protects against path traversal and generates a safe uuid-based storage filename.
@@ -32,6 +33,7 @@ def upload_evidence(file_bytes: bytes, filename: str, case_id: str, uploaded_by:
     # ── Path Traversal Validation (Task 3) ──────────────────────
     sanitized_case_id = sanitize_segment(case_id, "case_id")
     sanitized_filename = sanitize_segment(filename, "filename")
+    clean_filename = os.path.basename(sanitized_filename.replace("\\", "/"))
 
     evidence_id = str(uuid.uuid4())
     ext = os.path.splitext(sanitized_filename)[1].lower()
@@ -57,7 +59,8 @@ def upload_evidence(file_bytes: bytes, filename: str, case_id: str, uploaded_by:
     evidence = Evidence(
         evidence_id=evidence_id,
         case_id=case_id,
-        filename=filename,
+        tenant_id=tenant_id,
+        filename=sanitized_filename,
         file_path=file_path,
         original_file_path=file_path,
         uploaded_by=uploaded_by,

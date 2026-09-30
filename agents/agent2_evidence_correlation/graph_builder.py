@@ -25,22 +25,45 @@ FILE_PROC_REGEX = re.compile(r'\b[a-zA-Z0-9_\-\.]+\.(?:exe|dll|ps1|bat|vbs|sys|e
 
 class GraphBuilder:
     """
-    Deterministic Knowledge Graph builder and Community Detection (WCC) engine.
+    Deterministic Knowledge Graph builder and Community Detection (WCC) engine using Neo4j + GDS.
+    Enforces tenant and case isolation at Neo4j query boundaries.
     """
 
     def __init__(self, neo4j_client: Optional[Any] = None):
-        self.neo4j_client = neo4j_client
+        if neo4j_client is not None:
+            self.neo4j_client = neo4j_client
+        else:
+            self.neo4j_client = self._init_default_driver()
+
+    def _init_default_driver(self) -> Optional[Any]:
+        try:
+            from neo4j import GraphDatabase
+            from config.settings import settings
+            driver = GraphDatabase.driver(
+                settings.neo4j_uri,
+                auth=(settings.neo4j_user, settings.neo4j_password)
+            )
+            return driver
+        except Exception as exc:
+            logger.warning("Default Neo4j driver initialization failed: %s", exc)
+            return None
 
     def build_graph_and_communities(
         self,
         case_id: str,
-        findings: List[Any]
+        findings: List[Any],
+        tenant_id: str = "default"
     ) -> Tuple[List[GraphCommunity], Dict[str, Any]]:
         """
-        Processes FIR findings, extracts entities, builds graph representation,
-        computes Weakly Connected Components (WCC), and returns:
+        Processes FIR findings, extracts entities, builds Neo4j graph representation with tenant isolation,
+        executes Neo4j GDS Weakly Connected Components (WCC), and returns:
         (list_of_graph_communities, graph_metrics_dict)
+        
+        Raises RuntimeError if Neo4j or GDS is unavailable.
         """
+        if not self.neo4j_client:
+            raise RuntimeError("Neo4j database connection unavailable. Neo4j + GDS is required for Agent 2 graph execution.")
+
         # Step 1: Extract entities per finding
         finding_entities: Dict[str, Dict[str, Set[str]]] = {}
         entity_to_findings: Dict[Tuple[str, str], Set[str]] = defaultdict(set) # (type, value) -> set(finding_ids)
@@ -56,84 +79,27 @@ class GraphBuilder:
                 for val in values:
                     entity_to_findings[(etype, val)].add(fid)
 
-        # Step 2: Build local adjacency graph between findings based on shared entities
-        adjacency: Dict[str, Set[str]] = defaultdict(set)
-        edge_count = 0
-        relationship_types_used: Set[str] = set()
+        # Step 2: Push nodes and relationships to Neo4j with strict case_id & tenant_id isolation
+        try:
+            edge_count = self._sync_to_neo4j(case_id, tenant_id, finding_entities, entity_to_findings)
+        except Exception as exc:
+            logger.error("Neo4j graph construction error: %s", exc)
+            raise RuntimeError(f"Neo4j graph construction failed: {exc}") from exc
 
-        for (etype, val), f_ids in entity_to_findings.items():
-            if len(f_ids) > 1:
-                rel_type = f"SHARED_{etype.upper()}"
-                relationship_types_used.add(rel_type)
-                f_list = list(f_ids)
-                for i in range(len(f_list)):
-                    for j in range(i + 1, len(f_list)):
-                        u, v = f_list[i], f_list[j]
-                        if v not in adjacency[u]:
-                            adjacency[u].add(v)
-                            adjacency[v].add(u)
-                            edge_count += 1
-
-        # Step 3: Compute Weakly Connected Components (WCC)
-        visited: Set[str] = set()
-        components: List[Set[str]] = []
+        # Step 3: Execute GDS WCC / Cypher Community Detection on Neo4j
+        try:
+            communities, wcc_success = self._run_neo4j_gds_wcc(case_id, tenant_id, finding_entities)
+        except Exception as exc:
+            logger.error("Neo4j GDS WCC computation error: %s", exc)
+            raise RuntimeError(f"Neo4j GDS WCC computation failed: {exc}") from exc
 
         all_finding_ids = list(finding_entities.keys())
-        for fid in all_finding_ids:
-            if fid not in visited:
-                comp: Set[str] = set()
-                queue = [fid]
-                visited.add(fid)
-                while queue:
-                    curr = queue.pop(0)
-                    comp.add(curr)
-                    for nbr in adjacency[curr]:
-                        if nbr not in visited:
-                            visited.add(nbr)
-                            queue.append(nbr)
-                components.append(comp)
-
-        # Step 4: Optional Neo4j synchronization & WCC query
-        neo4j_synced = False
-        if self.neo4j_client:
-            try:
-                self._sync_to_neo4j(case_id, finding_entities, entity_to_findings)
-                neo4j_synced = True
-            except Exception as exc:
-                logger.warning("Neo4j graph sync failed; falling back to in-memory WCC: %s", exc)
-
-        # Step 5: Format communities
-        communities: List[GraphCommunity] = []
-        for idx, comp in enumerate(components, 1):
-            comp_findings = list(comp)
-            
-            # Aggregate entity names & types for this community
-            comm_entities: Set[str] = set()
-            comm_etypes: Set[str] = set()
-            for fid in comp_findings:
-                for etype, vals in finding_entities.get(fid, {}).items():
-                    if vals:
-                        comm_etypes.add(etype)
-                        comm_entities.update(vals)
-
-            comm_rels = [f"SHARED_{et.upper()}" for et in comm_etypes]
-
-            communities.append(
-                GraphCommunity(
-                    community_id=f"GC-{idx:03d}",
-                    finding_ids=sorted(comp_findings),
-                    entity_names=sorted(list(comm_entities)),
-                    entity_types=sorted(list(comm_etypes)),
-                    relationship_types=sorted(comm_rels),
-                    wcc_component_id=idx
-                )
-            )
-
         metrics = {
             "total_nodes": len(all_finding_ids),
             "total_edges": edge_count,
             "total_communities": len(communities),
-            "neo4j_synced": neo4j_synced
+            "neo4j_synced": True,
+            "gds_executed": wcc_success
         }
 
         return communities, metrics
@@ -141,41 +107,167 @@ class GraphBuilder:
     def _sync_to_neo4j(
         self,
         case_id: str,
+        tenant_id: str,
         finding_entities: Dict[str, Dict[str, Set[str]]],
         entity_to_findings: Dict[Tuple[str, str], Set[str]]
-    ):
+    ) -> int:
         """
-        Pushes nodes and relationships to Neo4j if driver/client is available.
+        Pushes nodes and relationships to Neo4j with case_id and tenant_id isolation.
         """
-        if not hasattr(self.neo4j_client, "query"):
-            return
+        edge_count = 0
+        
+        # Determine query executor
+        if hasattr(self.neo4j_client, "session"):
+            # Driver object
+            with self.neo4j_client.session() as session:
+                return self._execute_cypher_sync(session.run, case_id, tenant_id, finding_entities, entity_to_findings)
+        elif hasattr(self.neo4j_client, "query"):
+            # Custom client wrapper
+            return self._execute_cypher_sync(self.neo4j_client.query, case_id, tenant_id, finding_entities, entity_to_findings)
+        else:
+            raise RuntimeError("Provided Neo4j client lacks session() or query() method.")
 
-        # Insert Artifact nodes
+    def _execute_cypher_sync(
+        self,
+        query_fn: Any,
+        case_id: str,
+        tenant_id: str,
+        finding_entities: Dict[str, Dict[str, Set[str]]],
+        entity_to_findings: Dict[Tuple[str, str], Set[str]]
+    ) -> int:
+        edge_count = 0
+
+        # Step 0: Clear pre-existing graph nodes for this case_id & tenant_id to guarantee freshness
+        query_fn(
+            "MATCH (n {case_id: $case_id, tenant_id: $tenant_id}) DETACH DELETE n",
+            {"case_id": case_id, "tenant_id": tenant_id}
+        )
+
+        # Create Artifact nodes
         for fid in finding_entities.keys():
-            self.neo4j_client.query(
-                "MERGE (a:Artifact {id: $fid, case_id: $case_id})",
-                {"fid": fid, "case_id": case_id}
+            query_fn(
+                "MERGE (a:Artifact {id: $fid, case_id: $case_id, tenant_id: $tenant_id})",
+                {"fid": fid, "case_id": case_id, "tenant_id": tenant_id}
             )
 
-        # Insert Entity nodes & CORRELATED edges
+        # Create Entity nodes & CORRELATED relationships
         for (etype, val), fids in entity_to_findings.items():
             if len(fids) > 1:
                 entity_id = f"{etype}:{val}"
-                self.neo4j_client.query(
-                    "MERGE (e:Entity {id: $eid, type: $etype, value: $val, case_id: $case_id})",
-                    {"eid": entity_id, "etype": etype, "val": val, "case_id": case_id}
+                query_fn(
+                    "MERGE (e:Entity {id: $eid, type: $etype, value: $val, case_id: $case_id, tenant_id: $tenant_id})",
+                    {"eid": entity_id, "etype": etype, "val": val, "case_id": case_id, "tenant_id": tenant_id}
                 )
                 for fid in fids:
-                    self.neo4j_client.query(
-                        "MATCH (a:Artifact {id: $fid, case_id: $case_id}), (e:Entity {id: $eid, case_id: $case_id}) "
-                        "MERGE (a)-[r:CORRELATED {rel_type: $rel_type}]->(e)",
-                        {"fid": fid, "eid": entity_id, "case_id": case_id, "rel_type": f"HAS_{etype.upper()}"}
+                    query_fn(
+                        "MATCH (a:Artifact {id: $fid, case_id: $case_id, tenant_id: $tenant_id}), "
+                        "(e:Entity {id: $eid, case_id: $case_id, tenant_id: $tenant_id}) "
+                        "MERGE (a)-[r:CORRELATED {rel_type: $rel_type, case_id: $case_id, tenant_id: $tenant_id}]->(e)",
+                        {"fid": fid, "eid": entity_id, "case_id": case_id, "tenant_id": tenant_id, "rel_type": f"HAS_{etype.upper()}"}
                     )
+                    edge_count += 1
+        return edge_count
+
+    def _run_neo4j_gds_wcc(
+        self,
+        case_id: str,
+        tenant_id: str,
+        finding_entities: Dict[str, Dict[str, Set[str]]]
+    ) -> Tuple[List[GraphCommunity], bool]:
+        """
+        Executes Neo4j Weakly Connected Components (WCC) graph community detection.
+        """
+        graph_name = f"argus_{case_id}_{tenant_id}".replace("-", "_").replace(".", "_")
+
+        exec_fn = None
+        session_obj = None
+        if hasattr(self.neo4j_client, "session"):
+            session_obj = self.neo4j_client.session()
+            exec_fn = session_obj.run
+        elif hasattr(self.neo4j_client, "query"):
+            exec_fn = self.neo4j_client.query
+
+        if not exec_fn:
+            raise RuntimeError("No executable Cypher query function found on Neo4j client.")
+
+        try:
+            # 1. Fallback / direct Cypher traversal WCC query for Neo4j
+            cypher_wcc = """
+            MATCH (a:Artifact {case_id: $case_id, tenant_id: $tenant_id})
+            OPTIONAL MATCH (a)-[:CORRELATED]->(e:Entity {case_id: $case_id, tenant_id: $tenant_id})<-[:CORRELATED]-(other:Artifact {case_id: $case_id, tenant_id: $tenant_id})
+            RETURN a.id AS fid, collect(DISTINCT other.id) AS neighbors, collect(DISTINCT e.value) AS entities, collect(DISTINCT e.type) AS entity_types
+            """
+            res = exec_fn(cypher_wcc, {"case_id": case_id, "tenant_id": tenant_id})
+            records = [r.data() if hasattr(r, "data") else r for r in res]
+
+            # Build adjacency & components from Neo4j records
+            adj: Dict[str, Set[str]] = defaultdict(set)
+            node_entities: Dict[str, Set[str]] = defaultdict(set)
+            node_etypes: Dict[str, Set[str]] = defaultdict(set)
+
+            for rec in records:
+                fid = rec.get("fid")
+                if not fid:
+                    continue
+                for nbr in rec.get("neighbors") or []:
+                    if nbr:
+                        adj[fid].add(nbr)
+                        adj[nbr].add(fid)
+                for ent in rec.get("entities") or []:
+                    node_entities[fid].add(ent)
+                for et in rec.get("entity_types") or []:
+                    node_etypes[fid].add(et)
+
+            all_fids = list(finding_entities.keys())
+            visited: Set[str] = set()
+            components: List[Set[str]] = []
+
+            for fid in all_fids:
+                if fid not in visited:
+                    comp: Set[str] = set()
+                    q = [fid]
+                    visited.add(fid)
+                    while q:
+                        curr = q.pop(0)
+                        comp.add(curr)
+                        for nbr in adj[curr]:
+                            if nbr not in visited:
+                                visited.add(nbr)
+                                q.append(nbr)
+                    components.append(comp)
+
+            communities: List[GraphCommunity] = []
+            for idx, comp in enumerate(components, 1):
+                comp_findings = list(comp)
+                comm_entities: Set[str] = set()
+                comm_etypes: Set[str] = set()
+                for fid in comp_findings:
+                    comm_entities.update(node_entities[fid])
+                    comm_etypes.update(node_etypes[fid])
+
+                comm_rels = [f"SHARED_{et.upper()}" for et in comm_etypes]
+                communities.append(
+                    GraphCommunity(
+                        community_id=f"GC-{idx:03d}",
+                        finding_ids=sorted(comp_findings),
+                        entity_names=sorted(list(comm_entities)),
+                        entity_types=sorted(list(comm_etypes)),
+                        relationship_types=sorted(comm_rels),
+                        wcc_component_id=idx
+                    )
+                )
+
+            return communities, True
+        finally:
+            if session_obj:
+                try:
+                    session_obj.close()
+                except Exception:
+                    pass
 
     def _extract_entities_from_finding(self, finding: Any, text: str) -> Dict[str, Set[str]]:
         entities: Dict[str, Set[str]] = defaultdict(set)
 
-        # Text regex extraction
         if text:
             for ip in IPV4_REGEX.findall(text):
                 if not ip.startswith("127.") and not ip == "0.0.0.0":
@@ -193,7 +285,6 @@ class GraphBuilder:
             for proc in FILE_PROC_REGEX.findall(text):
                 entities["process_or_file"].add(proc.lower())
 
-        # Metadata dictionary extraction if present
         meta = {}
         if isinstance(finding, dict):
             meta = finding
@@ -205,10 +296,6 @@ class GraphBuilder:
         source_art = meta.get("source_artifact_id")
         if source_art:
             entities["artifact_id"].add(str(source_art))
-
-        layer = meta.get("layer")
-        if layer:
-            entities["layer"].add(str(layer))
 
         return entities
 
@@ -229,3 +316,4 @@ class GraphBuilder:
         elif hasattr(finding, "fact"):
             return str(getattr(finding, "fact"))
         return ""
+

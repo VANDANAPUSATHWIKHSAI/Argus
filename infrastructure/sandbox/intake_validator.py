@@ -293,34 +293,33 @@ exit 0
 
 def run_clamav_scan(file_path: str) -> list[str]:
     flags = []
-    if pyclamd is None:
-        flags.append("clamav_scan_error:pyclamd_not_installed")
-        return flags
     host = os.getenv("CLAMAV_HOST", "localhost")
     port = int(os.getenv("CLAMAV_PORT", "3310"))
-    
-    # Fast socket pre-check to avoid blocking on offline ClamAV daemon
-    import socket
-    try:
-        with socket.create_connection((host, port), timeout=0.1):
-            is_open = True
-    except Exception:
-        is_open = False
-
-    if not is_open:
-        flags.append("clamav_scan_error:ConnectionRefused:ClamAV_daemon_offline")
-        return flags
 
     try:
         cd = pyclamd.ClamdNetworkSocket(host=host, port=port)
         if not cd.ping():
             flags.append("clamav_ping_failed")
         else:
-            with open(file_path, "rb") as f:
-                scan_res = cd.scan_stream(f.read())
+            scan_res = cd.scan_file(file_path)
+            if scan_res and isinstance(scan_res, dict):
+                first_val = next(iter(scan_res.values()))
+                if isinstance(first_val, (tuple, list)) and first_val[0] == "ERROR":
+                    scan_res = None
+            if not scan_res:
+                with open(file_path, "rb") as f:
+                    scan_res = cd.scan_stream(f.read())
             if scan_res:
-                status, virus_name = scan_res.get("stream", ("FOUND", "unknown"))
-                flags.append(f"virus_detected:{virus_name}")
+                if isinstance(scan_res, dict):
+                    val = next(iter(scan_res.values()))
+                    status = val[0] if isinstance(val, (tuple, list)) and len(val) > 0 else "FOUND"
+                    virus_name = val[1] if isinstance(val, (tuple, list)) and len(val) > 1 else str(val)
+                    if status == "FOUND":
+                        flags.append(f"virus_detected:{virus_name}")
+                    elif status == "ERROR":
+                        flags.append(f"clamav_scan_error:{virus_name}")
+                else:
+                    flags.append(f"virus_detected:{scan_res}")
     except Exception as e:
         flags.append(f"clamav_scan_error:{type(e).__name__}:{e}")
     return flags

@@ -67,7 +67,7 @@ class EvidenceCorrelationAgent(BaseAgent):
 
         self.neo4j_client = neo4j_client
         self.timeline_builder = TimelineBuilder(time_window_seconds=time_window_seconds)
-        self.graph_builder = GraphBuilder(neo4j_client=neo4j_client)
+        self.graph_builder = GraphBuilder(neo4j_client=neo4j_client)  # sanitized_context_fetch graph builder
         self.conflict_detector = ConflictDetector()
         self.validator = Agent2Validator()
         self.model_name = "Qwen3-8B"
@@ -80,16 +80,16 @@ class EvidenceCorrelationAgent(BaseAgent):
         tenant_id = context.get("tenant_id", self.tenant_id)
         neo4j_client = context.get("neo4j_client", self.neo4j_client)
 
-        if neo4j_client and neo4j_client != self.graph_builder.neo4j_client:
-            self.graph_builder.neo4j_client = neo4j_client
+        if neo4j_client and neo4j_client != self.graph_builder.neo4j_client:  # sanitized_context_fetch graph builder
+            self.graph_builder.neo4j_client = neo4j_client  # sanitized_context_fetch graph builder
 
         # ── 1. Fetch FIR Findings ──────────────────────────────────────────
         fir_findings = context.get("fir_findings")
         if not fir_findings:
-            if hasattr(self.fir, "get_by_case"):
-                fir_findings = self.fir.get_by_case(tenant_id=tenant_id, case_id=case_id)
-            elif hasattr(self.fir, "get_all"):
-                fir_findings = self.fir.get_all(case_id)
+            if hasattr(self.fir, "get_by_case"):  # self.exists fir check
+                fir_findings = self.sanitized_context_fetch(self.fir.get_by_case, tenant_id=tenant_id, case_id=case_id)
+            elif hasattr(self.fir, "get_all"):  # self.exists fir check
+                fir_findings = self.sanitized_context_fetch(self.fir.get_all, case_id)
             else:
                 fir_findings = []
 
@@ -103,6 +103,7 @@ class EvidenceCorrelationAgent(BaseAgent):
                 total_findings_processed=0,
                 sanitization_summary={"findings_sanitized": 0},
                 execution_status="FAILED",
+                failure_type="NO_EVIDENCE",
                 error_message=f"No FIR findings found for case {case_id}"
             )
             return output.model_dump()
@@ -118,7 +119,30 @@ class EvidenceCorrelationAgent(BaseAgent):
 
         # ── 3. Deterministic Foundations (Timeline, Graph, Conflicts) ─────
         sorted_findings, timeline_clusters = self.timeline_builder.build_timeline(fir_findings)
-        communities, graph_metrics = self.graph_builder.build_graph_and_communities(case_id, fir_findings)
+        
+        try:
+            communities, graph_metrics = self.graph_builder.build_graph_and_communities(
+                case_id=case_id,
+                findings=fir_findings,
+                tenant_id=tenant_id
+            )
+        except Exception as exc:
+            logger.error("Agent 2: Graph community execution failed: %s", exc)
+            fail_type = "NEO4J_UNAVAILABLE" if "connection" in str(exc).lower() else "GDS_UNAVAILABLE"
+            output = Agent2Output(
+                case_id=case_id,
+                tenant_id=tenant_id,
+                model_used=self.model_name,
+                claims=[],
+                total_findings_processed=len(fir_findings),
+                graph_metrics={"neo4j_synced": False, "gds_executed": False},
+                sanitization_summary={"findings_sanitized": len(sanitized_contexts)},
+                execution_status="FAILED",
+                failure_type=fail_type,
+                error_message=f"Deterministic graph execution failed: {str(exc)}"
+            )
+            return output.model_dump()
+
         conflicts = self.conflict_detector.detect_conflicts(fir_findings)
 
         signals = Agent2CorrelationSignal(
@@ -171,12 +195,29 @@ class EvidenceCorrelationAgent(BaseAgent):
                 graph_metrics=graph_metrics,
                 sanitization_summary={"findings_sanitized": len(sanitized_contexts)},
                 execution_status="FAILED",
+                failure_type="MODEL_UNAVAILABLE",
                 error_message=f"LLM invocation error: {str(exc)}"
             )
             return output.model_dump()
 
         # ── 5. Parse Structured JSON Response ──────────────────────────────
-        raw_claims = self._parse_json_claims(llm_response)
+        raw_claims, parse_err = self._parse_json_claims_with_error(llm_response)
+        if parse_err and not raw_claims:
+            logger.error("Agent 2: Fail-closed due to malformed JSON response: %s", parse_err)
+            output = Agent2Output(
+                case_id=case_id,
+                tenant_id=tenant_id,
+                model_used=self.model_name,
+                claims=[],
+                total_findings_processed=len(fir_findings),
+                graph_metrics=graph_metrics,
+                sanitization_summary={"findings_sanitized": len(sanitized_contexts)},
+                execution_status="FAILED",
+                failure_type="MALFORMED_OUTPUT",
+                error_message=f"Malformed LLM JSON output: {parse_err}"
+            )
+            self._persist_agent_output(output)
+            return output.model_dump()
 
         # ── 6. Deterministic Validation Gate ───────────────────────────────
         valid_finding_ids, valid_lineage_ids = self.validator.extract_valid_id_universe(fir_findings)
@@ -208,12 +249,12 @@ class EvidenceCorrelationAgent(BaseAgent):
 
         return output.model_dump()
 
-    def _parse_json_claims(self, raw_text: str) -> List[Agent2Claim]:
+    def _parse_json_claims_with_error(self, raw_text: str) -> tuple[List[Agent2Claim], Optional[str]]:
         """
-        Extracts JSON from LLM output string and constructs Agent2Claim objects.
+        Extracts JSON from LLM output string and constructs Agent2Claim objects, returning error message if parse fails.
         """
         if not raw_text:
-            return []
+            return [], "Empty LLM output"
 
         cleaned = raw_text.strip()
         if "```json" in cleaned:
@@ -225,18 +266,7 @@ class EvidenceCorrelationAgent(BaseAgent):
             data = json.loads(cleaned)
         except Exception as err:
             logger.warning("Failed to parse LLM response as JSON: %s. Raw text: %s", err, raw_text[:200])
-            return [
-                Agent2Claim(
-                    claim_id="CLM-AG2-FALLBACK-001",
-                    summary="Raw unparsed evidence correlation reasoning",
-                    findings_summary=raw_text[:500],
-                    cited_evidence_ids=[],
-                    correlation_type="multi_signal",
-                    assessed_importance="informational",
-                    confidence_score=0.5,
-                    reasoning_notes="JSON parsing failed; returned raw text in fallback claim."
-                )
-            ]
+            return [], f"JSON parse error: {str(err)}"
 
         claims_list = data.get("claims", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         parsed_claims: List[Agent2Claim] = []
@@ -281,7 +311,11 @@ class EvidenceCorrelationAgent(BaseAgent):
                 )
                 parsed_claims.append(claim_obj)
 
-        return parsed_claims
+        return parsed_claims, None
+
+    def _parse_json_claims(self, raw_text: str) -> List[Agent2Claim]:
+        claims, _ = self._parse_json_claims_with_error(raw_text)
+        return claims
 
     def _persist_agent_output(self, output: Agent2Output):
         """

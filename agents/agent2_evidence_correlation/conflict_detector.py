@@ -18,44 +18,74 @@ logger = logging.getLogger(__name__)
 class ConflictDetector:
     """
     Deterministic conflict detection engine for forensic findings.
+    Provides O(n) indexed entity lookups to detect timestamp, host, user, process parent,
+    artifact identity, persistence, malware status, severity, and network conflicts.
     """
 
     def detect_conflicts(self, findings: List[Any]) -> List[CorrelationConflict]:
         conflicts: List[CorrelationConflict] = []
         conflict_idx = 1
 
-        # Map entities to finding details
-        filename_to_hashes: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list)) # filename -> hash -> [finding_ids]
-        ip_to_severities: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))   # IP -> severity -> [finding_ids]
-        finding_texts: Dict[str, str] = {}
+        # Indexed structures for O(n) lookups
+        filename_to_hashes: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+        ip_to_severities: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+        pid_to_users: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+        pid_to_ppids: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+        artifact_to_hosts: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+        artifact_to_timestamps: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+
+        persistence_findings: List[Tuple[str, str]] = [] # (fid, text)
+        malware_findings: List[Tuple[str, str]] = []     # (fid, text)
 
         for finding in findings:
             fid = self._extract_finding_id(finding)
-            text = self._extract_text(finding).lower()
-            severity = self._extract_severity(finding)
-            finding_texts[fid] = text
+            text = self._extract_text(finding)
+            text_lower = text.lower()
+            severity = self._extract_severity(finding).lower()
+            host = self._extract_host(finding)
+            user = self._extract_user(finding)
+            pid = self._extract_pid(finding)
+            ppid = self._extract_ppid(finding)
+            ts_str = self._extract_ts_str(finding)
+            art_id = self._extract_artifact_id(finding) or fid
 
-            # Extract filenames and hashes for hash collision check
+            # Index hashes and filenames
             hashes = re.findall(r'\b[a-fA-F0-9]{64}\b', text)
-            files = re.findall(r'\b[a-zA-Z0-9_\-\.]+\.(?:exe|dll|ps1|bat|vbs|sys|elf)\b', text)
+            files = re.findall(r'\b[a-zA-Z0-9_\-\.]+\.(?:exe|dll|ps1|bat|vbs|sys|elf)\b', text_lower)
             for f in files:
                 for h in hashes:
-                    filename_to_hashes[f.lower()][h.lower()].append(fid)
+                    filename_to_hashes[f][h.lower()].append(fid)
 
-            # Extract IPs for status contradiction check
+            # Index IPs & severities
             ips = re.findall(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b', text)
             for ip in ips:
                 if not ip.startswith("127.") and ip != "0.0.0.0":
-                    ip_to_severities[ip][severity.lower()].append(fid)
+                    ip_to_severities[ip][severity].append(fid)
 
-        # 1. Detect Hash Collisions / Filename Ambiguity
+            # Index PID -> User & Parent PID
+            if pid:
+                if user:
+                    pid_to_users[pid][user.lower()].append(fid)
+                if ppid:
+                    pid_to_ppids[pid][ppid].append(fid)
+
+            # Index Artifact -> Host & Timestamps
+            if art_id:
+                if host:
+                    artifact_to_hosts[art_id][host.lower()].append(fid)
+                if ts_str:
+                    artifact_to_timestamps[art_id][ts_str].append(fid)
+
+            # Collect persistence and malware statements
+            if "persistence" in text_lower:
+                persistence_findings.append((fid, text_lower))
+            if "malware" in text_lower or "cleared" in text_lower or "infected" in text_lower:
+                malware_findings.append((fid, text_lower))
+
+        # ── 1. Hash Collisions / Artifact Identity Conflicts ─────────────────
         for filename, hash_map in filename_to_hashes.items():
             if len(hash_map) > 1:
-                involved: List[str] = []
-                for h, fids in hash_map.items():
-                    involved.extend(fids)
-                involved = sorted(list(set(involved)))
-                
+                involved = sorted(list({fid for fids in hash_map.values() for fid in fids}))
                 conflicts.append(
                     CorrelationConflict(
                         conflict_id=f"CONF-{conflict_idx:03d}",
@@ -67,20 +97,79 @@ class ConflictDetector:
                 )
                 conflict_idx += 1
 
-        # 2. Detect Severity / Attitudinal Contradictions
+        # ── 2. User Attribution Conflicts ─────────────────────────────────────
+        for pid, user_map in pid_to_users.items():
+            if len(user_map) > 1:
+                involved = sorted(list({fid for fids in user_map.values() for fid in fids}))
+                users_str = ", ".join(user_map.keys())
+                conflicts.append(
+                    CorrelationConflict(
+                        conflict_id=f"CONF-{conflict_idx:03d}",
+                        conflict_type="user_attribution_conflict",
+                        description=f"Process PID '{pid}' attributed to multiple distinct users ({users_str}).",
+                        involved_finding_ids=involved,
+                        severity="high"
+                    )
+                )
+                conflict_idx += 1
+
+        # ── 3. Process Parent Conflicts ───────────────────────────────────────
+        for pid, ppid_map in pid_to_ppids.items():
+            if len(ppid_map) > 1:
+                involved = sorted(list({fid for fids in ppid_map.values() for fid in fids}))
+                ppids_str = ", ".join(ppid_map.keys())
+                conflicts.append(
+                    CorrelationConflict(
+                        conflict_id=f"CONF-{conflict_idx:03d}",
+                        conflict_type="process_parent_conflict",
+                        description=f"Process PID '{pid}' reported with contradictory parent PIDs ({ppids_str}).",
+                        involved_finding_ids=involved,
+                        severity="medium"
+                    )
+                )
+                conflict_idx += 1
+
+        # ── 4. Host Attribution Conflicts ─────────────────────────────────────
+        for art_id, host_map in artifact_to_hosts.items():
+            if len(host_map) > 1:
+                involved = sorted(list({fid for fids in host_map.values() for fid in fids}))
+                hosts_str = ", ".join(host_map.keys())
+                conflicts.append(
+                    CorrelationConflict(
+                        conflict_id=f"CONF-{conflict_idx:03d}",
+                        conflict_type="host_attribution_conflict",
+                        description=f"Artifact/finding '{art_id}' associated with contradictory hostnames ({hosts_str}).",
+                        involved_finding_ids=involved,
+                        severity="high"
+                    )
+                )
+                conflict_idx += 1
+
+        # ── 5. Timestamp Conflicts ───────────────────────────────────────────
+        for art_id, ts_map in artifact_to_timestamps.items():
+            if len(ts_map) > 1:
+                involved = sorted(list({fid for fids in ts_map.values() for fid in fids}))
+                conflicts.append(
+                    CorrelationConflict(
+                        conflict_id=f"CONF-{conflict_idx:03d}",
+                        conflict_type="timestamp_conflict",
+                        description=f"Contradictory event timestamps reported for artifact/finding '{art_id}'.",
+                        involved_finding_ids=involved,
+                        severity="medium"
+                    )
+                )
+                conflict_idx += 1
+
+        # ── 6. Severity / Attitudinal Contradictions ─────────────────────────
         for ip, sev_map in ip_to_severities.items():
             has_high_or_critical = "critical" in sev_map or "high" in sev_map
             has_low_or_info = "informational" in sev_map or "low" in sev_map
             if has_high_or_critical and has_low_or_info:
-                involved = []
-                for s, fids in sev_map.items():
-                    involved.extend(fids)
-                involved = sorted(list(set(involved)))
-
+                involved = sorted(list({fid for fids in sev_map.values() for fid in fids}))
                 conflicts.append(
                     CorrelationConflict(
                         conflict_id=f"CONF-{conflict_idx:03d}",
-                        conflict_type="attitudinal_contradiction",
+                        conflict_type="severity_disagreement",
                         description=f"Contradictory severity assessments for IP address '{ip}' (assessed as both high/critical and low/informational).",
                         involved_finding_ids=involved,
                         severity="medium"
@@ -88,38 +177,35 @@ class ConflictDetector:
                 )
                 conflict_idx += 1
 
-        # 3. Detect Textual Contradictions (e.g., "no persistence" vs "persistence detected")
-        fids_list = list(finding_texts.keys())
-        for i in range(len(fids_list)):
-            for j in range(i + 1, len(fids_list)):
-                id1, id2 = fids_list[i], fids_list[j]
-                t1, t2 = finding_texts[id1], finding_texts[id2]
+        # ── 7. File State / Persistence Disagreements (Indexed check) ────────
+        no_pers = [f for f, t in persistence_findings if "no persistence" in t or "benign" in t]
+        has_pers = [f for f, t in persistence_findings if "persistence detected" in t or "registry run" in t or "startup" in t]
+        if no_pers and has_pers:
+            conflicts.append(
+                CorrelationConflict(
+                    conflict_id=f"CONF-{conflict_idx:03d}",
+                    conflict_type="persistence_disagreement",
+                    description=f"Contradictory persistence assertions between findings {no_pers} and {has_pers}.",
+                    involved_finding_ids=sorted(list(set(no_pers + has_pers))),
+                    severity="high"
+                )
+            )
+            conflict_idx += 1
 
-                if ("no persistence" in t1 and "persistence detected" in t2) or \
-                   ("persistence detected" in t1 and "no persistence" in t2):
-                    conflicts.append(
-                        CorrelationConflict(
-                            conflict_id=f"CONF-{conflict_idx:03d}",
-                            conflict_type="attitudinal_contradiction",
-                            description=f"Contradictory persistence assertions between finding {id1} and finding {id2}.",
-                            involved_finding_ids=[id1, id2],
-                            severity="high"
-                        )
-                    )
-                    conflict_idx += 1
-
-                if ("cleared of malware" in t1 and "malware infection confirmed" in t2) or \
-                   ("malware infection confirmed" in t1 and "cleared of malware" in t2):
-                    conflicts.append(
-                        CorrelationConflict(
-                            conflict_id=f"CONF-{conflict_idx:03d}",
-                            conflict_type="attitudinal_contradiction",
-                            description=f"Contradictory malware status between finding {id1} and finding {id2}.",
-                            involved_finding_ids=[id1, id2],
-                            severity="high"
-                        )
-                    )
-                    conflict_idx += 1
+        # ── 8. Malware Status Disagreements (Indexed check) ─────────────────
+        cleared = [f for f, t in malware_findings if "cleared of malware" in t or "benign" in t]
+        infected = [f for f, t in malware_findings if "malware infection confirmed" in t or "trojan" in t or "ransomware" in t]
+        if cleared and infected:
+            conflicts.append(
+                CorrelationConflict(
+                    conflict_id=f"CONF-{conflict_idx:03d}",
+                    conflict_type="malware_status_disagreement",
+                    description=f"Contradictory malware status assertions between findings {cleared} and {infected}.",
+                    involved_finding_ids=sorted(list(set(cleared + infected))),
+                    severity="high"
+                )
+            )
+            conflict_idx += 1
 
         return conflicts
 
@@ -147,3 +233,49 @@ class ConflictDetector:
         elif hasattr(finding, "severity"):
             return str(getattr(finding, "severity"))
         return "medium"
+
+    def _extract_host(self, finding: Any) -> Optional[str]:
+        val = None
+        if isinstance(finding, dict):
+            val = finding.get("host") or finding.get("hostname")
+        else:
+            val = getattr(finding, "host", None) or getattr(finding, "hostname", None)
+        if val:
+            return str(val)
+        text = self._extract_text(finding)
+        match = re.search(r'\bhost(?:name)?[:=\s]+([a-zA-Z0-9_\-\.]+)\b', text, re.IGNORECASE)
+        return match.group(1) if match else None
+
+    def _extract_user(self, finding: Any) -> Optional[str]:
+        val = None
+        if isinstance(finding, dict):
+            val = finding.get("user") or finding.get("username")
+        else:
+            val = getattr(finding, "user", None) or getattr(finding, "username", None)
+        if val:
+            return str(val)
+        text = self._extract_text(finding)
+        match = re.search(r'\buser(?:name)?[:=\s]+([a-zA-Z0-9_\-\.]+)\b', text, re.IGNORECASE)
+        return match.group(1) if match else None
+
+    def _extract_pid(self, finding: Any) -> Optional[str]:
+        text = self._extract_text(finding)
+        match = re.search(r'\bpid[:=\s]+(\d+)\b', text, re.IGNORECASE)
+        return match.group(1) if match else None
+
+    def _extract_ppid(self, finding: Any) -> Optional[str]:
+        text = self._extract_text(finding)
+        match = re.search(r'\bppid[:=\s]+(\d+)\b', text, re.IGNORECASE)
+        return match.group(1) if match else None
+
+    def _extract_ts_str(self, finding: Any) -> Optional[str]:
+        if isinstance(finding, dict):
+            return str(finding.get("timestamp") or finding.get("created_at") or "")
+        return str(getattr(finding, "timestamp", None) or getattr(finding, "created_at", None) or "")
+
+    def _extract_artifact_id(self, finding: Any) -> Optional[str]:
+        if isinstance(finding, dict):
+            return finding.get("source_artifact_id") or finding.get("artifact_id")
+        return getattr(finding, "source_artifact_id", None) or getattr(finding, "artifact_id", None)
+
+

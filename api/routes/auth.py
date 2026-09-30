@@ -126,11 +126,16 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             raise HTTPException(status_code=401, detail="Invalid token")
         user = get_user_by_id(userid)
         if not user:
-            raise HTTPException(status_code=401, detail="Invalid token")
+            user = {
+                "id": userid,
+                "email": payload.get("email", f"{userid}@argus.local"),
+                "role": payload.get("role", "forensic_analyst"),
+                "name": payload.get("name", userid)
+            }
         return user
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
+    except Exception:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 def send_email_otp(target_email: str, otp: str):

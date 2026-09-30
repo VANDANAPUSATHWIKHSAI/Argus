@@ -25,7 +25,7 @@ class BaseAgent(ABC):
           Allows tenant_id override in kwargs or defaults to self.tenant_id.
         - Otherwise, executes the fetch_func and recursively sanitizes it using the old logic.
         """
-        tenant_id = kwargs.pop("tenant_id", getattr(self, "tenant_id", ""))
+        tenant_id = kwargs.get("tenant_id") or getattr(self, "tenant_id", "")
         if isinstance(source_or_func, str):
             # source_or_func is source name, args[0] is id
             source = source_or_func
@@ -122,7 +122,9 @@ class BaseAgent(ABC):
         "evidence_id", "id", "case_id", "sha256", "hash", "timestamp", "status",
         "created_at", "created_by", "uploaded_by", "uploaded_timestamp",
         "sha256_hash", "repository_path", "filename", "file_path", "type",
-        "tenant_id"
+        "tenant_id", "finding_id", "source_artifact_id", "evidence_reference",
+        "evidence_ref", "finding_fingerprint", "evidence_ids",
+        "cited_evidence_ids", "contributing_correlation_ids"
     }
 
     def _sanitize_recursive(self, data, field_name: str):

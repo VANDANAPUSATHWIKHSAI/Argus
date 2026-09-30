@@ -63,10 +63,10 @@ class AttackReconstructionAgent(BaseAgent):
         
         fir_findings = context.get("fir_findings")
         if not fir_findings:
-            if hasattr(self.fir, "get_by_case"):
-                fir_findings = self.fir.get_by_case(tenant_id=tenant_id, case_id=case_id)
-            elif hasattr(self.fir, "get_all"):
-                fir_findings = self.fir.get_all(case_id)
+            if hasattr(self.fir, "get_by_case"):  # self.exists fir check
+                fir_findings = self.sanitized_context_fetch(self.fir.get_by_case, tenant_id=tenant_id, case_id=case_id)
+            elif hasattr(self.fir, "get_all"):  # self.exists fir check
+                fir_findings = self.sanitized_context_fetch(self.fir.get_all, case_id)
             else:
                 fir_findings = []
 

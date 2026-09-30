@@ -40,8 +40,8 @@ class CorrelationConflict(BaseModel):
     Deterministic contradiction or temporal anomaly detected across evidence findings.
     """
     conflict_id: str = Field(description="Unique ID of conflict, e.g. CONF-001")
-    conflict_type: Literal["temporal_anomaly", "attitudinal_contradiction", "identity_mismatch", "hash_collision", "causality_violation"] = Field(
-        description="Category of deterministic conflict detected"
+    conflict_type: str = Field(
+        description="Category of deterministic conflict detected (e.g. timestamp_conflict, host_attribution_conflict, user_attribution_conflict, process_parent_conflict, artifact_identity_conflict, persistence_disagreement, malware_status_disagreement, severity_disagreement)"
     )
     description: str = Field(description="Detailed explanation of the contradiction")
     involved_finding_ids: List[str] = Field(default_factory=list, description="FIR finding IDs involved in conflict")
@@ -97,9 +97,13 @@ class Agent2Claim(BaseModel):
     )
 
     # ── Deterministic Validation Results (Enforced by code) ──
-    citation_verified: bool = Field(
+    citation_valid: bool = Field(
         default=False,
         description="True if every cited ID strictly exists in FIR findings or lineage"
+    )
+    citation_verified: bool = Field(
+        default=False,
+        description="Alias for citation_valid for backward compatibility"
     )
     invalid_citations: List[str] = Field(
         default_factory=list,
@@ -144,4 +148,9 @@ class Agent2Output(BaseModel):
     graph_metrics: Dict[str, Any] = Field(default_factory=dict)
     sanitization_summary: Dict[str, Any] = Field(default_factory=dict)
     execution_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] = "SUCCESS"
+    failure_type: Optional[str] = Field(
+        default=None,
+        description="Failure classification: NEO4J_UNAVAILABLE, GDS_UNAVAILABLE, MODEL_UNAVAILABLE, MALFORMED_OUTPUT, NO_EVIDENCE"
+    )
     error_message: Optional[str] = None
+

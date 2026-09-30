@@ -25,6 +25,10 @@ class Agent1Claim(BaseModel):
         default="medium",
         description="Assessed importance of evidence according to forensic rules"
     )
+    importance_reason: Optional[str] = Field(
+        default=None,
+        description="Evidence-backed explanation for high or critical priority rating"
+    )
     confidence_score: float = Field(
         description="Confidence score in range [0.0, 1.0]"
     )
@@ -42,9 +46,13 @@ class Agent1Claim(BaseModel):
     )
     
     # ── Deterministic Validation Results (Enforced by code, not LLM) ──
+    citation_valid: bool = Field(
+        default=False,
+        description="True if every cited ID strictly exists in FIR findings or case evidence lineage"
+    )
     citation_verified: bool = Field(
         default=False,
-        description="True if every cited ID strictly exists in FIR findings or lineage"
+        description="Alias for citation_valid for backward compatibility"
     )
     invalid_citations: List[str] = Field(
         default_factory=list,
@@ -64,7 +72,7 @@ class Agent1Claim(BaseModel):
     )
     semantic_support_verified: bool = Field(
         default=False,
-        description="True if independent Python validation code verified that underlying FIR evidence facts semantically support claim content"
+        description="True ONLY if independent verification proves semantic entailment. Citation existence alone does NOT count."
     )
     semantic_support_notes: Optional[str] = Field(
         default=None,
@@ -98,15 +106,19 @@ class Agent1Output(BaseModel):
     # ── Master Architecture Evidence Quality & Readiness Contracts ──
     evidence_trust_score: Optional[float] = Field(
         default=None,
-        description="Evidence Trust Score (ETS). Category D: Not yet defined by hardcoded formula; captured qualitatively."
+        description="Evidence Trust Score (ETS) computed deterministically based on findings."
     )
     evidence_quality_summary: Dict[str, Any] = Field(
         default_factory=dict,
-        description="Quality summary metrics including trust, coverage, and missing artifact breakdown."
+        description="Deterministic quality summary metrics including trust, coverage, and missing artifact breakdown."
     )
     investigation_readiness: Literal["READY", "LIMITED", "UNREADY"] = Field(
         default="READY",
         description="Assessed readiness of evidence base for downstream investigative reasoning."
+    )
+    readiness_blockers: List[str] = Field(
+        default_factory=list,
+        description="Deterministic hard blocker reasons if readiness is UNREADY or LIMITED."
     )
     possible_analyses: List[str] = Field(
         default_factory=list,
@@ -118,5 +130,10 @@ class Agent1Output(BaseModel):
     )
     
     execution_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] = "SUCCESS"
+    failure_type: Optional[str] = Field(
+        default=None,
+        description="Categorized failure classification: MODEL_UNAVAILABLE, MALFORMED_OUTPUT, NO_EVIDENCE, HARD_BLOCKER, etc."
+    )
     error_message: Optional[str] = None
+
 

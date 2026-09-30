@@ -74,6 +74,7 @@ class Agent2Validator:
                     invalid_citations.append(cid_clean)
 
             if invalid_citations:
+                claim.citation_valid = False
                 claim.citation_verified = False
                 claim.invalid_citations = invalid_citations
                 logger.warning(
@@ -81,10 +82,12 @@ class Agent2Validator:
                     claim.claim_id, invalid_citations
                 )
             elif cited:
+                claim.citation_valid = True
                 claim.citation_verified = True
                 claim.invalid_citations = []
             else:
                 # No citations provided
+                claim.citation_valid = False
                 claim.citation_verified = False
                 claim.invalid_citations = []
 

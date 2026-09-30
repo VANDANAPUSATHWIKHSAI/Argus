@@ -179,6 +179,9 @@ class RegistryParser:
                     profile, len(sections), len(artifacts),
                 )
 
+            if success_count == 0:
+                raise RegRipperExecutionError(f"RegRipper failed across all requested profiles: {self._profiles}")
+
             if artifacts:
                 logger.info("RegistryParser total (RegRipper): %d artifacts from %s", len(artifacts), src.name)
                 artifacts.extend(_check_timestomping(
@@ -186,6 +189,8 @@ class RegistryParser:
                 ))
                 return artifacts
         except Exception as e:
+            if isinstance(e, (RegRipperNotFoundError, RegRipperExecutionError)):
+                raise e
             logger.warning("RegRipper execution/lookup failed (%s). Falling back to native python-registry.", e)
 
         # 3. Native python-registry fallback path

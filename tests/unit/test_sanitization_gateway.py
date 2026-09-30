@@ -111,7 +111,8 @@ def test_xml_entity_escaping_and_active_content_inertness():
 
     # Active script content & html tags inside evidence
     html_content = "<script>alert('xss');</script> <b>User activity</b>"
-    res = gateway.sanitize(html_content, "event_summary")
+    with patch("sanitization.injection_detector.InjectionDetector.check_model", return_value=(False, 0.0)):
+        res = gateway.sanitize(html_content, "event_summary")
 
     # Special characters < and > inside evidence block must be entity-escaped
     assert "&lt;script&gt;alert('xss');&lt;/script&gt;" in res

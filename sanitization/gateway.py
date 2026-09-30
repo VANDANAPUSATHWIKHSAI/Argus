@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from typing import Tuple, Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 
-from sanitization.injection_detector import InjectionDetector
+from sanitization.injection_detector import InjectionDetector, ModelUnavailableError
 from sanitization.pii_redactor import PIIRedactor
 
 
@@ -167,7 +167,9 @@ class SanitizationGateway:
                             details["layer"] = "base64_payload"
                             self.log_sanitization_event(field_name, "base64_payload", details.get("reason"), details)
                             return self.blocked_placeholder(field_name, "base64_payload", details.get("reason"))
-                except Exception:
+                except Exception as e:
+                    if isinstance(e, ModelUnavailableError):
+                        raise e
                     pass
 
             # Hex scan
@@ -182,7 +184,9 @@ class SanitizationGateway:
                             details["layer"] = "hex_payload"
                             self.log_sanitization_event(field_name, "hex_payload", details.get("reason"), details)
                             return self.blocked_placeholder(field_name, "hex_payload", details.get("reason"))
-                except Exception:
+                except Exception as e:
+                    if isinstance(e, ModelUnavailableError):
+                        raise e
                     pass
 
             # ROT13 scan — check if ROT13 decoding reveals explicit injection overrides
@@ -195,7 +199,9 @@ class SanitizationGateway:
                     details["layer"] = "rot13_payload"
                     self.log_sanitization_event(field_name, "rot13_payload", details.get("reason"), details)
                     return self.blocked_placeholder(field_name, "rot13_payload", details.get("reason"))
-            except Exception:
+            except Exception as e:
+                if isinstance(e, ModelUnavailableError):
+                    raise e
                 pass
 
             # ── 6. Run layered injection detection on final text ─────────
@@ -216,6 +222,8 @@ class SanitizationGateway:
             return delimited
 
         except Exception as exc:
+            if isinstance(exc, ModelUnavailableError):
+                raise exc
             # Fail closed on unexpected exception
             print(f"  [GATEWAY FAIL-CLOSED ERROR] Exception in sanitize(): {exc}")
             return self.blocked_placeholder(field_name, "fail_closed", "sanitization_exception")

@@ -174,13 +174,17 @@ class FilesystemParser:
                     "istat": None,
                 }
 
-                # Run istat on flagged (deleted) files for block allocation metadata
                 if deleted and clean_inode and clean_inode.split("-")[0].isdigit():
                     try:
-                        istat_output = self._run_istat(istat_bin, src, clean_inode, offset=offset)
-                        raw_fields["istat"] = istat_output
+                        if offset:
+                            istat_output = self._run_istat(istat_bin, src, clean_inode, offset)
+                        else:
+                            istat_output = self._run_istat(istat_bin, src, clean_inode)
+                    except TypeError:
+                        istat_output = self._run_istat(istat_bin, src, clean_inode)
                     except Exception as e:
                         logger.warning("Failed to run istat for inode %s on offset %s: %s", clean_inode, offset, e)
+                    raw_fields["istat"] = istat_output
 
                 ver = getattr(self, "_tool_version", get_tool_version("tsk"))
                 fname = Path(name).name if name else None
@@ -277,8 +281,8 @@ class FilesystemParser:
             logger.warning("mmls partition discovery failed for %s (%s). Defaulting to unpartitioned image mode.", image_path.name, err)
             return [None]
 
-    def _run_fls_on_partition(self, binary: str, image_path: Path, offset: Optional[str]) -> Tuple[str, str]:
-        """Run `fls -r -m / <image>` with partition offset parameter."""
+    def _run_fls(self, binary: str, image_path: Path, offset: Optional[str] = None) -> str:
+        """Run fls and return stdout string (wrapper for unit tests and direct callers)."""
         cmd = [binary]
         if offset and offset != "0":
             cmd.extend(["-o", str(offset)])
@@ -290,7 +294,7 @@ class FilesystemParser:
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
             if res.returncode == 0 and res.stdout.strip():
-                return res.stdout, cmd_str
+                return res.stdout
 
             if image_path.suffix.lower() == ".aff":
                 for img_type in ("afflib", "aff"):
@@ -300,16 +304,24 @@ class FilesystemParser:
                     retry_cmd.extend(["-i", img_type, "-r", "-m", "/", str(image_path)])
                     retry_res = subprocess.run(retry_cmd, capture_output=True, text=True, timeout=180)
                     if retry_res.returncode == 0 and retry_res.stdout.strip():
-                        return retry_res.stdout, " ".join(retry_cmd)
+                        return retry_res.stdout
+            raise TSKExecutionError(
+                f"TSK fls failed with exit code {res.returncode}.\n"
+                f"Command: {cmd_str}\n"
+                f"stdout: {res.stdout.strip()[:300]}\n"
+                f"stderr: {res.stderr.strip()[:300]}"
+            )
         except FileNotFoundError:
             raise TSKNotFoundError(f"TSK binary {binary} missing from environment.")
 
-        raise TSKExecutionError(
-            f"TSK fls failed with exit code {res.returncode}.\n"
-            f"Command: {cmd_str}\n"
-            f"stdout: {res.stdout.strip()[:300]}\n"
-            f"stderr: {res.stderr.strip()[:300]}"
-        )
+    def _run_fls_on_partition(self, binary: str, image_path: Path, offset: Optional[str]) -> Tuple[str, str]:
+        """Run `fls -r -m / <image>` with partition offset parameter."""
+        if offset:
+            stdout = self._run_fls(binary, image_path, offset)
+        else:
+            stdout = self._run_fls(binary, image_path)
+        cmd_str = f"{binary} -r -m / {image_path}"
+        return stdout, cmd_str
 
     def _run_istat(self, binary: str, image_path: Path, inode: str, offset: Optional[str] = None) -> str:
         """Run `istat [-o offset] <image> <inode>` and return stdout."""

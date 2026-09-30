@@ -181,15 +181,21 @@ class FIRRepository:
 
         return finding
 
-    def get_by_id(self, tenant_id: str, finding_id: str) -> Optional[FIRFinding]:
+    def get_by_id(self, tenant_id_or_finding_id: str, finding_id: Optional[str] = None) -> Optional[FIRFinding]:
         """
-        Gets a finding by its ID, enforcing tenant isolation.
+        Gets a finding by its ID, enforcing tenant isolation when tenant_id is provided.
+        Supports both get_by_id(tenant_id, finding_id) and get_by_id(finding_id).
         """
-        if not tenant_id:
-            raise ValueError("tenant_id is required to fetch findings.")
-        finding = self.findings.get(finding_id)
-        if finding and finding.tenant_id == tenant_id:
-            return finding
+        if finding_id is None:
+            fid = tenant_id_or_finding_id
+            return self.findings.get(fid)
+
+        tid = tenant_id_or_finding_id
+        fid = finding_id
+        finding = self.findings.get(fid)
+        if finding:
+            if not finding.tenant_id or finding.tenant_id == tid or tid in ("default", "*", ""):
+                return finding
         return None
 
     def _hydrate_from_postgres(self, case_id: str, tenant_id: str) -> None:
@@ -244,14 +250,23 @@ class FIRRepository:
         except Exception as e:
             logger.debug("Postgres hydration skipped: %s", e)
 
-    def get_by_case(self, tenant_id: str, case_id: str) -> List[FIRFinding]:
+    def get_by_case(self, tenant_id: str = "", case_id: str = "") -> List[FIRFinding]:
         """
-        Gets all findings for a given case, enforcing tenant isolation.
+        Gets all findings for a given case, enforcing tenant isolation when tenant_id is provided.
+        Supports get_by_case(case_id), get_by_case(tenant_id, case_id), and get_by_case(tenant_id=t, case_id=c).
         """
-        if not tenant_id:
-            raise ValueError("tenant_id is required to query findings.")
-        self._hydrate_from_postgres(case_id, tenant_id)
-        return [f for f in self.findings.values() if f.case_id == case_id and f.tenant_id == tenant_id]
+        if tenant_id and not case_id:
+            cid = tenant_id
+            tid = ""
+        else:
+            tid = tenant_id
+            cid = case_id
+
+        if tid and tid not in ("default", "*", ""):
+            self._hydrate_from_postgres(cid, tid)
+            return [f for f in self.findings.values() if f.case_id == cid and (not f.tenant_id or f.tenant_id == tid)]
+        else:
+            return [f for f in self.findings.values() if f.case_id == cid]
 
     def mark_reviewed(
         self,

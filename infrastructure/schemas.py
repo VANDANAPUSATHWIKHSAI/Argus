@@ -83,6 +83,7 @@ class Evidence(BaseModel):
     """
     evidence_id:      str           = Field(default_factory=lambda: str(uuid.uuid4()))
     case_id:          str
+    tenant_id:        Optional[str] = None
     filename:         str
     file_path:        str                 # location of the raw bytes on disk (temp intake dir)
     uploaded_by:      str

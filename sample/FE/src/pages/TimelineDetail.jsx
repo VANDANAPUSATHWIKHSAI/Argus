@@ -4,29 +4,6 @@ import Sidebar from '../components/Sidebar';
 import NotificationMenu from '../components/NotificationMenu';
 import { fetchFindings } from '../js/api';
 
-const STATIC_FALLBACK_TIMELINE = [
-  {
-    id: 'T-001',
-    time: 'Oct 24, 2026 - 14:00:00',
-    category: 'Investigation',
-    severity: 'low',
-    title: 'Case Initialized',
-    desc: 'New investigation case initialized in response to suspicious network activity alerts from the SOC.',
-    source: 'System Audit',
-    details: 'Status: Active Investigation'
-  },
-  {
-    id: 'T-002',
-    time: 'Oct 24, 2026 - 14:15:30',
-    category: 'Evidence',
-    severity: 'low',
-    title: 'Evidence Ingested',
-    desc: 'Digital evidence artifacts ingested for forensic processing.',
-    source: 'System Intake',
-    details: 'Status: Ingestion & Parser Routing Complete'
-  }
-];
-
 const SEVERITY_COLORS = {
   critical: '#ef4444',
   high: '#f97316',
@@ -43,16 +20,18 @@ const TimelineDetail = () => {
   const [filter, setFilter] = useState('all');
   const [timelineData, setTimelineData] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const loadTimeline = async () => {
       if (!activeCaseId) {
-        setTimelineData(STATIC_FALLBACK_TIMELINE);
+        setTimelineData([]);
         setLoading(false);
         return;
       }
 
       setLoading(true);
+      setError(null);
       try {
         const res = await fetchFindings(activeCaseId);
         const dataList = Array.isArray(res) ? res : (res.data || []);
@@ -76,11 +55,12 @@ const TimelineDetail = () => {
           mapped.sort((a, b) => new Date(a.time) - new Date(b.time));
           setTimelineData(mapped);
         } else {
-          setTimelineData(STATIC_FALLBACK_TIMELINE);
+          setTimelineData([]);
         }
       } catch (err) {
         console.error('Error fetching timeline findings:', err);
-        setTimelineData(STATIC_FALLBACK_TIMELINE);
+        setError(err.message || 'Failed to load timeline events for this case.');
+        setTimelineData([]);
       } finally {
         setLoading(false);
       }
@@ -156,6 +136,17 @@ const TimelineDetail = () => {
             <div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)' }}>
               <div className="spinner" style={{ margin: '0 auto 12px auto' }}></div>
               Loading timeline events for case {activeCaseId}...
+            </div>
+          ) : error ? (
+            <div style={{ padding: '32px', textAlign: 'center', background: 'rgba(239,68,68,0.1)', border: '1px solid #ef4444', borderRadius: '8px', color: '#ef4444' }}>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '16px' }}>Timeline Retrieval Error</h4>
+              <p style={{ margin: 0, fontSize: '14px' }}>{error}</p>
+            </div>
+          ) : filteredData.length === 0 ? (
+            <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '14px', margin: 0 }}>
+                {!activeCaseId ? 'No active case selected. Please select a case from the Dashboard.' : 'No forensic findings are available for this case yet.'}
+              </p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', position: 'relative', paddingLeft: '20px' }}>

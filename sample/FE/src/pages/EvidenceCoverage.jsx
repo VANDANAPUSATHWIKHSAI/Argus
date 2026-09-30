@@ -104,14 +104,6 @@ export default function EvidenceCoverage() {
       if (caseId) {
         const raw = await fetchEvidenceForCase(caseId).catch(() => ({ data: [] }));
         evidenceList = raw.data || raw || [];
-      } else {
-        // Mock data if no case
-        evidenceList = [
-          { evidence_id: 1, filename: 'PC-01-Security.evtx', status: 'processing', metadata: { size_bytes: 125829120, sha256: 'a1b2c3d4e5f6' }, upload_timestamp: new Date().toISOString() },
-          { evidence_id: 2, filename: 'network_traffic.pcap', status: 'completed', metadata: { size_bytes: 891289600, sha256: 'f1e2d3c4b5a6' }, upload_timestamp: new Date(Date.now() - 3600000).toISOString() },
-          { evidence_id: 3, filename: 'firewall.log', status: 'processing', metadata: { size_bytes: 47185920, sha256: '9a8b7c6d5e4f' }, upload_timestamp: new Date().toISOString() },
-          { evidence_id: 4, filename: 'memdump.raw', status: 'error', metadata: { size_bytes: 2576980377, sha256: '112233445566', error: 'Unsupported compression format' }, upload_timestamp: new Date(Date.now() - 7200000).toISOString() },
-        ];
       }
 
       // Map submitted evidence

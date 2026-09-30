@@ -46,33 +46,7 @@ const NotificationMenu = () => {
           return { id: `${a.case_id}-${i}`, title, time };
         });
 
-        let mockNotifs = [];
-        if (isAdmin) {
-          mockNotifs = [
-            { id: 'mock-a1', title: 'System health check completed successfully', time: '10m ago' },
-            { id: 'mock-a2', title: 'New analyst account created: Jane Doe', time: '1h ago' },
-            { id: 'mock-a3', title: 'Weekly compliance report generated', time: '2h ago' }
-          ];
-        } else if (currentUser?.role === 'senior_analyst') {
-          mockNotifs = [
-            { id: 'mock-s1', title: 'Case ARGUS_952 is ready for final review', time: '5m ago' },
-            { id: 'mock-s2', title: 'High severity finding detected in PC-01', time: '20m ago' },
-            { id: 'mock-s3', title: 'Agent consensus reached on lateral movement', time: '45m ago' }
-          ];
-        } else {
-          mockNotifs = [
-            { id: 'mock-1', title: 'Evidence processing failed — memdump.raw', time: '5m ago' },
-            { id: 'mock-2', title: 'Evidence uploaded successfully — PC-01-Security.evtx', time: '12m ago' },
-            { id: 'mock-3', title: 'Evidence parsing started — firewall.log', time: '15m ago' }
-          ];
-        }
-
-        const finalNotifs = [
-          ...mockNotifs,
-          ...mapped
-        ];
-
-        setNotifications(finalNotifs);
+        setNotifications(mapped);
       } catch (e) {
         console.error('Notification load failed:', e);
       }

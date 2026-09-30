@@ -1,3 +1,5 @@
+import { DEFAULT_TENANT_ID } from './api';
+
 class SanitizedApp {
   constructor() {
     this.findingsData = [];
@@ -29,7 +31,7 @@ class SanitizedApp {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/cases/${caseId}/findings`, {
         headers: { 
-          'X-Tenant-ID': 'dev-team',
+          'X-Tenant-ID': DEFAULT_TENANT_ID,
           'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         }
       });

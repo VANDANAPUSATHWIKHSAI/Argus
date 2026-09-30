@@ -1,3 +1,5 @@
+import { DEFAULT_TENANT_ID } from './api';
+
 class CaseManager {
   constructor() {
     this.checkAuth();
@@ -154,7 +156,7 @@ class CaseManager {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Tenant-ID': 'dev-team',
+          'X-Tenant-ID': DEFAULT_TENANT_ID,
           'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         },
         body: JSON.stringify(payload)
@@ -201,7 +203,7 @@ class CaseManager {
           await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/evidence/upload`, {
             method: 'POST',
             headers: {
-              'X-Tenant-ID': 'dev-team',
+              'X-Tenant-ID': DEFAULT_TENANT_ID,
               'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
             },
             body: formData

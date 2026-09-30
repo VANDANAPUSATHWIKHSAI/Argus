@@ -1,3 +1,5 @@
+import { DEFAULT_TENANT_ID } from './api';
+
 // ==========================================================================
 // ARGUS - Digital Forensics Interactive Graph Engine
 // ==========================================================================
@@ -555,7 +557,7 @@ window.onload = async () => {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/cases/${caseId}`, {
         headers: { 
-          'X-Tenant-ID': 'dev-team',
+          'X-Tenant-ID': DEFAULT_TENANT_ID,
           'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         }
       });
@@ -563,7 +565,7 @@ window.onload = async () => {
         const stats = await response.json();
         const findingsResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/cases/${caseId}/findings`, {
           headers: { 
-            'X-Tenant-ID': 'dev-team',
+            'X-Tenant-ID': DEFAULT_TENANT_ID,
             'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
           }
         });

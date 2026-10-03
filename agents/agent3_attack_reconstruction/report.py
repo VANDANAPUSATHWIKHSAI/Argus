@@ -41,7 +41,7 @@ class Agent3ReportGenerator:
                     path_events.append(event)
             
         if path_events:
-            report_lines.append("\n      ↓\n".join(path_events))
+            report_lines.append("\n      | \n      v \n".join(path_events))
         else:
             report_lines.append("No infection path could be reconstructed.")
             

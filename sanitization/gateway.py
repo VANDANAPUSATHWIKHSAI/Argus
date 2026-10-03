@@ -256,7 +256,34 @@ class SanitizationGateway:
 
             fact_raw = getattr(finding, "sanitized_fact", None) or getattr(finding, "fact", "") or ""
             
-            xml_block = self.sanitize(fact_raw, field_name="fact")
+            # Extract timestamp string safely
+            ts_str = ""
+            ts_val = getattr(finding, "timestamp", None)
+            if isinstance(ts_val, datetime):
+                ts_str = ts_val.isoformat()
+            elif ts_val:
+                ts_str = str(ts_val)
+
+            ev_ref_str = ", ".join(ev_ref) if ev_ref else ""
+            mitre_str = getattr(finding, "mitre_mapping", None) or ""
+            layer_str = getattr(finding, "layer", "unknown")
+            sev_str = getattr(finding, "severity", "informational")
+            conf_val = getattr(finding, "confidence", 1.0)
+
+            sanitized_fact_xml = self.sanitize(fact_raw, field_name="fact")
+            xml_block = (
+                f'<finding_evidence '
+                f'finding_id="{html.escape(str(finding_id))}" '
+                f'layer="{html.escape(str(layer_str))}" '
+                f'source_artifact_id="{html.escape(str(source_artifact_id or ""))}" '
+                f'evidence_reference="{html.escape(ev_ref_str)}" '
+                f'timestamp="{html.escape(ts_str)}" '
+                f'severity="{html.escape(str(sev_str))}" '
+                f'confidence="{conf_val}" '
+                f'mitre_mapping="{html.escape(str(mitre_str))}">\n'
+                f'{sanitized_fact_xml}\n'
+                f'</finding_evidence>'
+            )
             
             # Check injection gate result
             gate_res = self.detector.is_injection(fact_raw, is_unstructured=True)
@@ -281,9 +308,9 @@ class SanitizationGateway:
                 evidence_reference=ev_ref,
                 contributing_correlation_ids=contrib_ids,
                 timestamp=getattr(finding, "timestamp", None),
-                severity=getattr(finding, "severity", "informational"),
-                confidence=getattr(finding, "confidence", 1.0),
-                layer=getattr(finding, "layer", "unknown"),
+                severity=sev_str,
+                confidence=conf_val,
+                layer=layer_str,
                 mitre_mapping=getattr(finding, "mitre_mapping", None),
                 sanitized_fact=redacted_text,
                 xml_evidence_block=xml_block,

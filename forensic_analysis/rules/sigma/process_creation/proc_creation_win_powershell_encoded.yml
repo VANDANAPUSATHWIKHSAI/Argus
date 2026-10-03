@@ -1,0 +1,22 @@
+title: Encoded PowerShell Command Execution
+id: e4a6b290-7d72-4d2c-92d5-9430c5e7514a
+status: test
+description: Detects execution of PowerShell with suspicious encoded command parameters
+author: Argus Rule Team
+date: 2026-10-04
+level: medium
+tags:
+    - attack.t1059.001
+    - attack.execution
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_cmd:
+        CommandLine|contains:
+            - '-EncodedCommand'
+            - '-enc '
+            - '-e '
+    condition: selection_cmd
+falsepositives:
+    - Legitimate administrative scripts

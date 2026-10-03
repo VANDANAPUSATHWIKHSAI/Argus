@@ -16,6 +16,7 @@ from forensic_analysis.log_analysis.auth_analyzer import AuthAnalyzer
 from forensic_analysis.log_analysis.process_creation_analyzer import ProcessCreationAnalyzer
 from forensic_analysis.log_analysis.powershell_analyzer import PowerShellAnalyzer
 from forensic_analysis.log_analysis.hayabusa_triage_analyzer import HayabusaTriageAnalyzer
+from forensic_analysis.rules.sigma_engine import SigmaRuleEngine
 from preprocessing.fcr_engine.schemas import CorrelationRecord
 from preprocessing.schemas import Artifact
 
@@ -27,11 +28,12 @@ class LogAnalysisEngine:
     Orchestrates deterministic forensic analysis over normalized log telemetry.
     """
 
-    def __init__(self):
+    def __init__(self, sigma_rules_dir: Optional[str] = None):
         self.auth_analyzer = AuthAnalyzer()
         self.process_creation_analyzer = ProcessCreationAnalyzer()
         self.powershell_analyzer = PowerShellAnalyzer()
         self.hayabusa_triage_analyzer = HayabusaTriageAnalyzer()
+        self.sigma_engine = SigmaRuleEngine(rules_dir=sigma_rules_dir)
 
     def analyze(
         self,
@@ -92,6 +94,10 @@ class LogAnalysisEngine:
 
             if hayabusa_artifacts:
                 raw_findings.extend(self.hayabusa_triage_analyzer.analyze(case_id, hayabusa_artifacts, fcr_ref))
+
+            # Evaluate Sigma rules across log artifacts
+            if fcr_artifacts:
+                raw_findings.extend(self.sigma_engine.evaluate(case_id, fcr_artifacts, fcr_ref))
 
         # Safe deterministic deduplication across overlapping FCRs
         deduped: Dict[tuple, Finding] = {}

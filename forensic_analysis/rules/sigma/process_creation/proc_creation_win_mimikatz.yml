@@ -1,0 +1,28 @@
+title: Mimikatz Execution Detection
+id: 56f293b6-28fb-4559-994c-8800a747aa13
+status: test
+description: Detects execution of Mimikatz LSASS password dumper command line parameters
+author: Argus Rule Team
+date: 2026-10-04
+references:
+    - https://github.com/SigmaHQ/sigma
+level: high
+tags:
+    - attack.t1003.001
+    - attack.credential_access
+logsource:
+    category: process_creation
+    product: windows
+detection:
+    selection_img:
+        Image|endswith:
+            - '\mimikatz.exe'
+    selection_cmd:
+        CommandLine|contains:
+            - 'sekurlsa::logonpasswords'
+            - 'lsadump::sam'
+            - 'lsadump::secrets'
+            - 'crypto::certificates'
+    condition: selection_img or selection_cmd
+falsepositives:
+    - Authorized penetration testing

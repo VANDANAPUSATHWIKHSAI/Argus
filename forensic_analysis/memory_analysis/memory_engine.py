@@ -30,6 +30,7 @@ from forensic_analysis.memory_analysis.injection_analyzer import InjectionAnalyz
 from forensic_analysis.memory_analysis.rootkit_analyzer import RootkitAnalyzer
 from forensic_analysis.memory_analysis.credential_analyzer import CredentialAnalyzer
 from forensic_analysis.memory_analysis.timeline_analyzer import TimelineAnalyzer
+from forensic_analysis.rules.yara_engine import YaraRuleEngine
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +38,10 @@ logger = logging.getLogger(__name__)
 class MemoryAnalysisEngine:
     """
     Deterministic Memory Forensic Analysis Engine.
-    Orchestrates the 7 memory sub-analyzers over input FCRs and Artifact stores.
+    Orchestrates memory sub-analyzers over input FCRs and Artifact stores.
     """
 
-    def __init__(self):
+    def __init__(self, yara_rules_dir: Optional[str] = None):
         self.process_analyzer = ProcessAnalyzer()
         self.dll_analyzer = DLLAnalyzer()
         self.network_analyzer = MemoryNetworkAnalyzer()
@@ -48,6 +49,7 @@ class MemoryAnalysisEngine:
         self.rootkit_analyzer = RootkitAnalyzer()
         self.credential_analyzer = CredentialAnalyzer()
         self.timeline_analyzer = TimelineAnalyzer()
+        self.yara_engine = YaraRuleEngine(rules_dir=yara_rules_dir)
 
     def analyze(
         self,
@@ -158,6 +160,12 @@ class MemoryAnalysisEngine:
                     raw_findings.extend(self.timeline_analyzer.analyze(timeline_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("TimelineAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
+
+            try:
+                if resolved_artifacts:
+                    raw_findings.extend(self.yara_engine.evaluate_artifacts(case_id, resolved_artifacts, fcr_id))
+            except Exception as e:
+                logger.error("YaraRuleEngine failed on FCR %s: %s", fcr_id, e, exc_info=True)
 
         # Deterministic artifact-level deduplication across overlapping FCRs
         deduped: Dict[tuple, Finding] = {}

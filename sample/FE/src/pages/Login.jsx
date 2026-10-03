@@ -385,7 +385,7 @@ const Login = () => {
       <header className="argus-header" style={{zIndex: 10, position: 'relative'}}>
         <div className="header-left">
           <div className="header-logo-wrapper" style={{ padding: 0, overflow: 'visible', border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', alignItems: 'center' }}>
-            <img src="/argus_logo_new.png" alt="ARGUS Logo" style={{ width: '44px', height: '44px', objectFit: 'contain', display: 'block', mixBlendMode: 'multiply' }} />
+            <img src="/argus_logo_new.png" alt="ARGUS Logo" className="argus-logo-img" style={{ width: '44px', height: '44px', objectFit: 'contain', display: 'block' }} />
           </div>
           <div className="header-brand-title">
             <span className="brand-name">ARGUS</span>
@@ -499,7 +499,7 @@ const Login = () => {
             
             {/* CARD TOP LOGO */}
             <div className="card-logo-wrapper" style={{ overflow: 'visible', border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', justifyContent: 'center' }}>
-              <img src="/argus_logo_new.png" alt="ARGUS Logo" style={{ width: '90px', height: '90px', objectFit: 'contain', display: 'block', mixBlendMode: 'multiply' }} />
+              <img src="/argus_logo_new.png" alt="ARGUS Logo" className="argus-logo-img" style={{ width: '90px', height: '90px', objectFit: 'contain', display: 'block' }} />
             </div>
 
             <div className="card-title-group">

@@ -235,6 +235,9 @@ input::placeholder, textarea::placeholder {
 .logo-text h1 { font-size: 18px; font-weight: 700; letter-spacing: 0.2px; }
 .logo-text p { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;}
 
+.argus-logo-img { mix-blend-mode: multiply; }
+[data-theme="dark"] .argus-logo-img { mix-blend-mode: screen; filter: invert(1) hue-rotate(180deg) brightness(1.5); }
+
 .nav-menu { display: flex; flex-direction: column; gap: 8px; padding: 0 16px; flex: 1; }
 .nav-item { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-radius: var(--radius-md); color: var(--text-muted); text-decoration: none; font-weight: 500; transition: all 0.2s; position: relative; }
 .nav-item:hover { background: var(--bg-app); color: var(--text-main); }

@@ -29,7 +29,7 @@ const Sidebar = () => {
     <aside className="sidebar">
       <div className="sidebar-logo">
         <div className="logo-wrapper" style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'visible', flexShrink: 0, background: 'transparent' }}>
-          <img src="/argus_logo_new.png" alt="ARGUS Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }} />
+          <img src="/argus_logo_new.png" alt="ARGUS Logo" className="argus-logo-img" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
         <div className="logo-text">
           <h1>ARGUS</h1>

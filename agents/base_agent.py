@@ -124,7 +124,7 @@ class BaseAgent(ABC):
         "sha256_hash", "repository_path", "filename", "file_path", "type",
         "tenant_id", "finding_id", "source_artifact_id", "evidence_reference",
         "evidence_ref", "finding_fingerprint", "evidence_ids",
-        "cited_evidence_ids", "contributing_correlation_ids"
+        "cited_evidence_ids", "contributing_correlation_ids", "fact", "sanitized_fact"
     }
 
     def _sanitize_recursive(self, data, field_name: str):

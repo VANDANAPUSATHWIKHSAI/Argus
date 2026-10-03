@@ -15,6 +15,15 @@ class InfectionPath(BaseModel):
     citation_verified: bool = Field(default=False)
     invalid_citations: List[str] = Field(default_factory=list)
 
+class AttackPathStep(BaseModel):
+    step_number: int = Field(description="Step sequence number in attack path")
+    stage: str = Field(description="Kill-chain stage (e.g. Initial Access, Execution, Lateral Movement)")
+    description: str = Field(description="Detailed description of the attack step")
+    evidence_ids: List[str] = Field(default_factory=list, description="Citations to supporting evidence")
+    confidence: float = Field(default=0.85, description="Confidence score [0.0, 1.0]")
+    citation_verified: bool = Field(default=False)
+    invalid_citations: List[str] = Field(default_factory=list)
+
 class AttackTimelineEvent(BaseModel):
     timestamp: str = Field(description="Chronological timestamp")
     event: str = Field(description="Description of the event")
@@ -59,6 +68,7 @@ class Agent3Output(BaseModel):
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     
     infection_path: InfectionPath
+    attack_path: List[AttackPathStep] = Field(default_factory=list, description="Step-by-step chronological attack path")
     attack_timeline: List[AttackTimelineEvent] = Field(default_factory=list)
     attack_chain: List[AttackChainStage] = Field(default_factory=list)
     lateral_movement: List[LateralMovement] = Field(default_factory=list)

@@ -26,7 +26,7 @@ from models.llm import LLMLoader
 from config.settings import settings
 
 from agents.agent3_attack_reconstruction.schemas import (
-    Agent3Output, InfectionPath, AttackTimelineEvent, AttackChainStage,
+    Agent3Output, InfectionPath, AttackPathStep, AttackTimelineEvent, AttackChainStage,
     LateralMovement, MissingExpectedEvent
 )
 from agents.agent3_attack_reconstruction.path_builder import CandidatePathBuilder
@@ -225,6 +225,7 @@ class AttackReconstructionAgent(BaseAgent):
                     tenant_id=tenant_id,
                     model_used=self.model_name,
                     infection_path=InfectionPath(**norm_data["infection_path"]),
+                    attack_path=[AttackPathStep(**x) for x in norm_data["attack_path"]],
                     attack_timeline=[AttackTimelineEvent(**x) for x in norm_data["attack_timeline"]],
                     attack_chain=[AttackChainStage(**x) for x in norm_data["attack_chain"]],
                     lateral_movement=[LateralMovement(**x) for x in norm_data["lateral_movement"]],
@@ -333,6 +334,19 @@ class AttackReconstructionAgent(BaseAgent):
             f"Identified infection entry point and {len(timeline_events)} chronological timeline events."
         )
 
+        attack_path_steps = []
+        for idx, te in enumerate(timeline_events, 1):
+            attack_path_steps.append(
+                AttackPathStep(
+                    step_number=idx,
+                    stage=te.stage,
+                    description=te.event,
+                    evidence_ids=te.evidence_ids,
+                    confidence=te.confidence,
+                    citation_verified=True
+                )
+            )
+
         return Agent3Output(
             agent_id="agent_3",
             execution_status="SUCCESS",
@@ -342,6 +356,7 @@ class AttackReconstructionAgent(BaseAgent):
             tenant_id=tenant_id,
             model_used=self.model_name,
             infection_path=inf_path,
+            attack_path=attack_path_steps,
             attack_timeline=timeline_events,
             attack_chain=chain_stages,
             lateral_movement=lateral_movs,

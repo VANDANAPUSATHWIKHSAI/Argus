@@ -47,7 +47,15 @@ class Agent3ReportGenerator:
             
         report_lines.append("")
 
-        # 2. ATTACK TIMELINE
+        # 2. CHRONOLOGICAL ATTACK PATH
+        if output.attack_path:
+            report_lines.extend(["ATTACK PATH", "-----------"])
+            for step in sorted(output.attack_path, key=lambda x: x.step_number):
+                cites = Agent3ReportGenerator.format_citations(step.evidence_ids, step.invalid_citations)
+                report_lines.append(f"Step {step.step_number} [{step.stage}]: {step.description} (Evidence: {cites})")
+            report_lines.append("")
+
+        # 3. ATTACK TIMELINE
         report_lines.extend(["ATTACK TIMELINE", "---------------"])
         if not output.attack_timeline and not output.missing_expected_events:
             report_lines.append("No timeline events reconstructed.")
@@ -67,7 +75,7 @@ class Agent3ReportGenerator:
 
         report_lines.append("")
 
-        # 3. ATTACK RECONSTRUCTION REPORT
+        # 4. ATTACK RECONSTRUCTION REPORT
         report_lines.extend(["ATTACK RECONSTRUCTION REPORT", "----------------------------"])
         
         report_lines.append(f"CONFIRMED RECONSTRUCTION:")

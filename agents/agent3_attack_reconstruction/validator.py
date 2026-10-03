@@ -8,7 +8,7 @@ schema normalization, and grounded confidence calculation.
 import logging
 from typing import List, Set, Tuple, Any, Dict
 from agents.agent3_attack_reconstruction.schemas import (
-    Agent3Output, InfectionPath, AttackTimelineEvent, AttackChainStage, LateralMovement, MissingExpectedEvent
+    Agent3Output, InfectionPath, AttackPathStep, AttackTimelineEvent, AttackChainStage, LateralMovement, MissingExpectedEvent
 )
 
 logger = logging.getLogger(__name__)
@@ -78,7 +78,27 @@ class Agent3Validator:
             "confidence": max(0.0, min(1.0, inf_conf))
         }
 
-        # 2. Attack Timeline normalization
+        # 2. Attack Path normalization
+        raw_path = data.get("attack_path") or []
+        cleaned_path = []
+        if isinstance(raw_path, list):
+            for idx, item in enumerate(raw_path, 1):
+                if isinstance(item, dict):
+                    step_num = int(item.get("step_number") or idx)
+                    stg = str(item.get("stage") or item.get("phase") or "Execution")
+                    desc = str(item.get("description") or item.get("event") or item.get("summary") or f"Attack step {idx}")
+                    ev_ids = _clean_ids(item.get("evidence_ids") or item.get("citations") or item.get("evidence"))
+                    conf = float(item.get("confidence") or 0.85)
+                    cleaned_path.append({
+                        "step_number": step_num,
+                        "stage": stg,
+                        "description": desc,
+                        "evidence_ids": ev_ids,
+                        "confidence": max(0.0, min(1.0, conf))
+                    })
+        data["attack_path"] = cleaned_path
+
+        # 3. Attack Timeline normalization
         raw_timeline = data.get("attack_timeline") or []
         cleaned_timeline = []
         if isinstance(raw_timeline, list):
@@ -100,7 +120,7 @@ class Agent3Validator:
                     })
         data["attack_timeline"] = cleaned_timeline
 
-        # 3. Attack Chain normalization
+        # 4. Attack Chain normalization
         raw_chain = data.get("attack_chain") or []
         cleaned_chain = []
         if isinstance(raw_chain, list):
@@ -124,7 +144,7 @@ class Agent3Validator:
                     })
         data["attack_chain"] = cleaned_chain
 
-        # 4. Lateral Movement normalization
+        # 5. Lateral Movement normalization
         raw_lm = data.get("lateral_movement") or []
         cleaned_lm = []
         if isinstance(raw_lm, list):
@@ -144,7 +164,7 @@ class Agent3Validator:
                     })
         data["lateral_movement"] = cleaned_lm
 
-        # 5. Missing Expected Events normalization
+        # 6. Missing Expected Events normalization
         raw_missing = data.get("missing_expected_events") or []
         cleaned_missing = []
         if isinstance(raw_missing, list):
@@ -195,6 +215,8 @@ class Agent3Validator:
         valid_universe = valid_finding_ids.union(valid_lineage_ids)
         
         self.validate_citations(output.infection_path, valid_universe)
+        for step in output.attack_path:
+            self.validate_citations(step, valid_universe)
         for evt in output.attack_timeline:
             self.validate_citations(evt, valid_universe)
         for stg in output.attack_chain:
@@ -203,7 +225,7 @@ class Agent3Validator:
             self.validate_citations(lm, valid_universe)
 
         # Grounded overall confidence score computation
-        all_components = [output.infection_path] + output.attack_timeline + output.attack_chain + output.lateral_movement
+        all_components = [output.infection_path] + output.attack_path + output.attack_timeline + output.attack_chain + output.lateral_movement
         if all_components:
             verified_count = sum(1 for c in all_components if getattr(c, "citation_verified", False))
             total_count = len(all_components)

@@ -17,13 +17,14 @@ logger = logging.getLogger(__name__)
 
 # Basic forensic stage keyword mapping for candidate path ordering
 STAGE_PATTERNS = {
-    "Initial Access": [r"phish", r"email", r"ingress", r"attachment", r"exploit", r"web_access", r"download"],
-    "Execution": [r"powershell", r"cmd", r"execution", r"process_create", r"script", r"vbs", r"bat", r"wmi"],
-    "Persistence": [r"run_key", r"scheduled_task", r"service_create", r"registry", r"startup"],
-    "Privilege Escalation": [r"system", r"uac", r"impersonat", r"privilege"],
-    "Credential Access": [r"lsass", r"mimikatz", r"dump", r"vault", r"sam_hive", r"browser_pass"],
-    "Lateral Movement": [r"smb", r"rdp", r"psexec", r"winrm", r"remote_logon", r"4624"],
-    "Exfiltration": [r"exfil", r"outbound", r"upload", r"mega", r"dropbox"],
+    "Initial Access": [r"phish", r"malicious_attachment", r"exploit", r"ingress_exploit", r"drive_by_download"],
+    "Execution": [r"powershell", r"cmd", r"process_create", r"script", r"vbs", r"bat", r"wmi"],
+    "Persistence": [r"run_key", r"scheduled_task", r"service_create", r"startup"],
+    "Privilege Escalation": [r"system_priv", r"uac_bypass", r"impersonat"],
+    "Credential Access": [r"lsass", r"mimikatz", r"sam_hive", r"dump_credentials"],
+    "Lateral Movement": [r"smb", r"rdp", r"psexec", r"winrm", r"remote_logon"],
+    "Exfiltration": [r"exfil", r"outbound_data", r"upload_mega"],
+    "Observed User Activity": [r"google", r"search", r"chrome", r"firefox", r"history", r"browser", r"url", r"download"]
 }
 
 class CandidatePathBuilder:
@@ -170,12 +171,12 @@ class CandidatePathBuilder:
         }
 
     def _classify_stage(self, text: str) -> str:
-        text_lower = text.lower()
+        text_lower = str(text or "").lower()
         for stage, patterns in STAGE_PATTERNS.items():
             for pat in patterns:
                 if re.search(pat, text_lower):
                     return stage
-        return "Execution"
+        return "Observed User Activity"
 
     def _extract_entities(self, finding: Any, text: str) -> Dict[str, Set[str]]:
         entities = defaultdict(set)

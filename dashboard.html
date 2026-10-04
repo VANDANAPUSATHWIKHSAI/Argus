@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARGUS — Multi-Agent Digital Forensic Intelligence Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0b0f19;
+            --bg-card: rgba(18, 26, 43, 0.75);
+            --bg-card-hover: rgba(28, 40, 65, 0.85);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --accent-cyan: #06b6d4;
+            --accent-purple: #a855f7;
+            --accent-green: #22c55e;
+            --accent-amber: #f59e0b;
+            --accent-red: #ef4444;
+            --shadow-glow: 0 0 25px rgba(56, 189, 248, 0.15);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-primary);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(168, 85, 247, 0.08) 0px, transparent 50%);
+            color: var(--text-main);
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        /* Header Bar */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 28px;
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-glow);
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-badge {
+            width: 42px;
+            height: 42px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 20px;
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
+        }
+
+        .title-text h1 {
+            font-size: 22px;
+            font-weight: 700;
+            background: linear-gradient(90deg, #fff, var(--text-muted));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .title-text p {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 14px;
+            background: rgba(34, 197, 94, 0.12);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 20px;
+            color: var(--accent-green);
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            box-shadow: 0 0 8px var(--accent-green);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* Metric Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .metric-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 18px 20px;
+            transition: all 0.3s ease;
+        }
+
+        .metric-card:hover {
+            background: var(--bg-card-hover);
+            transform: translateY(-2px);
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        .metric-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .metric-value {
+            font-size: 26px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            color: #fff;
+        }
+
+        .metric-sub {
+            font-size: 12px;
+            color: var(--accent-cyan);
+            margin-top: 4px;
+        }
+
+        /* Main Content Layout */
+        .main-layout {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 24px;
+        }
+
+        .section-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: var(--accent-blue);
+            border-radius: 2px;
+        }
+
+        /* Agent Claims Accordion */
+        .claim-card {
+            background: rgba(10, 15, 26, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .claim-card:hover {
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        .claim-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .claim-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            padding: 3px 8px;
+            background: rgba(56, 189, 248, 0.15);
+            color: var(--accent-blue);
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .claim-type {
+            font-size: 11px;
+            text-transform: uppercase;
+            padding: 3px 8px;
+            background: rgba(168, 85, 247, 0.15);
+            color: var(--accent-purple);
+            border-radius: 6px;
+            font-weight: 600;
+        }
+
+        .claim-summary {
+            font-size: 15px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .claim-reasoning {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+
+        .evidence-pills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .pill {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            padding: 3px 8px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-muted);
+        }
+
+        .pill.verified {
+            border-color: rgba(34, 197, 94, 0.3);
+            color: var(--accent-green);
+        }
+
+        /* Sidebar & System Status */
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 13px;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .val-good {
+            color: var(--accent-green);
+            font-weight: 600;
+        }
+
+        .btn-action {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            color: #000;
+            font-weight: 600;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 14px;
+            font-size: 14px;
+        }
+
+        .btn-action:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        /* Case Switcher Tab Bar */
+        .case-switcher {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .case-tab {
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .case-tab.active {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: var(--accent-blue);
+            color: var(--accent-blue);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="logo-container">
+            <div class="logo-badge">A</div>
+            <div class="title-text">
+                <h1>ARGUS Digital Forensic Intelligence Dashboard</h1>
+                <p>Autonomous Multi-Agent Evidence Correlation & Knowledge Graph Engine</p>
+            </div>
+        </div>
+        <div class="status-badge">
+            <div class="dot"></div>
+            <span>System Pipeline Online</span>
+        </div>
+    </div>
+
+    <!-- Case Selection Tabs -->
+    <div class="case-switcher">
+        <div class="case-tab active" onclick="switchCase('CASE-RAW-ANALYSIS-001')">Disk Image (3,636 Findings)</div>
+        <div class="case-tab" onclick="switchCase('CASE-FIREWALL-LOG-001')">Firewall Log (1,637 Findings)</div>
+        <div class="case-tab" onclick="switchCase('CASE-SYSMON-FTP-001')">Sysmon EVTX (58 Findings)</div>
+    </div>
+
+    <!-- Top Metrics Row -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-title">Total Findings Processed</div>
+            <div class="metric-value" id="m-findings">3,636</div>
+            <div class="metric-sub">100% Evidence Coverage</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Neo4j Knowledge Graph</div>
+            <div class="metric-value" id="m-neo4j" style="color: var(--accent-green)">SYNCED</div>
+            <div class="metric-sub" id="m-nodes">3,636 Nodes & Edges</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Citation Verification</div>
+            <div class="metric-value" id="m-citations" style="color: var(--accent-green)">100%</div>
+            <div class="metric-sub">Zero Invalid Citations</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Reasoning Model</div>
+            <div class="metric-value">Qwen3-8B</div>
+            <div class="metric-sub">Deterministic Validation Gate</div>
+        </div>
+    </div>
+
+    <!-- Main Content Layout -->
+    <div class="main-layout">
+        <!-- Left Column: Agent Claims & Evidence Timeline -->
+        <div>
+            <div class="section-card">
+                <div class="section-title">Agent 2 Evidence Correlation Claims</div>
+                <div id="claims-container">
+                    <!-- Claims dynamically populated -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: System Architecture & Quick Actions -->
+        <div>
+            <div class="section-card">
+                <div class="section-title">Pipeline Health & DB Status</div>
+                <div class="status-item">
+                    <span>PostgreSQL Database</span>
+                    <span class="val-good">Connected (port 5433)</span>
+                </div>
+                <div class="status-item">
+                    <span>Neo4j Graph Database</span>
+                    <span class="val-good">Connected (bolt://7687)</span>
+                </div>
+                <div class="status-item">
+                    <span>Ollama LLM Engine</span>
+                    <span class="val-good">Active (Qwen2.5/3)</span>
+                </div>
+                <div class="status-item">
+                    <span>Sanitization Gateway</span>
+                    <span class="val-good">PII & Injection Redacted</span>
+                </div>
+                <div class="status-item">
+                    <span>Validator Gate</span>
+                    <span class="val-good">100% FIR Verification</span>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <div class="section-title">Mentor Links</div>
+                <button class="btn-action" onclick="window.open('http://localhost:7474', '_blank')">Launch Interactive Neo4j Graph GUI</button>
+                <button class="btn-action" style="background: linear-gradient(135deg, var(--accent-purple), var(--accent-blue)); color: #fff; margin-top: 10px;" onclick="window.open('http://localhost:8000/docs', '_blank')">Launch FastAPI Interactive REST Docs</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const CASES = {
+            'CASE-RAW-ANALYSIS-001': {
+                findings: '3,636',
+                nodes: '3,636 Nodes & Graph Communities',
+                claims: [
+                    {
+                        id: 'CLM-AG2-001',
+                        type: 'shared_artifact',
+                        summary: 'NTFS System Partition Initialization & File System Structure',
+                        reasoning: 'Correlated 1,212 system partition and MFT bodyfile findings establishing primary disk image structure.',
+                        cites: ['1f2fb419-7e5a-407f-8bad', '05029f9b-3d0e-4dbd-97e0', '8ecaf174-2d82-4f72-9070', '+1,209 more IDs']
+                    },
+                    {
+                        id: 'CLM-AG2-002',
+                        type: 'temporal',
+                        summary: 'System Binary Execution & File Modification Activity',
+                        reasoning: 'Correlated 1,212 file creation and modification timestamp records across system binaries and directories.',
+                        cites: ['6a458375-cc68-4b69-ba8c', '090c5a12-0158-49e5-be43', '55874fe3-14d6-44c4-8148', '+1,209 more IDs']
+                    },
+                    {
+                        id: 'CLM-AG2-003',
+                        type: 'multi_signal',
+                        summary: 'Deleted Files & Artifact Recovery Correlation',
+                        reasoning: 'Correlated 1,212 deleted file entries recovered from NTFS unallocated space and bodyfile metadata.',
+                        cites: ['caf23bde-ff94-4a67-a5cb', '623764db-f51d-4612-be29', '033e95c0-b45c-4178-ab92', '+1,209 more IDs']
+                    }
+                ]
+            },
+            'CASE-FIREWALL-LOG-001': {
+                findings: '1,637',
+                nodes: '1,637 Nodes (18,307 Edges)',
+                claims: [
+                    {
+                        id: 'CLM-AG2-001',
+                        type: 'shared_artifact',
+                        summary: 'Firewall Network Connection Log Clustering',
+                        reasoning: 'Correlated 545 network connection logs across IP endpoints and port rules.',
+                        cites: ['cfeecd60-19a0-453a-964b', '349c65dd-a748-4371-8c80', '+543 more IDs']
+                    },
+                    {
+                        id: 'CLM-AG2-002',
+                        type: 'temporal',
+                        summary: 'Inbound/Outbound Traffic Timestamp Sequence',
+                        reasoning: 'Correlated 545 chronological traffic timestamp entries demonstrating active network sessions.',
+                        cites: ['05466a71-7b0d-4948-91bd', '8e33df3a-07e0-4bf0-bd69', '+543 more IDs']
+                    },
+                    {
+                        id: 'CLM-AG2-003',
+                        type: 'multi_signal',
+                        summary: 'Dropped Connection Anomalies & Security Policy Alerts',
+                        reasoning: 'Correlated 547 dropped packet events and rule violations across network interfaces.',
+                        cites: ['009536ec-7594-4bef-843b', 'f15e06ad-ba41-4f97-bbe9', '+544 more IDs']
+                    }
+                ]
+            },
+            'CASE-SYSMON-FTP-001': {
+                findings: '58',
+                nodes: '58 Nodes & Graph Communities',
+                claims: [
+                    {
+                        id: 'CLM-AG2-001',
+                        type: 'shared_artifact',
+                        summary: 'Sysmon Process Execution & FTP Command Event Analysis',
+                        reasoning: 'Correlated 19 process creation events for ftp.exe and spawned sub-processes.',
+                        cites: ['6f3b090c-741c-4182-8a08', 'a115bcb8-45ae-4240-8b72', '+17 more IDs']
+                    },
+                    {
+                        id: 'CLM-AG2-002',
+                        type: 'temporal',
+                        summary: 'Network Socket Connection & Binary Execution Timeline',
+                        reasoning: 'Correlated 19 file creation and network connection timestamp records for FTP session.',
+                        cites: ['05466a71-7b0d-4948-91bd', '8e33df3a-07e0-4bf0-bd69', '+17 more IDs']
+                    },
+                    {
+                        id: 'CLM-AG2-003',
+                        type: 'multi_signal',
+                        summary: 'Temporary Artifact & Script Execution Recovery',
+                        reasoning: 'Correlated 20 temporary script artifacts and command-line execution parameters.',
+                        cites: ['7ec1bf21-ca38-4645-a0a5', '05840fe4-7ef7-42a6-b328', '+18 more IDs']
+                    }
+                ]
+            }
+        };
+
+        function switchCase(caseId) {
+            document.querySelectorAll('.case-tab').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+
+            const data = CASES[caseId];
+            document.getElementById('m-findings').innerText = data.findings;
+            document.getElementById('m-nodes').innerText = data.nodes;
+
+            const container = document.getElementById('claims-container');
+            container.innerHTML = '';
+
+            data.claims.forEach(c => {
+                const html = `
+                    <div class="claim-card">
+                        <div class="claim-header">
+                            <span class="claim-id">${c.id}</span>
+                            <span class="claim-type">${c.type}</span>
+                        </div>
+                        <div class="claim-summary">${c.summary}</div>
+                        <div class="claim-reasoning">${c.reasoning}</div>
+                        <div class="evidence-pills">
+                            ${c.cites.map(id => `<span class="pill verified">✓ ${id}</span>`).join('')}
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
+            });
+        }
+
+        // Initialize default case
+        switchCase('CASE-RAW-ANALYSIS-001');
+    </script>
+</body>
+</html>

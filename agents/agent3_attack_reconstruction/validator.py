@@ -107,18 +107,28 @@ class Agent3Validator:
                     ts = str(item.get("timestamp") or item.get("time") or "2026-10-03T00:00:00Z")
                     evt = str(item.get("event") or item.get("summary") or item.get("description") or "Event")
                     stg = str(item.get("stage") or item.get("phase") or "Execution")
-                    mitre = str(item.get("mitre_technique") or item.get("technique") or item.get("mitre") or "T1000")
                     ev_ids = _clean_ids(item.get("evidence_ids") or item.get("citations") or item.get("evidence"))
                     conf = float(item.get("confidence") or 0.85)
                     cleaned_timeline.append({
                         "timestamp": ts,
                         "event": evt,
                         "stage": stg,
-                        "mitre_technique": mitre,
                         "evidence_ids": ev_ids,
                         "confidence": max(0.0, min(1.0, conf))
                     })
         data["attack_timeline"] = cleaned_timeline
+
+        # Auto-derive attack_path steps if LLM put sequence in timeline instead of attack_path
+        if not cleaned_path and cleaned_timeline:
+            for idx, item in enumerate(cleaned_timeline, 1):
+                cleaned_path.append({
+                    "step_number": idx,
+                    "stage": item["stage"],
+                    "description": item["event"],
+                    "evidence_ids": item["evidence_ids"],
+                    "confidence": item["confidence"]
+                })
+            data["attack_path"] = cleaned_path
 
         # 4. Attack Chain normalization
         raw_chain = data.get("attack_chain") or []

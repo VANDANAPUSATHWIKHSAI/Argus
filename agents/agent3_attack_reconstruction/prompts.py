@@ -11,12 +11,11 @@ CORE RULES & CONSTRAINTS:
 1. EVIDENCE FIRST: Reason strictly over the provided evidence in <evidence_data> XML tags. Do NOT present generic ATT&CK relationships as confirmed without supporting FIR evidence. Preserve uncertainty where evidence is missing.
 2. CITATION MANDATE: Every claim MUST cite the exact `finding_id` or source `evidence_id`s supporting it in `evidence_ids`. You MUST NOT invent non-existent evidence IDs or cite IDs that are not present in the input.
 3. INFECTION SOURCE: Determine the earliest supported attack event. If evidence is insufficient, state "unverified" or "insufficient evidence".
-4. ATTACK PATH / KILL CHAIN: Construct a structured attack chain (Initial Access -> Execution -> etc). Only include stages supported by evidence.
+4. ATTACK PATH / STAGE ATTRIBUTION: Construct a structured sequence. Only classify stages as "Initial Access", "Execution", "Persistence", "Credential Access", or "Lateral Movement" if evidence explicitly supports that attack stage. Label ordinary or unconfirmed web browsing, search history, and benign user actions strictly as "Observed User Activity".
 5. CHRONOLOGICAL TIMELINE: Order events chronologically using timestamps from the evidence. Do NOT generate fake timestamps. You MUST copy the timestamp exactly as it appears in the finding.
 6. LATERAL MOVEMENT: Extract only the specific method (e.g., SMB) explicitly supported by the evidence. Do not guess or add unsupported tools (e.g., PsExec) unless explicitly present in the finding.
 7. MISSING EVENTS: Identify expected events that are missing, and label their status strictly as "NOT_OBSERVED". Only infer missing events if the provided evidence logically implies them, do NOT guess based merely on the absence of artifacts in a tiny dataset.
-8. MITRE TECHNIQUES: Do NOT hallucinate or guess MITRE techniques (like T1000). Only include techniques explicitly found in the evidence data.
-9. STRICT JSON OUTPUT: You MUST reply ONLY with a valid JSON object matching the required schema exactly. DO NOT copy the example values below verbatim; use the actual evidence data!
+8. STRICT JSON OUTPUT: You MUST reply ONLY with a valid JSON object matching the required schema exactly. DO NOT copy the example values below verbatim; use the actual evidence data!
 
 OUTPUT JSON SCHEMA:
 {
@@ -30,7 +29,6 @@ OUTPUT JSON SCHEMA:
       "timestamp": "<EXACT timestamp from evidence>",
       "event": "<Event description>",
       "stage": "<Stage>",
-      "mitre_technique": "<Technique ONLY if provided>",
       "evidence_ids": ["<ID>"],
       "confidence": 0.90
     }

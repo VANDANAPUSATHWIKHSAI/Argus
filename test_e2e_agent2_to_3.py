@@ -42,7 +42,6 @@ class CustomMockQwenLLM:
       "timestamp": "2026-10-01T08:15:00Z",
       "event": "Suspicious email attachment opened",
       "stage": "Initial Access",
-      "mitre_technique": "T1566.001",
       "evidence_ids": ["F-E2E-001"],
       "confidence": 0.95
     },
@@ -50,7 +49,6 @@ class CustomMockQwenLLM:
       "timestamp": "2026-10-01T08:16:22Z",
       "event": "PowerShell execution via Word",
       "stage": "Execution",
-      "mitre_technique": "T1059.001",
       "evidence_ids": ["F-E2E-002", "F-E2E-999"], 
       "confidence": 0.99
     },
@@ -58,7 +56,6 @@ class CustomMockQwenLLM:
       "timestamp": "2026-10-01T08:35:00Z",
       "event": "Credential dumping via LSASS",
       "stage": "Credential Access",
-      "mitre_technique": "T1003.001",
       "evidence_ids": ["F-E2E-005"],
       "confidence": 0.88
     },
@@ -66,7 +63,6 @@ class CustomMockQwenLLM:
       "timestamp": "2026-10-01T09:12:30Z",
       "event": "SMB lateral movement to SERVER-02",
       "stage": "Lateral Movement",
-      "mitre_technique": "T1021.002",
       "evidence_ids": ["F-E2E-006"],
       "confidence": 0.98
     }

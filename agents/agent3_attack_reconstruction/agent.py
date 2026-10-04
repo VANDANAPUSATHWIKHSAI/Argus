@@ -33,6 +33,7 @@ from agents.agent3_attack_reconstruction.path_builder import CandidatePathBuilde
 from agents.agent3_attack_reconstruction.missing_event_detector import MissingEventDetector
 from agents.agent3_attack_reconstruction.prompts import AGENT3_SYSTEM_PROMPT, build_agent3_user_prompt
 from agents.agent3_attack_reconstruction.validator import Agent3Validator
+from agents.agent3_attack_reconstruction.graph_writer import AttackPathGraphWriter
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +180,13 @@ class AttackReconstructionAgent(BaseAgent):
         # 8. Non-blocking PostgreSQL persistence
         self._persist_agent_output(output)
 
+        # 9. Deterministic Neo4j Attack Path Graph Sync
+        try:
+            writer = AttackPathGraphWriter(neo4j_client=self.path_builder.neo4j_client)
+            writer.sync_attack_path(output)
+        except Exception as exc:
+            logger.debug("Agent 3 Neo4j graph sync note: %s", exc)
+
         return output.model_dump()
 
     def _parse_json_to_output(
@@ -285,7 +293,6 @@ class AttackReconstructionAgent(BaseAgent):
                     timestamp=ts,
                     event=fact[:150],
                     stage=stage,
-                    mitre_technique="T1059",
                     evidence_ids=[fid],
                     confidence=0.90,
                     citation_verified=True

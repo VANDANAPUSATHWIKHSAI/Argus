@@ -28,7 +28,6 @@ class AttackTimelineEvent(BaseModel):
     timestamp: str = Field(description="Chronological timestamp")
     event: str = Field(description="Description of the event")
     stage: str = Field(description="Attack stage (e.g. Execution, Lateral Movement)")
-    mitre_technique: str = Field(description="MITRE technique ID or name")
     evidence_ids: List[str] = Field(default_factory=list)
     confidence: float = Field(description="Confidence score [0.0, 1.0]")
     citation_verified: bool = Field(default=False)

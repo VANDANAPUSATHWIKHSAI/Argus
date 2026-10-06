@@ -37,8 +37,9 @@ class TestAgent4TwelveCases(unittest.TestCase):
         self.assertGreaterEqual(len(obs), 1)
         self.assertGreater(obs[0].confidence, 0.0)
 
-        claims = [c for c in output.claims if "T1059.001" in c.mitre_techniques]
-        self.assertGreaterEqual(len(claims), 1)
+        # Agent 4 detects behavior but leaves authoritative MITRE mapping to Agent 5a
+        for c in output.claims:
+            self.assertEqual(c.mitre_techniques, [])
 
     # Test Case 2 — Registry Persistence
     def test_case_02_registry_persistence(self):
@@ -67,8 +68,8 @@ class TestAgent4TwelveCases(unittest.TestCase):
         pers_obs = [o for o in output.behavior_observations if o.category == "persistence"]
         self.assertGreaterEqual(len(pers_obs), 1)
 
-        claims = [c for c in output.claims if "T1053.005" in c.mitre_techniques]
-        self.assertGreaterEqual(len(claims), 1)
+        for c in output.claims:
+            self.assertEqual(c.mitre_techniques, [])
 
     # Test Case 4 — Browser Credential Theft
     def test_case_04_browser_credential_theft(self):
@@ -96,8 +97,8 @@ class TestAgent4TwelveCases(unittest.TestCase):
         cred_obs = [o for o in output.behavior_observations if o.category == "credential_access"]
         self.assertGreaterEqual(len(cred_obs), 1)
 
-        claims = [c for c in output.claims if "T1003" in c.mitre_techniques]
-        self.assertGreaterEqual(len(claims), 1)
+        for c in output.claims:
+            self.assertEqual(c.mitre_techniques, [])
 
     # Test Case 6 — Process Injection
     def test_case_06_process_injection(self):

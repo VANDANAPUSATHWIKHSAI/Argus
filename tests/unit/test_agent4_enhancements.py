@@ -155,7 +155,7 @@ class TestAgent4Enhancements(unittest.TestCase):
         )
         self.assertIn("Execution", output.mitre_tactics)
         self.assertIn("Persistence", output.mitre_tactics)
-        self.assertIn("Remote Command Execution", output.malware_profile.likely_objectives)
+        self.assertEqual(output.malware_profile.status, "NOT_DETERMINED")
 
 
 if __name__ == "__main__":

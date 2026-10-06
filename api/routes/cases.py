@@ -381,6 +381,134 @@ async def get_recent_activity(
     }
 
 
+@router.get("/auditor-stats", response_model=Dict[str, Any])
+async def get_auditor_stats(
+    limit: int = Query(8, ge=1, le=50),
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+):
+    """
+    Get dynamic auditor statistics and data-driven previous case severity & confidence for top completed cases.
+    """
+    import datetime
+    from config.settings import settings
+    import psycopg2
+
+    total_findings = 0
+    high_severity = 0
+    medium_severity = 0
+    low_severity = 0
+
+    previous_cases = []
+
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password, connect_timeout=3
+        )
+        cur = conn.cursor()
+        
+        cur.execute(
+            """
+            SELECT f.severity
+            FROM fir_findings f
+            INNER JOIN cases c ON f.case_id = c.case_id
+            WHERE c.tenant_id = %s
+            """,
+            (x_tenant_id,)
+        )
+        rows = cur.fetchall()
+        for row in rows:
+            sev_str = (row[0] or "medium").lower()
+            total_findings += 1
+            if sev_str in ("critical", "high"):
+                high_severity += 1
+            elif sev_str == "medium":
+                medium_severity += 1
+            else:
+                low_severity += 1
+
+        cur.execute(
+            """
+            SELECT c.case_id, c.name, c.closed_at, c.created_at,
+                   COUNT(f.finding_id) as finding_count,
+                   AVG(f.confidence) as avg_conf,
+                   MAX(CASE 
+                       WHEN LOWER(f.severity) = 'critical' THEN 4 
+                       WHEN LOWER(f.severity) = 'high' THEN 3 
+                       WHEN LOWER(f.severity) = 'medium' THEN 2 
+                       WHEN LOWER(f.severity) = 'low' THEN 1 
+                       ELSE 0 END) as max_sev_rank
+            FROM cases c
+            LEFT JOIN fir_findings f ON c.case_id = f.case_id
+            WHERE c.tenant_id = %s AND (c.status = 'closed' OR c.closed_at IS NOT NULL)
+            GROUP BY c.case_id, c.name, c.closed_at, c.created_at
+            ORDER BY COALESCE(c.closed_at, c.created_at) DESC
+            LIMIT %s
+            """,
+            (x_tenant_id, limit)
+        )
+        case_rows = list(reversed(cur.fetchall()))
+
+        if len(case_rows) == 0:
+            cur.execute(
+                """
+                SELECT c.case_id, c.name, c.closed_at, c.created_at,
+                       COUNT(f.finding_id) as finding_count,
+                       AVG(f.confidence) as avg_conf,
+                       MAX(CASE 
+                           WHEN LOWER(f.severity) = 'critical' THEN 4 
+                           WHEN LOWER(f.severity) = 'high' THEN 3 
+                           WHEN LOWER(f.severity) = 'medium' THEN 2 
+                           WHEN LOWER(f.severity) = 'low' THEN 1 
+                           ELSE 0 END) as max_sev_rank
+                FROM cases c
+                LEFT JOIN fir_findings f ON c.case_id = f.case_id
+                WHERE (c.status = 'closed' OR c.closed_at IS NOT NULL)
+                GROUP BY c.case_id, c.name, c.closed_at, c.created_at
+                ORDER BY COALESCE(c.closed_at, c.created_at) DESC
+                LIMIT %s
+                """,
+                (limit,)
+            )
+            case_rows = list(reversed(cur.fetchall()))
+
+        sev_rank_map = {4: "Critical", 3: "High", 2: "Medium", 1: "Low", 0: "Low"}
+
+        for r in case_rows:
+            cid, name, closed_at, created_at, f_count, avg_conf, max_sev_rank = r
+            dt = closed_at or created_at
+            conf_pct = round(float(avg_conf) * 100, 1) if avg_conf is not None else 90.0
+            sev_label = sev_rank_map.get(max_sev_rank or 0, "Low")
+            
+            previous_cases.append({
+                "case_id": cid,
+                "name": name or cid,
+                "closed_at": dt.isoformat() if dt else None,
+                "month": dt.strftime("%b") if dt else "",
+                "date_formatted": dt.strftime("%b %d") if dt else "",
+                "full_date_formatted": dt.strftime("%b %d, %Y") if dt else "",
+                "severity": sev_label,
+                "confidence": conf_pct,
+                "total_findings": f_count
+            })
+
+        conn.close()
+    except Exception as e:
+        logger.warning(f"Could not fetch auditor stats from DB: {e}")
+
+    return {
+        "status": "SUCCESS",
+        "total_findings": total_findings,
+        "high_severity": high_severity,
+        "medium_severity": medium_severity,
+        "low_severity": low_severity,
+        "previous_cases": previous_cases
+    }
+
+
+
+
 
 @router.put("/{case_id}/close")
 async def close_case_endpoint(

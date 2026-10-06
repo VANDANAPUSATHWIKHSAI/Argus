@@ -286,24 +286,10 @@ const Upload = () => {
                   <div className="header-meta" style={{ marginTop: 12, gap: 12 }}>
                     <div className="meta-item" style={{ color: 'var(--text-main)', background: 'var(--bg-card)', padding: '4px 12px', borderRadius: 20, border: '1px solid var(--border-subtle)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                      {casesList.length > 0 ? (
-                        <select
-                          value={activeCaseId}
-                          onChange={e => handleSelectCase(e.target.value)}
-                          style={{ background: 'transparent', border: 'none', color: 'var(--text-main)', fontWeight: 600, fontSize: 13, outline: 'none', cursor: 'pointer' }}
-                        >
-                          {casesList.map(c => (
-                            <option key={c.case_id} value={c.case_id} style={{ background: 'var(--bg-card)', color: 'var(--text-main)' }}>
-                              {c.case_id} {c.name ? `— ${c.name}` : ''} ({c.status})
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <div>
-                          <span style={{ fontSize: 12, fontWeight: 600 }}>{activeCaseId || 'No Active Case'}</span>
-                          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 4 }}>{activeCaseName || 'Please Create Case'}</span>
-                        </div>
-                      )}
+                      <div>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>{activeCaseId || 'No Active Case'}</span>
+                        {activeCaseName && <span style={{ fontSize: 13, color: 'var(--text-main)' }}> — {activeCaseName}</span>}
+                      </div>
                     </div>
                     <div className="badge-danger">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -311,10 +297,6 @@ const Upload = () => {
                     </div>
                   </div>
                 </div>
-              </div>
-              <div className="header-quote">
-                <p>"From digital traces to real answers."</p>
-                <span>— ARGUS</span>
               </div>
             </div>
 
@@ -327,7 +309,7 @@ const Upload = () => {
               </div>
 
               {/* Main Upload Workspace */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2.5fr 1fr', gap: 24, padding: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24, padding: 24 }}>
 
                 {/* Left Column */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -491,65 +473,6 @@ const Upload = () => {
                   </div>
                 </div>
 
-                {/* Right Column */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  {/* ARGUS Analysis Toggle */}
-                  <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', padding: 24 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--blue-light)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                        </div>
-                        <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)' }}>ARGUS ANALYSIS</h3>
-                      </div>
-                      <label style={{ position: 'relative', display: 'inline-block', width: 44, height: 24, flexShrink: 0 }}>
-                        <input type="checkbox" checked={argusEnabled} onChange={() => setArgusEnabled(v => !v)} style={{ opacity: 0, width: 0, height: 0 }} />
-                        <span onClick={() => setArgusEnabled(v => !v)} style={{ position: 'absolute', cursor: 'pointer', top: 0, left: 0, right: 0, bottom: 0, background: argusEnabled ? 'var(--blue)' : 'var(--border-strong)', borderRadius: 24, transition: '0.3s' }}>
-                          <span style={{ position: 'absolute', height: 18, width: 18, left: argusEnabled ? 23 : 3, bottom: 3, background: '#fff', borderRadius: '50%', transition: '0.3s' }} />
-                        </span>
-                      </label>
-                    </div>
-                    <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', marginBottom: 8 }}>Analyze evidence automatically after upload</h4>
-                    <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>ARGUS agents will automatically extract metadata, identify artifacts, correlate evidence and detect potential findings.</p>
-                  </div>
-
-                  {/* Evidence Integrity */}
-                  <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', padding: 24 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-app)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-strong)' }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
-                      </div>
-                      <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main)' }}>EVIDENCE INTEGRITY</h3>
-                    </div>
-                    <p style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>ARGUS automatically calculates and records a cryptographic hash (SHA-256) for uploaded evidence to preserve forensic integrity.</p>
-                  </div>
-
-                  {/* Tips */}
-                  <div style={{ background: 'var(--bg-app)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-strong)', padding: 24, flexGrow: 1 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-main)', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-                      Tips
-                    </h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                      {[
-                        { bg: 'var(--blue-light)', col: 'var(--blue)', title: 'Supported formats', desc: 'RAW, E01, VMDK, VHD, MEM, PCAP, EVTX, LOG, ZIP, RAR, and more.', icon: <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/> },
-                        { bg: 'var(--purple-light, #f3e8ff)', col: 'var(--purple)', title: 'Larger files', desc: 'For files larger than 10 GB, use segmented upload or network ingestion.', icon: <><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></> },
-                        { bg: '#e6f6ec', col: '#10b981', title: 'Case association', desc: `All uploaded evidence will be automatically associated with ${localStorage.getItem('active_case_name') || 'the active case'}.`, icon: <><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></> },
-                        { bg: 'var(--orange-light)', col: 'var(--orange)', title: 'Next steps', desc: 'Once uploaded, ARGUS will ingest, parse and analyze the evidence automatically.', icon: <polygon points="5 3 19 12 5 21 5 3"/> },
-                      ].map((tip, i) => (
-                        <div key={i} style={{ display: 'flex', gap: 16 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: tip.bg, color: tip.col, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">{tip.icon}</svg>
-                          </div>
-                          <div>
-                            <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)', marginBottom: 4 }}>{tip.title}</h4>
-                            <p style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>{tip.desc}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
               </div>
             </div>
           </div>

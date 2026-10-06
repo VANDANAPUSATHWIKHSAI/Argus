@@ -7,6 +7,7 @@ import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import AdminDashboard from './AdminDashboard';
 import SeniorDashboard from './SeniorDashboard';
+import AuditorDashboard from './AuditorDashboard';
 import { fetchCases, fetchCaseSummary, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
 const Dashboard = () => {
@@ -19,6 +20,7 @@ const Dashboard = () => {
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
   const isAdmin = currentUser?.role === 'admin';
   const isSeniorAnalyst = currentUser?.role === 'senior_analyst';
+  const isAuditor = currentUser?.role === 'auditor';
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -241,8 +243,10 @@ const Dashboard = () => {
         <Sidebar />
 
         {/* ── MAIN CONTENT ── */}
-        <main className="main-content" style={{ padding: isSeniorAnalyst ? 0 : undefined }}>
-          {isSeniorAnalyst ? (
+        <main className="main-content" style={{ padding: (isSeniorAnalyst || isAuditor) ? 0 : undefined }}>
+          {isAuditor ? (
+            <AuditorDashboard />
+          ) : isSeniorAnalyst ? (
             <SeniorDashboard />
           ) : isAdmin ? (
             <>
@@ -405,10 +409,7 @@ const Dashboard = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="header-quote">
-                        <p>"From digital traces to real answers."</p>
-                        <span>— ARGUS</span>
-                      </div>
+
                     </div>
 
                     {/* Stats Grid */}
@@ -505,7 +506,18 @@ const Dashboard = () => {
                         <div className="panel-header">
                           <h3>Node Details</h3>
                           <div className="panel-actions">
-                            <button className="btn-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                            <button className="btn-icon" style={{ color: 'var(--red)', background: 'var(--red-light)', border: 'none', borderRadius: '50%', cursor: 'pointer', pointerEvents: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', padding: '0', transition: 'all 0.2s' }} onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (window.argusApp && typeof window.argusApp.clearSelection === 'function') {
+                                window.argusApp.clearSelection();
+                              } else {
+                                const grid = document.getElementById('main-grid');
+                                if (grid) grid.classList.remove('has-selection');
+                              }
+                            }}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                            </button>
                           </div>
                         </div>
                         <div className="details-content" id="details-content">

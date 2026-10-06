@@ -22,7 +22,8 @@ load_dotenv()
 
 router = APIRouter()
 
-SECRET_KEY = os.environ.get("ARGUS_SECRET_KEY", "argus_super_secret_key_CHANGE_IN_PRODUCTION")
+import secrets
+SECRET_KEY = os.environ.get("ARGUS_SECRET_KEY", secrets.token_urlsafe(32))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -70,15 +71,6 @@ def init_users_table():
                         doj VARCHAR(50)
                     );
                 """)
-                cur.execute("SELECT COUNT(*) FROM users")
-                if cur.fetchone()[0] == 0:
-                    pwd_hash = get_password_hash("123")
-                    cur.execute("""
-                        INSERT INTO users (id, email, password_hash, role, name, phone, doj) VALUES
-                        ('admin', 'admin@argus.local', %s, 'admin', 'System Administrator', '+1-555-0100', '2025-01-01'),
-                        ('analyst', 'analyst@argus.local', %s, 'analyst', 'Forensic Analyst', '+1-555-0101', '2025-01-15'),
-                        ('senior_analyst', 'senior@argus.local', %s, 'senior_analyst', 'Senior Forensic Analyst', '+1-555-0102', '2025-01-10')
-                    """, (pwd_hash, pwd_hash, pwd_hash))
             conn.commit()
     except Exception as e:
         print(f"User Table Init Error: {e}")

@@ -95,6 +95,28 @@ export async function fetchActivity() {
   return fetchWithAuth('/cases/activity');
 }
 
+export async function fetchAuditorStats() {
+  const token = localStorage.getItem('argus_token');
+  const headers = {
+    'Accept': 'application/json',
+    'X-Tenant-ID': DEFAULT_TENANT_ID,
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const response = await fetch(`${API_BASE_URL}/cases/auditor-stats`, { headers });
+  if (!response.ok) {
+    const fallbackRes = await fetch(`${API_BASE_URL}/cases/auditor-stats`, {
+      headers: { 'Accept': 'application/json', 'X-Tenant-ID': DEFAULT_TENANT_ID }
+    });
+    if (fallbackRes.ok) return fallbackRes.json();
+  }
+  return response.json();
+}
+
+
+
+
 export async function fetchReviewNotes(caseId) {
   return fetchWithAuth(`/cases/${caseId}/review-notes`);
 }

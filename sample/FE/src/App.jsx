@@ -14,6 +14,7 @@ import Chatbot from './pages/Chatbot';
 import Findings from './pages/Findings';
 import TimelineDetail from './pages/TimelineDetail';
 import EvidenceCoverage from './pages/EvidenceCoverage';
+import Notifications from './pages/Notifications';
 import ProtectedRoute from './components/ProtectedRoute';// Global styles for the app (can also just import individual ones in components)
 import './App.css';
 
@@ -39,6 +40,7 @@ function App() {
         <Route path="/index.html" element={<Navigate to="/dashboard" replace />} />
         <Route path="/evidence" element={<ProtectedRoute><Evidence /></ProtectedRoute>} />
         <Route path="/evidence.html" element={<Navigate to="/evidence" replace />} />
+        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/settings.html" element={<Navigate to="/settings" replace />} />
         <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />

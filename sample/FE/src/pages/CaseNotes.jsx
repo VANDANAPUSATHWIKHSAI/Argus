@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import { API_BASE_URL } from '../js/api';
 import '../css/style.css';
 
 const CaseNotes = () => {
@@ -28,10 +29,10 @@ const CaseNotes = () => {
   const fetchNotes = async () => {
     if (!activeCaseId) return;
     try {
-      const res = await fetch(`/api/cases/${activeCaseId}/notes`, {
+      const res = await fetch(`${API_BASE_URL}/cases/${activeCaseId}/notes`, {
         headers: {
-          'X-Tenant-ID': localStorage.getItem('tenant_id') || 'dev-team',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'X-Tenant-ID': 'dev-team',
+          'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         }
       });
       if (res.ok) {
@@ -45,6 +46,8 @@ const CaseNotes = () => {
 
   useEffect(() => {
     fetchNotes();
+    const intervalId = setInterval(fetchNotes, 10000);
+    return () => clearInterval(intervalId);
   }, [activeCaseId]);
 
   const handleSave = async () => {
@@ -60,16 +63,16 @@ const CaseNotes = () => {
 
     try {
       const url = editingNote 
-        ? `/api/cases/${activeCaseId}/notes/${editingNote.noteId}`
-        : `/api/cases/${activeCaseId}/notes`;
+        ? `${API_BASE_URL}/cases/${activeCaseId}/notes/${editingNote.noteId}`
+        : `${API_BASE_URL}/cases/${activeCaseId}/notes`;
       const method = editingNote ? 'PUT' : 'POST';
 
       const res = await fetch(url, {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'X-Tenant-ID': localStorage.getItem('tenant_id') || 'dev-team',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'X-Tenant-ID': 'dev-team',
+          'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         },
         body: JSON.stringify(noteData)
       });
@@ -84,11 +87,11 @@ const CaseNotes = () => {
 
   const handleDelete = async (noteId) => {
     try {
-      const res = await fetch(`/api/cases/${activeCaseId}/notes/${noteId}`, {
+      const res = await fetch(`${API_BASE_URL}/cases/${activeCaseId}/notes/${noteId}`, {
         method: 'DELETE',
         headers: {
-          'X-Tenant-ID': localStorage.getItem('tenant_id') || 'dev-team',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'X-Tenant-ID': 'dev-team',
+          'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
         }
       });
       if (res.ok) {

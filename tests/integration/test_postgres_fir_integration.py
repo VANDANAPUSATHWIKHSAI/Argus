@@ -12,6 +12,7 @@ Validates:
 from __future__ import annotations
 
 import unittest
+from uuid import uuid4
 from datetime import datetime, timezone
 
 from config.settings import settings
@@ -140,11 +141,12 @@ class TestPostgresFirIntegration(unittest.TestCase):
         conn = self._get_pg_conn()
         from psycopg2.extras import RealDictCursor
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("DELETE FROM fir_findings WHERE case_id = 'CASE-PG-IDEM';")
+        idem_case_id = str(uuid4())
+        cur.execute("DELETE FROM fir_findings WHERE case_id = %s;", (idem_case_id,))
         conn.commit()
 
         raw_fnd1 = Finding(
-            case_id="CASE-PG-IDEM",
+            case_id=idem_case_id,
             tenant_id=self.tenant_id,
             fact="Repeat threat finding",
             confidence=0.9,
@@ -158,11 +160,65 @@ class TestPostgresFirIntegration(unittest.TestCase):
         self.repo.insert(fir_fnd1)
         self.repo.insert(fir_fnd1)  # Repeat insert
 
-        cur.execute("SELECT COUNT(*) AS cnt FROM fir_findings WHERE case_id = 'CASE-PG-IDEM';")
+        cur.execute("SELECT COUNT(*) AS cnt FROM fir_findings WHERE case_id = %s;", (idem_case_id,))
         count = cur.fetchone()["cnt"]
         conn.close()
 
         self.assertEqual(count, 1)
+
+    def test_postgres_fresh_repository_resolves_scoped_evidence_and_correlations(self):
+        finding_id = f"fnd-{uuid4()}"
+        case_id = str(uuid4())
+        other_case_id = str(uuid4())
+        tenant_id = f"tenant-{uuid4()}"
+        finding = FIRFinding(
+            finding_id=finding_id,
+            case_id=case_id,
+            tenant_id=tenant_id,
+            fact="192.0.2.10",
+            confidence=0.9,
+            severity="high",
+            evidence_reference=["corr-fresh"],
+            layer="endpoint",
+            timestamp=datetime.now(timezone.utc),
+        )
+        self.repo.insert(finding)
+
+        fresh_repo = FIRRepository()
+        self.assertIsNotNone(fresh_repo.get_by_id(tenant_id, finding_id))
+        self.assertIsNone(fresh_repo.get_by_id(tenant_id, "fabricated"))
+        resolved = fresh_repo.get_by_id(tenant_id, finding_id)
+        self.assertEqual(resolved.case_id, case_id)
+        self.assertEqual(resolved.tenant_id, tenant_id)
+        self.assertNotEqual(resolved.case_id, other_case_id)
+        self.assertIsNone(fresh_repo.get_by_id("wrong-tenant", finding_id))
+
+        from agents.agent5a_threat_intelligence.agent import ThreatIntelligenceAgent
+        from sanitization.gateway import SanitizationGateway
+
+        agent = ThreatIntelligenceAgent(None, fresh_repo, SanitizationGateway(), tenant_id)
+        valid, correlations = agent._verified_references(
+            case_id,
+            tenant_id,
+            [],
+            {
+                "claims": [{"cited_evidence_ids": [finding_id, "fabricated"]}],
+                "correlation_ids": [finding_id, "fabricated"],
+            },
+            fresh_repo,
+        )
+        self.assertEqual(valid, {finding_id})
+        self.assertEqual(correlations, {finding_id})
+
+        wrong_case, wrong_case_corr = agent._verified_references(
+            other_case_id,
+            tenant_id,
+            [],
+            {"claims": [{"cited_evidence_ids": [finding_id]}], "correlation_ids": [finding_id]},
+            fresh_repo,
+        )
+        self.assertEqual(wrong_case, set())
+        self.assertEqual(wrong_case_corr, set())
 
     def test_postgres_tenant_isolation(self):
         """Verify strict tenant isolation filtering in PostgreSQL queries."""

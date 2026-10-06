@@ -21,11 +21,11 @@ from infrastructure.repository.evidence_store import create_case_session, list_c
 from fir.repository import FIRRepository
 from fir.service import AnalystFindingService
 from sanitization.gateway import SanitizationGateway
-from api.routes.auth import get_current_user
+from api.routes.auth import get_current_user, require_authorized_tenant
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_authorized_tenant)])
 
 _fir_repo = FIRRepository()
 _analyst_service = AnalystFindingService(fir_repo=_fir_repo)
@@ -114,7 +114,7 @@ def send_assignment_email(target_email: str, case_id: str, case_name: str, role_
 async def create_case(
     req: CreateCaseRequest,
     background_tasks: BackgroundTasks,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: dict = Depends(get_current_user)
 ):
     if current_user["role"] != "admin":
@@ -125,15 +125,7 @@ async def create_case(
     if req.case_id:
         case_id = req.case_id.strip()
     else:
-        existing_seqs = []
-        for c in existing_cases:
-            if c.case_id.startswith('ARGUS_'):
-                try:
-                    existing_seqs.append(int(c.case_id.split('_')[1]))
-                except ValueError:
-                    pass
-        next_seq = max(existing_seqs) + 1 if existing_seqs else 1
-        case_id = f"ARGUS_{next_seq:02d}"
+        case_id = str(uuid.uuid4())
         
     if any(c.case_id == case_id for c in existing_cases):
         raise HTTPException(status_code=409, detail=f"Case ID '{case_id}' already exists.")
@@ -165,27 +157,6 @@ async def create_case(
             (req.name, req.analyst_id, req.senior_analyst_id, session.case_id)
         )
         conn.commit()
-        
-        # 4. Case Notes
-        cur.execute(
-            """
-            SELECT note_id, case_id, created_by, created_at, title, type
-            FROM case_notes
-            WHERE tenant_id = %s
-            """,
-            (x_tenant_id,)
-        )
-        for row in cur.fetchall():
-            note_id, case_id, created_by, created_at, title, note_type = row
-            activity.append({
-                "action": "Created Note",
-                "case_id": case_id,
-                "created_by": user_map.get(created_by, created_by),
-                "created_by_id": created_by,
-                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
-                "details": f"{title} ({note_type})"
-            })
-
         conn.close()
     except Exception as e:
         print(f"[DB WARNING] Could not store case name: {e}")
@@ -210,7 +181,7 @@ async def create_case(
 
 @router.get("/", response_model=Dict[str, Any])
 async def get_all_cases(
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: dict = Depends(get_current_user)
 ):
     cases = list_cases(tenant_id=x_tenant_id)
@@ -270,7 +241,8 @@ async def get_all_cases(
 
 @router.get("/activity", response_model=Dict[str, Any])
 async def get_recent_activity(
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Depends(require_authorized_tenant),
+    current_user: dict = Depends(get_current_user)
 ):
     activity = []
     
@@ -339,11 +311,11 @@ async def get_recent_activity(
         # 3. Analyst Findings
         cur.execute(
             """
-            SELECT f.case_id, f.created_at, f.fact, f.source_engine, f.reviewed_by, f.review_status, f.timestamp
+            SELECT f.case_id, f.created_at, f.fact, f.source_engine
             FROM fir_findings f
             INNER JOIN cases c ON f.case_id = c.case_id
             WHERE c.tenant_id = %s
-            ORDER BY f.timestamp DESC
+            ORDER BY f.created_at DESC
             """,
             (x_tenant_id,)
         )
@@ -351,21 +323,15 @@ async def get_recent_activity(
         # Deduplicate findings by action, case, user, and approximate minute
         finding_events = {}
         for row in cur.fetchall():
-            case_id, created_at, fact, source_engine, reviewed_by, review_status, review_time = row
+            case_id, created_at, fact, source_engine = row
             
-            action_name = None
-            evt_time = None
-            if review_status in ('analyst_confirmed', 'analyst_rejected') and review_time:
-                action_name = "Confirmed Finding" if review_status == 'analyst_confirmed' else "Rejected Finding"
-                evt_time = review_time
-            elif source_engine == 'manual' or review_status == 'manual_entry':
-                action_name = "Created Finding"
-                evt_time = created_at
+            action_name = "Created Finding"
+            evt_time = created_at
                 
             if action_name and evt_time:
                 # Group by minute
-                minute_key = evt_time.replace(second=0, microsecond=0)
-                user_name = user_map.get(reviewed_by, reviewed_by) if reviewed_by else "Analyst"
+                minute_key = evt_time.replace(second=0, microsecond=0) if hasattr(evt_time, "replace") else evt_time
+                user_name = "System"
                 group_key = (action_name, case_id, user_name, minute_key)
                 
                 if group_key not in finding_events:
@@ -373,7 +339,7 @@ async def get_recent_activity(
                         "action": action_name,
                         "case_id": case_id,
                         "created_by": user_name,
-                        "created_by_id": reviewed_by if reviewed_by else "system",
+                        "created_by_id": "system",
                         "created_at": evt_time,
                         "details": fact[:50] + "..." if fact and len(fact) > 50 else fact,
                         "count": 1
@@ -387,6 +353,26 @@ async def get_recent_activity(
                 evt["details"] = f"Multiple findings ({evt['count']}) updated"
             evt["created_at"] = evt["created_at"].isoformat() if hasattr(evt["created_at"], "isoformat") else str(evt["created_at"])
             activity.append(evt)
+            
+        # 4. Case Notes
+        cur.execute(
+            """
+            SELECT note_id, case_id, created_by, created_at, title, type
+            FROM case_notes
+            WHERE tenant_id = %s
+            """,
+            (x_tenant_id,)
+        )
+        for row in cur.fetchall():
+            note_id, case_id, created_by, created_at, title, note_type = row
+            activity.append({
+                "action": "Created Note",
+                "case_id": case_id,
+                "created_by": user_map.get(created_by, created_by),
+                "created_by_id": created_by,
+                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+                "details": f"{title} ({note_type})"
+            })
             
         conn.close()
     except Exception as e:
@@ -404,7 +390,7 @@ async def get_recent_activity(
 @router.put("/{case_id}/close")
 async def close_case_endpoint(
     case_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: Dict = Depends(get_current_user)
 ):
     """
@@ -450,7 +436,7 @@ class AssignSeniorRequest(BaseModel):
 async def assign_senior_analyst(
     case_id: str,
     req: AssignSeniorRequest,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -499,7 +485,8 @@ async def assign_senior_analyst(
 @router.get("/{case_id}", response_model=CaseSummaryResponse)
 async def get_case(
     case_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Depends(require_authorized_tenant),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Retrieve structured case summary, severity metrics, and review status breakdown.
@@ -657,7 +644,7 @@ async def get_case(
 @router.get("/{case_id}/findings")
 async def get_case_findings(
     case_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -721,7 +708,8 @@ class CaseNoteModel(BaseModel):
     title: str
     content: str
     type: str
-    priority: str
+    priority: str = "Normal"
+    status: str = "Open"
     related_evidence_id: Optional[str] = None
     related_finding_id: Optional[str] = None
 
@@ -736,7 +724,7 @@ class ReviewNoteModel(BaseModel):
 @router.get("/{case_id}/notes")
 async def get_case_notes(
     case_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: Dict = Depends(get_current_user)
 ):
     from config.settings import settings
@@ -781,7 +769,7 @@ async def get_case_notes(
 async def create_case_note(
     case_id: str,
     note: CaseNoteModel,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: Dict = Depends(get_current_user)
 ):
     from config.settings import settings
@@ -813,7 +801,7 @@ async def update_case_note(
     case_id: str,
     note_id: str,
     note: CaseNoteModel,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: Dict = Depends(get_current_user)
 ):
     from config.settings import settings
@@ -843,7 +831,7 @@ async def update_case_note(
 async def delete_case_note(
     case_id: str,
     note_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: Dict = Depends(get_current_user)
 ):
     from config.settings import settings
@@ -866,7 +854,7 @@ async def delete_case_note(
 @router.get("/{case_id}/review-notes")
 async def get_review_notes(
     case_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: Dict = Depends(get_current_user)
 ):
     from config.settings import settings
@@ -929,7 +917,7 @@ async def get_review_notes(
 async def create_review_note(
     case_id: str,
     note: ReviewNoteModel,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: Dict = Depends(get_current_user)
 ):
     from config.settings import settings
@@ -986,7 +974,7 @@ async def update_review_note(
     case_id: str,
     note_id: str,
     note: ReviewNoteModel,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    x_tenant_id: str = Depends(require_authorized_tenant),
     current_user: Dict = Depends(get_current_user)
 ):
     from config.settings import settings

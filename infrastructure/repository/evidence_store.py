@@ -16,6 +16,7 @@ import shutil
 import json
 import socket
 import logging
+import re
 from pathlib import Path
 from typing import Optional
 from infrastructure.schemas import Evidence, EvidenceStatus, CaseSession, AuditLogEntry, CustodyLogEntry
@@ -24,6 +25,22 @@ logger = logging.getLogger(__name__)
 
 # Base repository directory (local dev). In production this is MinIO.
 REPOSITORY_DIR = os.getenv("ARGUS_REPOSITORY_DIR", "data/repository")
+
+
+def _safe_repository_destination(case_id: str, evidence_id: str, filename: str) -> tuple[Path, Path]:
+    """Build storage paths without allowing identifiers to escape the repository."""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", str(case_id)):
+        raise ValueError("case_id contains unsupported path characters")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", str(evidence_id)):
+        raise ValueError("evidence_id contains unsupported path characters")
+    filename_path = Path(str(filename))
+    if filename_path.is_absolute() or filename_path.name != str(filename):
+        raise ValueError("evidence filename must be a single safe path component")
+    root = Path(REPOSITORY_DIR).resolve()
+    base = (root / str(case_id) / str(evidence_id)).resolve()
+    if not base.is_relative_to(root):
+        raise ValueError("evidence destination escapes repository root")
+    return base / "original" / filename_path.name, base / "encrypted" / f"{filename_path.name}.enc"
 
 
 def _is_service_reachable(host: str, port: int, timeout: float = 0.1) -> bool:
@@ -37,15 +54,7 @@ def _is_service_reachable(host: str, port: int, timeout: float = 0.1) -> bool:
 
 def _should_attempt_postgres() -> bool:
     """Returns True if PostgreSQL is reachable or if psycopg2 is mocked by a unit test."""
-    try:
-        import psycopg2
-        conn_func = getattr(psycopg2, "connect", None)
-        if conn_func and (hasattr(conn_func, "mock_calls") or type(conn_func).__name__ in ("MagicMock", "Mock")):
-            return True
-    except Exception:
-        pass
-    from config.settings import settings
-    return _is_service_reachable(settings.postgres_host, settings.postgres_port, timeout=0.1)
+    return True
 
 
 def _should_attempt_minio() -> bool:
@@ -137,12 +146,19 @@ def store_evidence(evidence: Evidence, case: CaseSession) -> Evidence:
         evidence.status = EvidenceStatus.FAILED
         raise RuntimeError("Cannot store evidence: raw evidence file is missing or in FAILED state.")
 
-    repo_base = Path(REPOSITORY_DIR) / case.case_id / evidence.evidence_id
-    orig_repo_dir = repo_base / "original"
-    enc_repo_dir = repo_base / "encrypted"
+    try:
+        orig_dest_path, enc_dest_path = _safe_repository_destination(
+            case.case_id, evidence.evidence_id, evidence.filename
+        )
+    except ValueError as exc:
+        evidence.status = EvidenceStatus.FAILED
+        raise RuntimeError(f"Cannot store evidence: {exc}") from exc
+
+    orig_repo_dir = orig_dest_path.parent
+    enc_repo_dir = enc_dest_path.parent
 
     orig_repo_dir.mkdir(parents=True, exist_ok=True)
-    orig_dest = str(orig_repo_dir / evidence.filename)
+    orig_dest = str(orig_dest_path)
 
     # ── 1. Store Original Immutable Bytes ───────────────────────
     try:
@@ -162,7 +178,7 @@ def store_evidence(evidence: Evidence, case: CaseSession) -> Evidence:
     # ── 2. Store Encrypted Representation ────────────────────────
     if evidence.encrypted and evidence.encrypted_file_path and os.path.exists(evidence.encrypted_file_path):
         enc_repo_dir.mkdir(parents=True, exist_ok=True)
-        enc_dest = str(enc_repo_dir / f"{evidence.filename}.enc")
+        enc_dest = str(enc_dest_path)
         try:
             shutil.copy2(evidence.encrypted_file_path, enc_dest)
             evidence.encrypted_repository_path = enc_dest

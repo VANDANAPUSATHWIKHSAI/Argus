@@ -14,7 +14,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Response, Depends
+from api.routes.auth import get_current_user, require_authorized_tenant
 
 from fir.repository import FIRRepository
 from fir.service import AnalystFindingService
@@ -22,7 +23,7 @@ from report_generation.generator import ReportGenerator
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_authorized_tenant)])
 
 _fir_repo = FIRRepository()
 _analyst_service = AnalystFindingService(fir_repo=_fir_repo)
@@ -49,7 +50,8 @@ async def get_report(
     case_id: str,
     format: str = Query("html", description="Report format: 'html', 'json', or 'pdf'"),
     allow_unreviewed: bool = Query(False, description="Whether to include unreviewed findings"),
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID")
+    x_tenant_id: str = Depends(require_authorized_tenant),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Generate and download a forensic case report package in HTML, JSON, or PDF format.

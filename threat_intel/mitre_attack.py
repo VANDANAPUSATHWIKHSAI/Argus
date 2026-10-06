@@ -29,6 +29,10 @@ class MitreAttackClient:
             self._load()
         target = technique_id.lower()
         for item in self._objects:
+            if item.get("type") not in {"attack-pattern"}:
+                continue
+            if item.get("revoked") or item.get("x_mitre_deprecated"):
+                continue
             external_refs = item.get("external_references", [])
             if any(str(ref.get("external_id", "")).lower() == target for ref in external_refs):
                 return item

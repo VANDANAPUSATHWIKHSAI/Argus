@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from typing import Optional
@@ -55,11 +55,31 @@ def get_db_connection():
     finally:
         db_pool.putconn(conn)
 
+def ensure_tenant_membership_schema() -> None:
+    """Apply the additive tenant-membership migration for existing databases."""
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT")
+                cur.execute("UPDATE users SET tenant_id = 'default' WHERE tenant_id IS NULL")
+                cur.execute("ALTER TABLE users ALTER COLUMN tenant_id SET DEFAULT 'default'")
+                cur.execute("ALTER TABLE users ALTER COLUMN tenant_id SET NOT NULL")
+            conn.commit()
+    except Exception as exc:
+        # Authentication must fail closed if membership cannot be established.
+        print(f"Tenant membership migration failed: {exc}")
+
+ensure_tenant_membership_schema()
+
 def get_user_by_id(userid: str):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id, email, password_hash, role, name FROM users WHERE id = %s", (userid,))
+                cur.execute(
+                    "SELECT id, email, password_hash, role, name, tenant_id "
+                    "FROM users WHERE id = %s",
+                    (userid,),
+                )
                 row = cur.fetchone()
                 if row:
                     return {
@@ -67,7 +87,8 @@ def get_user_by_id(userid: str):
                         "email": row[1],
                         "password": row[2],
                         "role": row[3],
-                        "name": row[4]
+                        "name": row[4],
+                        "tenant_id": row[5],
                     }
     except Exception as e:
         print(f"DB Error: {e}")
@@ -133,6 +154,24 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
+def require_authorized_tenant(
+    x_tenant_id: str = Header(None, alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user),
+) -> str:
+    """Validate an optional tenant selector against the authenticated scope.
+
+    Tenant headers are selectors only; they never establish authorization.
+    Legacy users without an explicit tenant membership are restricted to the
+    default tenant until membership data is provisioned.
+    """
+    authorized = str(current_user.get("tenant_id") or "").strip()
+    if not authorized:
+        raise HTTPException(status_code=403, detail="User has no authorized tenant")
+    requested = (x_tenant_id or authorized).strip()
+    if requested != str(authorized):
+        raise HTTPException(status_code=403, detail="Tenant is not authorized for this user")
+    return str(authorized)
+
 def send_email_otp(target_email: str, otp: str):
     smtp_pass = os.environ.get("SMTP_PASSWORD") or os.environ.get("GMAIL_APP_PASSWORD")
     if not smtp_pass:
@@ -176,7 +215,12 @@ def login(credentials: LoginRequest):
     user = get_user_by_id(userid)
     if user and verify_password(password, user["password"]):
         access_token = create_access_token(
-            data={"sub": user["id"], "role": user["role"], "name": user["name"]}
+            data={
+                "sub": user["id"],
+                "role": user["role"],
+                "name": user["name"],
+                "tenant_id": user["tenant_id"],
+            }
         )
         return {
             "token": access_token,
@@ -185,7 +229,8 @@ def login(credentials: LoginRequest):
                 "id": user["id"],
                 "email": user["email"],
                 "role": user["role"],
-                "name": user["name"]
+                "name": user["name"],
+                "tenant_id": user["tenant_id"],
             }
         }
     
@@ -280,7 +325,11 @@ async def get_employees(response: Response, current_user: dict = Depends(get_cur
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT id, email, role, name, phone, doj FROM users")
+                cur.execute(
+                    "SELECT id, email, role, name, phone, doj FROM users "
+                    "WHERE tenant_id = %s",
+                    (current_user["tenant_id"],),
+                )
                 rows = cur.fetchall()
                 response.headers["Cache-Control"] = "no-store, max-age=0"
                 return [{"id": r[0], "email": r[1], "role": r[2], "name": r[3], "phone": r[4], "doj": r[5]} for r in rows]
@@ -304,8 +353,11 @@ async def create_employee(emp: EmployeeCreate, current_user: dict = Depends(get_
                         raise HTTPException(status_code=400, detail="An admin already exists. Only one admin is allowed.")
                 
                 cur.execute(
-                    "INSERT INTO users (id, email, password_hash, role, name, phone, doj) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (emp.userid, emp.email, default_password, emp.role, emp.name, emp.phone, emp.doj)
+                    "INSERT INTO users (id, email, password_hash, role, name, phone, doj, tenant_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (
+                        emp.userid, emp.email, default_password, emp.role,
+                        emp.name, emp.phone, emp.doj, current_user["tenant_id"],
+                    )
                 )
             conn.commit()
         return {"message": "Employee created successfully"}
@@ -359,4 +411,3 @@ async def delete_employee(userid: str, current_user: dict = Depends(get_current_
     except Exception as e:
         print(f"DB Error: {e}")
         raise HTTPException(status_code=500, detail="Database error")
-

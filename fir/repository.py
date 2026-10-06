@@ -176,6 +176,66 @@ class FIRRepository:
         finding = self.findings.get(finding_id)
         if finding and finding.tenant_id == tenant_id:
             return finding
+        try:
+            import psycopg2
+            from config.settings import settings
+            conn = psycopg2.connect(
+                host=settings.postgres_host,
+                port=settings.postgres_port,
+                database=settings.postgres_db,
+                user=settings.postgres_user,
+                password=settings.postgres_password,
+                connect_timeout=3,
+            )
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT finding_id, case_id, tenant_id, fact, sanitized_fact,
+                       confidence, severity, mitre_mapping, evidence_reference,
+                       source_artifact_id, finding_fingerprint, review_status,
+                       reviewed_by, injection_flagged, injection_score, layer,
+                       timestamp
+                FROM fir_findings
+                WHERE finding_id = %s AND tenant_id = %s
+                """,
+                (finding_id, tenant_id),
+            )
+            row = cur.fetchone()
+            conn.close()
+            if row is None:
+                return None
+            (
+                f_id, case_id, record_tenant, fact, sanitized_fact, confidence,
+                severity, mitre_mapping, evidence_reference, source_artifact_id,
+                fingerprint, review_status, reviewed_by, injection_flagged,
+                injection_score, layer, timestamp,
+            ) = row
+            hydrated = FIRFinding(
+                finding_id=f_id,
+                case_id=case_id,
+                tenant_id=record_tenant,
+                fact=fact,
+                sanitized_fact=sanitized_fact or fact,
+                confidence=float(confidence),
+                severity=severity,
+                mitre_mapping=mitre_mapping,
+                evidence_reference=list(evidence_reference or []),
+                source_artifact_id=source_artifact_id or f_id,
+                finding_fingerprint=fingerprint or "",
+                review_status=next(
+                    (status for status in ReviewStatus if status.value == review_status),
+                    ReviewStatus.PENDING_REVIEW,
+                ),
+                reviewed_by=reviewed_by,
+                injection_flagged=bool(injection_flagged),
+                injection_score=float(injection_score or 0.0),
+                layer=layer or "unknown",
+                timestamp=timestamp,
+            )
+            self.findings[f_id] = hydrated
+            return hydrated
+        except Exception as exc:
+            logger.debug("Postgres lookup skipped for finding %s: %s", finding_id, exc)
         return None
 
     def _hydrate_from_postgres(self, case_id: str, tenant_id: str) -> None:

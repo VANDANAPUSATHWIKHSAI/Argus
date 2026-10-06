@@ -1,13 +1,14 @@
 import logging
-from fastapi import APIRouter, HTTPException, Header
+from fastapi import APIRouter, HTTPException, Header, Depends
 from pydantic import BaseModel
+from api.routes.auth import get_current_user, require_authorized_tenant
 from sanitization.injection_gate import InjectionGate
 from fir.repository import FIRRepository
 from models.llm import OllamaWrapper
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_authorized_tenant)])
 
 # Share the repository instance so the API and tests can interact with the same database
 _fir_repo = FIRRepository()
@@ -22,7 +23,7 @@ class QueryResponse(BaseModel):
     injection_score: float
 
 @router.post("/{case_id}/query", response_model=QueryResponse)
-async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(..., alias="X-Tenant-ID")):
+async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Depends(require_authorized_tenant), current_user: dict = Depends(get_current_user)):
     # 1. Injection check on analyst query
     gate_res = _injection_gate.check(req.query, field_name="unstructured")
 

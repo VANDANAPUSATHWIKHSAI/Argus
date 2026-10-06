@@ -1,6 +1,19 @@
 -- Runs automatically the first time the postgres container starts.
 -- This is what gets committed to git -- the SCHEMA, not the data.
 
+CREATE TABLE IF NOT EXISTS users (
+    id            TEXT PRIMARY KEY,
+    email         TEXT,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL,
+    name          TEXT,
+    tenant_id     TEXT NOT NULL DEFAULT 'default'
+);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id TEXT;
+UPDATE users SET tenant_id = 'default' WHERE tenant_id IS NULL;
+ALTER TABLE users ALTER COLUMN tenant_id SET DEFAULT 'default';
+ALTER TABLE users ALTER COLUMN tenant_id SET NOT NULL;
+
 CREATE TABLE IF NOT EXISTS cases (
     case_id      UUID PRIMARY KEY,
     tenant_id    TEXT NOT NULL,

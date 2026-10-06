@@ -17,7 +17,7 @@ from typing import Optional, List
 from pathlib import Path
 
 from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException, Query, Depends
-from api.routes.auth import get_current_user
+from api.routes.auth import get_current_user, require_authorized_tenant
 from pydantic import BaseModel, Field
 
 from infrastructure.schemas import Evidence, CaseSession
@@ -31,7 +31,7 @@ from fir.service import AnalystFindingService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_authorized_tenant)])
 
 # Shared repository and service instances
 _fir_repo = FIRRepository()
@@ -73,7 +73,7 @@ async def upload_evidence(
     file: UploadFile = File(...),
     case_id: Optional[str] = Query(None),
     form_case_id: Optional[str] = Form(None, alias="case_id"),
-    tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    tenant_id: str = Depends(require_authorized_tenant),
     uploaded_by: str = Form("analyst_api"),
     host_id: str = Form("NTFS1-HOST"),
     relative_path: Optional[str] = Form(None),
@@ -317,7 +317,8 @@ async def upload_evidence(
 @router.get("/case/{case_id}")
 async def get_evidence_by_case(
     case_id: str,
-    tenant_id: str = Header("default", alias="X-Tenant-ID")
+    tenant_id: str = Depends(require_authorized_tenant),
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Retrieve all evidence records for a given case ID.

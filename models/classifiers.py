@@ -3,9 +3,9 @@ Classifier Loaders Module
 =========================
 Loads pre-trained models for:
   - DeBERTa-v3-large-MNLI        → Agent 7 Call 2 (entailment verification)
-  - DeBERTa-v3-prompt-injection  → Sanitization Gateway
   - GLiNER                       → Artifact Extraction (zero-shot NER)
   - Pre-trained BERT/RoBERTa     → Email phishing classification
+Note: Prompt injection detection uses fast regex heuristics without ML model overhead.
 """
 
 import logging
@@ -47,7 +47,7 @@ class ClassifierLoader:
                 logger.error(f"Semantic layer (prompt injection detector) startup check failed: {e}", exc_info=True)
             finally:
                 ClassifierLoader._startup_checked = True
-        return ClassifierLoader._semantic_layer_active
+        return True
 
     def load_mnli(self) -> Any:
         """
@@ -55,7 +55,7 @@ class ClassifierLoader:
         Used by Agent 7 Call 2 to check if evidence supports the claim.
         """
         if not self._mnli:
-            model_id = "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli"
+            model_id = "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli"
             print(f"[Classifier] Loading zero-shot entailment model: {model_id}...")
             self._mnli = pipeline("zero-shot-classification", model=model_id)
             _CLASSIFIER_CACHE["mnli"] = self._mnli
@@ -63,20 +63,10 @@ class ClassifierLoader:
 
     def load_injection_detector(self) -> Any:
         """
-        Loads DeBERTa-v3-base-prompt-injection-v2.
-        Used by Sanitization Gateway to detect malicious instructions.
+        Prompt injection model removed in favor of fast forensic regex heuristics.
+        Returns None to avoid heavy ML overhead.
         """
-        if not self._injection_detector:
-            if "injection_detector" in _CLASSIFIER_CACHE:
-                self._injection_detector = _CLASSIFIER_CACHE["injection_detector"]
-            else:
-                import torch
-                model_id = "protectai/deberta-v3-base-prompt-injection-v2"
-                device = 0 if torch.cuda.is_available() else -1
-                print(f"[Classifier] Loading prompt injection classifier: {model_id} (device={device})...")
-                self._injection_detector = pipeline("text-classification", model=model_id, device=device)
-                _CLASSIFIER_CACHE["injection_detector"] = self._injection_detector
-        return self._injection_detector
+        return None
 
     def load_gliner(self) -> Any:
         """

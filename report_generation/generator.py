@@ -238,7 +238,7 @@ HTML_REPORT_TEMPLATE = """<!DOCTYPE html>
                             <span class="badge badge-{{ f.severity|lower|e }}">{{ f.severity|e }}</span>
                         </td>
                         <td>{{ f.sanitized_fact or f.fact|e }}</td>
-                        <td>{{ "%.2f"|format(f.confidence|float) if f.confidence is not none else "1.00" }}</td>
+                        <td>{{ "%.2f"|format(f.confidence|float) if (f.confidence is defined and f.confidence is not none) else "1.00" }}</td>
                         <td class="mono">{{ f.mitre_mapping|e if f.mitre_mapping else '-' }}</td>
                         <td>{{ f.layer|e if f.layer else '-' }}</td>
                         <td>

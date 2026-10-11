@@ -70,6 +70,57 @@ class Agent1Validator:
 
         return finding_ids, lineage_ids
 
+    @staticmethod
+    def calculate_deterministic_priority_score(
+        investigative_value: str = "MEDIUM",
+        severity: str = "informational",
+        has_provenance: bool = True,
+        has_timestamp: bool = True,
+        has_multiple_refs: bool = False,
+        is_primary_or_supporting: bool = True
+    ) -> Tuple[float, List[str]]:
+        """
+        Calculates an explainable, deterministic priority score in [0.0, 1.0] with explicit factor breakdown.
+        Factor weights:
+        - relevance (investigative_value): 0.25
+        - evidentiary_strength (severity & provenance): 0.25
+        - temporal_relevance (has timestamp): 0.15
+        - cross_source_support (multiple evidence refs): 0.15
+        - downstream_usefulness: 0.10
+        - evidence_gap_contribution: 0.10
+        """
+        val_map = {"CRITICAL": 1.0, "HIGH": 0.8, "MEDIUM": 0.5, "LOW": 0.2, "INFORMATIONAL": 0.1}
+        rel_factor = val_map.get(str(investigative_value).upper(), 0.5)
+
+        sev_map = {"critical": 1.0, "high": 0.85, "medium": 0.6, "low": 0.3, "informational": 0.1}
+        sev_factor = sev_map.get(str(severity).lower(), 0.5)
+        prov_factor = 1.0 if has_provenance else 0.4
+        strength_factor = (sev_factor + prov_factor) / 2.0
+
+        ts_factor = 1.0 if has_timestamp else 0.0
+        cross_factor = 1.0 if has_multiple_refs else 0.5
+        downstream_factor = 1.0 if is_primary_or_supporting else 0.5
+        gap_factor = 1.0 if is_primary_or_supporting else 0.5
+
+        raw_score = (
+            0.25 * rel_factor +
+            0.25 * strength_factor +
+            0.15 * ts_factor +
+            0.15 * cross_factor +
+            0.10 * downstream_factor +
+            0.10 * gap_factor
+        )
+        score = round(max(0.0, min(1.0, raw_score)), 2)
+
+        breakdown = [
+            f"investigative_relevance={investigative_value} ({rel_factor:.2f})",
+            f"evidentiary_strength={strength_factor:.2f}",
+            f"temporal_relevance={ts_factor:.2f}",
+            f"cross_source_support={cross_factor:.2f}",
+            f"downstream_usefulness={downstream_factor:.2f}"
+        ]
+        return score, breakdown
+
     def validate_triage_output(
         self,
         output_dict: Dict[str, Any],
@@ -94,15 +145,27 @@ class Agent1Validator:
                         invalid_citations.add(eid)
                         logger.warning("Agent1Validator: priority_evidence cited invalid ID '%s'", eid)
                     else:
-                        # Validate priority_score bounds [0.0, 1.0]
-                        score = item.get("priority_score", 0.5)
-                        try:
-                            score = float(score)
-                            if score < 0.0 or score > 1.0:
-                                score = max(0.0, min(1.0, score))
-                        except (ValueError, TypeError):
-                            score = 0.5
+                        # Validate and enforce priority_score bounds [0.0, 1.0]
+                        inv_val = item.get("investigative_value", "MEDIUM")
+                        score = item.get("priority_score")
+                        reasons = item.get("reason", [])
+                        if not isinstance(reasons, list):
+                            reasons = [str(reasons)] if reasons else []
+
+                        if score is None:
+                            score, breakdown = self.calculate_deterministic_priority_score(investigative_value=inv_val)
+                            reasons.extend(breakdown)
+                        else:
+                            try:
+                                score = float(score)
+                                if score < 0.0 or score > 1.0:
+                                    score = max(0.0, min(1.0, score))
+                            except (ValueError, TypeError):
+                                score, breakdown = self.calculate_deterministic_priority_score(investigative_value=inv_val)
+                                reasons.extend(breakdown)
+
                         item["priority_score"] = score
+                        item["reason"] = reasons
                         cleaned_priority.append(item)
             output_dict["priority_evidence"] = cleaned_priority
 

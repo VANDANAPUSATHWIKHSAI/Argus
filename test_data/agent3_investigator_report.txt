@@ -4,8 +4,6 @@ OUTPUT
 INFECTION PATH
 --------------
 F-E2E-001
-      ↓
-F-E2E-001
 
 ATTACK TIMELINE
 ---------------

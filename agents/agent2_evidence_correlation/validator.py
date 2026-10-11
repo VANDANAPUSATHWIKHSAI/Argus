@@ -1,20 +1,22 @@
 """
 Agent 2 — Deterministic Validation Gate
 ==========================================
-Verifies that claims produced by Agent 2 strictly cite valid FIR finding IDs
-and carry valid confidence scores.
+Verifies that claims, timeline events, relationships, and Qwen interpretations
+produced by Agent 2 strictly cite valid FIR finding IDs and carry valid confidence scores.
 """
 
 import logging
-from typing import List, Set, Tuple, Any
-from agents.agent2_evidence_correlation.schemas import Agent2Claim
+from typing import List, Set, Tuple, Any, Dict
+from agents.agent2_evidence_correlation.schemas import (
+    Agent2Claim, Agent2Output, TimelineEvent, DeterministicRelationship, CorrelationConflict, QwenInterpretation
+)
 
 logger = logging.getLogger(__name__)
 
 
 class Agent2Validator:
     """
-    Deterministic validation gate for Agent 2 evidence correlation claims.
+    Deterministic validation gate for Agent 2 evidence correlation output.
     """
 
     def extract_valid_id_universe(self, findings: List[Any]) -> Tuple[Set[str], Set[str]]:
@@ -124,3 +126,44 @@ class Agent2Validator:
             validated_claims.append(claim)
 
         return validated_claims
+
+    def validate_evidence_references(
+        self,
+        output: Agent2Output,
+        valid_finding_ids: Set[str],
+        valid_lineage_ids: Set[str]
+    ) -> Dict[str, Any]:
+        """
+        Comprehensive evidence reference validator for entire Agent 2 output.
+        Checks all cited IDs across claims, relationships, timeline events, and conflicts.
+        Returns validation summary dict.
+        """
+        universe = valid_finding_ids.union(valid_lineage_ids)
+        invalid_ids_found: Set[str] = set()
+
+        for claim in output.claims:
+            for cid in claim.cited_evidence_ids:
+                if str(cid).strip() not in universe:
+                    invalid_ids_found.add(str(cid).strip())
+
+        for rel in output.relationships:
+            for eid in rel.evidence_ids:
+                if str(eid).strip() not in universe:
+                    invalid_ids_found.add(str(eid).strip())
+
+        for evt in output.timeline:
+            for eid in evt.evidence_ids:
+                if str(eid).strip() not in universe:
+                    invalid_ids_found.add(str(eid).strip())
+
+        for conf in output.conflicts:
+            for fid in conf.involved_finding_ids:
+                if str(fid).strip() not in universe:
+                    invalid_ids_found.add(str(fid).strip())
+
+        return {
+            "all_citations_valid": len(invalid_ids_found) == 0,
+            "invalid_evidence_ids": sorted(list(invalid_ids_found)),
+            "universe_size": len(universe)
+        }
+

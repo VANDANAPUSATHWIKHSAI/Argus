@@ -178,5 +178,6 @@ class Agent1Output(BaseModel):
     performed_analyses: List[str] = Field(default_factory=list)
     
     execution_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] = "SUCCESS"
+    persistence_status: Literal["PERSISTED", "PERSISTENCE_DEGRADED", "NOT_PERSISTED"] = "PERSISTED"
     failure_type: Optional[str] = None
     error_message: Optional[str] = None

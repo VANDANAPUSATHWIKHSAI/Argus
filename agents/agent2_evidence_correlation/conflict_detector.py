@@ -92,7 +92,9 @@ class ConflictDetector:
                         conflict_type="hash_collision",
                         description=f"Multiple distinct SHA256 hashes detected for the same file name '{filename}'.",
                         involved_finding_ids=involved,
-                        severity="high"
+                        severity="high",
+                        status="UNRESOLVED",
+                        conflicting_values={"filename": filename, "hashes": list(hash_map.keys())}
                     )
                 )
                 conflict_idx += 1
@@ -108,7 +110,9 @@ class ConflictDetector:
                         conflict_type="user_attribution_conflict",
                         description=f"Process PID '{pid}' attributed to multiple distinct users ({users_str}).",
                         involved_finding_ids=involved,
-                        severity="high"
+                        severity="high",
+                        status="UNRESOLVED",
+                        conflicting_values={"pid": pid, "users": list(user_map.keys())}
                     )
                 )
                 conflict_idx += 1
@@ -124,7 +128,9 @@ class ConflictDetector:
                         conflict_type="process_parent_conflict",
                         description=f"Process PID '{pid}' reported with contradictory parent PIDs ({ppids_str}).",
                         involved_finding_ids=involved,
-                        severity="medium"
+                        severity="medium",
+                        status="UNRESOLVED",
+                        conflicting_values={"pid": pid, "parent_pids": list(ppid_map.keys())}
                     )
                 )
                 conflict_idx += 1
@@ -140,7 +146,9 @@ class ConflictDetector:
                         conflict_type="host_attribution_conflict",
                         description=f"Artifact/finding '{art_id}' associated with contradictory hostnames ({hosts_str}).",
                         involved_finding_ids=involved,
-                        severity="high"
+                        severity="high",
+                        status="UNRESOLVED",
+                        conflicting_values={"artifact_id": art_id, "hosts": list(host_map.keys())}
                     )
                 )
                 conflict_idx += 1
@@ -155,7 +163,9 @@ class ConflictDetector:
                         conflict_type="timestamp_conflict",
                         description=f"Contradictory event timestamps reported for artifact/finding '{art_id}'.",
                         involved_finding_ids=involved,
-                        severity="medium"
+                        severity="medium",
+                        status="UNRESOLVED",
+                        conflicting_values={"artifact_id": art_id, "timestamps": list(ts_map.keys())}
                     )
                 )
                 conflict_idx += 1
@@ -172,7 +182,9 @@ class ConflictDetector:
                         conflict_type="severity_disagreement",
                         description=f"Contradictory severity assessments for IP address '{ip}' (assessed as both high/critical and low/informational).",
                         involved_finding_ids=involved,
-                        severity="medium"
+                        severity="medium",
+                        status="UNRESOLVED",
+                        conflicting_values={"ip": ip, "severities": list(sev_map.keys())}
                     )
                 )
                 conflict_idx += 1
@@ -187,7 +199,9 @@ class ConflictDetector:
                     conflict_type="persistence_disagreement",
                     description=f"Contradictory persistence assertions between findings {no_pers} and {has_pers}.",
                     involved_finding_ids=sorted(list(set(no_pers + has_pers))),
-                    severity="high"
+                    severity="high",
+                    status="UNRESOLVED",
+                    conflicting_values={"no_persistence_findings": no_pers, "persistence_findings": has_pers}
                 )
             )
             conflict_idx += 1
@@ -202,7 +216,9 @@ class ConflictDetector:
                     conflict_type="malware_status_disagreement",
                     description=f"Contradictory malware status assertions between findings {cleared} and {infected}.",
                     involved_finding_ids=sorted(list(set(cleared + infected))),
-                    severity="high"
+                    severity="high",
+                    status="UNRESOLVED",
+                    conflicting_values={"cleared_findings": cleared, "infected_findings": infected}
                 )
             )
             conflict_idx += 1
@@ -277,5 +293,6 @@ class ConflictDetector:
         if isinstance(finding, dict):
             return finding.get("source_artifact_id") or finding.get("artifact_id")
         return getattr(finding, "source_artifact_id", None) or getattr(finding, "artifact_id", None)
+
 
 

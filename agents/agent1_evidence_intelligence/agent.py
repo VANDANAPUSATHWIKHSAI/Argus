@@ -128,13 +128,14 @@ class EvidenceIntelligenceAgent(BaseAgent):
         """
         STEP 4: Objective Metadata Calculation before calling LLM.
         Calculates provenance completeness, duplicate fingerprints, evidence category inventory,
-        coverage breakdown, and hard readiness blockers.
+        coverage breakdown, injection security flags vs genuine forensic conflicts, and hard readiness blockers.
         """
         total_findings = len(fir_findings)
         layers_present: Set[str] = set()
         source_tools_present: Set[str] = set()
         provenance_count = 0
-        conflicting_count = 0
+        forensic_conflict_count = 0
+        injections_flagged_count = 0
         fingerprints: Set[str] = set()
         duplicate_count = 0
 
@@ -172,8 +173,19 @@ class EvidenceIntelligenceAgent(BaseAgent):
             if ev_ref or src_art:
                 provenance_count += 1
 
+            # FIX #1: Prompt injection is a security flag, NOT a forensic contradiction!
             if _get_val(f, "injection_flagged", False):
-                conflicting_count += 1
+                injections_flagged_count += 1
+
+            fact_str = str(_get_val(f, "fact") or "").lower()
+            if (
+                _get_val(f, "has_forensic_conflict", False)
+                or _get_val(f, "is_contradiction", False)
+                or _get_val(f, "forensic_conflict", False)
+                or "conflict" in fact_str
+                or "contradiction" in fact_str
+            ):
+                forensic_conflict_count += 1
 
             if "registry" in lyr or "reg" in src_tool:
                 inventory["registry"] += 1
@@ -217,9 +229,13 @@ class EvidenceIntelligenceAgent(BaseAgent):
             "initial_access": "HIGH" if (inventory["email"] > 0 or inventory["browser"] > 0 or inventory["network"] > 0) else "LOW"
         }
 
+        # FIX #4: Semantically meaningful readiness states: READY, READY_WITH_LIMITATIONS, LIMITED, NOT_READY
         if total_findings == 0:
             readiness_status = "NOT_READY"
             readiness_reason = "No forensic evidence available for case."
+        elif prov_ratio < 0.3:
+            readiness_status = "LIMITED"
+            readiness_reason = f"Evidence provenance severely incomplete ({prov_ratio*100:.1f}%)."
         elif readiness_blockers:
             readiness_status = "READY_WITH_LIMITATIONS"
             readiness_reason = f"Evidence available with limitations: {'; '.join(readiness_blockers)}"
@@ -227,7 +243,8 @@ class EvidenceIntelligenceAgent(BaseAgent):
             readiness_status = "READY"
             readiness_reason = f"Ingested {total_findings} FIR findings across {len(layers_present)} forensic layers."
 
-        trust_score = round(min(1.0, max(0.0, prov_ratio * 0.7 + (1.0 - conflicting_count / max(1, total_findings)) * 0.3)), 2)
+        # FIX #1 & #6: Trust score depends on provenance ratio & genuine forensic conflicts (NOT prompt injection flags)
+        trust_score = round(min(1.0, max(0.0, prov_ratio * 0.7 + (1.0 - forensic_conflict_count / max(1, total_findings)) * 0.3)), 2)
 
         return {
             "total_findings": total_findings,
@@ -236,7 +253,8 @@ class EvidenceIntelligenceAgent(BaseAgent):
             "layers_present": sorted(list(layers_present)),
             "source_tools_present": sorted(list(source_tools_present)),
             "provenance_ratio": prov_ratio,
-            "conflicting_count": conflicting_count,
+            "forensic_conflict_count": forensic_conflict_count,
+            "injections_flagged_count": injections_flagged_count,
             "inventory": inventory,
             "coverage": coverage,
             "readiness_status": readiness_status,
@@ -513,11 +531,19 @@ class EvidenceIntelligenceAgent(BaseAgent):
             logger.warning("Failed to parse LLM response as JSON: %s. Raw text: %s", err, raw_text[:200])
             return None, [], f"JSON parse error: {str(err)}"
 
+    _db_unreachable: bool = False
+
     def _persist_agent_output(self, output: Agent1Output):
         """
         Persists Agent 1 output into PostgreSQL `agent_outputs` table using idempotent UPSERT.
         Does NOT create duplicate execution records for unchanged case/tenant/claim states.
+        Updates output.persistence_status to PERSISTED on success or PERSISTENCE_DEGRADED on DB offline.
         """
+        if EvidenceIntelligenceAgent._db_unreachable:
+            output.persistence_status = "PERSISTENCE_DEGRADED"
+            logger.info("PostgreSQL unavailable. Persistence fallback active (PERSISTENCE_DEGRADED).")
+            return
+
         try:
             import psycopg2
             from config.settings import settings
@@ -527,7 +553,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 database=settings.postgres_db,
                 user=settings.postgres_user,
                 password=settings.postgres_password,
-                connect_timeout=5
+                connect_timeout=1
             )
             _ensure_agent_outputs_table_initialized(conn)
             cur = conn.cursor()
@@ -584,6 +610,9 @@ class EvidenceIntelligenceAgent(BaseAgent):
 
             conn.commit()
             conn.close()
+            output.persistence_status = "PERSISTED"
             logger.info("Agent 1 output persisted to PostgreSQL agent_outputs table for case %s", output.case_id)
         except Exception as exc:
-            logger.warning("PostgreSQL agent_outputs persist error: %s", exc)
+            EvidenceIntelligenceAgent._db_unreachable = True
+            output.persistence_status = "PERSISTENCE_DEGRADED"
+            logger.warning("PostgreSQL offline / persistence unavailable (%s). Execution continues with PERSISTENCE_DEGRADED.", exc)

@@ -61,6 +61,69 @@ class ClassifierLoader:
             _CLASSIFIER_CACHE["mnli"] = self._mnli
         return self._mnli
 
+    def classify_nli(self, premise: str, hypothesis: str) -> Dict[str, Any]:
+        """
+        Runs true NLI cross-encoder inference:
+        Premise = Evidence fact (FIR finding)
+        Hypothesis = Claim statement
+        Returns probabilities for entailment, neutral, contradiction, and top label.
+        """
+        import torch
+        pipe = self.load_mnli()
+        model = getattr(pipe, "model", None)
+        tokenizer = getattr(pipe, "tokenizer", None)
+
+        if (
+            isinstance(model, torch.nn.Module)
+            and tokenizer is not None
+            and not hasattr(model, "_mock_return_value")
+        ):
+            device = model.device
+            inputs = tokenizer(premise, hypothesis, return_tensors="pt", truncation=True).to(device)
+            with torch.no_grad():
+                logits = model(**inputs).logits
+                probs = torch.softmax(logits, dim=-1)[0]
+
+            id2label = getattr(model.config, "id2label", {0: "entailment", 1: "neutral", 2: "contradiction"})
+            id2label_norm = {k: str(v).lower() for k, v in id2label.items()}
+            entail_idx = next((k for k, v in id2label_norm.items() if "entail" in v), 0)
+            neutral_idx = next((k for k, v in id2label_norm.items() if "neut" in v), 1)
+            contra_idx = next((k for k, v in id2label_norm.items() if "contra" in v), 2)
+
+            top_idx = int(torch.argmax(probs).item())
+            top_label = id2label_norm.get(top_idx, "neutral")
+
+            return {
+                "entailment": float(probs[entail_idx].item()),
+                "neutral": float(probs[neutral_idx].item()),
+                "contradiction": float(probs[contra_idx].item()),
+                "label": top_label,
+            }
+        else:
+            # Fallback for mocked or non-torch pipeline in unit tests
+            res = pipe(
+                sequences=premise,
+                candidate_labels=["entailment", "neutral", "contradiction"],
+                hypothesis_template=hypothesis
+            )
+            labels = res["labels"]
+            scores = res["scores"]
+            score_dict = dict(zip(labels, scores))
+            ent = float(score_dict.get("entailment", score_dict.get("supports", 0.0)))
+            neut = float(score_dict.get("neutral", 0.0))
+            contra = float(score_dict.get("contradiction", score_dict.get("contradicts", 0.0)))
+            top_lbl = labels[0] if labels else "neutral"
+            if top_lbl == "supports":
+                top_lbl = "entailment"
+            elif top_lbl == "contradicts":
+                top_lbl = "contradiction"
+            return {
+                "entailment": ent,
+                "neutral": neut,
+                "contradiction": contra,
+                "label": top_lbl,
+            }
+
     def load_injection_detector(self) -> Any:
         """
         Prompt injection model removed in favor of fast forensic regex heuristics.

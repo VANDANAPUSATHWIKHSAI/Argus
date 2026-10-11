@@ -130,6 +130,13 @@ class SupervisorAgent(BaseAgent):
 
             try:
                 synthesis_data = self.call1.run(case_id, context)
+                if synthesis_data.get("synthesis_status") == "FAILED" or synthesis_data.get("synthesis_error"):
+                    return {
+                        "status": "FAILED",
+                        "error": synthesis_data.get("synthesis_error") or "SYNTHESIS_FAILED",
+                        "synthesis": synthesis_data,
+                        "claims": [],
+                    }
                 claims = synthesis_data.get("claims", [])
                 return {
                     "status": "SYNTHESIS_COMPLETED",
@@ -151,9 +158,10 @@ class SupervisorAgent(BaseAgent):
 
             try:
                 ver_output = self.call2.run(case_id, {"claims": claims, "tenant_id": tenant_id})
+                results = ver_output.get("verification_results", [])
                 return {
                     "status": "VERIFICATION_COMPLETED",
-                    "verification_results": ver_output.get("verification_results", []),
+                    "verification_results": results,
                 }
             except Exception as e:
                 logger.error(f"Agent 7 verification node encountered exception: {e}", exc_info=True)
@@ -195,27 +203,57 @@ class SupervisorAgent(BaseAgent):
             tenant_id = state.get("tenant_id", self.tenant_id)
             synthesis_data = state.get("synthesis", {})
             ver_results = state.get("verification_results", [])
+            claims = state.get("claims", [])
             gate_decision = state.get("confidence_gate", {})
             review_level = state.get("review_level", "ROUTINE_ANALYST_REVIEW")
             extra_ctx = dict(state.get("context", {}))
             extra_ctx["review_level"] = review_level
 
-            package = self.report_builder.build_report_package(
-                case_id=case_id,
-                tenant_id=tenant_id,
-                synthesis=synthesis_data,
-                verification_results=ver_results,
-                confidence_gate=gate_decision,
-                extra_context=extra_ctx,
-            )
+            try:
+                package = self.report_builder.build_report_package(
+                    case_id=case_id,
+                    tenant_id=tenant_id,
+                    synthesis=synthesis_data,
+                    verification_results=ver_results,
+                    confidence_gate=gate_decision,
+                    extra_context=extra_ctx,
+                )
+            except Exception as rep_err:
+                logger.error(f"Report generation failed: {rep_err}", exc_info=True)
+                err_msg = f"REPORT_GENERATION_ERROR: {str(rep_err)}"
+                final_output = {
+                    "case_id": case_id,
+                    "tenant_id": tenant_id,
+                    "status": "FAILED",
+                    "error": err_msg,
+                    "review_level": review_level,
+                    "synthesis": synthesis_data,
+                    "verification_results": ver_results,
+                    "all_claims_verified": False,
+                    "unverified_claim_count": len(ver_results),
+                    "confidence_gate": gate_decision,
+                    "reports": {},
+                    "report_metadata": {"status": "FAILED", "error": err_msg},
+                }
+                return {
+                    "status": "FAILED",
+                    "error": err_msg,
+                    "final_output": final_output,
+                }
 
-            all_verified = all(r.get("verified", False) for r in ver_results) if ver_results else True
+            all_verified = bool(ver_results) and all(r.get("verified", False) for r in ver_results)
             unverified_count = sum(1 for r in ver_results if not r.get("verified", False))
+
+            # Distinguish COMPLETED from NEEDS_REVIEW
+            if not claims or not ver_results or not all_verified or review_level == "MANDATORY_SENIOR_DUAL_REVIEW":
+                terminal_status = "NEEDS_REVIEW"
+            else:
+                terminal_status = "COMPLETED"
 
             final_output = {
                 "case_id": case_id,
                 "tenant_id": tenant_id,
-                "status": "COMPLETED",
+                "status": terminal_status,
                 "review_level": review_level,
                 "synthesis": synthesis_data,
                 "verification_results": ver_results,
@@ -229,20 +267,28 @@ class SupervisorAgent(BaseAgent):
             return {
                 "reports": package,
                 "final_output": final_output,
-                "status": "COMPLETED",
+                "status": terminal_status,
             }
 
         # ── Node 7: Failure Terminal Node ────────────────────────────
         def failure_terminal_node(state: Agent7State) -> Agent7State:
             err = state.get("error") or "Unknown execution error"
+            case_id = state.get("case_id") or "INVALID"
+            tenant_id = state.get("tenant_id") or self.tenant_id
+            claims = state.get("claims", [])
             final_output = {
-                "case_id": state.get("case_id", "INVALID"),
-                "tenant_id": state.get("tenant_id", self.tenant_id),
+                "case_id": case_id,
+                "tenant_id": tenant_id,
                 "status": "FAILED",
                 "error": err,
                 "all_claims_verified": False,
-                "unverified_claim_count": len(state.get("claims", [])),
-                "confidence_gate": {"route": "senior_dual", "requires_senior_review": True, "reasons": [err]},
+                "unverified_claim_count": len(claims),
+                "confidence_gate": {
+                    "route": "senior_dual",
+                    "requires_senior_review": True,
+                    "reasons": [err],
+                    "attention_items": ["Execution failed: manual investigation required"],
+                },
                 "reports": {},
                 "report_metadata": {"status": "FAILED", "error": err},
             }
@@ -269,7 +315,11 @@ class SupervisorAgent(BaseAgent):
         def check_synthesis_status(state: Agent7State) -> str:
             return "failure_terminal" if state.get("status") == "FAILED" else "verification"
 
-        # Conditional Edge 3: Confidence Gate -> (routine_routing | senior_dual_routing)
+        # Conditional Edge 3: Verification -> (confidence_gate | failure_terminal)
+        def check_verification_status(state: Agent7State) -> str:
+            return "failure_terminal" if state.get("status") == "FAILED" else "confidence_gate"
+
+        # Conditional Edge 4: Confidence Gate -> (routine_routing | senior_dual_routing)
         def route_confidence_gate(state: Agent7State) -> str:
             decision = state.get("confidence_gate", {})
             if decision.get("route") == "senior_dual":
@@ -286,7 +336,10 @@ class SupervisorAgent(BaseAgent):
             "verification": "verification",
             "failure_terminal": "failure_terminal",
         })
-        builder.add_edge("verification", "confidence_gate")
+        builder.add_conditional_edges("verification", check_verification_status, {
+            "confidence_gate": "confidence_gate",
+            "failure_terminal": "failure_terminal",
+        })
         builder.add_conditional_edges("confidence_gate", route_confidence_gate, {
             "routine_routing": "routine_routing",
             "senior_dual_routing": "senior_dual_routing",

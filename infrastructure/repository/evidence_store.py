@@ -337,9 +337,15 @@ def store_evidence(evidence: Evidence, case: CaseSession) -> Evidence:
             conn.close()
         except Exception as e:
             print(f"  [DB WARNING] Failed to persist evidence records: {e}")
-    else:
-        from config.settings import settings
-        print(f"  [DB NOTICE] PostgreSQL offline on port {settings.postgres_port}; skipped SQL insert.")
+    # Local fallback persistence of metadata.json
+    try:
+        meta_dict = evidence.model_dump(mode="json")
+        meta_dict["tenant_id"] = case.tenant_id
+        meta_file = repo_base / "metadata.json"
+        with open(meta_file, "w", encoding="utf-8") as f:
+            json.dump(meta_dict, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to persist metadata.json locally: {e}")
 
     evidence.status = EvidenceStatus.STORED
     print(f"  [5/5] STORED     {evidence.filename} -> orig={evidence.original_repository_path} enc={evidence.encrypted_repository_path}")
@@ -496,6 +502,47 @@ def get_evidence(tenant_id: str, evidence_id: str) -> Optional[Evidence]:
                 return reconstruct_evidence_from_row(row)
         except Exception as e:
             logger.error("Failed to query evidence: %s", e)
+    else:
+        # LOCAL FALLBACK: scan local data/repository/*/{evidence_id}
+        from infrastructure.repository.evidence_store import REPOSITORY_DIR
+        from datetime import datetime
+        repo_path = Path(REPOSITORY_DIR)
+        if repo_path.exists():
+            for case_dir in repo_path.iterdir():
+                if case_dir.is_dir():
+                    ev_dir = case_dir / evidence_id
+                    if ev_dir.exists() and ev_dir.is_dir():
+                        metadata_file = ev_dir / "metadata.json"
+                        if metadata_file.exists():
+                            try:
+                                with open(metadata_file, "r", encoding="utf-8") as f:
+                                    data = json.load(f)
+                                    data["evidence_id"] = evidence_id
+                                    data["case_id"] = case_dir.name
+                                    if not data.get("status"):
+                                        data["status"] = EvidenceStatus.STORED
+                                    if data.get("tenant_id") and data["tenant_id"] != tenant_id and tenant_id != "default":
+                                        return None
+                                    return Evidence(**data)
+                            except Exception as e:
+                                logger.error("Failed to read metadata.json: %s", e)
+                        orig_dir = ev_dir / "original"
+                        if orig_dir.exists():
+                            files = list(orig_dir.iterdir())
+                            if files:
+                                file_path = files[0]
+                                return Evidence(
+                                    evidence_id=evidence_id,
+                                    case_id=case_dir.name,
+                                    filename=file_path.name,
+                                    file_path=str(file_path),
+                                    uploaded_by="Unknown (Local Fallback)",
+                                    upload_timestamp=datetime.fromtimestamp(file_path.stat().st_ctime),
+                                    status=EvidenceStatus.STORED,
+                                    original_repository_path=str(file_path),
+                                    repository_path=str(file_path),
+                                    metadata={"size_bytes": file_path.stat().st_size}
+                                )
     return None
 
 

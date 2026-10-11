@@ -48,7 +48,9 @@ class ConfidenceGate:
             or 0.0
         )
         ver_results = verification_output.get("verification_results") or []
-        claims = verification_output.get("claims") or []
+        claims = verification_output.get("claims")
+        if claims is None:
+            claims = [r for r in ver_results if isinstance(r, dict)]
         divergence_flags = list(verification_output.get("divergence_flags") or [])
 
         reasons: List[str] = []
@@ -57,6 +59,18 @@ class ConfidenceGate:
         # 1. Check verified vs unverified claims
         unverified_claims = [r for r in ver_results if not r.get("verified", False)]
         verified_claims = [r for r in ver_results if r.get("verified", False)]
+
+        # Zero claims or zero verification results MUST NEVER be treated as routine
+        if not claims or not ver_results:
+            reasons.append(
+                "Zero verified claims: Investigation has no verified claims. Mandatory human review required."
+            )
+            attention_items.append("No claims verified for this investigation; dual reviewer sign-off required.")
+        elif len(ver_results) < len(claims):
+            reasons.append(
+                f"Incomplete verification: {len(claims) - len(ver_results)} claim(s) lack verification results."
+            )
+            attention_items.append("Incomplete claim verification requires senior review.")
 
         for uv in unverified_claims:
             cid = uv.get("claim_id", "UNKNOWN")

@@ -73,7 +73,14 @@ class InteractiveInvestigationAssistant:
         claims = synthesis.get("claims") or []
         timeline = synthesis.get("attack_timeline") or []
         conf_gate = output.get("confidence_gate") or {}
-        conf_score = float(synthesis.get("confidence_score", 0.90))
+        
+        raw_score = synthesis.get("confidence_score")
+        conf_score: Optional[float] = None
+        if raw_score is not None:
+            try:
+                conf_score = float(raw_score)
+            except (ValueError, TypeError):
+                conf_score = None
 
         # Check for inquiry on empty/uninitialized investigation
         if not synthesis and not ver_results:
@@ -102,7 +109,7 @@ class InteractiveInvestigationAssistant:
 
         # 5. Why did you reach this conclusion / general reasoning
         elif any(kw in q for kw in ("reach this conclusion", "why did you conclude", "reasoning", "explain conclusion", "why")):
-            return self._explain_conclusion(synthesis, ver_results)
+            return self._explain_conclusion(synthesis, ver_results, conf_score)
 
         # 6. Specific evidence ID lookup query (e.g. "show FIR-9999")
         elif "fir-" in q:
@@ -114,7 +121,12 @@ class InteractiveInvestigationAssistant:
         # 7. Default response with grounded facts
         return self._general_investigation_summary(synthesis, ver_results, conf_score)
 
-    def _explain_conclusion(self, synthesis: Dict[str, Any], ver_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _explain_conclusion(
+        self,
+        synthesis: Dict[str, Any],
+        ver_results: List[Dict[str, Any]],
+        conf_score: Optional[float] = None,
+    ) -> Dict[str, Any]:
         verified_claims = [vr for vr in ver_results if vr.get("verified")]
         unverified_claims = [vr for vr in ver_results if not vr.get("verified")]
 
@@ -128,11 +140,17 @@ class InteractiveInvestigationAssistant:
             f"All core assertions were checked against the Forensic Information Repository (FIR) and verified via DeBERTa-v3-large-MNLI zero-shot entailment."
         )
 
+        conf_justification = (
+            f"Overall investigation confidence is {conf_score:.2f} based on verified evidence grounding."
+            if conf_score is not None
+            else "Investigation confidence score was not computed or is unavailable."
+        )
+
         return {
             "query_type": "conclusion_reasoning",
             "reasoning_explanation": reasoning,
             "supporting_evidence": list(set(evidence_cited)),
-            "confidence_justification": f"Overall investigation confidence is {synthesis.get('confidence_score', 0.90):.2f} based on verified evidence grounding.",
+            "confidence_justification": conf_justification,
             "verified_claims": [vc.get("claim") for vc in verified_claims],
             "unverified_claims": [uv.get("claim") for uv in unverified_claims],
         }
@@ -185,12 +203,14 @@ class InteractiveInvestigationAssistant:
             "confidence_justification": "Attribution confidence is constrained to verified MITRE ATT&CK technique overlap and Yara/IOC matches.",
         }
 
-    def _explain_confidence(self, score: float, conf_gate: Dict[str, Any], ver_results: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _explain_confidence(self, score: Optional[float], conf_gate: Dict[str, Any], ver_results: List[Dict[str, Any]]) -> Dict[str, Any]:
         reasons = conf_gate.get("reasons", [])
         unverified = [vr for vr in ver_results if not vr.get("verified")]
 
         threshold = float(conf_gate.get("confidence_threshold", 0.85))
-        if score >= threshold and not unverified:
+        if score is None:
+            explanation = "Investigation confidence score was not computed or is unavailable."
+        elif score >= threshold and not unverified:
             explanation = f"Confidence is high ({score:.2f} >= threshold {threshold:.2f}) because 100% of generated claims passed independent verification without divergence or inflation."
         else:
             explanation = (
@@ -229,10 +249,16 @@ class InteractiveInvestigationAssistant:
             "confidence_justification": f"Verified status: {matching[0].get('status')}",
         }
 
-    def _general_investigation_summary(self, synthesis: Dict[str, Any], ver_results: List[Dict[str, Any]], score: float) -> Dict[str, Any]:
+    def _general_investigation_summary(
+        self,
+        synthesis: Dict[str, Any],
+        ver_results: List[Dict[str, Any]],
+        score: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        conf_str = f"Investigation confidence: {score:.2f}" if score is not None else "Investigation confidence: unavailable"
         return {
             "query_type": "general_inquiry",
             "reasoning_explanation": synthesis.get("executive_summary", "Forensic investigation completed."),
             "supporting_evidence": [eid for vr in ver_results for eid in vr.get("evidence_ids", [])],
-            "confidence_justification": f"Investigation confidence: {score:.2f}",
+            "confidence_justification": conf_str,
         }

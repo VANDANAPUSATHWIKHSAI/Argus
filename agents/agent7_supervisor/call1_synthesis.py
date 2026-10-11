@@ -130,12 +130,17 @@ class SupervisorSynthesis(BaseAgent):
         )
 
         response_text = ""
+        model_error = None
         try:
             response_text = self.model.generate(full_prompt)
         except Exception as e:
             logger.error(f"LLM generation failed in SupervisorSynthesis: {e}", exc_info=True)
+            model_error = f"SYNTHESIS_MODEL_FAILED: {str(e)}"
 
         parsed = self._parse_synthesis_response(response_text, case_id, tenant_id, evidence_ids)
+        if model_error:
+            parsed["synthesis_status"] = "FAILED"
+            parsed["synthesis_error"] = model_error
         return parsed
 
     def _parse_synthesis_response(
@@ -147,10 +152,12 @@ class SupervisorSynthesis(BaseAgent):
     ) -> Dict[str, Any]:
         """
         Parses and validates LLM synthesis response into structured dict.
+        Never fabricates claims, evidence IDs, or artificial confidence scores.
         """
         data = None
-        if raw_text:
-            cleaned = raw_text.strip()
+        synthesis_error = None
+        if raw_text is not None:
+            cleaned = str(raw_text).strip()
             # Strip markdown json block if present
             if cleaned.startswith("```"):
                 cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned)
@@ -167,63 +174,72 @@ class SupervisorSynthesis(BaseAgent):
                         pass
 
         if not isinstance(data, dict):
-            logger.warning("Synthesis LLM response could not be parsed as JSON; using deterministic fallback structure.")
+            logger.warning(
+                "Synthesis LLM response could not be parsed as valid JSON; returning typed incomplete synthesis."
+            )
+            synthesis_error = "MALFORMED_OUTPUT: Synthesis model output could not be parsed as JSON."
             data = {
-                "executive_summary": raw_text[:500] if raw_text else f"Forensic investigation synthesis for case {case_id}.",
-                "incident_narrative": raw_text if raw_text else "Investigation outputs synthesized across available forensic layers.",
-                "claims": [
-                    {
-                        "claim_id": "CLM-001",
-                        "claim": (raw_text[:200] if raw_text else f"Incident confirmed for case {case_id}"),
-                        "evidence_ids": fallback_evidence_ids,
-                        "severity": "medium",
-                        "is_attribution": False,
-                        "confidence": 0.85,
-                        "mitre_tactics": ["Execution"],
-                        "mitre_techniques": ["T1059"]
-                    }
-                ],
+                "executive_summary": "Investigation synthesis unavailable: Model output could not be parsed as structured JSON.",
+                "incident_narrative": "No structured claims could be extracted due to synthesis output parsing failure.",
+                "claims": [],
                 "attack_timeline": [],
                 "conflicts_resolved": [],
-                "confidence_score": 0.85,
+                "confidence_score": 0.0,
             }
 
-        # Normalize claims
+        # Normalize claims without fabricating evidence references or scores
         claims_raw = data.get("claims") or []
         normalized_claims = []
         for idx, c in enumerate(claims_raw, start=1):
             if isinstance(c, dict):
                 cid = c.get("claim_id") or f"CLM-{idx:03d}"
-                ctext = c.get("claim") or c.get("statement") or ""
-                eids = c.get("evidence_ids") or fallback_evidence_ids
+                ctext = (c.get("claim") or c.get("statement") or "").strip()
+                if not ctext:
+                    continue
+                # Cited evidence IDs must come from the actual claim, not invented
+                eids = c.get("evidence_ids")
+                if eids is None:
+                    eids = []
+                elif not isinstance(eids, list):
+                    eids = [str(eids)]
+
                 sev = str(c.get("severity") or "medium").lower()
                 if sev not in ("critical", "high", "medium", "low", "informational"):
                     sev = "medium"
+
+                # Parse confidence safely without defaulting to 0.90
+                c_conf = 0.0
+                if c.get("confidence") is not None:
+                    try:
+                        c_conf = float(c["confidence"])
+                        c_conf = max(0.0, min(1.0, c_conf))
+                    except (ValueError, TypeError):
+                        c_conf = 0.0
+
                 normalized_claims.append({
                     "claim_id": cid,
                     "claim": ctext,
-                    "evidence_ids": eids if isinstance(eids, list) else [str(eids)],
+                    "evidence_ids": [str(eid).strip() for eid in eids if str(eid).strip()],
                     "severity": sev,
                     "is_attribution": bool(c.get("is_attribution", False)),
-                    "confidence": float(c.get("confidence", 0.90)),
+                    "confidence": c_conf,
                     "mitre_tactics": list(c.get("mitre_tactics") or []),
                     "mitre_techniques": list(c.get("mitre_techniques") or []),
                 })
 
-        if not normalized_claims:
-            normalized_claims = [{
-                "claim_id": "CLM-001",
-                "claim": f"Forensic evidence supports incident findings in case {case_id}",
-                "evidence_ids": fallback_evidence_ids,
-                "severity": "medium",
-                "is_attribution": False,
-                "confidence": 0.85,
-                "mitre_tactics": [],
-                "mitre_techniques": [],
-            }]
+        # CRITICAL: If no claims were generated or parsed, DO NOT invent a fallback claim.
+        # Leave normalized_claims as [] and mark incomplete.
 
-        confidence_score = float(data.get("confidence_score") or 0.85)
-        confidence_score = max(0.0, min(1.0, confidence_score))
+        raw_score = data.get("confidence_score")
+        confidence_score = 0.0
+        if raw_score is not None:
+            try:
+                confidence_score = float(raw_score)
+                confidence_score = max(0.0, min(1.0, confidence_score))
+            except (ValueError, TypeError):
+                confidence_score = 0.0
+
+        status = "FAILED" if synthesis_error else ("COMPLETED" if normalized_claims else "NO_CLAIMS")
 
         return {
             "case_id": case_id,
@@ -235,4 +251,6 @@ class SupervisorSynthesis(BaseAgent):
             "conflicts_resolved": list(data.get("conflicts_resolved") or []),
             "confidence_score": confidence_score,
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "synthesis_status": status,
+            "synthesis_error": synthesis_error,
         }

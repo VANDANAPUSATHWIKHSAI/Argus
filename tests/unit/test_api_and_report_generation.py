@@ -276,3 +276,100 @@ class TestApiAndReportGeneration:
         assert response.status_code in (200, 400)
         if response.status_code == 400:
             assert "pdf" in response.json()["detail"].lower()
+
+    def test_async_evidence_upload_and_status_polling(self):
+        """Test POST /evidence/upload?async_mode=true returns PROCESSING and can be polled via GET /evidence/status/{evidence_id}."""
+        import time
+        content = b"2026-09-02 10:00:00 [INFO] Authentication successful for user analyst from 10.0.0.5\n"
+        file_obj = io.BytesIO(content)
+        test_case_id = "55555555-5555-5555-5555-555555555555"
+        tenant_id = "tenant-async-test"
+
+        response = client.post(
+            "/evidence/upload?async_mode=true",
+            files={"file": ("auth.log", file_obj, "text/plain")},
+            data={"case_id": test_case_id, "uploaded_by": "async_analyst"},
+            headers={"X-Tenant-ID": tenant_id}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "PROCESSING"
+        evidence_id = data["evidence_id"]
+        assert evidence_id
+
+        # Poll status endpoint
+        completed = False
+        final_data = None
+        for _ in range(30):
+            status_res = client.get(
+                f"/evidence/status/{evidence_id}",
+                headers={"X-Tenant-ID": tenant_id}
+            )
+            assert status_res.status_code == 200
+            final_data = status_res.json()
+            if final_data["status"] in ("SUCCESS", "PARTIAL_SUCCESS", "FAILED"):
+                completed = True
+                break
+            time.sleep(0.5)
+
+        assert completed, f"Async ingestion did not complete in time, last status: {final_data}"
+        assert final_data["status"] in ("SUCCESS", "PARTIAL_SUCCESS")
+        assert final_data["evidence_id"] == evidence_id
+        assert final_data["case_id"] == test_case_id
+
+    def test_evidence_status_tenant_isolation(self):
+        """Test GET /evidence/status/{evidence_id} enforces tenant isolation."""
+        content = b"2026-09-02 10:00:00 [INFO] System boot\n"
+        file_obj = io.BytesIO(content)
+        test_case_id = "66666666-6666-6666-6666-666666666666"
+
+        response = client.post(
+            "/evidence/upload",
+            files={"file": ("sys.log", file_obj, "text/plain")},
+            data={"case_id": test_case_id, "uploaded_by": "analyst_a"},
+            headers={"X-Tenant-ID": "tenant-owner"}
+        )
+        assert response.status_code == 200
+        ev_id = response.json()["evidence_id"]
+
+        # Attempt to access status with unauthorized tenant
+        unauth_res = client.get(
+            f"/evidence/status/{ev_id}",
+            headers={"X-Tenant-ID": "tenant-unauthorized"}
+        )
+        assert unauth_res.status_code in (403, 404)
+
+    def test_post_evidence_upload_empty_file_rejected(self):
+        """Test POST /evidence/upload with an empty file returns HTTP 400."""
+        empty_obj = io.BytesIO(b"")
+        response = client.post(
+            "/evidence/upload",
+            files={"file": ("empty.log", empty_obj, "text/plain")},
+            data={"case_id": "77777777-7777-7777-7777-777777777777"},
+            headers={"X-Tenant-ID": "tenant-empty"}
+        )
+        assert response.status_code == 400
+        assert "empty" in response.json()["detail"].lower()
+
+    def test_evidence_repository_fallback_retrieval(self):
+        """Test that get_evidence retrieves stored evidence in local fallback mode."""
+        from infrastructure.repository.evidence_store import get_evidence
+        content = b"2026-09-02 11:00:00 [ALERT] Port scan detected\n"
+        file_obj = io.BytesIO(content)
+        test_case_id = "88888888-8888-8888-8888-888888888888"
+        tenant_id = "tenant-fallback-retrieval"
+
+        response = client.post(
+            "/evidence/upload",
+            files={"file": ("scan.log", file_obj, "text/plain")},
+            data={"case_id": test_case_id, "uploaded_by": "analyst_fallback"},
+            headers={"X-Tenant-ID": tenant_id}
+        )
+        assert response.status_code == 200
+        ev_id = response.json()["evidence_id"]
+
+        ev_record = get_evidence(tenant_id=tenant_id, evidence_id=ev_id)
+        assert ev_record is not None
+        assert ev_record.evidence_id == ev_id
+        assert ev_record.filename == "scan.log"

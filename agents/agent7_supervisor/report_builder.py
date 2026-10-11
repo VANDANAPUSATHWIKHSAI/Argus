@@ -8,10 +8,11 @@ Builds the 3 required report types:
   3. Executive Summary    (strategic risk, key findings, immediate actions)
 
 Stamps every report package with legal defensibility metadata:
-  - Model name & actual checkpoint/version
+  - Model name & actual execution statuses
   - Prompt template version
   - Retrieval corpus snapshot ID (or explicit 'unavailable')
   - Deterministic execution timestamp
+  - Authoritative chain-of-custody status (or 'not_verified' / False)
 """
 
 from __future__ import annotations
@@ -48,9 +49,15 @@ class SupervisorReportBuilder:
         extra = extra_context or {}
         now_iso = datetime.now(timezone.utc).isoformat()
 
+        # Chain of custody must be evidence-based or explicitly marked not_verified
+        coc_verified = bool(extra.get("chain_of_custody_verified", False))
+        coc_status = extra.get("chain_of_custody_status") or ("verified" if coc_verified else "not_verified")
+
         # Legitimate metadata from runtime context (no fabricated hashes)
         metadata = {
             "model_name": extra.get("model_name") or self.DEFAULT_MODEL_NAME,
+            "synthesis_model": extra.get("synthesis_model", "Qwen3-8B"),
+            "verification_model": extra.get("verification_model", "MoritzLaurer/DeBERTa-v3-large-MNLI"),
             "model_version_hash": extra.get("model_version_hash") or "unavailable",
             "prompt_template_version": self.PROMPT_TEMPLATE_VERSION,
             "retrieval_corpus_snapshot_id": extra.get("corpus_snapshot_id") or "unavailable",
@@ -58,8 +65,9 @@ class SupervisorReportBuilder:
             "case_id": case_id,
             "tenant_id": tenant_id,
             "report_version": extra.get("report_version", "1.0"),
-            "review_status": confidence_gate.get("route", "routine"),
-            "legal_chain_of_custody_verified": True,
+            "review_status": confidence_gate.get("route", "senior_dual"),
+            "legal_chain_of_custody_verified": coc_verified,
+            "legal_chain_of_custody_status": coc_status,
         }
 
         # 1. Analyst Report Data
@@ -118,7 +126,7 @@ class SupervisorReportBuilder:
                 "finding_id": vr.get("claim_id"),
                 "fact": vr.get("claim"),
                 "severity": vr.get("severity", "medium"),
-                "confidence": vr.get("support_score", 1.0),
+                "confidence": float(vr.get("support_score", 0.0)),
                 "review_status": "verified" if vr.get("verified") else "unverified",
                 "evidence_reference": vr.get("evidence_ids", []),
                 "verification_status": vr.get("status"),
@@ -129,14 +137,17 @@ class SupervisorReportBuilder:
         timeline = synthesis.get("attack_timeline") or extra.get("timeline") or []
         mitre_matrix = synthesis.get("mitre_matrix") or []
 
+        raw_conf = synthesis.get("confidence_score")
+        conf_score = float(raw_conf) if raw_conf is not None else 0.0
+
         return {
             "report_type": "Analyst Report",
             "case_id": case_id,
             "tenant_id": tenant_id,
             "generated_at": metadata["timestamp"],
             "metadata": metadata,
-            "investigation_confidence_score": synthesis.get("confidence_score", 0.90),
-            "review_route": confidence_gate.get("route", "routine"),
+            "investigation_confidence_score": conf_score,
+            "review_route": confidence_gate.get("route", "senior_dual"),
             "review_reasons": confidence_gate.get("reasons", []),
             "attention_items": confidence_gate.get("attention_items", []),
             "executive_summary": synthesis.get("executive_summary", ""),
@@ -149,9 +160,8 @@ class SupervisorReportBuilder:
             "technical_recommendations": extra.get(
                 "technical_recommendations",
                 [
-                    "Isolate all endpoints associated with identified command-and-control communication.",
-                    "Revoke session tokens and rotate passwords for compromised accounts.",
-                    "Deploy Sigma/YARA rules corresponding to identified persistence techniques.",
+                    "Review unverified findings in forensic repository before proceeding.",
+                    "Verify cited evidence chain of custody and cryptographic hashes.",
                 ]
             ),
         }
@@ -173,27 +183,30 @@ class SupervisorReportBuilder:
             "tenant_id": tenant_id,
             "generated_at": metadata["timestamp"],
             "metadata": metadata,
-            "incident_overview": synthesis.get("executive_summary", ""),
-            "entry_vector": extra.get("entry_vector", "Suspected phishing attachment executing unauthorized script payload"),
+            "incident_overview": synthesis.get("executive_summary", "Forensic assessment in progress."),
+            "entry_vector": extra.get("entry_vector") or "Not established by the available evidence",
             "adversary_actions": synthesis.get("incident_narrative", ""),
-            "data_affected": extra.get("data_affected", "System configuration and process memory inspected; no bulk exfiltration confirmed."),
-            "risk_level": extra.get("risk_level", "HIGH"),
-            "recovery_checklist": [
-                "Verify network firewall blocks communication with suspicious destination IPs.",
-                "Execute host scan using latest security agent signatures.",
-                "Ensure endpoint detection agent is active across all company workstations.",
-                "Notify internal compliance officer with this confirmed report summary.",
-            ],
-            "recommendations": [
-                "Implement strict filtering for script attachments.",
-                "Enforce multi-factor authentication across all privileged remote access accounts.",
-            ],
+            "data_affected": extra.get("data_affected") or "Not established by the available evidence",
+            "risk_level": extra.get("risk_level") or "Requires analyst review",
+            "recovery_checklist": extra.get(
+                "recovery_checklist",
+                [
+                    "Perform analyst review of cited forensic evidence.",
+                    "Await senior analyst sign-off before modifying host configurations.",
+                ]
+            ),
+            "recommendations": extra.get(
+                "recommendations",
+                [
+                    "Maintain system isolation pending full forensic verification.",
+                ]
+            ),
             "findings": [
                 {
                     "finding_id": vr.get("claim_id"),
                     "fact": vr.get("claim"),
                     "severity": vr.get("severity", "medium"),
-                    "confidence": vr.get("support_score", 0.90),
+                    "confidence": float(vr.get("support_score", 0.0)),
                     "review_status": "verified" if vr.get("verified") else "unverified",
                     "evidence_reference": vr.get("evidence_ids", []),
                 }
@@ -212,6 +225,9 @@ class SupervisorReportBuilder:
         extra: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Assembles data payload for Executive Summary."""
+        raw_conf = synthesis.get("confidence_score")
+        conf_score = float(raw_conf) if raw_conf is not None else 0.0
+
         return {
             "report_type": "Executive Incident Summary",
             "case_id": case_id,
@@ -219,23 +235,25 @@ class SupervisorReportBuilder:
             "generated_at": metadata["timestamp"],
             "metadata": metadata,
             "incident_title": f"Digital Forensic Incident Investigation — Case {case_id}",
-            "high_level_incident": synthesis.get("executive_summary", ""),
+            "high_level_incident": synthesis.get("executive_summary", "Incident investigation pending formal review."),
             "key_findings": [vr.get("claim") for vr in verification_results if vr.get("verified")][:5],
-            "investigation_confidence": synthesis.get("confidence_score", 0.90),
-            "review_route": confidence_gate.get("route", "routine"),
-            "risk": extra.get("risk", "HIGH: Host compromise detected with persistence attempts."),
-            "impact": extra.get("impact", "Operational disruption contained to infected workstation; core systems unaffected."),
-            "recommended_actions": [
-                "Authorize containment and remediation of flagged workstation.",
-                "Review enterprise security posture against identified techniques.",
-                "Archive case documentation for regulatory compliance.",
-            ],
+            "investigation_confidence": conf_score,
+            "review_route": confidence_gate.get("route", "senior_dual"),
+            "risk": extra.get("risk") or "Not established by the available evidence",
+            "impact": extra.get("impact") or "Not established by the available evidence",
+            "recommended_actions": extra.get(
+                "recommended_actions",
+                [
+                    "Review findings with lead forensic examiner.",
+                    "Await completion of formal senior verification.",
+                ]
+            ),
             "findings": [
                 {
                     "finding_id": vr.get("claim_id"),
                     "fact": vr.get("claim"),
                     "severity": vr.get("severity", "medium"),
-                    "confidence": vr.get("support_score", 0.90),
+                    "confidence": float(vr.get("support_score", 0.0)),
                     "review_status": "verified" if vr.get("verified") else "unverified",
                     "evidence_reference": vr.get("evidence_ids", []),
                 }

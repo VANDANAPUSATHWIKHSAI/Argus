@@ -1,24 +1,29 @@
 """
 Agent 7 — Call 2: Independent Verification
 ===========================================
-Runs in an ISOLATED context with a lightweight model.
+Runs in an ISOLATED context with DeBERTa-v3-large-MNLI.
 Receives ONLY:
-  - One individual claim
-  - The underlying FIR records for that claim's evidence IDs
-Does NOT receive Call 1's reasoning narrative or unrelated context.
+  - One individual claim (as the NLI hypothesis)
+  - The underlying FIR records for that claim's cited evidence IDs (as NLI premises)
+Does NOT receive Call 1's reasoning narrative, entire report, or unrelated evidence.
 
 Executes Four Independent Verification Checks:
-  1. Existence   — Does each cited evidence_id exist in FIR for the authorized tenant?
-  2. Support     — Does the finding actually support the claim? (DeBERTa-v3-large-MNLI)
+  1. Existence   — Does each cited evidence_id exist in FIR for the authorized tenant and case?
+  2. Support     — Does each cited finding actually support the claim? (DeBERTa-v3-large-MNLI)
   3. Severity    — Was confidence or severity silently inflated relative to the findings?
-  4. Divergence  — Does the narrative contradict deterministic Layer 4 labels or findings?
+  4. Divergence  — Does the claim contradict deterministic Layer 4 labels or evidence?
 
 Critical Security Policy:
-  - If semantic entailment is inconclusive (< 0.70 threshold), the claim MUST remain
-    unverified (verified = False) and be routed for human review.
+  - Evidence text is passed as the NLI premise; claim text is passed as the hypothesis.
+  - Multiple evidence records are evaluated individually; contradiction in any cited
+    record flags a contradiction/divergence defect.
+  - If semantic entailment is inconclusive (< 0.70 threshold) or model fails, the claim
+    MUST remain unverified (verified = False) and be routed for human review.
   - An LLM fallback assessment is strictly secondary/informational and CANNOT override
     an unverified claim or approve Agent 7's own assertions.
 """
+
+from __future__ import annotations
 
 import logging
 from typing import Dict, Any, List, Optional
@@ -52,10 +57,11 @@ class SupervisorVerification(BaseAgent):
         tenant_id = context.get("tenant_id") or getattr(self, "tenant_id", "default")
         results = []
         for claim in claims:
-            res = self.verify(claim, tenant_id=tenant_id)
+            res = self.verify(claim, tenant_id=tenant_id, case_id=case_id)
             results.append(res)
 
-        all_verified = all(r.get("verified", False) for r in results) if results else True
+        # Empty claims or empty results cannot satisfy mandatory verification
+        all_verified = bool(results) and all(r.get("verified", False) for r in results)
         unverified_count = sum(1 for r in results if not r.get("verified", False))
 
         return {
@@ -64,16 +70,34 @@ class SupervisorVerification(BaseAgent):
             "verification_results": results,
             "all_claims_verified": all_verified,
             "unverified_claim_count": unverified_count,
+            "claim_count": len(claims),
+            "status": "COMPLETED" if (results and all_verified) else ("NEEDS_REVIEW" if results else "NO_CLAIMS"),
         }
 
-    def verify(self, claim: dict, fir_records: list = None, tenant_id: str = "") -> dict:
+    def verify(
+        self,
+        claim: dict,
+        fir_records: Optional[list] = None,
+        tenant_id: str = "",
+        case_id: str = "",
+    ) -> dict:
         """
         Verifies a single claim in an isolated context against its cited evidence.
         """
         claim_id = claim.get("claim_id") or "CLM-UNKNOWN"
-        claim_text = claim.get("claim", "")
+        claim_text = (claim.get("claim") or claim.get("statement") or "").strip()
         claim_severity = str(claim.get("severity", "medium")).lower()
-        claim_confidence = float(claim.get("confidence", 0.90))
+
+        # Validate confidence safely without assuming high defaults
+        raw_conf = claim.get("confidence")
+        claim_confidence: Optional[float] = None
+        if raw_conf is not None:
+            try:
+                parsed_conf = float(raw_conf)
+                if 0.0 <= parsed_conf <= 1.0:
+                    claim_confidence = parsed_conf
+            except (ValueError, TypeError):
+                pass
 
         # 1. Resolve cited evidence IDs
         evidence_ids = list(claim.get("evidence_ids", []))
@@ -88,132 +112,167 @@ class SupervisorVerification(BaseAgent):
 
         flags: List[str] = []
         evidence_details: List[Dict[str, Any]] = []
-        evidence_clean_texts: List[str] = []
-        evidence_wrapped_texts: List[str] = []
-
-        # 2. Pull evidence findings in isolated context with tenant validation
-        t_id = tenant_id or getattr(self, "tenant_id", "default")
-        fir_objects = []
-        for fid in evidence_ids:
-            finding = None
-            if hasattr(self.fir, "get_by_id"):
-                finding = self.fir.get_by_id(t_id, fid)
-
-            if finding:
-                fir_objects.append(finding)
-                clean_fact = finding.sanitized_fact or finding.fact
-                sev = getattr(finding, "severity", "medium")
-                conf = getattr(finding, "confidence", 1.0)
-                status = getattr(finding, "review_status", ReviewStatus.PENDING_REVIEW)
-                evidence_details.append({
-                    "finding_id": fid,
-                    "fact": clean_fact,
-                    "severity": sev,
-                    "confidence": conf,
-                    "review_status": str(status),
-                    "tenant_id": getattr(finding, "tenant_id", t_id),
-                })
-            else:
-                # Check for cross-tenant breach attempt
-                raw_finding = None
-                if hasattr(self.fir, "get_by_id"):
-                    try:
-                        raw_finding = self.fir.get_by_id(fid)
-                    except TypeError:
-                        pass
-
-                if raw_finding and getattr(raw_finding, "tenant_id", "") not in ("", t_id, "default"):
-                    flags.append(
-                        f"Cross-tenant access violation: Evidence ID [{fid}] belongs to tenant '{raw_finding.tenant_id}', not '{t_id}'"
-                    )
-                clean_fact = f"Evidence ID: {fid}"
-
-            # Safe context wrapping
-            ev_wrapped = self.sanitized_context_fetch("fir", fid, tenant_id=t_id)
-            evidence_wrapped_texts.append(ev_wrapped)
-            evidence_clean_texts.append(clean_fact)
-
-        # ── CHECK 1: Deterministic Existence & Tenant Check ───────────────
+        fir_objects: List[Any] = []
         existence_passed = True
+
+        t_id = tenant_id or getattr(self, "tenant_id", "default")
+        active_case = case_id or claim.get("case_id", "")
+
+        # ── CHECK 1: Deterministic Existence & Scoped Retrieval ──────────
         if not evidence_ids:
             existence_passed = False
             flags.append(f"Claim [{claim_id}] cites zero evidence IDs")
         else:
-            missing_ids = []
             for fid in evidence_ids:
-                exists = False
-                if hasattr(self, "exists"):
-                    exists = self.exists("fir", fid, tenant_id=t_id)
-                elif hasattr(self.fir, "get_by_id"):
-                    exists = self.fir.get_by_id(t_id, fid) is not None
-                if not exists:
-                    missing_ids.append(fid)
+                finding = None
+                if hasattr(self.fir, "get_by_id"):
+                    try:
+                        finding = self.fir.get_by_id(t_id, fid)
+                    except Exception as lookup_err:
+                        logger.warning(f"Error querying FIR for evidence {fid}: {lookup_err}")
 
-            if missing_ids:
-                existence_passed = False
-                flags.append(f"Evidence ID(s) not found in FIR for tenant '{t_id}': {', '.join(missing_ids)}")
+                if finding is None:
+                    # Check for cross-tenant breach attempt
+                    raw_finding = None
+                    if hasattr(self.fir, "get_by_id"):
+                        try:
+                            raw_finding = self.fir.get_by_id(fid)
+                        except TypeError:
+                            pass
+                        except Exception:
+                            pass
+
+                    if raw_finding and getattr(raw_finding, "tenant_id", "") not in ("", t_id, "default"):
+                        existence_passed = False
+                        flags.append(
+                            f"Evidence ID [{fid}] not found in FIR for tenant '{t_id}' (Cross-tenant access violation: belongs to tenant '{getattr(raw_finding, 'tenant_id', '')}')"
+                        )
+                    else:
+                        existence_passed = False
+                        flags.append(f"Evidence ID [{fid}] not found in FIR for tenant '{t_id}'")
+                else:
+                    # Validate case boundary if finding specifies case_id
+                    finding_case = getattr(finding, "case_id", None)
+                    if finding_case and active_case and str(finding_case) != str(active_case):
+                        existence_passed = False
+                        flags.append(
+                            f"Cross-case access violation: Evidence ID [{fid}] belongs to case '{finding_case}', not active case '{active_case}'"
+                        )
+                        continue
+
+                    fir_objects.append(finding)
+                    clean_fact = finding.sanitized_fact or finding.fact
+                    sev = getattr(finding, "severity", "medium")
+                    conf = getattr(finding, "confidence", None)
+                    status = getattr(finding, "review_status", ReviewStatus.PENDING_REVIEW)
+                    evidence_details.append({
+                        "finding_id": fid,
+                        "fact": clean_fact,
+                        "severity": sev,
+                        "confidence": conf,
+                        "review_status": str(status),
+                        "tenant_id": getattr(finding, "tenant_id", t_id),
+                        "case_id": finding_case,
+                    })
 
         # ── CHECK 2: Semantic Support Check (DeBERTa-v3-large-MNLI) ───────
-        support_passed = True
-        support_score = 1.0
-        entailment_label = "supports"
+        support_passed = False
+        support_score = 0.0
+        entailment_label = "unverified"
+        evidence_evaluations: List[Dict[str, Any]] = []
+        contradiction_detected = False
         fallback_used = False
         secondary_assessment: Optional[str] = None
 
-        evidence_combined = " ".join(evidence_clean_texts).strip()
-
-        if existence_passed and evidence_combined:
+        if existence_passed and evidence_details and claim_text:
             from models.classifiers import ClassifierLoader
             loader = ClassifierLoader()
 
             try:
-                classifier = loader.load_mnli()
-                # Run zero-shot entailment
-                res = classifier(
-                    sequences=claim_text,
-                    candidate_labels=["supports", "neutral", "contradicts"],
-                    hypothesis_template="This evidence: {}"
-                )
-                entailment_label = res["labels"][0]
-                supp_idx = res["labels"].index("supports")
-                support_score = float(res["scores"][supp_idx])
+                for ev in evidence_details:
+                    premise_fact = ev.get("fact", "")
+                    if not premise_fact:
+                        continue
 
-                # Policy: support score must meet threshold
-                if support_score < self.SUPPORT_THRESHOLD:
-                    support_passed = False
-                    fallback_used = True
-                    flags.append(
-                        f"Inconclusive semantic entailment (DeBERTa support score {support_score:.2f} < {self.SUPPORT_THRESHOLD:.2f})"
-                    )
+                    nli_res = loader.classify_nli(premise=premise_fact, hypothesis=claim_text)
+                    ent_score = float(nli_res.get("entailment", 0.0))
+                    neut_score = float(nli_res.get("neutral", 0.0))
+                    contra_score = float(nli_res.get("contradiction", 0.0))
+                    top_label = str(nli_res.get("label", "neutral")).lower()
 
-                    # Secondary LLM assessment (informational only — cannot override unverified status)
-                    try:
-                        prompt = (
-                            "SYSTEM INSTRUCTION:\n"
-                            "You are an objective forensic verification supervisor. Determine if the evidence strictly supports the claim.\n"
-                            "Respond ONLY with 'YES' or 'NO'.\n\n"
-                            f"Claim: {claim_text}\n"
-                            f"Evidence:\n{' '.join(evidence_wrapped_texts)}"
+                    evidence_evaluations.append({
+                        "finding_id": ev.get("finding_id"),
+                        "premise": premise_fact,
+                        "entailment": round(ent_score, 4),
+                        "neutral": round(neut_score, 4),
+                        "contradiction": round(contra_score, 4),
+                        "label": top_label,
+                    })
+
+                    # Check for explicit contradiction
+                    if contra_score >= 0.50 or (top_label == "contradiction" and contra_score > ent_score):
+                        contradiction_detected = True
+                        flags.append(
+                            f"Contradiction detected: Evidence [{ev.get('finding_id')}] contradicts claim [{claim_id}] (contradiction score: {contra_score:.2f})"
                         )
-                        resp = str(self.model.generate(prompt)).strip().upper()
-                        secondary_assessment = "SECONDARY_AFFIRMED" if "YES" in resp else "SECONDARY_REJECTED"
-                    except Exception as llm_err:
-                        secondary_assessment = f"SECONDARY_FAILED: {llm_err}"
+
+                if contradiction_detected:
+                    support_passed = False
+                    support_score = max((ev["entailment"] for ev in evidence_evaluations), default=0.0)
+                    entailment_label = "contradiction"
+                else:
+                    max_entailment = max((ev["entailment"] for ev in evidence_evaluations), default=0.0)
+                    support_score = max_entailment
+
+                    if max_entailment >= self.SUPPORT_THRESHOLD:
+                        support_passed = True
+                        entailment_label = "entailment"
+                    else:
+                        support_passed = False
+                        entailment_label = "neutral"
+                        fallback_used = True
+                        flags.append(
+                            f"Inconclusive semantic entailment: Highest DeBERTa support score ({max_entailment:.2f}) < threshold ({self.SUPPORT_THRESHOLD:.2f})"
+                        )
+
+                        # Secondary LLM assessment (strictly informational, cannot override unverified status)
+                        try:
+                            ev_wrapped_texts = [
+                                self.sanitized_context_fetch("fir", fid, tenant_id=t_id)
+                                for fid in evidence_ids
+                            ]
+                            prompt = (
+                                "SYSTEM INSTRUCTION:\n"
+                                "You are an objective forensic verification supervisor. Determine if the evidence strictly supports the claim.\n"
+                                "Respond ONLY with 'YES' or 'NO'.\n\n"
+                                f"Claim: {claim_text}\n"
+                                f"Evidence:\n{' '.join(ev_wrapped_texts)}"
+                            )
+                            resp = str(self.model.generate(prompt)).strip().upper()
+                            secondary_assessment = "SECONDARY_AFFIRMED" if "YES" in resp else "SECONDARY_REJECTED"
+                        except Exception as llm_err:
+                            secondary_assessment = f"SECONDARY_FAILED: {llm_err}"
 
             except Exception as e:
                 logger.warning(f"MNLI classifier unavailable or failed ({e}); marking support unverified", exc_info=True)
                 support_passed = False
+                support_score = 0.0
+                entailment_label = "unverified"
                 fallback_used = True
                 flags.append(f"DeBERTa verification model unavailable or failed: {e}")
 
                 # Secondary LLM assessment
                 try:
+                    ev_wrapped_texts = [
+                        self.sanitized_context_fetch("fir", fid, tenant_id=t_id)
+                        for fid in evidence_ids
+                    ]
                     prompt = (
                         "SYSTEM INSTRUCTION:\n"
                         "You are an objective forensic verification supervisor. Determine if the evidence strictly supports the claim.\n"
                         "Respond ONLY with 'YES' or 'NO'.\n\n"
                         f"Claim: {claim_text}\n"
-                        f"Evidence:\n{' '.join(evidence_wrapped_texts)}"
+                        f"Evidence:\n{' '.join(ev_wrapped_texts)}"
                     )
                     resp = str(self.model.generate(prompt)).strip().upper()
                     secondary_assessment = "SECONDARY_AFFIRMED" if "YES" in resp else "SECONDARY_REJECTED"
@@ -223,6 +282,12 @@ class SupervisorVerification(BaseAgent):
         elif not existence_passed:
             support_passed = False
             support_score = 0.0
+            entailment_label = "unverified"
+        elif not claim_text:
+            support_passed = False
+            support_score = 0.0
+            entailment_label = "unverified"
+            flags.append(f"Claim [{claim_id}] contains empty statement text")
 
         # ── CHECK 3: Severity & Confidence Inflation Check ───────────────
         severity_passed = True
@@ -231,10 +296,12 @@ class SupervisorVerification(BaseAgent):
                 SEVERITY_WEIGHTS.get(str(getattr(fo, "severity", "medium")).lower(), 2)
                 for fo in fir_objects
             )
-            max_evidence_conf = max(
-                float(getattr(fo, "confidence", 1.0))
+            valid_confidences = [
+                float(getattr(fo, "confidence"))
                 for fo in fir_objects
-            )
+                if getattr(fo, "confidence", None) is not None
+            ]
+            max_evidence_conf = max(valid_confidences) if valid_confidences else None
             claim_sev_val = SEVERITY_WEIGHTS.get(claim_severity, 2)
 
             # Rule A: Claimed severity cannot be more than 1 tier higher than max evidence severity
@@ -245,15 +312,16 @@ class SupervisorVerification(BaseAgent):
                 )
 
             # Rule B: Claimed confidence cannot exceed evidence confidence by more than 0.25
-            if claim_confidence > max_evidence_conf + 0.25:
-                severity_passed = False
-                flags.append(
-                    f"Confidence inflated: claim confidence ({claim_confidence:.2f}) exceeds evidence confidence ({max_evidence_conf:.2f})"
-                )
+            if claim_confidence is not None and max_evidence_conf is not None:
+                if claim_confidence > max_evidence_conf + 0.25:
+                    severity_passed = False
+                    flags.append(
+                        f"Confidence inflated: claim confidence ({claim_confidence:.2f}) exceeds evidence confidence ({max_evidence_conf:.2f})"
+                    )
 
         # ── CHECK 4: Divergence Check ────────────────────────────────────
         divergence_passed = True
-        # Check if underlying finding was explicitly rejected by an analyst
+        # Check if underlying finding was explicitly rejected by an analyst in Layer 4
         for fo in fir_objects:
             status = getattr(fo, "review_status", None)
             if status == ReviewStatus.ANALYST_REJECTED:
@@ -262,14 +330,25 @@ class SupervisorVerification(BaseAgent):
                     f"Divergence detected: cited finding [{fo.finding_id}] was marked ANALYST_REJECTED in Layer 4"
                 )
 
-        # Check if DeBERTa entailment strongly concluded contradiction
-        if entailment_label == "contradicts" and support_score < 0.30:
+        if contradiction_detected:
             divergence_passed = False
-            flags.append("Divergence detected: DeBERTa model flagged direct contradiction between evidence and claim")
 
         # ── VERDICT ──────────────────────────────────────────────────────
         verified = existence_passed and support_passed and severity_passed and divergence_passed
         status_label = "verified" if verified else "unverified — requires manual confirmation"
+
+        if verified:
+            detailed_status = "supported"
+        elif not existence_passed:
+            detailed_status = "invalid_or_missing_evidence"
+        elif contradiction_detected or not divergence_passed:
+            detailed_status = "contradicted"
+        elif not support_passed:
+            detailed_status = "insufficient_evidence"
+        elif not severity_passed:
+            detailed_status = "severity_inflated"
+        else:
+            detailed_status = "unverified"
 
         return {
             "claim_id": claim_id,
@@ -277,6 +356,7 @@ class SupervisorVerification(BaseAgent):
             "evidence_ids": evidence_ids,
             "verified": verified,
             "status": status_label,
+            "verification_status": detailed_status,
             "checks": {
                 "existence": existence_passed,
                 "support": support_passed,
@@ -289,4 +369,9 @@ class SupervisorVerification(BaseAgent):
             "secondary_assessment": secondary_assessment,
             "flags": flags,
             "evidence_details": evidence_details,
+            "evidence_evaluations": evidence_evaluations,
+            "model_metadata": {
+                "model": "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli",
+                "threshold": self.SUPPORT_THRESHOLD,
+            },
         }

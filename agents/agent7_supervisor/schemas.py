@@ -47,21 +47,23 @@ class ClaimVerificationResult(BaseModel):
     claim: str
     evidence_ids: List[str]
     verified: bool
-    status: Literal["verified", "unverified — requires manual confirmation"]
+    status: str = "unverified — requires manual confirmation"
     checks: Dict[str, bool] = Field(
         default_factory=lambda: {
-            "existence": True,
-            "support": True,
-            "severity": True,
-            "divergence": True,
+            "existence": False,
+            "support": False,
+            "severity": False,
+            "divergence": False,
         }
     )
-    support_score: float = 1.0
-    entailment_label: str = "supports"
+    support_score: float = 0.0
+    entailment_label: str = "unverified"
     fallback_used: bool = False
     secondary_assessment: Optional[str] = None
     flags: List[str] = Field(default_factory=list)
     evidence_details: List[Dict[str, Any]] = Field(default_factory=list)
+    evidence_evaluations: List[Dict[str, Any]] = Field(default_factory=list)
+    model_metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class InvestigationSynthesis(BaseModel):
@@ -76,8 +78,10 @@ class InvestigationSynthesis(BaseModel):
     attack_timeline: List[Dict[str, Any]] = Field(default_factory=list)
     mitre_matrix: List[Dict[str, Any]] = Field(default_factory=list)
     conflicts_resolved: List[Dict[str, Any]] = Field(default_factory=list)
-    confidence_score: float = Field(ge=0.0, le=1.0, default=0.95)
+    confidence_score: float = Field(ge=0.0, le=1.0, default=0.0)
     generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    synthesis_status: Optional[str] = "COMPLETED"
+    synthesis_error: Optional[str] = None
 
 
 class ConfidenceGateDecision(BaseModel):

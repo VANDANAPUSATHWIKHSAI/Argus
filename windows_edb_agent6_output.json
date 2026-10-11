@@ -1,0 +1,415 @@
+{
+  "agent_id": "agent_6",
+  "case_id": "CASE-WINDOWS-EDB-2026",
+  "tenant_id": "default",
+  "timestamp": "2026-10-11T10:04:42.227925+00:00",
+  "model_used": "Qwen3-8B",
+  "execution_status": "SUCCESS",
+  "error_message": null,
+  "cvss_assessment": {
+    "assessment_status": "INSUFFICIENT_DATA",
+    "cvss_version": "3.1",
+    "vector_string": null,
+    "base_score": null,
+    "severity": "UNDETERMINED",
+    "score_range_min": null,
+    "score_range_max": null,
+    "metrics": {
+      "attack_vector": {
+        "metric_name": "Attack Vector",
+        "metric_code": "AV",
+        "assigned_value": null,
+        "value_code": null,
+        "is_confirmed": false,
+        "evidence_ids": [],
+        "justification": "No network socket, adjacent subnet, or physical media evidence identified in investigation findings.",
+        "confidence": 0.0
+      },
+      "attack_complexity": {
+        "metric_name": "Attack Complexity",
+        "metric_code": "AC",
+        "assigned_value": null,
+        "value_code": null,
+        "is_confirmed": false,
+        "evidence_ids": [],
+        "justification": "Environmental preconditions or timing complexity cannot be conclusively established from evidence.",
+        "confidence": 0.0
+      },
+      "privileges_required": {
+        "metric_name": "Privileges Required",
+        "metric_code": "PR",
+        "assigned_value": null,
+        "value_code": null,
+        "is_confirmed": false,
+        "evidence_ids": [],
+        "justification": "No user authorization or session privilege level substantiated in forensic evidence.",
+        "confidence": 0.0
+      },
+      "user_interaction": {
+        "metric_name": "User Interaction",
+        "metric_code": "UI",
+        "assigned_value": null,
+        "value_code": null,
+        "is_confirmed": false,
+        "evidence_ids": [],
+        "justification": "Presence or absence of victim user interaction cannot be definitively established.",
+        "confidence": 0.0
+      },
+      "scope": {
+        "metric_name": "Scope",
+        "metric_code": "S",
+        "assigned_value": "UNCHANGED",
+        "value_code": "U",
+        "is_confirmed": true,
+        "evidence_ids": [],
+        "justification": "Compromise impacts are confined to the security authority of the host environment.",
+        "confidence": 0.8
+      },
+      "confidentiality": {
+        "metric_name": "Confidentiality",
+        "metric_code": "C",
+        "assigned_value": "NONE",
+        "value_code": "N",
+        "is_confirmed": true,
+        "evidence_ids": [],
+        "justification": "No credential access, system discovery, or data exfiltration evidence detected.",
+        "confidence": 0.75
+      },
+      "integrity": {
+        "metric_name": "Integrity",
+        "metric_code": "I",
+        "assigned_value": "NONE",
+        "value_code": "N",
+        "is_confirmed": true,
+        "evidence_ids": [],
+        "justification": "No persistent modification, file tampering, or unauthorized code installation verified in evidence.",
+        "confidence": 0.75
+      },
+      "availability": {
+        "metric_name": "Availability",
+        "metric_code": "A",
+        "assigned_value": "NONE",
+        "value_code": "N",
+        "is_confirmed": true,
+        "evidence_ids": [],
+        "justification": "Systems and network services remained responsive with no denial-of-service observed.",
+        "confidence": 0.8
+      }
+    },
+    "missing_metrics": [
+      "attack_vector",
+      "attack_complexity",
+      "privileges_required",
+      "user_interaction"
+    ],
+    "exploitability_subscore": null,
+    "impact_subscore": null,
+    "calculation_notes": "Insufficient forensic evidence to compute CVSS score. Missing metrics: attack_vector, attack_complexity, privileges_required, user_interaction. Unsubstantiated scores are omitted to preserve forensic integrity.",
+    "evidence_ids": []
+  },
+  "iss_assessment": {
+    "iss_score": 3.3,
+    "severity": "LOW",
+    "factor_breakdown": {
+      "asset_criticality": {
+        "factor_name": "Asset Criticality & Enterprise Exposure",
+        "weight": 0.25,
+        "raw_score": 5.0,
+        "weighted_score": 1.25,
+        "description": "Standard corporate endpoint(s) or workstations compromised.",
+        "evidence_ids": [
+          "F-EDB-001",
+          "F-EDB-005"
+        ]
+      },
+      "data_impact": {
+        "factor_name": "Data Compromise & Confidentiality Exposure",
+        "weight": 0.2,
+        "raw_score": 1.0,
+        "weighted_score": 0.2,
+        "description": "No sensitive data access, credential theft, or exfiltration detected.",
+        "evidence_ids": []
+      },
+      "system_integrity": {
+        "factor_name": "System Integrity & Persistence Depth",
+        "weight": 0.2,
+        "raw_score": 5.0,
+        "weighted_score": 1.0,
+        "description": "Unauthorized code execution observed without established persistence.",
+        "evidence_ids": [
+          "F-EDB-001",
+          "F-EDB-005"
+        ]
+      },
+      "operational_availability": {
+        "factor_name": "Operational Availability & Service Downtime",
+        "weight": 0.15,
+        "raw_score": 1.0,
+        "weighted_score": 0.15,
+        "description": "Standard system availability preserved; no service interruption observed.",
+        "evidence_ids": []
+      },
+      "scope_lateral_movement": {
+        "factor_name": "Scope of Compromise & Lateral Movement",
+        "weight": 0.1,
+        "raw_score": 2.0,
+        "weighted_score": 0.2,
+        "description": "Compromise strictly confined to a single initial host.",
+        "evidence_ids": []
+      },
+      "technical_vulnerability": {
+        "factor_name": "Technical Vulnerability Severity (CVSS Baseline)",
+        "weight": 0.1,
+        "raw_score": 5.0,
+        "weighted_score": 0.5,
+        "description": "Baseline technical vulnerability severity estimated in absence of full CVSS vector.",
+        "evidence_ids": []
+      }
+    },
+    "contributing_evidence_ids": [
+      "F-EDB-001",
+      "F-EDB-005"
+    ],
+    "executive_summary": "ARGUS Investigation Severity Score (ISS) calculated at 3.3/10.0 (LOW). Primary impact drivers: Asset Criticality & Enterprise Exposure (1.25 pts) & System Integrity & Persistence Depth (1.0 pts)."
+  },
+  "affected_assets": [
+    {
+      "asset_id": "access",
+      "asset_type": "USER_ACCOUNT",
+      "criticality": "MEDIUM",
+      "compromise_state": "CONFIRMED_COMPROMISED",
+      "risk_score": 6.5,
+      "impact_details": "User account context compromised during execution: Windows Search database indexing confirms user access to Microsoft Online login ",
+      "evidence_ids": [
+        "F-EDB-001",
+        "F-EDB-005"
+      ],
+      "first_observed": null,
+      "last_observed": null
+    }
+  ],
+  "total_assets_affected": 1,
+  "critical_assets_count": 0,
+  "recovery_actions": [
+    {
+      "action_id": "REC-001",
+      "phase": "CONTAINMENT",
+      "priority": "P1_IMMEDIATE",
+      "title": "Revoke Active Sessions and Reset Credentials for Compromised Accounts",
+      "description": "Terminate active Kerberos tickets, refresh tokens, and force password change for identity/account(s): access.",
+      "target_assets": [
+        "access"
+      ],
+      "responsible_role": "IAM_ADMIN",
+      "verification_step": "Query Active Directory / IdP to ensure password last set timestamp is updated and active tokens revoked.",
+      "evidence_ids": [
+        "F-EDB-001",
+        "F-EDB-005"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-002",
+      "phase": "ERADICATION",
+      "priority": "P2_HIGH",
+      "title": "Scan File System with Custom YARA Rules for Residual Droppers",
+      "description": "Run full-disk forensic YARA scan across all affected endpoints to ensure no secondary droppers remain.",
+      "target_assets": [
+        "AFFECTED_HOSTS"
+      ],
+      "responsible_role": "FORENSIC_ANALYST",
+      "verification_step": "Verify YARA scan report returns zero undetected matches across disk volumes.",
+      "evidence_ids": [
+        "F-EDB-001",
+        "F-EDB-005"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-003",
+      "phase": "RECOVERY",
+      "priority": "P3_MEDIUM",
+      "title": "Rebuild or Restore Endpoints from Verified Clean Golden Images",
+      "description": "Re-image impacted endpoints from clean baseline templates or restore data from offline backups prior to confirmed compromise timestamp.",
+      "target_assets": [
+        "AFFECTED_HOSTS"
+      ],
+      "responsible_role": "SYSADMIN",
+      "verification_step": "Confirm golden image integrity checksum and ensure latest OS security updates applied.",
+      "evidence_ids": [
+        "F-EDB-001",
+        "F-EDB-005"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-004",
+      "phase": "RECOVERY",
+      "priority": "P3_MEDIUM",
+      "title": "Gradual Network Re-Integration under Elevated Telemetry Monitoring",
+      "description": "Re-attach restored systems to their production subnets with real-time EDR debug-level auditing enabled for 72 hours.",
+      "target_assets": [
+        "AFFECTED_HOSTS"
+      ],
+      "responsible_role": "SOC_L2",
+      "verification_step": "Audit telemetry stream to ensure zero anomalous network beacons or unauthorized process spawns.",
+      "evidence_ids": [
+        "F-EDB-001",
+        "F-EDB-005"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-005",
+      "phase": "HARDENING",
+      "priority": "P4_LOW",
+      "title": "Implement Attack Surface Reduction & PowerShell Constrained Language Mode",
+      "description": "Enforce PowerShell ConstrainedLanguage mode via AppLocker/WDAC and disable WScript/CScript execution for standard domain users.",
+      "target_assets": [
+        "ENTERPRISE_GPO"
+      ],
+      "responsible_role": "SYSADMIN",
+      "verification_step": "Verify Group Policy Object (GPO) propagation and test PowerShell execution policy restriction.",
+      "evidence_ids": [],
+      "completed": false
+    },
+    {
+      "action_id": "REC-006",
+      "phase": "HARDENING",
+      "priority": "P4_LOW",
+      "title": "Update SIEM Correlation Rules for Observed TTPs",
+      "description": "Deploy detection rules targeting cmd.exe -> powershell.exe parent-child anomalies and unusual outbound socket connections on non-standard ports.",
+      "target_assets": [
+        "SIEM_DETECTION_ENGINE"
+      ],
+      "responsible_role": "SOC_L2",
+      "verification_step": "Trigger detection rule unit test and confirm alert dispatch to SOC queue.",
+      "evidence_ids": [],
+      "completed": false
+    }
+  ],
+  "recovery_checklist": {
+    "containment_steps": [
+      {
+        "action_id": "REC-001",
+        "phase": "CONTAINMENT",
+        "priority": "P1_IMMEDIATE",
+        "title": "Revoke Active Sessions and Reset Credentials for Compromised Accounts",
+        "description": "Terminate active Kerberos tickets, refresh tokens, and force password change for identity/account(s): access.",
+        "target_assets": [
+          "access"
+        ],
+        "responsible_role": "IAM_ADMIN",
+        "verification_step": "Query Active Directory / IdP to ensure password last set timestamp is updated and active tokens revoked.",
+        "evidence_ids": [
+          "F-EDB-001",
+          "F-EDB-005"
+        ],
+        "completed": false
+      }
+    ],
+    "eradication_steps": [
+      {
+        "action_id": "REC-002",
+        "phase": "ERADICATION",
+        "priority": "P2_HIGH",
+        "title": "Scan File System with Custom YARA Rules for Residual Droppers",
+        "description": "Run full-disk forensic YARA scan across all affected endpoints to ensure no secondary droppers remain.",
+        "target_assets": [
+          "AFFECTED_HOSTS"
+        ],
+        "responsible_role": "FORENSIC_ANALYST",
+        "verification_step": "Verify YARA scan report returns zero undetected matches across disk volumes.",
+        "evidence_ids": [
+          "F-EDB-001",
+          "F-EDB-005"
+        ],
+        "completed": false
+      }
+    ],
+    "recovery_steps": [
+      {
+        "action_id": "REC-003",
+        "phase": "RECOVERY",
+        "priority": "P3_MEDIUM",
+        "title": "Rebuild or Restore Endpoints from Verified Clean Golden Images",
+        "description": "Re-image impacted endpoints from clean baseline templates or restore data from offline backups prior to confirmed compromise timestamp.",
+        "target_assets": [
+          "AFFECTED_HOSTS"
+        ],
+        "responsible_role": "SYSADMIN",
+        "verification_step": "Confirm golden image integrity checksum and ensure latest OS security updates applied.",
+        "evidence_ids": [
+          "F-EDB-001",
+          "F-EDB-005"
+        ],
+        "completed": false
+      },
+      {
+        "action_id": "REC-004",
+        "phase": "RECOVERY",
+        "priority": "P3_MEDIUM",
+        "title": "Gradual Network Re-Integration under Elevated Telemetry Monitoring",
+        "description": "Re-attach restored systems to their production subnets with real-time EDR debug-level auditing enabled for 72 hours.",
+        "target_assets": [
+          "AFFECTED_HOSTS"
+        ],
+        "responsible_role": "SOC_L2",
+        "verification_step": "Audit telemetry stream to ensure zero anomalous network beacons or unauthorized process spawns.",
+        "evidence_ids": [
+          "F-EDB-001",
+          "F-EDB-005"
+        ],
+        "completed": false
+      }
+    ],
+    "hardening_steps": [
+      {
+        "action_id": "REC-005",
+        "phase": "HARDENING",
+        "priority": "P4_LOW",
+        "title": "Implement Attack Surface Reduction & PowerShell Constrained Language Mode",
+        "description": "Enforce PowerShell ConstrainedLanguage mode via AppLocker/WDAC and disable WScript/CScript execution for standard domain users.",
+        "target_assets": [
+          "ENTERPRISE_GPO"
+        ],
+        "responsible_role": "SYSADMIN",
+        "verification_step": "Verify Group Policy Object (GPO) propagation and test PowerShell execution policy restriction.",
+        "evidence_ids": [],
+        "completed": false
+      },
+      {
+        "action_id": "REC-006",
+        "phase": "HARDENING",
+        "priority": "P4_LOW",
+        "title": "Update SIEM Correlation Rules for Observed TTPs",
+        "description": "Deploy detection rules targeting cmd.exe -> powershell.exe parent-child anomalies and unusual outbound socket connections on non-standard ports.",
+        "target_assets": [
+          "SIEM_DETECTION_ENGINE"
+        ],
+        "responsible_role": "SOC_L2",
+        "verification_step": "Trigger detection rule unit test and confirm alert dispatch to SOC queue.",
+        "evidence_ids": [],
+        "completed": false
+      }
+    ],
+    "total_actions": 6
+  },
+  "explanation": "### Section 1: Executive Incident Summary & Severity\nInvestigation impact assessment establishes an overall ARGUS Investigation Severity Score (ISS) of **3.3/10.0 (LOW)**. ARGUS Investigation Severity Score (ISS) calculated at 3.3/10.0 (LOW). Primary impact drivers: Asset Criticality & Enterprise Exposure (1.25 pts) & System Integrity & Persistence Depth (1.0 pts).\n\n### Section 2: Affected Assets & Threat Blast Radius\nA total of 1 system assets and identities were evaluated:\n- **access** (USER_ACCOUNT, Criticality: MEDIUM): State: CONFIRMED_COMPROMISED, Assessed Risk: 6.5/10. User account context compromised during execution: Windows Search database indexing confirms user access to Microsoft Online login \n\n### Section 3: Technical Vulnerability Analysis (CVSS v3.1 Assessment)\nCVSS Status: **INSUFFICIENT_DATA** (Score: None, Severity: UNDETERMINED)\nMissing Metrics: attack_vector, attack_complexity, privileges_required, user_interaction\nInsufficient forensic evidence to compute CVSS score. Missing metrics: attack_vector, attack_complexity, privileges_required, user_interaction. Unsubstantiated scores are omitted to preserve forensic integrity.\n\n### Section 4: Investigation Severity Score (ISS) Business Impact Breakdown\nInvestigation-level severity is derived from 6 weighted forensic dimensions:\n- **Asset Criticality & Enterprise Exposure**: Raw=5.0/10, Weighted Contribution=1.25 pts (Standard corporate endpoint(s) or workstations compromised.)\n- **Data Compromise & Confidentiality Exposure**: Raw=1.0/10, Weighted Contribution=0.2 pts (No sensitive data access, credential theft, or exfiltration detected.)\n- **System Integrity & Persistence Depth**: Raw=5.0/10, Weighted Contribution=1.0 pts (Unauthorized code execution observed without established persistence.)\n- **Operational Availability & Service Downtime**: Raw=1.0/10, Weighted Contribution=0.15 pts (Standard system availability preserved; no service interruption observed.)\n- **Scope of Compromise & Lateral Movement**: Raw=2.0/10, Weighted Contribution=0.2 pts (Compromise strictly confined to a single initial host.)\n- **Technical Vulnerability Severity (CVSS Baseline)**: Raw=5.0/10, Weighted Contribution=0.5 pts (Baseline technical vulnerability severity estimated in absence of full CVSS vector.)\n\n### Section 5: Priority Containment & Recovery Guidance\nThe incident response team must execute the following prioritized operations immediately:\n- **[CONTAINMENT] (P1_IMMEDIATE) REC-001**: Revoke Active Sessions and Reset Credentials for Compromised Accounts (IAM_ADMIN)\n  *Task*: Terminate active Kerberos tickets, refresh tokens, and force password change for identity/account(s): access.\n  *Verification*: Query Active Directory / IdP to ensure password last set timestamp is updated and active tokens revoked.\n- **[ERADICATION] (P2_HIGH) REC-002**: Scan File System with Custom YARA Rules for Residual Droppers (FORENSIC_ANALYST)\n  *Task*: Run full-disk forensic YARA scan across all affected endpoints to ensure no secondary droppers remain.\n  *Verification*: Verify YARA scan report returns zero undetected matches across disk volumes.\n- **[RECOVERY] (P3_MEDIUM) REC-003**: Rebuild or Restore Endpoints from Verified Clean Golden Images (SYSADMIN)\n  *Task*: Re-image impacted endpoints from clean baseline templates or restore data from offline backups prior to confirmed compromise timestamp.\n  *Verification*: Confirm golden image integrity checksum and ensure latest OS security updates applied.\n- **[RECOVERY] (P3_MEDIUM) REC-004**: Gradual Network Re-Integration under Elevated Telemetry Monitoring (SOC_L2)\n  *Task*: Re-attach restored systems to their production subnets with real-time EDR debug-level auditing enabled for 72 hours.\n  *Verification*: Audit telemetry stream to ensure zero anomalous network beacons or unauthorized process spawns.\n- **[HARDENING] (P4_LOW) REC-005**: Implement Attack Surface Reduction & PowerShell Constrained Language Mode (SYSADMIN)\n  *Task*: Enforce PowerShell ConstrainedLanguage mode via AppLocker/WDAC and disable WScript/CScript execution for standard domain users.\n  *Verification*: Verify Group Policy Object (GPO) propagation and test PowerShell execution policy restriction.",
+  "all_cited_evidence_ids": [
+    "F-EDB-001",
+    "F-EDB-005"
+  ],
+  "citation_validation": {
+    "citation_valid": true,
+    "total_citations": 2,
+    "valid_citations_count": 2,
+    "invalid_citations": [],
+    "score_integrity_valid": true,
+    "validation_notes": "Validation PASSED: 2 unique citations verified against universe."
+  },
+  "sanitization_summary": {
+    "findings_sanitized": 6,
+    "injections_flagged": 0
+  }
+}

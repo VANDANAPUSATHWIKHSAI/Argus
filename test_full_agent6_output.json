@@ -1,0 +1,601 @@
+{
+  "agent_id": "agent_6",
+  "case_id": "CASE-AGENT6-DEMO",
+  "tenant_id": "default",
+  "timestamp": "2026-10-11T10:13:07.223454+00:00",
+  "model_used": "Qwen3-8B",
+  "execution_status": "SUCCESS",
+  "error_message": null,
+  "cvss_assessment": {
+    "assessment_status": "COMPLETED",
+    "cvss_version": "3.1",
+    "vector_string": "CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:N/I:H/A:N",
+    "base_score": 7.4,
+    "severity": "HIGH",
+    "score_range_min": 7.4,
+    "score_range_max": 7.4,
+    "metrics": {
+      "attack_vector": {
+        "metric_name": "Attack Vector",
+        "metric_code": "AV",
+        "assigned_value": "NETWORK",
+        "value_code": "N",
+        "is_confirmed": true,
+        "evidence_ids": [
+          "F-101",
+          "F-102"
+        ],
+        "justification": "Infection entry point established as remote network vector: 'Remote inbound phishing email with macro attachment'.",
+        "confidence": 0.92
+      },
+      "attack_complexity": {
+        "metric_name": "Attack Complexity",
+        "metric_code": "AC",
+        "assigned_value": "LOW",
+        "value_code": "L",
+        "is_confirmed": true,
+        "evidence_ids": [
+          "F-102"
+        ],
+        "justification": "Exploitation relies on repeatable script/process execution without race conditions or specialized environmental preconditions.",
+        "confidence": 0.88
+      },
+      "privileges_required": {
+        "metric_name": "Privileges Required",
+        "metric_code": "PR",
+        "assigned_value": "NONE",
+        "value_code": "N",
+        "is_confirmed": true,
+        "evidence_ids": [
+          "F-101",
+          "F-102"
+        ],
+        "justification": "Initial exploitation occurred without prior authenticated access ('Remote inbound phishing email with macro attachment').",
+        "confidence": 0.9
+      },
+      "user_interaction": {
+        "metric_name": "User Interaction",
+        "metric_code": "UI",
+        "assigned_value": "REQUIRED",
+        "value_code": "R",
+        "is_confirmed": true,
+        "evidence_ids": [
+          "F-101"
+        ],
+        "justification": "Exploitation required victim user action (e.g. email/attachment interaction): 'Phishing email with attachment 'Invoice_2026.docm' delivered to user 'john.doe' at 08:30:00 UTC.'.",
+        "confidence": 0.88
+      },
+      "scope": {
+        "metric_name": "Scope",
+        "metric_code": "S",
+        "assigned_value": "CHANGED",
+        "value_code": "C",
+        "is_confirmed": true,
+        "evidence_ids": [
+          "F-105"
+        ],
+        "justification": "Compromise expanded beyond initial security authority via confirmed lateral movement across hosts.",
+        "confidence": 0.9
+      },
+      "confidentiality": {
+        "metric_name": "Confidentiality",
+        "metric_code": "C",
+        "assigned_value": "NONE",
+        "value_code": "N",
+        "is_confirmed": true,
+        "evidence_ids": [],
+        "justification": "No credential access, system discovery, or data exfiltration evidence detected.",
+        "confidence": 0.75
+      },
+      "integrity": {
+        "metric_name": "Integrity",
+        "metric_code": "I",
+        "assigned_value": "HIGH",
+        "value_code": "H",
+        "is_confirmed": true,
+        "evidence_ids": [
+          "F-104"
+        ],
+        "justification": "Direct modification of system state, persistence installation, or payload delivery confirmed: 'User 'admin' created scheduled task persistence update.exe with SHA256 7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284'.",
+        "confidence": 0.92
+      },
+      "availability": {
+        "metric_name": "Availability",
+        "metric_code": "A",
+        "assigned_value": "NONE",
+        "value_code": "N",
+        "is_confirmed": true,
+        "evidence_ids": [],
+        "justification": "Systems and network services remained responsive with no denial-of-service observed.",
+        "confidence": 0.8
+      }
+    },
+    "missing_metrics": [],
+    "exploitability_subscore": 2.8,
+    "impact_subscore": 4.0,
+    "calculation_notes": "All 8 CVSS v3.1 base metrics substantiated by forensic investigation evidence.",
+    "evidence_ids": [
+      "F-101",
+      "F-102",
+      "F-104",
+      "F-105"
+    ]
+  },
+  "iss_assessment": {
+    "iss_score": 5.6,
+    "severity": "MEDIUM",
+    "factor_breakdown": {
+      "asset_criticality": {
+        "factor_name": "Asset Criticality & Enterprise Exposure",
+        "weight": 0.25,
+        "raw_score": 9.5,
+        "weighted_score": 2.38,
+        "description": "Critical infrastructure asset(s) compromised (e.g. Domain Controller, Core Database).",
+        "evidence_ids": [
+          "F-102",
+          "F-103",
+          "F-104",
+          "F-105",
+          "F-104",
+          "F-105"
+        ]
+      },
+      "data_impact": {
+        "factor_name": "Data Compromise & Confidentiality Exposure",
+        "weight": 0.2,
+        "raw_score": 1.0,
+        "weighted_score": 0.2,
+        "description": "No sensitive data access, credential theft, or exfiltration detected.",
+        "evidence_ids": []
+      },
+      "system_integrity": {
+        "factor_name": "System Integrity & Persistence Depth",
+        "weight": 0.2,
+        "raw_score": 7.5,
+        "weighted_score": 1.5,
+        "description": "Persistent malware execution mechanism established (scheduled task/registry).",
+        "evidence_ids": [
+          "F-102",
+          "F-104",
+          "F-104"
+        ]
+      },
+      "operational_availability": {
+        "factor_name": "Operational Availability & Service Downtime",
+        "weight": 0.15,
+        "raw_score": 1.0,
+        "weighted_score": 0.15,
+        "description": "Standard system availability preserved; no service interruption observed.",
+        "evidence_ids": []
+      },
+      "scope_lateral_movement": {
+        "factor_name": "Scope of Compromise & Lateral Movement",
+        "weight": 0.1,
+        "raw_score": 6.0,
+        "weighted_score": 0.6,
+        "description": "Lateral movement confirmed to a secondary system.",
+        "evidence_ids": [
+          "F-105"
+        ]
+      },
+      "technical_vulnerability": {
+        "factor_name": "Technical Vulnerability Severity (CVSS Baseline)",
+        "weight": 0.1,
+        "raw_score": 7.4,
+        "weighted_score": 0.74,
+        "description": "Directly derived from deterministic CVSS v3.1 base score (7.4/10.0).",
+        "evidence_ids": [
+          "F-101",
+          "F-102",
+          "F-104",
+          "F-105"
+        ]
+      }
+    },
+    "contributing_evidence_ids": [
+      "F-101",
+      "F-102",
+      "F-103",
+      "F-104",
+      "F-105"
+    ],
+    "executive_summary": "ARGUS Investigation Severity Score (ISS) calculated at 5.6/10.0 (MEDIUM). Primary impact drivers: Asset Criticality & Enterprise Exposure (2.38 pts) & System Integrity & Persistence Depth (1.5 pts)."
+  },
+  "affected_assets": [
+    {
+      "asset_id": "WIN-WORKSTATION-01",
+      "asset_type": "ENDPOINT",
+      "criticality": "MEDIUM",
+      "compromise_state": "CONFIRMED_COMPROMISED",
+      "risk_score": 8.5,
+      "impact_details": "Target of Command_and_Control execution: 'Finding F-103 details continuous encrypted TLS beaconing from WIN-WORKSTATION-01 to external IP 198.'",
+      "evidence_ids": [
+        "F-102",
+        "F-103",
+        "F-104",
+        "F-105"
+      ],
+      "first_observed": null,
+      "last_observed": null
+    },
+    {
+      "asset_id": "admin",
+      "asset_type": "USER_ACCOUNT",
+      "criticality": "HIGH",
+      "compromise_state": "CONFIRMED_COMPROMISED",
+      "risk_score": 9.0,
+      "impact_details": "Privileged account authority utilized: Finding F-104 shows user 'admin' on WIN-WORKSTATION-01 creating scheduled task u",
+      "evidence_ids": [
+        "F-104"
+      ],
+      "first_observed": null,
+      "last_observed": null
+    },
+    {
+      "asset_id": "CORP-DC-01",
+      "asset_type": "DOMAIN_CONTROLLER",
+      "criticality": "CRITICAL",
+      "compromise_state": "TARGETED",
+      "risk_score": 8.0,
+      "impact_details": "Target host targeted via lateral movement.",
+      "evidence_ids": [
+        "F-105"
+      ],
+      "first_observed": null,
+      "last_observed": null
+    }
+  ],
+  "total_assets_affected": 3,
+  "critical_assets_count": 2,
+  "recovery_actions": [
+    {
+      "action_id": "REC-001",
+      "phase": "CONTAINMENT",
+      "priority": "P1_IMMEDIATE",
+      "title": "Isolate Compromised Host(s) from Production Network",
+      "description": "Perform network-level quarantine for host(s): WIN-WORKSTATION-01, CORP-DC-01. Maintain only EDR sensor connection to prevent lateral pivot while preserving volatile evidence.",
+      "target_assets": [
+        "WIN-WORKSTATION-01",
+        "CORP-DC-01"
+      ],
+      "responsible_role": "SOC_L2",
+      "verification_step": "Confirm host ping is dropped and only management EDR traffic is permitted.",
+      "evidence_ids": [
+        "F-102",
+        "F-103",
+        "F-104"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-002",
+      "phase": "CONTAINMENT",
+      "priority": "P1_IMMEDIATE",
+      "title": "Enforce Perimeter Firewall Blocks for Observed C2 Indicators",
+      "description": "Immediately block all outbound and inbound traffic to command-and-control IP(s): 198.51.100.22 across enterprise perimeter firewalls, egress proxies, and DNS resolvers.",
+      "target_assets": [
+        "198.51.100.22"
+      ],
+      "responsible_role": "NETWORK_ADMIN",
+      "verification_step": "Verify firewall drop rule counters increment on synthetic test beacon.",
+      "evidence_ids": [
+        "F-102",
+        "F-103",
+        "F-104"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-003",
+      "phase": "CONTAINMENT",
+      "priority": "P1_IMMEDIATE",
+      "title": "Revoke Active Sessions and Reset Credentials for Compromised Accounts",
+      "description": "Terminate active Kerberos tickets, refresh tokens, and force password change for identity/account(s): admin.",
+      "target_assets": [
+        "admin"
+      ],
+      "responsible_role": "IAM_ADMIN",
+      "verification_step": "Query Active Directory / IdP to ensure password last set timestamp is updated and active tokens revoked.",
+      "evidence_ids": [
+        "F-102",
+        "F-103",
+        "F-104"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-004",
+      "phase": "ERADICATION",
+      "priority": "P2_HIGH",
+      "title": "Eradicate Malicious Persistence Mechanisms and Payloads",
+      "description": "Delete unauthorized scheduled tasks (e.g., 'update.exe'), purge registry Run keys, and delete malicious payloads matching hashes: 7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069.",
+      "target_assets": [
+        "WIN-WORKSTATION-01",
+        "CORP-DC-01"
+      ],
+      "responsible_role": "SYSADMIN",
+      "verification_step": "Execute Schtasks query and filesystem hash check to verify binary and task removal.",
+      "evidence_ids": [
+        "F-102",
+        "F-103",
+        "F-104"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-005",
+      "phase": "ERADICATION",
+      "priority": "P2_HIGH",
+      "title": "Scan File System with Custom YARA Rules for Residual Droppers",
+      "description": "Run full-disk forensic YARA scan across all affected endpoints to ensure no secondary droppers remain.",
+      "target_assets": [
+        "WIN-WORKSTATION-01",
+        "CORP-DC-01"
+      ],
+      "responsible_role": "FORENSIC_ANALYST",
+      "verification_step": "Verify YARA scan report returns zero undetected matches across disk volumes.",
+      "evidence_ids": [
+        "F-102",
+        "F-103",
+        "F-104"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-006",
+      "phase": "RECOVERY",
+      "priority": "P3_MEDIUM",
+      "title": "Rebuild or Restore Endpoints from Verified Clean Golden Images",
+      "description": "Re-image impacted endpoints from clean baseline templates or restore data from offline backups prior to confirmed compromise timestamp.",
+      "target_assets": [
+        "WIN-WORKSTATION-01",
+        "CORP-DC-01"
+      ],
+      "responsible_role": "SYSADMIN",
+      "verification_step": "Confirm golden image integrity checksum and ensure latest OS security updates applied.",
+      "evidence_ids": [
+        "F-102",
+        "F-103",
+        "F-104"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-007",
+      "phase": "RECOVERY",
+      "priority": "P3_MEDIUM",
+      "title": "Gradual Network Re-Integration under Elevated Telemetry Monitoring",
+      "description": "Re-attach restored systems to their production subnets with real-time EDR debug-level auditing enabled for 72 hours.",
+      "target_assets": [
+        "WIN-WORKSTATION-01",
+        "CORP-DC-01"
+      ],
+      "responsible_role": "SOC_L2",
+      "verification_step": "Audit telemetry stream to ensure zero anomalous network beacons or unauthorized process spawns.",
+      "evidence_ids": [
+        "F-102",
+        "F-103",
+        "F-104"
+      ],
+      "completed": false
+    },
+    {
+      "action_id": "REC-008",
+      "phase": "HARDENING",
+      "priority": "P4_LOW",
+      "title": "Implement Attack Surface Reduction & PowerShell Constrained Language Mode",
+      "description": "Enforce PowerShell ConstrainedLanguage mode via AppLocker/WDAC and disable WScript/CScript execution for standard domain users.",
+      "target_assets": [
+        "ENTERPRISE_GPO"
+      ],
+      "responsible_role": "SYSADMIN",
+      "verification_step": "Verify Group Policy Object (GPO) propagation and test PowerShell execution policy restriction.",
+      "evidence_ids": [],
+      "completed": false
+    },
+    {
+      "action_id": "REC-009",
+      "phase": "HARDENING",
+      "priority": "P4_LOW",
+      "title": "Update SIEM Correlation Rules for Observed TTPs",
+      "description": "Deploy detection rules targeting cmd.exe -> powershell.exe parent-child anomalies and unusual outbound socket connections on non-standard ports.",
+      "target_assets": [
+        "SIEM_DETECTION_ENGINE"
+      ],
+      "responsible_role": "SOC_L2",
+      "verification_step": "Trigger detection rule unit test and confirm alert dispatch to SOC queue.",
+      "evidence_ids": [],
+      "completed": false
+    }
+  ],
+  "recovery_checklist": {
+    "containment_steps": [
+      {
+        "action_id": "REC-001",
+        "phase": "CONTAINMENT",
+        "priority": "P1_IMMEDIATE",
+        "title": "Isolate Compromised Host(s) from Production Network",
+        "description": "Perform network-level quarantine for host(s): WIN-WORKSTATION-01, CORP-DC-01. Maintain only EDR sensor connection to prevent lateral pivot while preserving volatile evidence.",
+        "target_assets": [
+          "WIN-WORKSTATION-01",
+          "CORP-DC-01"
+        ],
+        "responsible_role": "SOC_L2",
+        "verification_step": "Confirm host ping is dropped and only management EDR traffic is permitted.",
+        "evidence_ids": [
+          "F-102",
+          "F-103",
+          "F-104"
+        ],
+        "completed": false
+      },
+      {
+        "action_id": "REC-002",
+        "phase": "CONTAINMENT",
+        "priority": "P1_IMMEDIATE",
+        "title": "Enforce Perimeter Firewall Blocks for Observed C2 Indicators",
+        "description": "Immediately block all outbound and inbound traffic to command-and-control IP(s): 198.51.100.22 across enterprise perimeter firewalls, egress proxies, and DNS resolvers.",
+        "target_assets": [
+          "198.51.100.22"
+        ],
+        "responsible_role": "NETWORK_ADMIN",
+        "verification_step": "Verify firewall drop rule counters increment on synthetic test beacon.",
+        "evidence_ids": [
+          "F-102",
+          "F-103",
+          "F-104"
+        ],
+        "completed": false
+      },
+      {
+        "action_id": "REC-003",
+        "phase": "CONTAINMENT",
+        "priority": "P1_IMMEDIATE",
+        "title": "Revoke Active Sessions and Reset Credentials for Compromised Accounts",
+        "description": "Terminate active Kerberos tickets, refresh tokens, and force password change for identity/account(s): admin.",
+        "target_assets": [
+          "admin"
+        ],
+        "responsible_role": "IAM_ADMIN",
+        "verification_step": "Query Active Directory / IdP to ensure password last set timestamp is updated and active tokens revoked.",
+        "evidence_ids": [
+          "F-102",
+          "F-103",
+          "F-104"
+        ],
+        "completed": false
+      }
+    ],
+    "eradication_steps": [
+      {
+        "action_id": "REC-004",
+        "phase": "ERADICATION",
+        "priority": "P2_HIGH",
+        "title": "Eradicate Malicious Persistence Mechanisms and Payloads",
+        "description": "Delete unauthorized scheduled tasks (e.g., 'update.exe'), purge registry Run keys, and delete malicious payloads matching hashes: 7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069.",
+        "target_assets": [
+          "WIN-WORKSTATION-01",
+          "CORP-DC-01"
+        ],
+        "responsible_role": "SYSADMIN",
+        "verification_step": "Execute Schtasks query and filesystem hash check to verify binary and task removal.",
+        "evidence_ids": [
+          "F-102",
+          "F-103",
+          "F-104"
+        ],
+        "completed": false
+      },
+      {
+        "action_id": "REC-005",
+        "phase": "ERADICATION",
+        "priority": "P2_HIGH",
+        "title": "Scan File System with Custom YARA Rules for Residual Droppers",
+        "description": "Run full-disk forensic YARA scan across all affected endpoints to ensure no secondary droppers remain.",
+        "target_assets": [
+          "WIN-WORKSTATION-01",
+          "CORP-DC-01"
+        ],
+        "responsible_role": "FORENSIC_ANALYST",
+        "verification_step": "Verify YARA scan report returns zero undetected matches across disk volumes.",
+        "evidence_ids": [
+          "F-102",
+          "F-103",
+          "F-104"
+        ],
+        "completed": false
+      }
+    ],
+    "recovery_steps": [
+      {
+        "action_id": "REC-006",
+        "phase": "RECOVERY",
+        "priority": "P3_MEDIUM",
+        "title": "Rebuild or Restore Endpoints from Verified Clean Golden Images",
+        "description": "Re-image impacted endpoints from clean baseline templates or restore data from offline backups prior to confirmed compromise timestamp.",
+        "target_assets": [
+          "WIN-WORKSTATION-01",
+          "CORP-DC-01"
+        ],
+        "responsible_role": "SYSADMIN",
+        "verification_step": "Confirm golden image integrity checksum and ensure latest OS security updates applied.",
+        "evidence_ids": [
+          "F-102",
+          "F-103",
+          "F-104"
+        ],
+        "completed": false
+      },
+      {
+        "action_id": "REC-007",
+        "phase": "RECOVERY",
+        "priority": "P3_MEDIUM",
+        "title": "Gradual Network Re-Integration under Elevated Telemetry Monitoring",
+        "description": "Re-attach restored systems to their production subnets with real-time EDR debug-level auditing enabled for 72 hours.",
+        "target_assets": [
+          "WIN-WORKSTATION-01",
+          "CORP-DC-01"
+        ],
+        "responsible_role": "SOC_L2",
+        "verification_step": "Audit telemetry stream to ensure zero anomalous network beacons or unauthorized process spawns.",
+        "evidence_ids": [
+          "F-102",
+          "F-103",
+          "F-104"
+        ],
+        "completed": false
+      }
+    ],
+    "hardening_steps": [
+      {
+        "action_id": "REC-008",
+        "phase": "HARDENING",
+        "priority": "P4_LOW",
+        "title": "Implement Attack Surface Reduction & PowerShell Constrained Language Mode",
+        "description": "Enforce PowerShell ConstrainedLanguage mode via AppLocker/WDAC and disable WScript/CScript execution for standard domain users.",
+        "target_assets": [
+          "ENTERPRISE_GPO"
+        ],
+        "responsible_role": "SYSADMIN",
+        "verification_step": "Verify Group Policy Object (GPO) propagation and test PowerShell execution policy restriction.",
+        "evidence_ids": [],
+        "completed": false
+      },
+      {
+        "action_id": "REC-009",
+        "phase": "HARDENING",
+        "priority": "P4_LOW",
+        "title": "Update SIEM Correlation Rules for Observed TTPs",
+        "description": "Deploy detection rules targeting cmd.exe -> powershell.exe parent-child anomalies and unusual outbound socket connections on non-standard ports.",
+        "target_assets": [
+          "SIEM_DETECTION_ENGINE"
+        ],
+        "responsible_role": "SOC_L2",
+        "verification_step": "Trigger detection rule unit test and confirm alert dispatch to SOC queue.",
+        "evidence_ids": [],
+        "completed": false
+      }
+    ],
+    "total_actions": 9
+  },
+  "explanation": "### Section 1: Executive Incident Summary & Severity\nInvestigation impact assessment establishes an overall ARGUS Investigation Severity Score (ISS) of **5.6/10.0 (MEDIUM)**. ARGUS Investigation Severity Score (ISS) calculated at 5.6/10.0 (MEDIUM). Primary impact drivers: Asset Criticality & Enterprise Exposure (2.38 pts) & System Integrity & Persistence Depth (1.5 pts).\n\n### Section 2: Affected Assets & Threat Blast Radius\nA total of 3 system assets and identities were evaluated:\n- **WIN-WORKSTATION-01** (ENDPOINT, Criticality: MEDIUM): State: CONFIRMED_COMPROMISED, Assessed Risk: 8.5/10. Target of Command_and_Control execution: 'Finding F-103 details continuous encrypted TLS beaconing from WIN-WORKSTATION-01 to external IP 198.'\n- **admin** (USER_ACCOUNT, Criticality: HIGH): State: CONFIRMED_COMPROMISED, Assessed Risk: 9.0/10. Privileged account authority utilized: Finding F-104 shows user 'admin' on WIN-WORKSTATION-01 creating scheduled task u\n- **CORP-DC-01** (DOMAIN_CONTROLLER, Criticality: CRITICAL): State: TARGETED, Assessed Risk: 8.0/10. Target host targeted via lateral movement.\n\n### Section 3: Technical Vulnerability Analysis (CVSS v3.1 Assessment)\nCVSS v3.1 Base Score: **7.4 (HIGH)**\nVector String: `CVSS:3.1/AV:N/AC:L/PR:N/UI:R/S:C/C:N/I:H/A:N`\nExploitability Subscore: 2.8 | Impact Subscore: 4.0\nAll 8 CVSS v3.1 base metrics substantiated by forensic investigation evidence.\n\n### Section 4: Investigation Severity Score (ISS) Business Impact Breakdown\nInvestigation-level severity is derived from 6 weighted forensic dimensions:\n- **Asset Criticality & Enterprise Exposure**: Raw=9.5/10, Weighted Contribution=2.38 pts (Critical infrastructure asset(s) compromised (e.g. Domain Controller, Core Database).)\n- **Data Compromise & Confidentiality Exposure**: Raw=1.0/10, Weighted Contribution=0.2 pts (No sensitive data access, credential theft, or exfiltration detected.)\n- **System Integrity & Persistence Depth**: Raw=7.5/10, Weighted Contribution=1.5 pts (Persistent malware execution mechanism established (scheduled task/registry).)\n- **Operational Availability & Service Downtime**: Raw=1.0/10, Weighted Contribution=0.15 pts (Standard system availability preserved; no service interruption observed.)\n- **Scope of Compromise & Lateral Movement**: Raw=6.0/10, Weighted Contribution=0.6 pts (Lateral movement confirmed to a secondary system.)\n- **Technical Vulnerability Severity (CVSS Baseline)**: Raw=7.4/10, Weighted Contribution=0.74 pts (Directly derived from deterministic CVSS v3.1 base score (7.4/10.0).)\n\n### Section 5: Priority Containment & Recovery Guidance\nThe incident response team must execute the following prioritized operations immediately:\n- **[CONTAINMENT] (P1_IMMEDIATE) REC-001**: Isolate Compromised Host(s) from Production Network (SOC_L2)\n  *Task*: Perform network-level quarantine for host(s): WIN-WORKSTATION-01, CORP-DC-01. Maintain only EDR sensor connection to prevent lateral pivot while preserving volatile evidence.\n  *Verification*: Confirm host ping is dropped and only management EDR traffic is permitted.\n- **[CONTAINMENT] (P1_IMMEDIATE) REC-002**: Enforce Perimeter Firewall Blocks for Observed C2 Indicators (NETWORK_ADMIN)\n  *Task*: Immediately block all outbound and inbound traffic to command-and-control IP(s): 198.51.100.22 across enterprise perimeter firewalls, egress proxies, and DNS resolvers.\n  *Verification*: Verify firewall drop rule counters increment on synthetic test beacon.\n- **[CONTAINMENT] (P1_IMMEDIATE) REC-003**: Revoke Active Sessions and Reset Credentials for Compromised Accounts (IAM_ADMIN)\n  *Task*: Terminate active Kerberos tickets, refresh tokens, and force password change for identity/account(s): admin.\n  *Verification*: Query Active Directory / IdP to ensure password last set timestamp is updated and active tokens revoked.\n- **[ERADICATION] (P2_HIGH) REC-004**: Eradicate Malicious Persistence Mechanisms and Payloads (SYSADMIN)\n  *Task*: Delete unauthorized scheduled tasks (e.g., 'update.exe'), purge registry Run keys, and delete malicious payloads matching hashes: 7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284addd200126d9069.\n  *Verification*: Execute Schtasks query and filesystem hash check to verify binary and task removal.\n- **[ERADICATION] (P2_HIGH) REC-005**: Scan File System with Custom YARA Rules for Residual Droppers (FORENSIC_ANALYST)\n  *Task*: Run full-disk forensic YARA scan across all affected endpoints to ensure no secondary droppers remain.\n  *Verification*: Verify YARA scan report returns zero undetected matches across disk volumes.",
+  "all_cited_evidence_ids": [
+    "F-101",
+    "F-102",
+    "F-103",
+    "F-104",
+    "F-105"
+  ],
+  "citation_validation": {
+    "citation_valid": true,
+    "total_citations": 5,
+    "valid_citations_count": 5,
+    "invalid_citations": [],
+    "score_integrity_valid": true,
+    "validation_notes": "Validation PASSED: 5 unique citations verified against universe."
+  },
+  "sanitization_summary": {
+    "findings_sanitized": 5,
+    "injections_flagged": 0
+  }
+}

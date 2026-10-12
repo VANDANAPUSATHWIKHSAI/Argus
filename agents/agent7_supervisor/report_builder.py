@@ -134,6 +134,23 @@ class SupervisorReportBuilder:
                 "flags": vr.get("flags", []),
             })
 
+        verified_facts = [f for f in findings if f.get("review_status") == "verified"]
+        contradictions = [
+            f for f in findings
+            if "contradicted" in str(f.get("verification_status", "")).lower()
+            or any("contradiction" in str(fl).lower() for fl in f.get("flags", []))
+        ]
+        missing_evidence = [
+            f for f in findings
+            if "invalid_or_missing_evidence" in str(f.get("verification_status", "")).lower()
+            or any("not found" in str(fl).lower() or "zero evidence" in str(fl).lower() for fl in f.get("flags", []))
+        ]
+        unverified_claims = [
+            f for f in findings
+            if f.get("review_status") != "verified" and f not in contradictions and f not in missing_evidence
+        ]
+        exec_status = "FAILED" if synthesis.get("synthesis_status") == "FAILED" or synthesis.get("synthesis_error") else "SUCCESS"
+
         timeline = synthesis.get("attack_timeline") or extra.get("timeline") or []
         mitre_matrix = synthesis.get("mitre_matrix") or []
 
@@ -146,6 +163,8 @@ class SupervisorReportBuilder:
             "tenant_id": tenant_id,
             "generated_at": metadata["timestamp"],
             "metadata": metadata,
+            "execution_status": exec_status,
+            "synthesis_error": synthesis.get("synthesis_error"),
             "investigation_confidence_score": conf_score,
             "review_route": confidence_gate.get("route", "senior_dual"),
             "review_reasons": confidence_gate.get("reasons", []),
@@ -153,6 +172,10 @@ class SupervisorReportBuilder:
             "executive_summary": synthesis.get("executive_summary", ""),
             "incident_narrative": synthesis.get("incident_narrative", ""),
             "findings": findings,
+            "verified_facts": verified_facts,
+            "unverified_claims": unverified_claims,
+            "contradictions": contradictions,
+            "missing_evidence": missing_evidence,
             "timeline": timeline,
             "mitre_matrix": mitre_matrix,
             "conflicts_resolved": synthesis.get("conflicts_resolved", []),

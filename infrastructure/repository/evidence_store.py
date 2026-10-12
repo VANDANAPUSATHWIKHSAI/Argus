@@ -517,17 +517,24 @@ def get_evidence(tenant_id: str, evidence_id: str) -> Optional[Evidence]:
                             try:
                                 with open(metadata_file, "r", encoding="utf-8") as f:
                                     data = json.load(f)
+                                    stored_tenant = data.get("tenant_id")
+                                    if stored_tenant and stored_tenant != tenant_id:
+                                        return None
+                                    if not stored_tenant and tenant_id != "default":
+                                        return None
                                     data["evidence_id"] = evidence_id
                                     data["case_id"] = case_dir.name
-                                    if not data.get("status"):
+                                    raw_status = str(data.get("status", "")).lower()
+                                    valid_statuses = {s.value for s in EvidenceStatus}
+                                    if raw_status in valid_statuses:
+                                        data["status"] = EvidenceStatus(raw_status)
+                                    else:
                                         data["status"] = EvidenceStatus.STORED
-                                    if data.get("tenant_id") and data["tenant_id"] != tenant_id and tenant_id != "default":
-                                        return None
                                     return Evidence(**data)
                             except Exception as e:
                                 logger.error("Failed to read metadata.json: %s", e)
                         orig_dir = ev_dir / "original"
-                        if orig_dir.exists():
+                        if orig_dir.exists() and tenant_id == "default":
                             files = list(orig_dir.iterdir())
                             if files:
                                 file_path = files[0]
@@ -541,7 +548,7 @@ def get_evidence(tenant_id: str, evidence_id: str) -> Optional[Evidence]:
                                     status=EvidenceStatus.STORED,
                                     original_repository_path=str(file_path),
                                     repository_path=str(file_path),
-                                    metadata={"size_bytes": file_path.stat().st_size}
+                                    metadata={"size_bytes": file_path.stat().st_size, "tenant_id": "default"}
                                 )
     return None
 
@@ -602,17 +609,25 @@ def list_evidence_by_case(tenant_id: str, case_id: str) -> list[Evidence]:
                             import json
                             with open(metadata_file, "r", encoding="utf-8") as f:
                                 data = json.load(f)
+                                stored_tenant = data.get("tenant_id")
+                                if stored_tenant and stored_tenant != tenant_id:
+                                    continue
+                                if not stored_tenant and tenant_id != "default":
+                                    continue
                                 data["evidence_id"] = ev_id_dir.name
                                 data["case_id"] = case_id
-                                # Ensure status is available, default to Processing
-                                if not data.get("status"):
-                                    data["status"] = "processing"
+                                raw_status = str(data.get("status", "")).lower()
+                                valid_statuses = {s.value for s in EvidenceStatus}
+                                if raw_status in valid_statuses:
+                                    data["status"] = EvidenceStatus(raw_status)
+                                else:
+                                    data["status"] = EvidenceStatus.STORED
                                 evidence_list.append(Evidence(**data))
                             continue
                         except Exception as e:
                             logger.error("Failed to read metadata.json: %s", e)
                     orig_dir = ev_id_dir / "original"
-                    if orig_dir.exists() and orig_dir.is_dir():
+                    if orig_dir.exists() and orig_dir.is_dir() and tenant_id == "default":
                         files = list(orig_dir.iterdir())
                         if files:
                             # Use the first file found in original/
@@ -627,7 +642,7 @@ def list_evidence_by_case(tenant_id: str, case_id: str) -> list[Evidence]:
                                 status=EvidenceStatus.STORED,
                                 original_repository_path=str(file_path),
                                 repository_path=str(file_path),
-                                metadata={"size_bytes": file_path.stat().st_size}
+                                metadata={"size_bytes": file_path.stat().st_size, "tenant_id": "default"}
                             ))
                             
     return evidence_list

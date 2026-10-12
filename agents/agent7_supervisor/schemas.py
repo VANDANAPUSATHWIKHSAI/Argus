@@ -34,7 +34,12 @@ class StructuredClaim(BaseModel):
     evidence_ids: List[str] = Field(default_factory=list, description="Cited FIR finding IDs")
     severity: Literal["critical", "high", "medium", "low", "informational"] = "medium"
     is_attribution: bool = Field(default=False, description="True if claim asserts actor or malware attribution")
-    confidence: float = Field(ge=0.0, le=1.0, default=0.90)
+    confidence: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Explicit model-provided confidence; None if absent or missing"
+    )
     mitre_tactics: List[str] = Field(default_factory=list)
     mitre_techniques: List[str] = Field(default_factory=list)
 

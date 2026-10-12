@@ -38,9 +38,14 @@ class Agent1Validator:
     """
 
     @staticmethod
-    def extract_valid_id_universe(findings: List[Any]) -> Tuple[Set[str], Set[str]]:
+    def extract_valid_id_universe(
+        findings: List[Any],
+        tenant_id: Optional[str] = None,
+        case_id: Optional[str] = None
+    ) -> Tuple[Set[str], Set[str]]:
         """
         Extracts all valid finding_ids and valid source evidence_ids from supplied FIR findings or SanitizedAgentContexts.
+        Enforces tenant and case boundary filtering when provided.
         Returns:
             (valid_finding_ids, valid_evidence_lineage_ids)
         """
@@ -48,6 +53,14 @@ class Agent1Validator:
         lineage_ids: Set[str] = set()
 
         for f in findings:
+            f_tenant = _get_val(f, "tenant_id")
+            if tenant_id and f_tenant and f_tenant != tenant_id and tenant_id != "default":
+                continue
+
+            f_case = _get_val(f, "case_id")
+            if case_id and f_case and str(f_case) != str(case_id):
+                continue
+
             fid = _get_val(f, "finding_id")
             if fid:
                 finding_ids.add(str(fid).strip())
@@ -129,6 +142,8 @@ class Agent1Validator:
     ) -> Tuple[Dict[str, Any], List[str]]:
         """
         Performs strict Evidence Reference Gate validation across all output components.
+        Rejects triage items with empty evidence_ids.
+        Preserves raw priority scores without silent clamping.
         Returns (validated_output_dict, invalid_citations_list).
         """
         valid_universe = valid_finding_ids.union(valid_lineage_ids)
@@ -141,32 +156,41 @@ class Agent1Validator:
             for item in priority_ev:
                 if isinstance(item, dict):
                     eid = str(item.get("evidence_id", "")).strip()
-                    if eid and eid not in valid_universe:
+                    if not eid:
+                        invalid_citations.add("<empty_evidence_id>")
+                        logger.warning("Agent1Validator: priority_evidence rejected due to empty evidence_id")
+                        continue
+                    if eid not in valid_universe:
                         invalid_citations.add(eid)
                         logger.warning("Agent1Validator: priority_evidence cited invalid ID '%s'", eid)
-                    else:
-                        # Validate and enforce priority_score bounds [0.0, 1.0]
-                        inv_val = item.get("investigative_value", "MEDIUM")
-                        score = item.get("priority_score")
-                        reasons = item.get("reason", [])
-                        if not isinstance(reasons, list):
-                            reasons = [str(reasons)] if reasons else []
+                        continue
 
-                        if score is None:
-                            score, breakdown = self.calculate_deterministic_priority_score(investigative_value=inv_val)
-                            reasons.extend(breakdown)
-                        else:
-                            try:
-                                score = float(score)
-                                if score < 0.0 or score > 1.0:
-                                    score = max(0.0, min(1.0, score))
-                            except (ValueError, TypeError):
+                    inv_val = item.get("investigative_value", "MEDIUM")
+                    score = item.get("priority_score")
+                    reasons = item.get("reason", [])
+                    if not isinstance(reasons, list):
+                        reasons = [str(reasons)] if reasons else []
+
+                    if score is None:
+                        score, breakdown = self.calculate_deterministic_priority_score(investigative_value=inv_val)
+                        reasons.extend(breakdown)
+                    else:
+                        try:
+                            parsed_score = float(score)
+                            item["raw_priority_score"] = parsed_score
+                            if parsed_score < 0.0 or parsed_score > 1.0:
+                                reasons.append(f"Priority score {parsed_score} out of bounds [0.0, 1.0]; recomputed deterministically.")
                                 score, breakdown = self.calculate_deterministic_priority_score(investigative_value=inv_val)
                                 reasons.extend(breakdown)
+                            else:
+                                score = parsed_score
+                        except (ValueError, TypeError):
+                            score, breakdown = self.calculate_deterministic_priority_score(investigative_value=inv_val)
+                            reasons.extend(breakdown)
 
-                        item["priority_score"] = score
-                        item["reason"] = reasons
-                        cleaned_priority.append(item)
+                    item["priority_score"] = score
+                    item["reason"] = reasons
+                    cleaned_priority.append(item)
             output_dict["priority_evidence"] = cleaned_priority
 
         # 2. Validate supporting_evidence
@@ -176,10 +200,27 @@ class Agent1Validator:
             for item in supporting_ev:
                 if isinstance(item, dict):
                     eid = str(item.get("evidence_id", "")).strip()
-                    if eid and eid not in valid_universe:
+                    if not eid:
+                        invalid_citations.add("<empty_evidence_id>")
+                        continue
+                    if eid not in valid_universe:
                         invalid_citations.add(eid)
-                    else:
-                        cleaned_supporting.append(item)
+                        continue
+
+                    # Validate supported IDs
+                    supports = item.get("supports", [])
+                    valid_supports = []
+                    if isinstance(supports, list):
+                        for s in supports:
+                            s_str = str(s).strip()
+                            if not s_str:
+                                invalid_citations.add("<empty_supported_id>")
+                            elif s_str not in valid_universe:
+                                invalid_citations.add(s_str)
+                            else:
+                                valid_supports.append(s_str)
+                    item["supports"] = valid_supports
+                    cleaned_supporting.append(item)
             output_dict["supporting_evidence"] = cleaned_supporting
 
         # 3. Validate evidence_clusters
@@ -189,10 +230,15 @@ class Agent1Validator:
             for item in clusters:
                 if isinstance(item, dict):
                     eids = item.get("evidence_ids", [])
-                    valid_eids = [eid for eid in eids if str(eid).strip() in valid_universe]
+                    valid_eids = []
                     for eid in eids:
-                        if str(eid).strip() not in valid_universe:
-                            invalid_citations.add(str(eid).strip())
+                        eid_str = str(eid).strip()
+                        if not eid_str:
+                            invalid_citations.add("<empty_cluster_evidence_id>")
+                        elif eid_str not in valid_universe:
+                            invalid_citations.add(eid_str)
+                        else:
+                            valid_eids.append(eid_str)
                     item["evidence_ids"] = valid_eids
                     cleaned_clusters.append(item)
             output_dict["evidence_clusters"] = cleaned_clusters
@@ -204,10 +250,15 @@ class Agent1Validator:
             for item in questions:
                 if isinstance(item, dict):
                     eids = item.get("evidence_ids", [])
-                    valid_eids = [eid for eid in eids if str(eid).strip() in valid_universe]
+                    valid_eids = []
                     for eid in eids:
-                        if str(eid).strip() not in valid_universe:
-                            invalid_citations.add(str(eid).strip())
+                        eid_str = str(eid).strip()
+                        if not eid_str:
+                            invalid_citations.add("<empty_question_evidence_id>")
+                        elif eid_str not in valid_universe:
+                            invalid_citations.add(eid_str)
+                        else:
+                            valid_eids.append(eid_str)
                     item["evidence_ids"] = valid_eids
                     cleaned_questions.append(item)
             output_dict["investigation_questions"] = cleaned_questions
@@ -219,10 +270,15 @@ class Agent1Validator:
             for item in focus_areas:
                 if isinstance(item, dict):
                     eids = item.get("evidence_ids", [])
-                    valid_eids = [eid for eid in eids if str(eid).strip() in valid_universe]
+                    valid_eids = []
                     for eid in eids:
-                        if str(eid).strip() not in valid_universe:
-                            invalid_citations.add(str(eid).strip())
+                        eid_str = str(eid).strip()
+                        if not eid_str:
+                            invalid_citations.add("<empty_focus_evidence_id>")
+                        elif eid_str not in valid_universe:
+                            invalid_citations.add(eid_str)
+                        else:
+                            valid_eids.append(eid_str)
                     item["evidence_ids"] = valid_eids
                     cleaned_focus.append(item)
             output_dict["focus_areas"] = cleaned_focus
@@ -233,10 +289,15 @@ class Agent1Validator:
             cleaned_rel = {}
             for agent_key, eids in relevance.items():
                 if isinstance(eids, list):
-                    valid_eids = [eid for eid in eids if str(eid).strip() in valid_universe]
+                    valid_eids = []
                     for eid in eids:
-                        if str(eid).strip() not in valid_universe:
-                            invalid_citations.add(str(eid).strip())
+                        eid_str = str(eid).strip()
+                        if not eid_str:
+                            invalid_citations.add("<empty_downstream_evidence_id>")
+                        elif eid_str not in valid_universe:
+                            invalid_citations.add(eid_str)
+                        else:
+                            valid_eids.append(eid_str)
                     cleaned_rel[agent_key] = valid_eids
                 else:
                     cleaned_rel[agent_key] = []
@@ -253,28 +314,46 @@ class Agent1Validator:
     ) -> List[Agent1Claim]:
         """
         Backward compatibility helper validating Agent1Claim objects.
+        Enforces:
+        - Claims with zero evidence IDs NEVER receive citation_valid=True or citation_verified=True.
+        - Missing confidence is preserved as None and marked invalid/missing.
         """
         valid_universe = valid_finding_ids.union(valid_lineage_ids)
         validated_claims: List[Agent1Claim] = []
 
         for claim in claims:
-            cited_ids = claim.cited_evidence_ids or []
-            invalid_ids = [cid for cid in cited_ids if cid not in valid_universe]
+            raw_cited = claim.cited_evidence_ids or []
+            cleaned_cited = [str(cid).strip() for cid in raw_cited if cid and str(cid).strip()]
 
             notes = []
-            if invalid_ids:
+            if not raw_cited or not cleaned_cited:
                 claim.citation_valid = False
                 claim.citation_verified = False
-                claim.invalid_citations = invalid_ids
-                notes.append(f"Invalid cited IDs not in evidence lineage: {invalid_ids}")
-            else:
-                claim.citation_valid = True
-                claim.citation_verified = True
                 claim.invalid_citations = []
-                notes.append("Citation verification passed.")
+                notes.append("Claim cites zero evidence IDs: citation verification failed.")
+            else:
+                invalid_ids = [cid for cid in cleaned_cited if cid not in valid_universe]
+                if len(raw_cited) > len(cleaned_cited):
+                    invalid_ids.append("<empty_evidence_id>")
+
+                if invalid_ids:
+                    claim.citation_valid = False
+                    claim.citation_verified = False
+                    claim.invalid_citations = invalid_ids
+                    notes.append(f"Invalid cited IDs not in evidence lineage: {invalid_ids}")
+                else:
+                    claim.citation_valid = True
+                    claim.citation_verified = True
+                    claim.invalid_citations = []
+                    notes.append("Citation verification passed.")
 
             raw_conf = claim.confidence_score
-            if raw_conf is None or raw_conf < 0.0 or raw_conf > 1.0:
+            if raw_conf is None:
+                claim.is_valid_confidence = False
+                claim.raw_model_confidence = None
+                claim.confidence_score = None
+                notes.append("Missing confidence_score: model did not supply confidence.")
+            elif raw_conf < 0.0 or raw_conf > 1.0:
                 claim.is_valid_confidence = False
                 claim.raw_model_confidence = raw_conf
                 claim.confidence_score = 0.0

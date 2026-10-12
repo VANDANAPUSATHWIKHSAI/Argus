@@ -113,8 +113,12 @@ class FIRRepository:
         )
 
         # 4. Attempt Postgres write to authoritative 'fir_findings' table
+        from infrastructure.repository.evidence_store import _should_attempt_postgres
         if FIRRepository._db_unreachable:
-            return finding
+            if _should_attempt_postgres():
+                FIRRepository._db_unreachable = False
+            else:
+                return finding
 
         try:
             import psycopg2
@@ -181,25 +185,15 @@ class FIRRepository:
 
         return finding
 
-    def get_by_id(self, tenant_id_or_finding_id: str, finding_id: Optional[str] = None) -> Optional[FIRFinding]:
-        """
-        Gets a finding by its ID, enforcing tenant isolation when tenant_id is provided.
-        Supports both get_by_id(tenant_id, finding_id) and get_by_id(finding_id).
-        """
-        if finding_id is None:
-            fid = tenant_id_or_finding_id
-            return self.findings.get(fid)
+    @classmethod
+    def reset_db_unreachable(cls) -> None:
+        """Reset DB unreachable status for testing or health check."""
+        cls._db_unreachable = False
 
-        tid = tenant_id_or_finding_id
-        fid = finding_id
-        finding = self.findings.get(fid)
-        if finding:
-            if not finding.tenant_id or finding.tenant_id == tid or tid in ("default", "*", ""):
-                return finding
-        return None
-
-    def _hydrate_from_postgres(self, case_id: str, tenant_id: str) -> None:
-        """Hydrates findings from PostgreSQL 'fir_findings' table."""
+    def _hydrate_single_from_postgres(self, finding_id: str, tenant_id: str) -> Optional[FIRFinding]:
+        """Hydrates a single finding from PostgreSQL 'fir_findings' table enforcing tenant scope."""
+        if FIRRepository._db_unreachable:
+            return None
         try:
             import psycopg2
             from config.settings import settings
@@ -209,7 +203,104 @@ class FIRRepository:
                 database=settings.postgres_db,
                 user=settings.postgres_user,
                 password=settings.postgres_password,
-                connect_timeout=3
+                connect_timeout=1
+            )
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT finding_id, case_id, tenant_id, fact, sanitized_fact, confidence, severity, mitre_mapping,
+                       evidence_reference, source_artifact_id, finding_fingerprint, review_status, reviewed_by,
+                       injection_flagged, injection_score, layer, timestamp
+                FROM fir_findings
+                WHERE finding_id = %s AND tenant_id = %s
+                """,
+                (finding_id, tenant_id)
+            )
+            row = cur.fetchone()
+            if row:
+                f_id, c_id, t_id, fact, s_fact, conf, sev, mitre, evid_ref, src_art, fp, st_val, rev_by, inj_flg, inj_sc, lyr, ts = row
+                fnd = FIRFinding(
+                    finding_id=f_id,
+                    case_id=c_id,
+                    tenant_id=t_id,
+                    fact=fact,
+                    sanitized_fact=s_fact or fact,
+                    confidence=float(conf),
+                    severity=sev,
+                    mitre_mapping=mitre,
+                    evidence_reference=list(evid_ref) if isinstance(evid_ref, (list, tuple)) else [],
+                    source_artifact_id=src_art or f_id,
+                    finding_fingerprint=fp or "",
+                    review_status=ReviewStatus(st_val) if st_val in ReviewStatus.__members__.values() or any(st_val == member.value for member in ReviewStatus) else ReviewStatus.PENDING_REVIEW,
+                    reviewed_by=rev_by,
+                    injection_flagged=bool(inj_flg),
+                    injection_score=float(inj_sc or 0.0),
+                    layer=lyr or "unknown",
+                    timestamp=ts
+                )
+                self.findings[f_id] = fnd
+                conn.close()
+                return fnd
+            conn.close()
+        except Exception as e:
+            FIRRepository._db_unreachable = True
+            logger.debug("Postgres single finding hydration skipped: %s", e)
+        return None
+
+    def get_by_id(
+        self,
+        tenant_id_or_finding_id: Optional[str] = None,
+        finding_id: Optional[str] = None,
+        *,
+        tenant_id: Optional[str] = None,
+    ) -> Optional[FIRFinding]:
+        """
+        Gets a finding by its ID, enforcing tenant isolation.
+        Requires both tenant_id and finding_id.
+        Fails closed (returns None) if tenant_id is missing, empty, '*', or unscoped.
+        """
+        tid = tenant_id
+        fid = finding_id
+
+        if tenant_id_or_finding_id is not None:
+            if fid is None:
+                if tid is not None:
+                    fid = tenant_id_or_finding_id
+                else:
+                    # Legacy unscoped call get_by_id(finding_id) -> fail closed!
+                    return None
+            else:
+                tid = tenant_id_or_finding_id
+
+        if not tid or tid in ("*", "") or not fid:
+            return None
+
+        finding = self.findings.get(fid)
+        if finding:
+            # Enforce strict tenant boundary without blanket wildcard/default bypass
+            if finding.tenant_id == tid:
+                return finding
+            if not finding.tenant_id and tid == "default":
+                return finding
+            return None
+
+        # Fallback to PostgreSQL if not present in memory
+        return self._hydrate_single_from_postgres(fid, tid)
+
+    def _hydrate_from_postgres(self, case_id: str, tenant_id: str) -> None:
+        """Hydrates findings from PostgreSQL 'fir_findings' table."""
+        if FIRRepository._db_unreachable:
+            return
+        try:
+            import psycopg2
+            from config.settings import settings
+            conn = psycopg2.connect(
+                host=settings.postgres_host,
+                port=settings.postgres_port,
+                database=settings.postgres_db,
+                user=settings.postgres_user,
+                password=settings.postgres_password,
+                connect_timeout=1
             )
             cur = conn.cursor()
             cur.execute(
@@ -248,25 +339,44 @@ class FIRRepository:
                     self.findings[f_id] = fnd
             conn.close()
         except Exception as e:
+            FIRRepository._db_unreachable = True
             logger.debug("Postgres hydration skipped: %s", e)
 
-    def get_by_case(self, tenant_id: str = "", case_id: str = "") -> List[FIRFinding]:
+    def get_by_case(self, *args, **kwargs) -> List[FIRFinding]:
         """
-        Gets all findings for a given case, enforcing tenant isolation when tenant_id is provided.
-        Supports get_by_case(case_id), get_by_case(tenant_id, case_id), and get_by_case(tenant_id=t, case_id=c).
-        """
-        if tenant_id and not case_id:
-            cid = tenant_id
-            tid = ""
-        else:
-            tid = tenant_id
-            cid = case_id
+        Gets all findings for a given case, enforcing tenant isolation.
+        Requires both tenant_id and case_id.
+        Supports:
+        - get_by_case(tenant_id, case_id)
+        - get_by_case(case_id, tenant_id=t)
+        - get_by_case(case_id=c, tenant_id=t)
+        - get_by_case(tenant_id=t, case_id=c)
 
-        if tid and tid not in ("default", "*", ""):
-            self._hydrate_from_postgres(cid, tid)
-            return [f for f in self.findings.values() if f.case_id == cid and (not f.tenant_id or f.tenant_id == tid)]
-        else:
-            return [f for f in self.findings.values() if f.case_id == cid]
+        Fails closed (returns []) if tenant_id is missing, empty, '*', or unscoped.
+        """
+        tid = kwargs.get("tenant_id")
+        cid = kwargs.get("case_id")
+
+        if args:
+            if len(args) == 1:
+                if cid and not tid:
+                    tid = args[0]
+                elif tid and not cid:
+                    cid = args[0]
+                elif not cid and not tid:
+                    cid = args[0]
+            elif len(args) >= 2:
+                tid, cid = args[0], args[1]
+
+        if not cid or not tid or tid in ("*", ""):
+            # Cannot establish tenant safely or unscoped query -> fail closed!
+            return []
+
+        self._hydrate_from_postgres(cid, tid)
+        return [
+            f for f in self.findings.values()
+            if f.case_id == cid and (f.tenant_id == tid or (not f.tenant_id and tid == "default"))
+        ]
 
     def mark_reviewed(
         self,

@@ -142,7 +142,7 @@ class SupervisorVerification(BaseAgent):
                         except Exception:
                             pass
 
-                    if raw_finding and getattr(raw_finding, "tenant_id", "") not in ("", t_id, "default"):
+                    if raw_finding and getattr(raw_finding, "tenant_id", "") not in ("", t_id):
                         existence_passed = False
                         flags.append(
                             f"Evidence ID [{fid}] not found in FIR for tenant '{t_id}' (Cross-tenant access violation: belongs to tenant '{getattr(raw_finding, 'tenant_id', '')}')"
@@ -151,9 +151,19 @@ class SupervisorVerification(BaseAgent):
                         existence_passed = False
                         flags.append(f"Evidence ID [{fid}] not found in FIR for tenant '{t_id}'")
                 else:
-                    # Validate case boundary if finding specifies case_id
+                    # Every evidence record must be verified against authorized tenant and active case.
+                    # Legacy or missing tenant metadata must not automatically authorize the record.
+                    finding_tenant = getattr(finding, "tenant_id", None)
+                    if not finding_tenant or (t_id and str(finding_tenant) != str(t_id)):
+                        existence_passed = False
+                        flags.append(
+                            f"Tenant boundary violation: Evidence ID [{fid}] tenant '{finding_tenant}' does not match authorized tenant '{t_id}'"
+                        )
+                        continue
+
+                    # Validate case boundary if finding specifies case_id or active_case is provided
                     finding_case = getattr(finding, "case_id", None)
-                    if finding_case and active_case and str(finding_case) != str(active_case):
+                    if active_case and (not finding_case or str(finding_case) != str(active_case)):
                         existence_passed = False
                         flags.append(
                             f"Cross-case access violation: Evidence ID [{fid}] belongs to case '{finding_case}', not active case '{active_case}'"
@@ -189,6 +199,8 @@ class SupervisorVerification(BaseAgent):
             loader = ClassifierLoader()
 
             try:
+                import re
+                # 1. Evaluate individual evidence findings against the claim hypothesis
                 for ev in evidence_details:
                     premise_fact = ev.get("fact", "")
                     if not premise_fact:
@@ -216,26 +228,102 @@ class SupervisorVerification(BaseAgent):
                             f"Contradiction detected: Evidence [{ev.get('finding_id')}] contradicts claim [{claim_id}] (contradiction score: {contra_score:.2f})"
                         )
 
+                # 2. Defensible Compound Claim Aggregation Strategy:
+                # Do NOT verify a compound claim just because one cited finding has the maximum entailment score.
+                # Every material assertion/clause must demonstrate evidentiary support.
+                raw_clauses = [c.strip() for c in re.split(r'(?<=[.!?])\s+|;\s*', claim_text) if c.strip()]
+                clauses = raw_clauses if raw_clauses else [claim_text]
+
+                all_clauses_supported = True
+                clause_evaluations: List[Dict[str, Any]] = []
+
+                if len(clauses) > 1:
+                    # Evaluate each atomic clause across available evidence premises
+                    combined_premise = " ".join(ev.get("fact", "") for ev in evidence_details if ev.get("fact"))
+                    for cl in clauses:
+                        cl_max_ent = 0.0
+                        for ev in evidence_details:
+                            pf = ev.get("fact", "")
+                            if pf:
+                                cl_res = loader.classify_nli(premise=pf, hypothesis=cl)
+                                cl_ent = float(cl_res.get("entailment", 0.0))
+                                cl_contra = float(cl_res.get("contradiction", 0.0))
+                                if cl_contra >= 0.50:
+                                    contradiction_detected = True
+                                if cl_ent > cl_max_ent:
+                                    cl_max_ent = cl_ent
+                        if combined_premise:
+                            cl_joint = loader.classify_nli(premise=combined_premise, hypothesis=cl)
+                            cl_joint_ent = float(cl_joint.get("entailment", 0.0))
+                            if float(cl_joint.get("contradiction", 0.0)) >= 0.50:
+                                contradiction_detected = True
+                            if cl_joint_ent > cl_max_ent:
+                                cl_max_ent = cl_joint_ent
+
+                        cl_supported = (cl_max_ent >= self.SUPPORT_THRESHOLD)
+                        clause_evaluations.append({
+                            "clause": cl,
+                            "max_entailment": round(cl_max_ent, 4),
+                            "supported": cl_supported,
+                        })
+                        if not cl_supported:
+                            all_clauses_supported = False
+                            flags.append(
+                                f"Compound claim [{claim_id}] unsupported clause: '{cl}' score ({cl_max_ent:.2f}) < threshold ({self.SUPPORT_THRESHOLD:.2f})"
+                            )
+
                 if contradiction_detected:
                     support_passed = False
                     support_score = max((ev["entailment"] for ev in evidence_evaluations), default=0.0)
                     entailment_label = "contradiction"
+                elif len(clauses) > 1 and not all_clauses_supported:
+                    # Compound claim failed assertion support
+                    support_passed = False
+                    support_score = min((ce["max_entailment"] for ce in clause_evaluations), default=0.0)
+                    entailment_label = "neutral"
                 else:
-                    max_entailment = max((ev["entailment"] for ev in evidence_evaluations), default=0.0)
-                    support_score = max_entailment
-
-                    if max_entailment >= self.SUPPORT_THRESHOLD:
-                        support_passed = True
-                        entailment_label = "entailment"
+                    # Evaluate combined premise for multi-evidence single-statement claims
+                    if len(evidence_details) > 1:
+                        combined_premise = " ".join(ev.get("fact", "") for ev in evidence_details if ev.get("fact"))
+                        joint_res = loader.classify_nli(premise=combined_premise, hypothesis=claim_text)
+                        joint_ent = float(joint_res.get("entailment", 0.0))
+                        joint_contra = float(joint_res.get("contradiction", 0.0))
+                        if joint_contra >= 0.50:
+                            contradiction_detected = True
+                            support_passed = False
+                            support_score = joint_ent
+                            entailment_label = "contradiction"
+                        else:
+                            # Use max of joint premise support and individual premise support
+                            max_entailment = max(joint_ent, max((ev["entailment"] for ev in evidence_evaluations), default=0.0))
+                            support_score = max_entailment
+                            if max_entailment >= self.SUPPORT_THRESHOLD:
+                                support_passed = True
+                                entailment_label = "entailment"
+                            else:
+                                support_passed = False
+                                entailment_label = "neutral"
+                                fallback_used = True
+                                flags.append(
+                                    f"Inconclusive semantic entailment: Highest DeBERTa support score ({max_entailment:.2f}) < threshold ({self.SUPPORT_THRESHOLD:.2f})"
+                                )
                     else:
-                        support_passed = False
-                        entailment_label = "neutral"
-                        fallback_used = True
-                        flags.append(
-                            f"Inconclusive semantic entailment: Highest DeBERTa support score ({max_entailment:.2f}) < threshold ({self.SUPPORT_THRESHOLD:.2f})"
-                        )
+                        max_entailment = max((ev["entailment"] for ev in evidence_evaluations), default=0.0)
+                        support_score = max_entailment
 
-                        # Secondary LLM assessment (strictly informational, cannot override unverified status)
+                        if max_entailment >= self.SUPPORT_THRESHOLD:
+                            support_passed = True
+                            entailment_label = "entailment"
+                        else:
+                            support_passed = False
+                            entailment_label = "neutral"
+                            fallback_used = True
+                            flags.append(
+                                f"Inconclusive semantic entailment: Highest DeBERTa support score ({max_entailment:.2f}) < threshold ({self.SUPPORT_THRESHOLD:.2f})"
+                            )
+
+                    # Secondary LLM assessment (strictly informational, cannot override unverified status)
+                    if not support_passed and not contradiction_detected:
                         try:
                             ev_wrapped_texts = [
                                 self.sanitized_context_fetch("fir", fid, tenant_id=t_id)
@@ -291,7 +379,12 @@ class SupervisorVerification(BaseAgent):
 
         # ── CHECK 3: Severity & Confidence Inflation Check ───────────────
         severity_passed = True
-        if fir_objects:
+        if claim_confidence is None:
+            severity_passed = False
+            flags.append(
+                f"Missing model confidence: claim [{claim_id}] lacks explicit confidence score; cannot verify without model confidence"
+            )
+        elif fir_objects:
             max_evidence_sev_val = max(
                 SEVERITY_WEIGHTS.get(str(getattr(fo, "severity", "medium")).lower(), 2)
                 for fo in fir_objects
@@ -312,7 +405,7 @@ class SupervisorVerification(BaseAgent):
                 )
 
             # Rule B: Claimed confidence cannot exceed evidence confidence by more than 0.25
-            if claim_confidence is not None and max_evidence_conf is not None:
+            if max_evidence_conf is not None:
                 if claim_confidence > max_evidence_conf + 0.25:
                     severity_passed = False
                     flags.append(

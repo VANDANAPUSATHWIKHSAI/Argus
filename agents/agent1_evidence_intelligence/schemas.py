@@ -95,7 +95,7 @@ class Agent1Claim(BaseModel):
     cited_evidence_ids: List[str] = Field(default_factory=list)
     assessed_importance: Literal["critical", "high", "medium", "low", "informational"] = "medium"
     importance_reason: Optional[str] = None
-    confidence_score: float = 0.8
+    confidence_score: Optional[float] = Field(default=None, description="Model-provided confidence score in [0.0, 1.0]")
     missing_evidence_noted: List[str] = Field(default_factory=list)
     uncertainties_or_conflicts: List[str] = Field(default_factory=list)
     reasoning_notes: str = ""
@@ -104,7 +104,7 @@ class Agent1Claim(BaseModel):
     citation_valid: bool = False
     citation_verified: bool = False
     invalid_citations: List[str] = Field(default_factory=list)
-    is_valid_confidence: bool = True
+    is_valid_confidence: bool = False
     raw_model_confidence: Optional[float] = None
     validation_notes: Optional[str] = None
     semantic_support_verified: bool = False

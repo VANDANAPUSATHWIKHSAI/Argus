@@ -385,7 +385,11 @@ class EvidenceIntelligenceAgent(BaseAgent):
             return output.model_dump()
 
         # ── 5. Evidence Reference Gate & Deterministic Validation ─────────
-        valid_finding_ids, valid_lineage_ids = self.validator.extract_valid_id_universe(fir_findings)
+        valid_finding_ids, valid_lineage_ids = self.validator.extract_valid_id_universe(
+            fir_findings,
+            tenant_id=tenant_id,
+            case_id=case_id
+        )
         validated_dict, invalid_citations = self.validator.validate_triage_output(
             output_dict=parsed_dict,
             valid_finding_ids=valid_finding_ids,
@@ -398,6 +402,12 @@ class EvidenceIntelligenceAgent(BaseAgent):
             valid_lineage_ids=valid_lineage_ids
         )
 
+        all_invalid_citations = set(invalid_citations)
+        for clm in validated_claims:
+            if clm.invalid_citations:
+                all_invalid_citations.update(clm.invalid_citations)
+
+        invalid_citations_list = sorted(list(all_invalid_citations))
         status = "SUCCESS"
         if invalid_citations:
             logger.warning("Agent 1: Evidence Reference Gate flagged invalid citations: %s", invalid_citations)
@@ -437,7 +447,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 sanitization_summary={
                     "findings_sanitized": len(fir_findings),
                     "injections_flagged": injections_flagged_count,
-                    "invalid_citations_blocked": invalid_citations
+                    "invalid_citations_blocked": invalid_citations_list
                 },
                 evidence_trust_score=metrics["trust_score"],
                 evidence_quality_summary=metrics,
@@ -495,11 +505,16 @@ class EvidenceIntelligenceAgent(BaseAgent):
                         if importance not in ("critical", "high", "medium", "low", "informational"):
                             importance = "medium"
 
-                        conf = item.get("confidence_score", item.get("confidence", 0.8))
-                        try:
-                            conf = float(conf)
-                        except (ValueError, TypeError):
-                            conf = -1.0
+                        raw_conf = item.get("confidence_score")
+                        if raw_conf is None:
+                            raw_conf = item.get("confidence")
+                        if raw_conf is not None:
+                            try:
+                                conf = float(raw_conf)
+                            except (ValueError, TypeError):
+                                conf = -1.0
+                        else:
+                            conf = None
 
                         missing_ev = item.get("missing_evidence_noted", [])
                         if isinstance(missing_ev, str):
@@ -532,14 +547,32 @@ class EvidenceIntelligenceAgent(BaseAgent):
             return None, [], f"JSON parse error: {str(err)}"
 
     _db_unreachable: bool = False
+    _last_db_check: float = 0.0
+    _db_retry_interval: float = 5.0
+
+    @classmethod
+    def reset_db_unreachable(cls):
+        """Explicitly reset the DB unreachable status to allow immediate reconnection attempts."""
+        cls._db_unreachable = False
+        cls._last_db_check = 0.0
+
+    @classmethod
+    def _should_attempt_postgres(cls) -> bool:
+        if not cls._db_unreachable:
+            return True
+        import time
+        if time.time() - cls._last_db_check > cls._db_retry_interval:
+            return True
+        return False
 
     def _persist_agent_output(self, output: Agent1Output):
         """
         Persists Agent 1 output into PostgreSQL `agent_outputs` table using idempotent UPSERT.
         Does NOT create duplicate execution records for unchanged case/tenant/claim states.
         Updates output.persistence_status to PERSISTED on success or PERSISTENCE_DEGRADED on DB offline.
+        Recovers automatically when PostgreSQL becomes reachable again or via reset_db_unreachable().
         """
-        if EvidenceIntelligenceAgent._db_unreachable:
+        if not self._should_attempt_postgres():
             output.persistence_status = "PERSISTENCE_DEGRADED"
             logger.info("PostgreSQL unavailable. Persistence fallback active (PERSISTENCE_DEGRADED).")
             return
@@ -610,9 +643,12 @@ class EvidenceIntelligenceAgent(BaseAgent):
 
             conn.commit()
             conn.close()
+            EvidenceIntelligenceAgent._db_unreachable = False
             output.persistence_status = "PERSISTED"
             logger.info("Agent 1 output persisted to PostgreSQL agent_outputs table for case %s", output.case_id)
         except Exception as exc:
+            import time
             EvidenceIntelligenceAgent._db_unreachable = True
+            EvidenceIntelligenceAgent._last_db_check = time.time()
             output.persistence_status = "PERSISTENCE_DEGRADED"
             logger.warning("PostgreSQL offline / persistence unavailable (%s). Execution continues with PERSISTENCE_DEGRADED.", exc)

@@ -207,14 +207,14 @@ class SupervisorSynthesis(BaseAgent):
                 if sev not in ("critical", "high", "medium", "low", "informational"):
                     sev = "medium"
 
-                # Parse confidence safely without defaulting to 0.90
-                c_conf = 0.0
+                # Parse confidence safely without defaulting to 0.90 or treating absent as 0.0
+                c_conf = None
                 if c.get("confidence") is not None:
                     try:
-                        c_conf = float(c["confidence"])
-                        c_conf = max(0.0, min(1.0, c_conf))
+                        val = float(c["confidence"])
+                        c_conf = max(0.0, min(1.0, val))
                     except (ValueError, TypeError):
-                        c_conf = 0.0
+                        c_conf = None
 
                 normalized_claims.append({
                     "claim_id": cid,

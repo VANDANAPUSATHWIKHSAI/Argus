@@ -24,6 +24,7 @@ class FCRRepository:
         self._lock = threading.RLock()
         self._by_id: dict[str, CorrelationRecord] = {}
         self._by_case: dict[str, set[str]] = {}
+        self._by_tenant_case: dict[tuple[str, str], set[str]] = {}
         self._by_host: dict[str, set[str]] = {}
         self._by_artifact: dict[str, set[str]] = {}
         self._by_rel: dict[str, set[str]] = {}
@@ -48,9 +49,11 @@ class FCRRepository:
 
             self._by_id[cid] = record
 
-            # Index by case_id
+            # Index by case_id and (tenant_id, case_id)
+            tid = getattr(record, "tenant_id", "default") or "default"
             if record.case_id:
                 self._by_case.setdefault(record.case_id, set()).add(cid)
+                self._by_tenant_case.setdefault((tid, record.case_id), set()).add(cid)
 
             # Index by host
             if record.host:
@@ -75,16 +78,35 @@ class FCRRepository:
                     count += 1
         return count
 
-    def get_record(self, correlation_id: str) -> Optional[CorrelationRecord]:
-        """Retrieve CorrelationRecord by correlation_id."""
+    def get_record(self, correlation_id: str, tenant_id: Optional[str] = None) -> Optional[CorrelationRecord]:
+        """Retrieve CorrelationRecord by correlation_id, enforcing tenant check if tenant_id provided."""
         with self._lock:
-            return self._by_id.get(correlation_id)
+            rec = self._by_id.get(correlation_id)
+            if rec and tenant_id:
+                if tenant_id in ("*", ""):
+                    return None
+                rec_tid = getattr(rec, "tenant_id", "default") or "default"
+                if rec_tid != tenant_id.strip():
+                    return None
+            return rec
 
-    def list_by_case(self, case_id: str) -> list[CorrelationRecord]:
-        """Retrieve all CorrelationRecord objects for a given case_id."""
+    def list_by_case(self, case_id: str, tenant_id: Optional[str] = None) -> list[CorrelationRecord]:
+        """Retrieve all CorrelationRecord objects for a given case_id and tenant_id."""
         with self._lock:
-            cids = self._by_case.get(case_id, set())
-            return [self._by_id[cid] for cid in cids if cid in self._by_id]
+            if tenant_id:
+                if tenant_id in ("*", ""):
+                    return []
+                cids = self._by_tenant_case.get((tenant_id.strip(), case_id), set())
+                return [self._by_id[cid] for cid in cids if cid in self._by_id]
+            else:
+                # Unscoped query: fail closed if multi-tenant records exist for this case
+                cids = self._by_case.get(case_id, set())
+                records = [self._by_id[cid] for cid in cids if cid in self._by_id]
+                distinct_tenants = set(getattr(r, "tenant_id", "default") for r in records)
+                if len(distinct_tenants) > 1:
+                    logger.warning("Unscoped list_by_case for multi-tenant case %s. Failing closed.", case_id)
+                    return []
+                return records
 
     def list_by_host(self, host: str) -> list[CorrelationRecord]:
         """Retrieve all CorrelationRecord objects for a given host."""
@@ -114,6 +136,7 @@ class FCRRepository:
         with self._lock:
             self._by_id.clear()
             self._by_case.clear()
+            self._by_tenant_case.clear()
             self._by_host.clear()
             self._by_artifact.clear()
             self._by_rel.clear()
@@ -158,6 +181,7 @@ class FCRRepository:
                     CREATE TABLE IF NOT EXISTS fcr_records (
                         correlation_id VARCHAR(128) PRIMARY KEY,
                         case_id VARCHAR(128) NOT NULL,
+                        tenant_id VARCHAR(128) NOT NULL DEFAULT 'default',
                         relationship_type TEXT[] NOT NULL,
                         artifact_ids TEXT[] NOT NULL,
                         confidence DOUBLE PRECISION NOT NULL,
@@ -166,7 +190,9 @@ class FCRRepository:
                         strategy_params JSONB,
                         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
                     );
+                    ALTER TABLE fcr_records ADD COLUMN IF NOT EXISTS tenant_id VARCHAR(128) NOT NULL DEFAULT 'default';
                     CREATE INDEX IF NOT EXISTS idx_fcr_case_id ON fcr_records(case_id);
+                    CREATE INDEX IF NOT EXISTS idx_fcr_tenant_case ON fcr_records(tenant_id, case_id);
                     CREATE INDEX IF NOT EXISTS idx_fcr_host ON fcr_records(host);
                 """)
                 
@@ -174,13 +200,14 @@ class FCRRepository:
                 for rec in records_to_save:
                     cur.execute("""
                         INSERT INTO fcr_records (
-                            correlation_id, case_id, relationship_type, artifact_ids,
+                            correlation_id, case_id, tenant_id, relationship_type, artifact_ids,
                             confidence, host, shared_value, strategy_params, created_at
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (correlation_id) DO NOTHING;
                     """, (
                         rec.correlation_id,
                         rec.case_id,
+                        getattr(rec, "tenant_id", "default") or "default",
                         rec.relationship_type,
                         rec.artifact_ids,
                         rec.confidence,

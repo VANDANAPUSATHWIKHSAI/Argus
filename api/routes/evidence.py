@@ -81,6 +81,37 @@ def sanitize_uuid(val: Optional[str]) -> str:
     return cleaned
 
 
+def authorize_tenant_access(current_user: dict, requested_tenant: Optional[str]) -> str:
+    """
+    Validates tenant access against the authenticated user context.
+    - Prohibits empty string or wildcard '*' tenant values in ordinary application paths.
+    - Verifies user membership if user has explicit tenant restrictions.
+    - Privileged cross-tenant access requires explicit admin role.
+    """
+    clean_tenant = (requested_tenant or "").strip()
+    if clean_tenant in ("*", ""):
+        raise HTTPException(status_code=400, detail="Invalid tenant identifier. Wildcards and empty tenants are prohibited.")
+
+    user_role = current_user.get("role", "")
+    user_tenant = current_user.get("tenant_id")
+    user_tenants = current_user.get("tenants")
+
+    if user_role == "admin":
+        return clean_tenant or "default"
+
+    if user_tenants and isinstance(user_tenants, list):
+        if clean_tenant not in user_tenants:
+            raise HTTPException(status_code=403, detail="Tenant access denied: user not authorized for requested tenant.")
+        return clean_tenant
+
+    if user_tenant:
+        if clean_tenant != user_tenant:
+            raise HTTPException(status_code=403, detail="Tenant access denied: user not authorized for requested tenant.")
+        return user_tenant
+
+    return clean_tenant or "default"
+
+
 def _run_forensic_pipeline(
     evidence: Evidence,
     session: CaseSession,
@@ -137,7 +168,7 @@ def _run_forensic_pipeline(
                         raw_file_path=str(ext_file),
                         uploaded_by=uploaded_by,
                         sha256_hash=hashlib.sha256(sub_bytes).hexdigest(),
-                        metadata={"size_bytes": len(sub_bytes)}
+                        metadata={"size_bytes": len(sub_bytes), "tenant_id": tenant_id}
                     )
                     r_res = _parser_router.determine_routing(sub_ev)
                     if r_res.status == "ROUTED" and r_res.parser_instance:
@@ -146,6 +177,7 @@ def _run_forensic_pipeline(
                             for art in sub_arts:
                                 art.case_id = target_case_id
                                 art.host_id = host_id
+                                art.tenant_id = tenant_id
                                 if getattr(art, "normalized_fields", None):
                                     art.normalized_fields.host = host_id
                             parsed_artifacts.extend(sub_arts)
@@ -164,6 +196,7 @@ def _run_forensic_pipeline(
                         for art in arts:
                             art.case_id = target_case_id
                             art.host_id = host_id
+                            art.tenant_id = tenant_id
                             if getattr(art, "normalized_fields", None):
                                 art.normalized_fields.host = host_id
                         parsed_artifacts.extend(arts)
@@ -191,6 +224,7 @@ def _run_forensic_pipeline(
                 for obs in (obs_list or []):
                     obs.case_id = target_case_id
                     obs.host_id = host_id
+                    obs.tenant_id = tenant_id
                     if obs.normalized_fields:
                         obs.normalized_fields.host = host_id
                     derived_observables.append(obs)
@@ -343,6 +377,7 @@ async def upload_evidence(
         raise HTTPException(status_code=400, detail="No file provided in evidence upload request.")
 
     target_case_id = sanitize_uuid(raw_case_id)
+    tenant_id = authorize_tenant_access(current_user, tenant_id)
 
     # Create or fetch case session
     uploader_name = current_user.get("name", uploaded_by)
@@ -463,11 +498,13 @@ async def get_evidence_status(
     from infrastructure.repository.evidence_store import get_evidence
     from infrastructure.schemas import EvidenceStatus
 
+    tenant_id = authorize_tenant_access(current_user, tenant_id)
+
     # Check in-memory job registry first
     with _jobs_lock:
         job = dict(_evidence_jobs[evidence_id]) if evidence_id in _evidence_jobs else None
     if job:
-        if job["tenant_id"] != tenant_id and tenant_id != "default":
+        if job["tenant_id"] != tenant_id:
             raise HTTPException(status_code=403, detail="Tenant access denied.")
         return EvidenceUploadResponse(**job)
 
@@ -510,8 +547,11 @@ async def get_evidence_by_case(
     Retrieve all evidence records for a given case ID.
     """
     try:
+        tenant_id = authorize_tenant_access(current_user, tenant_id)
         evidence_list = list_evidence_by_case(tenant_id=tenant_id, case_id=case_id)
         return {"status": "SUCCESS", "data": [e.model_dump(mode='json') for e in evidence_list]}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching evidence for case {case_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

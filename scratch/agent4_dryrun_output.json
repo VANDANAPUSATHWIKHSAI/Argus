@@ -1,0 +1,764 @@
+{
+  "case_id": "CASE-DRYRUN-2026-001",
+  "tenant_id": "tenant_enterprise",
+  "agent": "agent_4",
+  "agent_id": "agent4_malware_behaviour",
+  "agent_version": "v4",
+  "model_used": "Qwen3-8B",
+  "timestamp": "2026-10-12T12:38:33.777463+00:00",
+  "execution_status": "SUCCESS",
+  "error_message": null,
+  "behavior_observations": [
+    {
+      "behavior_id": "BEH-0001",
+      "category": "execution",
+      "behavior": "PowerShell execution",
+      "subject": {
+        "process": "powershell.exe",
+        "path": null,
+        "pid": null,
+        "user": null,
+        "hash_sha256": null
+      },
+      "mechanism": {
+        "type": "script",
+        "location": "Command Interpreter",
+        "value_name": null,
+        "detail": null
+      },
+      "action": "executes",
+      "target": "System Shell",
+      "evidence_ids": [
+        "FIR-2026-001",
+        "FIR-2026-003"
+      ],
+      "correlation_ids": [],
+      "observed_sequence": [
+        "Process created command interpreter"
+      ],
+      "interpretation": "Interpreter invoked command or script execution.",
+      "confidence": 0.62,
+      "confidence_breakdown": {
+        "evidence_strength": 0.4,
+        "correlation_strength": 0.6,
+        "artifact_diversity": 0.66,
+        "timeline_consistency": 1.0
+      },
+      "claim_status": "sufficient",
+      "graph_updates": [
+        {
+          "source": "powershell.exe",
+          "relation": "executes",
+          "target": "System Shell"
+        }
+      ],
+      "mitre_tactics": [
+        "Execution"
+      ],
+      "limitations": [],
+      "unverified": false,
+      "verification_notes": "Evidence reference verification PASSED."
+    },
+    {
+      "behavior_id": "BEH-0002",
+      "category": "persistence",
+      "behavior": "Registry Run Key persistence",
+      "subject": {
+        "process": "update.exe",
+        "path": null,
+        "pid": null,
+        "user": null,
+        "hash_sha256": null
+      },
+      "mechanism": {
+        "type": "registry",
+        "location": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+        "value_name": "WinSecurityUpdater",
+        "detail": null
+      },
+      "action": "creates",
+      "target": "WinSecurityUpdater",
+      "evidence_ids": [
+        "FIR-2026-002"
+      ],
+      "correlation_ids": [],
+      "observed_sequence": [
+        "binary creates persistence key/task"
+      ],
+      "interpretation": "Established persistence via registry modification.",
+      "confidence": 0.56,
+      "confidence_breakdown": {
+        "evidence_strength": 0.4,
+        "correlation_strength": 0.6,
+        "artifact_diversity": 0.33,
+        "timeline_consistency": 1.0
+      },
+      "claim_status": "sufficient",
+      "graph_updates": [
+        {
+          "source": "update.exe",
+          "relation": "creates",
+          "target": "WinSecurityUpdater"
+        }
+      ],
+      "mitre_tactics": [
+        "Persistence"
+      ],
+      "limitations": [],
+      "unverified": false,
+      "verification_notes": "Evidence reference verification PASSED."
+    },
+    {
+      "behavior_id": "BEH-0004",
+      "category": "credential_access",
+      "behavior": "Browser credential access",
+      "subject": {
+        "process": "update.exe",
+        "path": null,
+        "pid": null,
+        "user": null,
+        "hash_sha256": null
+      },
+      "mechanism": {
+        "type": "file_access",
+        "location": "Browser database / Memory",
+        "value_name": null,
+        "detail": null
+      },
+      "action": "accesses",
+      "target": "Credential Database",
+      "evidence_ids": [
+        "FIR-2026-004"
+      ],
+      "correlation_ids": [],
+      "observed_sequence": [
+        "Process opened credential store"
+      ],
+      "interpretation": "Process attempted credential or session token harvesting.",
+      "confidence": 0.56,
+      "confidence_breakdown": {
+        "evidence_strength": 0.4,
+        "correlation_strength": 0.6,
+        "artifact_diversity": 0.33,
+        "timeline_consistency": 1.0
+      },
+      "claim_status": "sufficient",
+      "graph_updates": [
+        {
+          "source": "update.exe",
+          "relation": "accesses",
+          "target": "Credential Database"
+        }
+      ],
+      "mitre_tactics": [
+        "Credential Access"
+      ],
+      "limitations": [],
+      "unverified": false,
+      "verification_notes": "Evidence reference verification PASSED."
+    },
+    {
+      "behavior_id": "BEH-0005",
+      "category": "execution",
+      "behavior": "Uncharacterized suspicious behavior pattern",
+      "subject": {
+        "process": "suspicious_process",
+        "path": null,
+        "pid": null,
+        "user": null,
+        "hash_sha256": null
+      },
+      "mechanism": {
+        "type": "unclassified",
+        "location": "Host System",
+        "value_name": null,
+        "detail": null
+      },
+      "action": "executes",
+      "target": "System Component",
+      "evidence_ids": [
+        "FIR-2026-005"
+      ],
+      "correlation_ids": [],
+      "observed_sequence": [
+        "Defense evasion: executed Set-MpPreference -DisableRealtimeMonitoring $true to evade Windows Defender"
+      ],
+      "interpretation": "Defense evasion: executed Set-MpPreference -DisableRealtimeMonitoring $true to evade Windows Defender",
+      "confidence": 0.56,
+      "confidence_breakdown": {
+        "evidence_strength": 0.4,
+        "correlation_strength": 0.6,
+        "artifact_diversity": 0.33,
+        "timeline_consistency": 1.0
+      },
+      "claim_status": "sufficient",
+      "graph_updates": [
+        {
+          "source": "suspicious_process",
+          "relation": "executes",
+          "target": "System Component"
+        }
+      ],
+      "mitre_tactics": [
+        "Execution"
+      ],
+      "limitations": [],
+      "unverified": false,
+      "verification_notes": "Evidence reference verification PASSED."
+    }
+  ],
+  "capability_profile": {
+    "execution": [
+      "PowerShell execution",
+      "Uncharacterized suspicious behavior pattern"
+    ],
+    "persistence": [
+      "Registry Run Key persistence"
+    ],
+    "credential_access": [
+      "Browser credential access"
+    ],
+    "privilege_escalation": [],
+    "defense_evasion": [],
+    "discovery": [],
+    "collection": [],
+    "command_and_control": [],
+    "exfiltration": [],
+    "impact": []
+  },
+  "behavior_chains": [
+    {
+      "chain_id": "CHAIN-01",
+      "title": "Malware Execution and Persistence Chain",
+      "steps": [
+        "Execution: powershell.exe executed",
+        "Persistence: registry modified"
+      ],
+      "evidence_ids": [
+        "FIR-2026-001",
+        "FIR-2026-003",
+        "FIR-2026-002"
+      ]
+    }
+  ],
+  "unobserved_behaviors": [
+    {
+      "category": "privilege_escalation",
+      "behavior": "Privilege-related process behavior",
+      "status": "not_observed_in_available_evidence",
+      "notes": "No forensic evidence of Privilege Escalation observed in supplied case findings."
+    },
+    {
+      "category": "defense_evasion",
+      "behavior": "File deletion",
+      "status": "not_observed_in_available_evidence",
+      "notes": "No forensic evidence of Defense Evasion observed in supplied case findings."
+    },
+    {
+      "category": "discovery",
+      "behavior": "System information discovery",
+      "status": "not_observed_in_available_evidence",
+      "notes": "No forensic evidence of Discovery observed in supplied case findings."
+    },
+    {
+      "category": "collection",
+      "behavior": "Browser data collection",
+      "status": "not_observed_in_available_evidence",
+      "notes": "No forensic evidence of Collection observed in supplied case findings."
+    },
+    {
+      "category": "command_and_control",
+      "behavior": "Remote access",
+      "status": "not_observed_in_available_evidence",
+      "notes": "No forensic evidence of Command and Control observed in supplied case findings."
+    },
+    {
+      "category": "exfiltration",
+      "behavior": "External transfer",
+      "status": "not_observed_in_available_evidence",
+      "notes": "No forensic evidence of Exfiltration observed in supplied case findings."
+    },
+    {
+      "category": "impact",
+      "behavior": "Ransomware behavior",
+      "status": "not_observed_in_available_evidence",
+      "notes": "No forensic evidence of Impact observed in supplied case findings."
+    }
+  ],
+  "contradictions": [],
+  "behavior_fingerprint": {
+    "execution": [
+      "PowerShell execution",
+      "PowerShell execution (script)",
+      "Uncharacterized suspicious behavior pattern",
+      "Uncharacterized suspicious behavior pattern (unclassified)"
+    ],
+    "persistence": [
+      "Registry Run Key persistence",
+      "Registry Run Key persistence (registry)"
+    ],
+    "credential_access": [
+      "Browser credential access",
+      "Browser credential access (file_access)"
+    ],
+    "privilege_escalation": [],
+    "defense_evasion": [],
+    "discovery": [],
+    "collection": [],
+    "command_and_control": [],
+    "exfiltration": [],
+    "impact": []
+  },
+  "limitations": [],
+  "scan_summary": {
+    "total_claims_processed": 4,
+    "total_deterministic_findings": 5,
+    "total_yara_matches": 1,
+    "total_fir_findings_built": 4,
+    "yara_rules_fired": [
+      "Suspicious_PowerShell_Dropper"
+    ],
+    "behaviour_categories_found": [
+      "execution",
+      "persistence",
+      "credential_access"
+    ],
+    "injections_flagged": 0,
+    "pii_redactions": 0
+  },
+  "claims": [
+    {
+      "claim_id": "CLM-AG4-001",
+      "summary": "Interpreter invoked command or script execution.",
+      "behaviour_category": "execution",
+      "threat_classification": {
+        "label": "malicious",
+        "reason": "Observed behavior: PowerShell execution via script."
+      },
+      "fir_finding_ids": [
+        "FIR-2026-001",
+        "FIR-2026-003"
+      ],
+      "cited_evidence_ids": [
+        "FIR-2026-001",
+        "FIR-2026-003"
+      ],
+      "yara_rules_cited": [],
+      "mitre_techniques": [
+        "T1059.001"
+      ],
+      "mitre_tactics": [
+        "Execution"
+      ],
+      "assessed_importance": "high",
+      "confidence_score": 0.62,
+      "confidence_breakdown": {
+        "evidence_strength": 0.4,
+        "correlation_strength": 0.6,
+        "artifact_diversity": 0.66,
+        "timeline_consistency": 1.0
+      },
+      "claim_status": "sufficient",
+      "graph_updates": [
+        {
+          "source": "powershell.exe",
+          "relation": "executes",
+          "target": "System Shell"
+        }
+      ],
+      "agent5_input_summary": {
+        "iocs": [],
+        "behaviors": [],
+        "mitre": [],
+        "novel_candidates": []
+      },
+      "coverage_gaps": [
+        "No network PCAP or socket connection evidence available"
+      ],
+      "likely_objective": [],
+      "novel_behavior_candidate": false,
+      "novel_behavior_score": 0.0,
+      "novel_behavior_reason": "",
+      "knowledge_base_update_required": false,
+      "reasoning_notes": "Interpreter invoked command or script execution.",
+      "citation_verified": true,
+      "invalid_citations": [],
+      "is_valid_confidence": true,
+      "raw_model_confidence": null,
+      "supported_indicators": [],
+      "unsupported_claims": [],
+      "false_positive_risk": "low",
+      "validation_notes": "Citation verification PASSED."
+    },
+    {
+      "claim_id": "CLM-AG4-002",
+      "summary": "Established persistence via registry modification.",
+      "behaviour_category": "persistence",
+      "threat_classification": {
+        "label": "malicious",
+        "reason": "Observed behavior: Registry Run Key persistence via registry."
+      },
+      "fir_finding_ids": [
+        "FIR-2026-002"
+      ],
+      "cited_evidence_ids": [
+        "FIR-2026-002"
+      ],
+      "yara_rules_cited": [],
+      "mitre_techniques": [],
+      "mitre_tactics": [
+        "Persistence"
+      ],
+      "assessed_importance": "high",
+      "confidence_score": 0.56,
+      "confidence_breakdown": {
+        "evidence_strength": 0.4,
+        "correlation_strength": 0.6,
+        "artifact_diversity": 0.33,
+        "timeline_consistency": 1.0
+      },
+      "claim_status": "sufficient",
+      "graph_updates": [
+        {
+          "source": "update.exe",
+          "relation": "creates",
+          "target": "WinSecurityUpdater"
+        }
+      ],
+      "agent5_input_summary": {
+        "iocs": [],
+        "behaviors": [],
+        "mitre": [],
+        "novel_candidates": []
+      },
+      "coverage_gaps": [
+        "No network PCAP or socket connection evidence available"
+      ],
+      "likely_objective": [],
+      "novel_behavior_candidate": false,
+      "novel_behavior_score": 0.0,
+      "novel_behavior_reason": "",
+      "knowledge_base_update_required": false,
+      "reasoning_notes": "Established persistence via registry modification.",
+      "citation_verified": true,
+      "invalid_citations": [],
+      "is_valid_confidence": true,
+      "raw_model_confidence": null,
+      "supported_indicators": [],
+      "unsupported_claims": [],
+      "false_positive_risk": "low",
+      "validation_notes": "Citation verification PASSED."
+    },
+    {
+      "claim_id": "CLM-AG4-003",
+      "summary": "Process attempted credential or session token harvesting.",
+      "behaviour_category": "credential_access",
+      "threat_classification": {
+        "label": "malicious",
+        "reason": "Observed behavior: Browser credential access via file_access."
+      },
+      "fir_finding_ids": [
+        "FIR-2026-004"
+      ],
+      "cited_evidence_ids": [
+        "FIR-2026-004"
+      ],
+      "yara_rules_cited": [],
+      "mitre_techniques": [],
+      "mitre_tactics": [
+        "Credential Access"
+      ],
+      "assessed_importance": "high",
+      "confidence_score": 0.56,
+      "confidence_breakdown": {
+        "evidence_strength": 0.4,
+        "correlation_strength": 0.6,
+        "artifact_diversity": 0.33,
+        "timeline_consistency": 1.0
+      },
+      "claim_status": "sufficient",
+      "graph_updates": [
+        {
+          "source": "update.exe",
+          "relation": "accesses",
+          "target": "Credential Database"
+        }
+      ],
+      "agent5_input_summary": {
+        "iocs": [],
+        "behaviors": [],
+        "mitre": [],
+        "novel_candidates": []
+      },
+      "coverage_gaps": [
+        "No network PCAP or socket connection evidence available"
+      ],
+      "likely_objective": [],
+      "novel_behavior_candidate": false,
+      "novel_behavior_score": 0.0,
+      "novel_behavior_reason": "",
+      "knowledge_base_update_required": false,
+      "reasoning_notes": "Process attempted credential or session token harvesting.",
+      "citation_verified": true,
+      "invalid_citations": [],
+      "is_valid_confidence": true,
+      "raw_model_confidence": null,
+      "supported_indicators": [],
+      "unsupported_claims": [],
+      "false_positive_risk": "low",
+      "validation_notes": "Citation verification PASSED."
+    },
+    {
+      "claim_id": "CLM-AG4-004",
+      "summary": "Defense evasion: executed Set-MpPreference -DisableRealtimeMonitoring $true to evade Windows Defender",
+      "behaviour_category": "execution",
+      "threat_classification": {
+        "label": "malicious",
+        "reason": "Observed behavior: Uncharacterized suspicious behavior pattern via unclassified."
+      },
+      "fir_finding_ids": [
+        "FIR-2026-005"
+      ],
+      "cited_evidence_ids": [
+        "FIR-2026-005"
+      ],
+      "yara_rules_cited": [],
+      "mitre_techniques": [],
+      "mitre_tactics": [
+        "Execution"
+      ],
+      "assessed_importance": "high",
+      "confidence_score": 0.56,
+      "confidence_breakdown": {
+        "evidence_strength": 0.4,
+        "correlation_strength": 0.6,
+        "artifact_diversity": 0.33,
+        "timeline_consistency": 1.0
+      },
+      "claim_status": "sufficient",
+      "graph_updates": [
+        {
+          "source": "suspicious_process",
+          "relation": "executes",
+          "target": "System Component"
+        }
+      ],
+      "agent5_input_summary": {
+        "iocs": [],
+        "behaviors": [],
+        "mitre": [],
+        "novel_candidates": []
+      },
+      "coverage_gaps": [
+        "No network PCAP or socket connection evidence available"
+      ],
+      "likely_objective": [],
+      "novel_behavior_candidate": false,
+      "novel_behavior_score": 0.0,
+      "novel_behavior_reason": "",
+      "knowledge_base_update_required": false,
+      "reasoning_notes": "Defense evasion: executed Set-MpPreference -DisableRealtimeMonitoring $true to evade Windows Defender",
+      "citation_verified": true,
+      "invalid_citations": [],
+      "is_valid_confidence": true,
+      "raw_model_confidence": null,
+      "supported_indicators": [],
+      "unsupported_claims": [],
+      "false_positive_risk": "low",
+      "validation_notes": "Citation verification PASSED."
+    }
+  ],
+  "fir_findings": [
+    {
+      "finding_id": "FIR-AG4-CASE-DRYRUN-2026-001-001",
+      "case_id": "CASE-DRYRUN-2026-001",
+      "tenant_id": "tenant_enterprise",
+      "fact": "Agent 4 Behavior: PowerShell execution via mechanism script.",
+      "sanitized_fact": "Agent 4 Behavior: PowerShell execution via mechanism script.",
+      "severity": "high",
+      "confidence": 0.62,
+      "layer": "malware_behaviour",
+      "evidence_reference": [
+        "FIR-2026-001",
+        "FIR-2026-003"
+      ],
+      "source_claim_ids": [
+        "CLM-AG4-001"
+      ],
+      "yara_rules_matched": [],
+      "behaviour_categories": [
+        "execution"
+      ],
+      "mitre_techniques": [],
+      "injection_flagged": false,
+      "injection_score": 0.0,
+      "timestamp": "2026-10-12T12:38:33.777113+00:00"
+    },
+    {
+      "finding_id": "FIR-AG4-CASE-DRYRUN-2026-001-002",
+      "case_id": "CASE-DRYRUN-2026-001",
+      "tenant_id": "tenant_enterprise",
+      "fact": "Agent 4 Behavior: Registry Run Key persistence via mechanism registry.",
+      "sanitized_fact": "Agent 4 Behavior: Registry Run Key persistence via mechanism registry.",
+      "severity": "high",
+      "confidence": 0.56,
+      "layer": "malware_behaviour",
+      "evidence_reference": [
+        "FIR-2026-002"
+      ],
+      "source_claim_ids": [
+        "CLM-AG4-002"
+      ],
+      "yara_rules_matched": [],
+      "behaviour_categories": [
+        "persistence"
+      ],
+      "mitre_techniques": [],
+      "injection_flagged": false,
+      "injection_score": 0.0,
+      "timestamp": "2026-10-12T12:38:33.777293+00:00"
+    },
+    {
+      "finding_id": "FIR-AG4-CASE-DRYRUN-2026-001-003",
+      "case_id": "CASE-DRYRUN-2026-001",
+      "tenant_id": "tenant_enterprise",
+      "fact": "Agent 4 Behavior: Browser credential access via mechanism file_access.",
+      "sanitized_fact": "Agent 4 Behavior: Browser credential access via mechanism file_access.",
+      "severity": "high",
+      "confidence": 0.56,
+      "layer": "malware_behaviour",
+      "evidence_reference": [
+        "FIR-2026-004"
+      ],
+      "source_claim_ids": [
+        "CLM-AG4-003"
+      ],
+      "yara_rules_matched": [],
+      "behaviour_categories": [
+        "credential_access"
+      ],
+      "mitre_techniques": [],
+      "injection_flagged": false,
+      "injection_score": 0.0,
+      "timestamp": "2026-10-12T12:38:33.777336+00:00"
+    },
+    {
+      "finding_id": "FIR-AG4-CASE-DRYRUN-2026-001-004",
+      "case_id": "CASE-DRYRUN-2026-001",
+      "tenant_id": "tenant_enterprise",
+      "fact": "Agent 4 Behavior: Uncharacterized suspicious behavior pattern via mechanism unclassified.",
+      "sanitized_fact": "Agent 4 Behavior: Uncharacterized suspicious behavior pattern via mechanism unclassified.",
+      "severity": "high",
+      "confidence": 0.56,
+      "layer": "malware_behaviour",
+      "evidence_reference": [
+        "FIR-2026-005"
+      ],
+      "source_claim_ids": [
+        "CLM-AG4-004"
+      ],
+      "yara_rules_matched": [],
+      "behaviour_categories": [
+        "execution"
+      ],
+      "mitre_techniques": [],
+      "injection_flagged": false,
+      "injection_score": 0.0,
+      "timestamp": "2026-10-12T12:38:33.777364+00:00"
+    }
+  ],
+  "deterministic_findings": [],
+  "yara_matches": [
+    {
+      "finding_id": "FIR-2026-001",
+      "rule_name": "Suspicious_PowerShell_Dropper",
+      "file_path": "C:\\Users\\Public\\payload.ps1",
+      "matched_strings": [
+        "-ExecutionPolicy Bypass",
+        "DownloadString"
+      ]
+    }
+  ],
+  "threat_classification": {
+    "label": "malicious",
+    "reason": "Execution + Persistence + Credential_access behavior observed."
+  },
+  "malware_profile": {
+    "threat_family": "PowerShell Downloader / Dropper",
+    "family_similarity": "AgentTesla-like",
+    "similarity_confidence": 0.75,
+    "primary_objective": "Persistence & Remote Execution",
+    "likely_objectives": [
+      "Remote Command Execution",
+      "Persistence Establishment",
+      "Credential Harvesting"
+    ],
+    "capabilities": [
+      "execution",
+      "persistence",
+      "credential_access"
+    ]
+  },
+  "ioc_collection": {
+    "ips": [
+      "198.51.100.22"
+    ],
+    "hashes": [],
+    "domains": [],
+    "urls": []
+  },
+  "novel_threat_detected": false,
+  "novelty_score": 0.0,
+  "mitre_match_found": true,
+  "novel_threat_profile": null,
+  "novel_behavior_candidate": false,
+  "novel_behavior_score": 0.0,
+  "novel_behavior_reason": "",
+  "knowledge_base_update_required": false,
+  "ambiguity_detected": false,
+  "coverage_gaps": [
+    "No network PCAP or socket connection evidence available"
+  ],
+  "graph_updates": [
+    {
+      "source": "powershell.exe",
+      "relation": "executes",
+      "target": "System Shell"
+    },
+    {
+      "source": "update.exe",
+      "relation": "creates",
+      "target": "WinSecurityUpdater"
+    },
+    {
+      "source": "update.exe",
+      "relation": "accesses",
+      "target": "Credential Database"
+    },
+    {
+      "source": "suspicious_process",
+      "relation": "executes",
+      "target": "System Component"
+    }
+  ],
+  "agent5_input_summary": {
+    "iocs": [
+      "198.51.100.22"
+    ],
+    "behaviors": [
+      "PowerShell execution",
+      "Registry Run Key persistence",
+      "Browser credential access",
+      "Uncharacterized suspicious behavior pattern"
+    ],
+    "mitre": [
+      "T1059.001"
+    ],
+    "novel_candidates": []
+  },
+  "mitre_tactics": [
+    "Credential Access",
+    "Execution",
+    "Persistence"
+  ]
+}

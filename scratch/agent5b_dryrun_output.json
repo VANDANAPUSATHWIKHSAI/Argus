@@ -1,0 +1,486 @@
+{
+  "case_id": "CASE-DRYRUN-2026-001",
+  "tenant_id": "tenant_enterprise",
+  "execution_status": "success",
+  "historical_similarity": {
+    "retrieved_cases": [
+      {
+        "case_id": "HIST-CASE-2025-089",
+        "tenant_id": "tenant_enterprise",
+        "similarity_score": 0.8130069585772146,
+        "vector_retrieval_similarity": null,
+        "behavior_similarity": 0.6019858414048516,
+        "attack_similarity": 0.8394167820617594,
+        "intelligence_similarity": 0.5953420099369854,
+        "case_data": {
+          "case_id": "HIST-CASE-2025-089",
+          "tenant_id": "tenant_enterprise",
+          "validation": {
+            "status": "approved",
+            "approved_by": "lead_investigator_42",
+            "approval_timestamp": "2025-11-14T09:30:00Z",
+            "validation_version": "1.0"
+          },
+          "malware_identity": {
+            "family": "RedLine Stealer",
+            "variant": null,
+            "identity_confidence": 0.94
+          },
+          "malware_behavior_fingerprint": {
+            "execution": [
+              "PowerShell Execution (powershell.exe)"
+            ],
+            "persistence": [
+              "Registry Run Key (Run)"
+            ],
+            "command_and_control": [
+              "HTTPS C2 communication"
+            ],
+            "credential_access": [
+              "Browser credential theft (SQLite extraction)"
+            ]
+          },
+          "behavior_mechanisms": [],
+          "attack_pattern": {
+            "infection_source": "Phishing Email with Malicious LNK",
+            "stages": [
+              "Initial Access",
+              "Execution",
+              "Persistence",
+              "Credential Access",
+              "Command and Control"
+            ],
+            "path": [
+              "Phishing Email -> PowerShell Script -> Registry Run Key -> HTTPS C2"
+            ]
+          },
+          "threat_intelligence": {
+            "mitre_techniques": [
+              "T1566.001",
+              "T1059.001",
+              "T1547.001",
+              "T1555.003",
+              "T1071.001"
+            ],
+            "iocs": [
+              "198.51.100.22",
+              "c2-gateway-update.net"
+            ]
+          },
+          "yara": {},
+          "investigation_summary": "",
+          "analyst_notes": "",
+          "associated_campaigns": [
+            "Operation FrozenSteal"
+          ],
+          "threat_actor": "Storm-0501",
+          "limitations": [],
+          "provenance": {}
+        }
+      },
+      {
+        "case_id": "HIST-CASE-2025-042",
+        "tenant_id": "tenant_enterprise",
+        "similarity_score": 0.5839055030946841,
+        "vector_retrieval_similarity": null,
+        "behavior_similarity": 0.3405030018081046,
+        "attack_similarity": 0.6659486753097764,
+        "intelligence_similarity": 0.2917521944533805,
+        "case_data": {
+          "case_id": "HIST-CASE-2025-042",
+          "tenant_id": "tenant_enterprise",
+          "validation": {
+            "status": "approved",
+            "approved_by": "senior_soc_reviewer",
+            "approval_timestamp": "2025-08-20T14:15:00Z",
+            "validation_version": "1.0"
+          },
+          "malware_identity": {
+            "family": "Vidar",
+            "variant": null,
+            "identity_confidence": 0.88
+          },
+          "malware_behavior_fingerprint": {
+            "execution": [
+              "Command Shell (cmd.exe)"
+            ],
+            "persistence": [
+              "Scheduled Task (schtasks)"
+            ],
+            "command_and_control": [
+              "HTTPS C2 communication"
+            ],
+            "credential_access": [
+              "Browser credential theft (SQLite extraction)"
+            ]
+          },
+          "behavior_mechanisms": [],
+          "attack_pattern": {
+            "infection_source": "Malvertising ISO download",
+            "stages": [
+              "Initial Access",
+              "Execution",
+              "Persistence",
+              "Credential Access",
+              "Command and Control"
+            ],
+            "path": [
+              "ISO -> LNK -> cmd.exe -> schtasks -> HTTPS C2"
+            ]
+          },
+          "threat_intelligence": {
+            "mitre_techniques": [
+              "T1204.002",
+              "T1059.003",
+              "T1053.005",
+              "T1555.003",
+              "T1071.001"
+            ],
+            "iocs": [
+              "198.51.100.88",
+              "vidar-fast-sync.org"
+            ]
+          },
+          "yara": {},
+          "investigation_summary": "",
+          "analyst_notes": "",
+          "associated_campaigns": [
+            "Vidar Stealer Waves 2025"
+          ],
+          "threat_actor": "Unknown / Affiliate",
+          "limitations": [],
+          "provenance": {}
+        }
+      }
+    ],
+    "behavior_similarity": 0.602,
+    "attack_similarity": 0.7508,
+    "intelligence_similarity": 0.5953,
+    "composite_similarity": 0.6524,
+    "similarity_breakdown": {
+      "behavior_similarity": 0.6019858414048516,
+      "attack_similarity": 0.7507667128247038,
+      "intelligence_similarity": 0.5953420099369854,
+      "composite_similarity": 0.6523981885348333,
+      "weights_used": {
+        "behavior": 0.4,
+        "attack": 0.35,
+        "threat_intel": 0.25
+      },
+      "formula": "composite = (0.40 * 0.6020) + (0.35 * 0.7508) + (0.25 * 0.5953) = 0.6524"
+    },
+    "common_behaviors": [
+      "PowerShell execution",
+      "PowerShell execution (script)",
+      "Registry Run Key persistence",
+      "Registry Run Key persistence (registry)"
+    ],
+    "new_behaviors": [
+      "Browser credential access",
+      "Browser credential access (file_access)",
+      "Uncharacterized suspicious behavior pattern",
+      "Uncharacterized suspicious behavior pattern (unclassified)"
+    ],
+    "different_behaviors": [
+      {
+        "category": "credential_access",
+        "current_behavior": "Browser credential access",
+        "historical_behavior": "Browser credential theft (SQLite extraction)",
+        "difference_reason": "Category 'credential_access': Current case uses 'Browser credential access' whereas historical Case 'HIST-CASE-2025-089' used 'Browser credential theft (SQLite extraction)'. These are distinct mechanisms.",
+        "supporting_evidence_ids": [
+          "FIR-2026-004"
+        ]
+      },
+      {
+        "category": "credential_access",
+        "current_behavior": "Browser credential access (file_access)",
+        "historical_behavior": "Browser credential theft (SQLite extraction)",
+        "difference_reason": "Category 'credential_access': Current case uses 'Browser credential access (file_access)' whereas historical Case 'HIST-CASE-2025-089' used 'Browser credential theft (SQLite extraction)'. These are distinct mechanisms.",
+        "supporting_evidence_ids": [
+          "FIR-2026-001",
+          "FIR-2026-002",
+          "FIR-2026-003",
+          "FIR-2026-004",
+          "FIR-2026-005"
+        ]
+      }
+    ],
+    "historical_only_behaviors": [
+      "command_and_control: HTTPS C2 communication [Recorded in Case HIST-CASE-2025-089; unobserved in current evidence. Unobserved does not prove absence.]",
+      "credential_access: Browser credential theft (SQLite extraction) [Recorded in Case HIST-CASE-2025-089; unobserved in current evidence. Unobserved does not prove absence.]"
+    ],
+    "similar_malware_families": [
+      {
+        "family_name": "RedLine Stealer",
+        "historical_case_id": "HIST-CASE-2025-089",
+        "similarity_score": 0.602,
+        "supporting_behaviors": [
+          "execution: PowerShell execution"
+        ],
+        "caveat": "Current investigation exhibits behavioral similarity to Case HIST-CASE-2025-089 (RedLine Stealer). This is contextual reference only, not proof of malware identity (does not prove current malware identity)."
+      }
+    ],
+    "similar_campaigns": [
+      {
+        "campaign_name": "Operation FrozenSteal",
+        "historical_case_id": "HIST-CASE-2025-089",
+        "similarity_score": 0.813,
+        "overlapping_techniques": [
+          "T1059.001",
+          "T1071.001",
+          "T1547.001",
+          "T1555.003"
+        ],
+        "overlapping_infrastructure": [
+          "198.51.100.22 [SYNTHETIC TEST INDICATOR - NOT LIVE C2]",
+          "c2-gateway-update.net"
+        ]
+      },
+      {
+        "campaign_name": "Vidar Stealer Waves 2025",
+        "historical_case_id": "HIST-CASE-2025-042",
+        "similarity_score": 0.5839,
+        "overlapping_techniques": [
+          "T1071.001",
+          "T1555.003"
+        ],
+        "overlapping_infrastructure": []
+      }
+    ],
+    "possible_actor_context": [
+      {
+        "actor_name": "Storm-0501",
+        "historical_case_id": "HIST-CASE-2025-089",
+        "similarity_score": 0.813,
+        "matching_characteristics": [
+          "Attack Stage: Initial Access",
+          "Attack Stage: Execution",
+          "Attack Stage: Persistence",
+          "Attack Stage: Credential Access",
+          "Attack Stage: Command and Control"
+        ],
+        "attribution_caveat": "Contextual profiling only. Behavioral similarity to historical Case HIST-CASE-2025-089 does not assert that the current attack was conducted by 'Storm-0501'."
+      },
+      {
+        "actor_name": "Unknown / Affiliate",
+        "historical_case_id": "HIST-CASE-2025-042",
+        "similarity_score": 0.5839,
+        "matching_characteristics": [
+          "Attack Stage: Initial Access",
+          "Attack Stage: Execution",
+          "Attack Stage: Persistence",
+          "Attack Stage: Credential Access",
+          "Attack Stage: Command and Control"
+        ],
+        "attribution_caveat": "Contextual profiling only. Behavioral similarity to historical Case HIST-CASE-2025-042 does not assert that the current attack was conducted by 'Unknown / Affiliate'."
+      }
+    ],
+    "novelty": {
+      "detected": true,
+      "observations": [
+        "Behavior 'Browser credential access' is not represented in any of the 2 retrieved historical cases (HIST-CASE-2025-089, HIST-CASE-2025-042).",
+        "Behavior 'Browser credential access (file_access)' is not represented in any of the 2 retrieved historical cases (HIST-CASE-2025-089, HIST-CASE-2025-042).",
+        "Behavior 'Uncharacterized suspicious behavior pattern' is not represented in any of the 2 retrieved historical cases (HIST-CASE-2025-089, HIST-CASE-2025-042).",
+        "Behavior 'Uncharacterized suspicious behavior pattern (unclassified)' is not represented in any of the 2 retrieved historical cases (HIST-CASE-2025-089, HIST-CASE-2025-042)."
+      ],
+      "novelty_score": 0.5,
+      "novel_mechanisms": [
+        "Browser credential access",
+        "Browser credential access (file_access)",
+        "Uncharacterized suspicious behavior pattern",
+        "Uncharacterized suspicious behavior pattern (unclassified)"
+      ],
+      "historical_novelty": [
+        "Browser credential access",
+        "Browser credential access (file_access)",
+        "Uncharacterized suspicious behavior pattern",
+        "Uncharacterized suspicious behavior pattern (unclassified)"
+      ],
+      "mitre_unmapped": [],
+      "novel_threat_candidate": true,
+      "novel_threat_candidate_reason": "Observed 4 behavior(s) unrepresented in historical validated investigations: Browser credential access, Browser credential access (file_access), Uncharacterized suspicious behavior pattern.",
+      "confirmed_novel_threat": false,
+      "confirmation_rationale": "Absence of historical match establishes candidate novelty only. Confirmed novelty requires authorized analyst validation.",
+      "historical_cases_compared": [
+        "HIST-CASE-2025-089",
+        "HIST-CASE-2025-042"
+      ],
+      "supporting_evidence_references": [
+        "FIR-2026-001",
+        "FIR-2026-002",
+        "FIR-2026-003",
+        "FIR-2026-004",
+        "FIR-2026-005"
+      ]
+    },
+    "explanations": [
+      "Historical Similarity Scoring: Composite similarity is 0.6524 (Behavior: 0.6020, Attack Pattern: 0.7508, Threat Intel: 0.5953). Formula: composite = (0.40 * 0.6020) + (0.35 * 0.7508) + (0.25 * 0.5953) = 0.6524.",
+      "Matched behaviors with historical Case 'HIST-CASE-2025-089': PowerShell execution, PowerShell execution (script), Registry Run Key persistence, Registry Run Key persistence (registry) (supported by current case evidence: FIR-2026-001, FIR-2026-002, FIR-2026-003, FIR-2026-004).",
+      "Divergent mechanisms: Category 'credential_access': Current case uses 'Browser credential access' whereas historical Case 'HIST-CASE-2025-089' used 'Browser credential theft (SQLite extraction)'. These are distinct mechanisms.; Category 'credential_access': Current case uses 'Browser credential access (file_access)' whereas historical Case 'HIST-CASE-2025-089' used 'Browser credential theft (SQLite extraction)'. These are distinct mechanisms..",
+      "Knowledge-Delta / Novelty: 4 observed behavior(s) (Browser credential access, Browser credential access (file_access), Uncharacterized suspicious behavior pattern, Uncharacterized suspicious behavior pattern (unclassified)) do not appear in retrieved historical records. Candidate status: True. Confirmed novel status: False (Absence of historical match establishes candidate novelty only. Confirmed novelty requires authorized analyst validation.).",
+      "Principle reminder: Validated historical Case 'HIST-CASE-2025-089' provides investigative reference and context only. It does NOT prove current malware identity, does NOT attribute the attack, and NEVER overrides current forensic evidence."
+    ],
+    "confidence": 0.8836,
+    "confidence_methodology": "Coverage factor: 0.86 (3 active categories, 5 evidence IDs); Upstream completeness: 1.00 (Agents 3, 4, 5a presence); Threat intel reliability: 0.78 (5A confidence: 0.92, freshness multiplier: 0.85)",
+    "limitations": [
+      "Historical cases are contextual references only, never proof of identity or attribution.",
+      "Historical similarity cannot override or contradict current forensic evidence.",
+      "Missing evidence in current investigation must not be interpreted as confirmed proof of absence.",
+      "Similarity scoring reflects semantic proximity in behavior and kill-chain alignment, not investigative certainty.",
+      "Investigative confidence is an empirical forensic-coverage score, not a calibrated statistical probability."
+    ],
+    "historical_case_references": [
+      "HIST-CASE-2025-089",
+      "HIST-CASE-2025-042"
+    ]
+  },
+  "claim": "Case CASE-DRYRUN-2026-001 exhibits behavioral and campaign similarities (composite: 0.6524) to validated historical Case HIST-CASE-2025-089 (associated with RedLine Stealer), sharing common behaviors (PowerShell execution, PowerShell execution (script), Registry Run Key persistence). Novel mechanisms observed (Browser credential access, Browser credential access (file_access)). Historical cases serve as investigative context and do not constitute proof of identity or attribution.",
+  "evidence_ids": [
+    "FIR-2026-001",
+    "FIR-2026-002",
+    "FIR-2026-003",
+    "FIR-2026-004",
+    "FIR-2026-005"
+  ],
+  "agent6_handoff": {
+    "case_id": "CASE-DRYRUN-2026-001",
+    "tenant_id": "tenant_enterprise",
+    "validated_historical_references": [
+      "HIST-CASE-2025-089",
+      "HIST-CASE-2025-042"
+    ],
+    "similarity_metrics": {
+      "behavior_similarity": 0.602,
+      "attack_similarity": 0.7508,
+      "intelligence_similarity": 0.5953,
+      "composite_similarity": 0.6524
+    },
+    "behavior_comparisons": {
+      "common_behaviors": [
+        "PowerShell execution",
+        "PowerShell execution (script)",
+        "Registry Run Key persistence",
+        "Registry Run Key persistence (registry)"
+      ],
+      "new_behaviors": [
+        "Browser credential access",
+        "Browser credential access (file_access)",
+        "Uncharacterized suspicious behavior pattern",
+        "Uncharacterized suspicious behavior pattern (unclassified)"
+      ],
+      "different_behaviors": [
+        {
+          "category": "credential_access",
+          "current_behavior": "Browser credential access",
+          "historical_behavior": "Browser credential theft (SQLite extraction)",
+          "difference_reason": "Category 'credential_access': Current case uses 'Browser credential access' whereas historical Case 'HIST-CASE-2025-089' used 'Browser credential theft (SQLite extraction)'. These are distinct mechanisms.",
+          "supporting_evidence_ids": [
+            "FIR-2026-004"
+          ]
+        },
+        {
+          "category": "credential_access",
+          "current_behavior": "Browser credential access (file_access)",
+          "historical_behavior": "Browser credential theft (SQLite extraction)",
+          "difference_reason": "Category 'credential_access': Current case uses 'Browser credential access (file_access)' whereas historical Case 'HIST-CASE-2025-089' used 'Browser credential theft (SQLite extraction)'. These are distinct mechanisms.",
+          "supporting_evidence_ids": [
+            "FIR-2026-001",
+            "FIR-2026-002",
+            "FIR-2026-003",
+            "FIR-2026-004",
+            "FIR-2026-005"
+          ]
+        }
+      ],
+      "historical_only_behaviors": [
+        "command_and_control: HTTPS C2 communication [Recorded in Case HIST-CASE-2025-089; unobserved in current evidence. Unobserved does not prove absence.]",
+        "credential_access: Browser credential theft (SQLite extraction) [Recorded in Case HIST-CASE-2025-089; unobserved in current evidence. Unobserved does not prove absence.]"
+      ]
+    },
+    "novelty_findings": {
+      "detected": true,
+      "observations": [
+        "Behavior 'Browser credential access' is not represented in any of the 2 retrieved historical cases (HIST-CASE-2025-089, HIST-CASE-2025-042).",
+        "Behavior 'Browser credential access (file_access)' is not represented in any of the 2 retrieved historical cases (HIST-CASE-2025-089, HIST-CASE-2025-042).",
+        "Behavior 'Uncharacterized suspicious behavior pattern' is not represented in any of the 2 retrieved historical cases (HIST-CASE-2025-089, HIST-CASE-2025-042).",
+        "Behavior 'Uncharacterized suspicious behavior pattern (unclassified)' is not represented in any of the 2 retrieved historical cases (HIST-CASE-2025-089, HIST-CASE-2025-042)."
+      ],
+      "novelty_score": 0.5,
+      "novel_mechanisms": [
+        "Browser credential access",
+        "Browser credential access (file_access)",
+        "Uncharacterized suspicious behavior pattern",
+        "Uncharacterized suspicious behavior pattern (unclassified)"
+      ],
+      "historical_novelty": [
+        "Browser credential access",
+        "Browser credential access (file_access)",
+        "Uncharacterized suspicious behavior pattern",
+        "Uncharacterized suspicious behavior pattern (unclassified)"
+      ],
+      "mitre_unmapped": [],
+      "novel_threat_candidate": true,
+      "novel_threat_candidate_reason": "Observed 4 behavior(s) unrepresented in historical validated investigations: Browser credential access, Browser credential access (file_access), Uncharacterized suspicious behavior pattern.",
+      "confirmed_novel_threat": false,
+      "confirmation_rationale": "Absence of historical match establishes candidate novelty only. Confirmed novelty requires authorized analyst validation.",
+      "historical_cases_compared": [
+        "HIST-CASE-2025-089",
+        "HIST-CASE-2025-042"
+      ],
+      "supporting_evidence_references": [
+        "FIR-2026-001",
+        "FIR-2026-002",
+        "FIR-2026-003",
+        "FIR-2026-004",
+        "FIR-2026-005"
+      ]
+    },
+    "supporting_evidence_references": [
+      "FIR-2026-001",
+      "FIR-2026-002",
+      "FIR-2026-003",
+      "FIR-2026-004",
+      "FIR-2026-005"
+    ],
+    "investigative_confidence": 0.8836,
+    "confidence_methodology": "Coverage factor: 0.86 (3 active categories, 5 evidence IDs); Upstream completeness: 1.00 (Agents 3, 4, 5a presence); Threat intel reliability: 0.78 (5A confidence: 0.92, freshness multiplier: 0.85)",
+    "limitations": [
+      "Historical cases are contextual references only, never proof of identity or attribution.",
+      "Historical similarity cannot override or contradict current forensic evidence.",
+      "Missing evidence in current investigation must not be interpreted as confirmed proof of absence.",
+      "Similarity scoring reflects semantic proximity in behavior and kill-chain alignment, not investigative certainty.",
+      "Investigative confidence is an empirical forensic-coverage score, not a calibrated statistical probability."
+    ],
+    "attribution_safeguards": [
+      "Historical case similarity is contextual reference only, never proof of identity or attribution.",
+      "Malware family associations reflect behavioral resemblance only, not confirmed family identity.",
+      "Campaign correlations reflect overlapping techniques and infrastructure; do not assert campaign membership.",
+      "Threat actor context provides profiling background; does not assert that the actor conducted the current attack.",
+      "Previous cases never override current forensic evidence."
+    ]
+  },
+  "audit_record": {
+    "timestamp": "2026-10-12T12:38:33.832909+00:00",
+    "case_id": "CASE-DRYRUN-2026-001",
+    "tenant_id": "tenant_enterprise",
+    "scoring_version": "1.0.0",
+    "retrieval_filter": {
+      "tenant_id": "tenant_enterprise",
+      "validation_status": [
+        "approved",
+        "validated"
+      ]
+    },
+    "model_metadata": {
+      "model": "Qwen3-8B",
+      "vector_dim": "384"
+    },
+    "validation_decisions": [
+      "Retrieved 2 approved historical case(s) from collection for tenant 'tenant_enterprise'."
+    ],
+    "errors_encountered": []
+  },
+  "validation_warnings": [],
+  "mismatched_records": [],
+  "error_message": null
+}

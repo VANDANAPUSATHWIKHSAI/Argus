@@ -1,0 +1,360 @@
+{
+  "case_id": "CASE-INCIDENT-2026-001",
+  "tenant_id": "tenant_enterprise",
+  "execution_status": "success",
+  "historical_similarity": {
+    "retrieved_cases": [
+      {
+        "case_id": "HIST-CASE-2025-089",
+        "tenant_id": "tenant_enterprise",
+        "similarity_score": 0.6839643867048192,
+        "behavior_similarity": 0.5566099460272727,
+        "attack_similarity": 0.8980591905103886,
+        "intelligence_similarity": 0.3787670270943259,
+        "case_data": {
+          "case_id": "HIST-CASE-2025-089",
+          "tenant_id": "tenant_enterprise",
+          "validation": {
+            "status": "approved",
+            "approved_by": "lead_investigator_42",
+            "approval_timestamp": "2025-11-14T09:30:00Z",
+            "validation_version": "1.0"
+          },
+          "malware_identity": {
+            "family": "RedLine Stealer",
+            "variant": null,
+            "identity_confidence": 0.94
+          },
+          "malware_behavior_fingerprint": {
+            "execution": [
+              "PowerShell Execution (powershell.exe)"
+            ],
+            "persistence": [
+              "Scheduled Task (schtasks)"
+            ],
+            "command_and_control": [
+              "HTTPS C2 communication"
+            ],
+            "credential_access": [
+              "Browser credential theft (SQLite extraction)"
+            ]
+          },
+          "behavior_mechanisms": [],
+          "attack_pattern": {
+            "infection_source": "Phishing Email with Malicious LNK",
+            "stages": [
+              "Initial Access",
+              "Execution",
+              "Persistence",
+              "Credential Access",
+              "Command and Control"
+            ],
+            "path": [
+              "Phishing Email -> PowerShell Script -> Scheduled Task -> HTTPS C2"
+            ]
+          },
+          "threat_intelligence": {
+            "mitre_techniques": [
+              "T1566.001",
+              "T1059.001",
+              "T1053.005",
+              "T1555.003",
+              "T1071.001"
+            ],
+            "iocs": [
+              "198.51.100.22",
+              "c2-gateway-update.net"
+            ]
+          },
+          "yara": {},
+          "investigation_summary": "",
+          "analyst_notes": "",
+          "associated_campaigns": [
+            "Operation FrozenSteal"
+          ],
+          "threat_actor": "Storm-0501",
+          "limitations": [],
+          "provenance": {}
+        }
+      }
+    ],
+    "behavior_similarity": 0.5566,
+    "attack_similarity": 0.8527,
+    "intelligence_similarity": 0.3788,
+    "composite_similarity": 0.6158,
+    "similarity_breakdown": {
+      "behavior_similarity": 0.5566099460272727,
+      "attack_similarity": 0.8527236762041555,
+      "intelligence_similarity": 0.3787670270943259,
+      "composite_similarity": 0.6157890218559449,
+      "weights_used": {
+        "behavior": 0.4,
+        "attack": 0.35,
+        "threat_intel": 0.25
+      },
+      "formula": "composite = (0.40 * 0.5566) + (0.35 * 0.8527) + (0.25 * 0.3788) = 0.6158"
+    },
+    "common_behaviors": [
+      "HTTPS C2 communication",
+      "PowerShell Execution (powershell.exe)"
+    ],
+    "new_behaviors": [
+      "LSASS memory dump via MiniDumpWriteDump",
+      "Registry Run Key (Run)"
+    ],
+    "different_behaviors": [
+      {
+        "category": "persistence",
+        "current_behavior": "Registry Run Key (Run)",
+        "historical_behavior": "Scheduled Task (schtasks)",
+        "difference_reason": "Category 'persistence': Current case uses 'Registry Run Key (Run)' whereas historical Case 'HIST-CASE-2025-089' used 'Scheduled Task (schtasks)'. These are distinct mechanisms.",
+        "supporting_evidence_ids": [
+          "FIR-2026-01",
+          "FIR-2026-03",
+          "FIR-2026-04"
+        ]
+      },
+      {
+        "category": "credential_access",
+        "current_behavior": "LSASS memory dump via MiniDumpWriteDump",
+        "historical_behavior": "Browser credential theft (SQLite extraction)",
+        "difference_reason": "Category 'credential_access': Current case uses 'LSASS memory dump via MiniDumpWriteDump' whereas historical Case 'HIST-CASE-2025-089' used 'Browser credential theft (SQLite extraction)'. These are distinct mechanisms.",
+        "supporting_evidence_ids": [
+          "FIR-2026-01",
+          "FIR-2026-03",
+          "FIR-2026-04"
+        ]
+      }
+    ],
+    "historical_only_behaviors": [
+      "credential_access: Browser credential theft (SQLite extraction) [Recorded in Case HIST-CASE-2025-089; unobserved in current evidence. Unobserved does not prove absence.]",
+      "persistence: Scheduled Task (schtasks) [Recorded in Case HIST-CASE-2025-089; unobserved in current evidence. Unobserved does not prove absence.]"
+    ],
+    "similar_malware_families": [
+      {
+        "family_name": "RedLine Stealer",
+        "historical_case_id": "HIST-CASE-2025-089",
+        "similarity_score": 0.5566,
+        "supporting_behaviors": [
+          "execution: PowerShell Execution (powershell.exe)",
+          "command_and_control: HTTPS C2 communication"
+        ],
+        "caveat": "Current investigation exhibits behavioral similarity to Case HIST-CASE-2025-089 (RedLine Stealer). This is contextual reference only, not proof of malware identity (does not prove current malware identity)."
+      }
+    ],
+    "similar_campaigns": [
+      {
+        "campaign_name": "Operation FrozenSteal",
+        "historical_case_id": "HIST-CASE-2025-089",
+        "similarity_score": 0.684,
+        "overlapping_techniques": [
+          "T1059.001",
+          "T1071.001"
+        ],
+        "overlapping_infrastructure": [
+          "198.51.100.22 [SYNTHETIC TEST INDICATOR - NOT LIVE C2]",
+          "c2-gateway-update.net"
+        ]
+      }
+    ],
+    "possible_actor_context": [
+      {
+        "actor_name": "Storm-0501",
+        "historical_case_id": "HIST-CASE-2025-089",
+        "similarity_score": 0.684,
+        "matching_characteristics": [
+          "Attack Stage: Initial Access",
+          "Attack Stage: Execution",
+          "Attack Stage: Persistence",
+          "Attack Stage: Command and Control"
+        ],
+        "attribution_caveat": "Contextual profiling only. Behavioral similarity to historical Case HIST-CASE-2025-089 does not assert that the current attack was conducted by 'Storm-0501'."
+      }
+    ],
+    "novelty": {
+      "detected": true,
+      "observations": [
+        "Behavior 'LSASS memory dump via MiniDumpWriteDump' is not represented in any of the 1 retrieved historical cases (HIST-CASE-2025-089).",
+        "Behavior 'Registry Run Key (Run)' is not represented in any of the 1 retrieved historical cases (HIST-CASE-2025-089)."
+      ],
+      "novelty_score": 0.5,
+      "novel_mechanisms": [
+        "LSASS memory dump via MiniDumpWriteDump",
+        "Registry Run Key (Run)"
+      ],
+      "historical_novelty": [
+        "LSASS memory dump via MiniDumpWriteDump",
+        "Registry Run Key (Run)"
+      ],
+      "mitre_unmapped": [],
+      "novel_threat_candidate": true,
+      "novel_threat_candidate_reason": "Observed 2 behavior(s) unrepresented in historical validated investigations: LSASS memory dump via MiniDumpWriteDump, Registry Run Key (Run).",
+      "confirmed_novel_threat": false,
+      "confirmation_rationale": "Absence of historical match establishes candidate novelty only. Confirmed novelty requires authorized analyst validation.",
+      "historical_cases_compared": [
+        "HIST-CASE-2025-089"
+      ],
+      "supporting_evidence_references": [
+        "FIR-2026-01",
+        "FIR-2026-02",
+        "FIR-2026-03",
+        "FIR-2026-04",
+        "FIR-2026-05"
+      ]
+    },
+    "explanations": [
+      "Historical Similarity Scoring: Composite similarity is 0.6158 (Behavior: 0.5566, Attack Pattern: 0.8527, Threat Intel: 0.3788). Formula: composite = (0.40 * 0.5566) + (0.35 * 0.8527) + (0.25 * 0.3788) = 0.6158.",
+      "Matched behaviors with historical Case 'HIST-CASE-2025-089': HTTPS C2 communication, PowerShell Execution (powershell.exe) (supported by current case evidence: FIR-2026-01, FIR-2026-02, FIR-2026-03, FIR-2026-04).",
+      "Divergent mechanisms: Category 'persistence': Current case uses 'Registry Run Key (Run)' whereas historical Case 'HIST-CASE-2025-089' used 'Scheduled Task (schtasks)'. These are distinct mechanisms.; Category 'credential_access': Current case uses 'LSASS memory dump via MiniDumpWriteDump' whereas historical Case 'HIST-CASE-2025-089' used 'Browser credential theft (SQLite extraction)'. These are distinct mechanisms..",
+      "Knowledge-Delta / Novelty: 2 observed behavior(s) (LSASS memory dump via MiniDumpWriteDump, Registry Run Key (Run)) do not appear in retrieved historical records. Candidate status: True. Confirmed novel status: False (Absence of historical match establishes candidate novelty only. Confirmed novelty requires authorized analyst validation.).",
+      "Principle reminder: Validated historical Case 'HIST-CASE-2025-089' provides investigative reference and context only. It does NOT prove current malware identity, does NOT attribute the attack, and NEVER overrides current forensic evidence."
+    ],
+    "confidence": 0.97,
+    "confidence_methodology": "Coverage factor: 1.00 (4 active categories, 5 evidence IDs); Upstream completeness: 1.00 (Agents 3, 4, 5a presence); Threat intel reliability: 0.88 (5A confidence: 0.88, freshness multiplier: 1.00)",
+    "limitations": [
+      "Historical cases are contextual references only, never proof of identity or attribution.",
+      "Historical similarity cannot override or contradict current forensic evidence.",
+      "Missing evidence in current investigation must not be interpreted as confirmed proof of absence.",
+      "Similarity scoring reflects semantic proximity in behavior and kill-chain alignment, not investigative certainty."
+    ],
+    "historical_case_references": [
+      "HIST-CASE-2025-089"
+    ]
+  },
+  "claim": "Case CASE-INCIDENT-2026-001 exhibits behavioral and campaign similarities (composite: 0.6158) to validated historical Case HIST-CASE-2025-089 (associated with RedLine Stealer), sharing common behaviors (HTTPS C2 communication, PowerShell Execution (powershell.exe)). Novel mechanisms observed (LSASS memory dump via MiniDumpWriteDump, Registry Run Key (Run)). Historical cases serve as investigative context and do not constitute proof of identity or attribution.",
+  "evidence_ids": [
+    "FIR-2026-01",
+    "FIR-2026-02",
+    "FIR-2026-03",
+    "FIR-2026-04",
+    "FIR-2026-05"
+  ],
+  "agent6_handoff": {
+    "case_id": "CASE-INCIDENT-2026-001",
+    "tenant_id": "tenant_enterprise",
+    "validated_historical_references": [
+      "HIST-CASE-2025-089"
+    ],
+    "similarity_metrics": {
+      "behavior_similarity": 0.5566,
+      "attack_similarity": 0.8527,
+      "intelligence_similarity": 0.3788,
+      "composite_similarity": 0.6158
+    },
+    "behavior_comparisons": {
+      "common_behaviors": [
+        "HTTPS C2 communication",
+        "PowerShell Execution (powershell.exe)"
+      ],
+      "new_behaviors": [
+        "LSASS memory dump via MiniDumpWriteDump",
+        "Registry Run Key (Run)"
+      ],
+      "different_behaviors": [
+        {
+          "category": "persistence",
+          "current_behavior": "Registry Run Key (Run)",
+          "historical_behavior": "Scheduled Task (schtasks)",
+          "difference_reason": "Category 'persistence': Current case uses 'Registry Run Key (Run)' whereas historical Case 'HIST-CASE-2025-089' used 'Scheduled Task (schtasks)'. These are distinct mechanisms.",
+          "supporting_evidence_ids": [
+            "FIR-2026-01",
+            "FIR-2026-03",
+            "FIR-2026-04"
+          ]
+        },
+        {
+          "category": "credential_access",
+          "current_behavior": "LSASS memory dump via MiniDumpWriteDump",
+          "historical_behavior": "Browser credential theft (SQLite extraction)",
+          "difference_reason": "Category 'credential_access': Current case uses 'LSASS memory dump via MiniDumpWriteDump' whereas historical Case 'HIST-CASE-2025-089' used 'Browser credential theft (SQLite extraction)'. These are distinct mechanisms.",
+          "supporting_evidence_ids": [
+            "FIR-2026-01",
+            "FIR-2026-03",
+            "FIR-2026-04"
+          ]
+        }
+      ],
+      "historical_only_behaviors": [
+        "credential_access: Browser credential theft (SQLite extraction) [Recorded in Case HIST-CASE-2025-089; unobserved in current evidence. Unobserved does not prove absence.]",
+        "persistence: Scheduled Task (schtasks) [Recorded in Case HIST-CASE-2025-089; unobserved in current evidence. Unobserved does not prove absence.]"
+      ]
+    },
+    "novelty_findings": {
+      "detected": true,
+      "observations": [
+        "Behavior 'LSASS memory dump via MiniDumpWriteDump' is not represented in any of the 1 retrieved historical cases (HIST-CASE-2025-089).",
+        "Behavior 'Registry Run Key (Run)' is not represented in any of the 1 retrieved historical cases (HIST-CASE-2025-089)."
+      ],
+      "novelty_score": 0.5,
+      "novel_mechanisms": [
+        "LSASS memory dump via MiniDumpWriteDump",
+        "Registry Run Key (Run)"
+      ],
+      "historical_novelty": [
+        "LSASS memory dump via MiniDumpWriteDump",
+        "Registry Run Key (Run)"
+      ],
+      "mitre_unmapped": [],
+      "novel_threat_candidate": true,
+      "novel_threat_candidate_reason": "Observed 2 behavior(s) unrepresented in historical validated investigations: LSASS memory dump via MiniDumpWriteDump, Registry Run Key (Run).",
+      "confirmed_novel_threat": false,
+      "confirmation_rationale": "Absence of historical match establishes candidate novelty only. Confirmed novelty requires authorized analyst validation.",
+      "historical_cases_compared": [
+        "HIST-CASE-2025-089"
+      ],
+      "supporting_evidence_references": [
+        "FIR-2026-01",
+        "FIR-2026-02",
+        "FIR-2026-03",
+        "FIR-2026-04",
+        "FIR-2026-05"
+      ]
+    },
+    "supporting_evidence_references": [
+      "FIR-2026-01",
+      "FIR-2026-02",
+      "FIR-2026-03",
+      "FIR-2026-04",
+      "FIR-2026-05"
+    ],
+    "investigative_confidence": 0.97,
+    "confidence_methodology": "Coverage factor: 1.00 (4 active categories, 5 evidence IDs); Upstream completeness: 1.00 (Agents 3, 4, 5a presence); Threat intel reliability: 0.88 (5A confidence: 0.88, freshness multiplier: 1.00)",
+    "limitations": [
+      "Historical cases are contextual references only, never proof of identity or attribution.",
+      "Historical similarity cannot override or contradict current forensic evidence.",
+      "Missing evidence in current investigation must not be interpreted as confirmed proof of absence.",
+      "Similarity scoring reflects semantic proximity in behavior and kill-chain alignment, not investigative certainty."
+    ],
+    "attribution_safeguards": [
+      "Historical case similarity is contextual reference only, never proof of identity or attribution.",
+      "Malware family associations reflect behavioral resemblance only, not confirmed family identity.",
+      "Campaign correlations reflect overlapping techniques and infrastructure; do not assert campaign membership.",
+      "Threat actor context provides profiling background; does not assert that the actor conducted the current attack.",
+      "Previous cases never override current forensic evidence."
+    ]
+  },
+  "audit_record": {
+    "timestamp": "2026-10-11T08:56:33.805409+00:00",
+    "case_id": "CASE-INCIDENT-2026-001",
+    "tenant_id": "tenant_enterprise",
+    "scoring_version": "1.0.0",
+    "retrieval_filter": {
+      "tenant_id": "tenant_enterprise",
+      "validation_status": [
+        "approved",
+        "validated"
+      ]
+    },
+    "model_metadata": {
+      "model": "deterministic",
+      "vector_dim": "384"
+    },
+    "validation_decisions": [
+      "Retrieved 1 approved historical case(s) from collection for tenant 'tenant_enterprise'."
+    ],
+    "errors_encountered": []
+  },
+  "validation_warnings": [],
+  "mismatched_records": [],
+  "error_message": null
+}

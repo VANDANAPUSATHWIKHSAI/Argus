@@ -64,7 +64,7 @@ def run_test():
     )
 
     result = agent.run("CASE-AGENT3-TEST")
-    print(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2, default=str))
 
 if __name__ == "__main__":
     run_test()

@@ -4,8 +4,6 @@ OUTPUT
 INFECTION PATH
 --------------
 F-E2E-001
-      ↓
-F-E2E-001
 
 ATTACK TIMELINE
 ---------------
@@ -34,6 +32,14 @@ Missing expected event:
 Network Discovery / Port Scan
 Reason: Missing expected discovery phase between credential dumping and lateral movement.
 
+Missing expected event:
+Expected Successful Authentication / Interactive Session Log
+Reason: Credential dumping / LSASS access was observed, but no subsequent successful logon (Event ID 4624) or remote session creation log was recorded.
+
+Missing expected event:
+Expected DNS Query Resolution Log
+Reason: Direct socket connection to external IP (198.51.100.45) was observed, but corresponding DNS query resolution log was not captured.
+
 ATTACK RECONSTRUCTION REPORT
 ----------------------------
 CONFIRMED RECONSTRUCTION:
@@ -42,4 +48,4 @@ Confirmed infection path starts with a malicious email (F-E2E-001) leading to co
 LATERAL MOVEMENT:
 - WORKSTATION-01 -> SERVER-02 via SMB Admin credentials (Evidence: F-E2E-006)
 
-OVERALL CONFIDENCE: 0.92
+OVERALL CONFIDENCE: 0.95

@@ -36,6 +36,7 @@ from agents.agent2_evidence_correlation.prompts import AGENT2_SYSTEM_PROMPT, bui
 from agents.agent2_evidence_correlation.validator import Agent2Validator
 
 logger = logging.getLogger(__name__)
+_AGENT2_TABLE_INITIALIZED = False
 
 
 class EvidenceCorrelationAgent(BaseAgent):
@@ -396,27 +397,31 @@ class EvidenceCorrelationAgent(BaseAgent):
             )
             cur = conn.cursor()
             
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS agent_outputs (
-                    id              SERIAL PRIMARY KEY,
-                    case_id         TEXT,
-                    agent_id        TEXT NOT NULL,
-                    claim           TEXT NOT NULL,
-                    evidence_ids    TEXT[] DEFAULT '{}',
-                    confidence      FLOAT,
-                    verified        BOOLEAN,
-                    flags           JSONB DEFAULT '{}',
-                    created_at      TIMESTAMPTZ DEFAULT NOW(),
-                    tenant_id       TEXT NOT NULL DEFAULT 'default',
-                    model_used      TEXT,
-                    execution_status TEXT DEFAULT 'SUCCESS'
-                );
-                ALTER TABLE agent_outputs DROP CONSTRAINT IF EXISTS agent_outputs_case_id_fkey;
-                ALTER TABLE agent_outputs ALTER COLUMN case_id TYPE TEXT USING case_id::text;
-                ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
-                ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS model_used TEXT;
-                ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS execution_status TEXT DEFAULT 'SUCCESS';
-            """)
+            global _AGENT2_TABLE_INITIALIZED
+            if not _AGENT2_TABLE_INITIALIZED:
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS agent_outputs (
+                        id              SERIAL PRIMARY KEY,
+                        case_id         TEXT,
+                        agent_id        TEXT NOT NULL,
+                        claim           TEXT NOT NULL,
+                        evidence_ids    TEXT[] DEFAULT '{}',
+                        confidence      FLOAT,
+                        verified        BOOLEAN,
+                        flags           JSONB DEFAULT '{}',
+                        created_at      TIMESTAMPTZ DEFAULT NOW(),
+                        tenant_id       TEXT NOT NULL DEFAULT 'default',
+                        model_used      TEXT,
+                        execution_status TEXT DEFAULT 'SUCCESS'
+                    );
+                    ALTER TABLE agent_outputs DROP CONSTRAINT IF EXISTS agent_outputs_case_id_fkey;
+                    ALTER TABLE agent_outputs ALTER COLUMN case_id TYPE TEXT USING case_id::text;
+                    ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS tenant_id TEXT NOT NULL DEFAULT 'default';
+                    ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS model_used TEXT;
+                    ALTER TABLE agent_outputs ADD COLUMN IF NOT EXISTS execution_status TEXT DEFAULT 'SUCCESS';
+                """)
+                conn.commit()
+                _AGENT2_TABLE_INITIALIZED = True
 
             query = """
                 INSERT INTO agent_outputs 

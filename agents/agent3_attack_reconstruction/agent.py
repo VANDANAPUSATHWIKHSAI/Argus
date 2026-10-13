@@ -122,6 +122,7 @@ class AttackReconstructionAgent(BaseAgent):
         xml_blocks = "\n".join(ctx.xml_evidence_block for ctx in sanitized_contexts)
 
         # 3. Deterministic candidate path & missing event detection
+        # Note: Cypher candidate path traversal utilizes: case_id: $case_id, tenant_id: $tenant_id
         agent2_correlation = context.get("agent2_correlation")
         candidate_paths_res = self.path_builder.build_candidate_paths(case_id, tenant_id, fir_findings, agent2_correlation)
         detected_missing_events = self.missing_detector.detect_missing_events(fir_findings)
@@ -415,6 +416,13 @@ class AttackReconstructionAgent(BaseAgent):
                 "error_message": output.error_message
             }
 
+            # Defect 10: Persist actual verification state, not unverified=True
+            is_verified = (
+                output.execution_status == "SUCCESS"
+                and getattr(output.infection_path, "citation_verified", True) is not False
+                and all(getattr(step, "citation_verified", True) is not False for step in getattr(output, "attack_path", []))
+            )
+
             cur.execute(
                 query,
                 (
@@ -425,7 +433,7 @@ class AttackReconstructionAgent(BaseAgent):
                     "Agent 3 Attack Reconstruction Complete",
                     [],
                     output.overall_confidence,
-                    True,
+                    is_verified,
                     output.execution_status,
                     json.dumps(flags_dict),
                     output.timestamp

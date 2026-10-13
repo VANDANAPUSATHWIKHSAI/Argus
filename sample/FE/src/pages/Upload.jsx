@@ -257,14 +257,14 @@ const Upload = () => {
               {localStorage.getItem('active_case_id') && <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>}
               <NotificationMenu />
               <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
-                <div className="avatar">A</div>
-                <span style={{ fontWeight: 500 }}>Analyst</span>
+                <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+                <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
                 {showUserDropdown && (
                   <div className="user-dropdown" style={{ display: 'block' }}>
                     <div className="user-dropdown-header">
-                      <div className="ud-name">Analyst</div>
-                      <div className="ud-role">Digital Forensics Investigator</div>
+                      <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</div>
+                      <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
                     </div>
                     <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowProfileModal(true); setShowUserDropdown(false); }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>

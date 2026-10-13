@@ -5,19 +5,10 @@ import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import { fetchActivity } from '../js/api';
 
+import { safeFormatDateTime } from '../js/dateUtils';
+
 const formatDate = (isoStr) => {
-  try {
-    const d = new Date(isoStr);
-    const m = d.toLocaleString('en-US', { month: 'short' });
-    const day = String(d.getDate()).padStart(2, '0');
-    const y = d.getFullYear();
-    const h = String(d.getHours()).padStart(2, '0');
-    const min = String(d.getMinutes()).padStart(2, '0');
-    const s = String(d.getSeconds()).padStart(2, '0');
-    return `${day} ${m} ${y}, ${h}:${min}:${s}`;
-  } catch (e) {
-    return isoStr;
-  }
+  return safeFormatDateTime(isoStr, '-');
 };
 
 const getActionDetails = (action, details, case_id, user_name) => {

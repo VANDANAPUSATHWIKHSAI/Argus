@@ -1,16 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import '../css/login.css';
 import '../css/style.css'; 
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import * as THREE from 'three';
 import { login as apiLogin } from '../js/api';
+import ArgusLogo from '../components/ArgusLogo';
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const canvasRef = useRef(null);
   const [userid, setUserid] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
+  const [sessionNotice, setSessionNotice] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
   const [isOtpMode, setIsOtpMode] = useState(false);
@@ -19,6 +22,31 @@ const Login = () => {
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [theme, setTheme] = useState(() => {
+    return document.documentElement.getAttribute('data-theme') || localStorage.getItem('argus_theme') || 'dark';
+  });
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    if (nextTheme === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+    localStorage.setItem('argus_theme', nextTheme);
+    if (window.toggleTheme) window.toggleTheme();
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const reason = params.get('reason');
+    if (reason === 'session_expired') {
+      setSessionNotice('Your session has expired. Please sign in again.');
+    } else if (reason === 'idle_timeout') {
+      setSessionNotice('You were automatically signed out due to 30 minutes of inactivity.');
+    }
+  }, [location.search]);
 
   useEffect(() => {
     if (!canvasRef.current) return;
@@ -250,9 +278,18 @@ const Login = () => {
     window.addEventListener('wheel', onWheel, { passive: true });
     window.addEventListener('resize', onResize);
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && !frameId) {
+        lastUserInteraction = Date.now();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+
     // Animation Loop
     const animate = () => {
       frameId = requestAnimationFrame(animate);
+
+      if (document.visibilityState === 'hidden') return;
 
       // Auto-spin only when user hasn't moved the mouse recently
       if (Date.now() - lastUserInteraction > 3000) {
@@ -281,6 +318,18 @@ const Login = () => {
       window.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+
+      scene.traverse((obj) => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) {
+            obj.material.forEach(m => m.dispose());
+          } else {
+            obj.material.dispose();
+          }
+        }
+      });
       renderer.dispose();
     };
   }, []);
@@ -382,10 +431,10 @@ const Login = () => {
       <canvas ref={canvasRef} id="webgl-canvas"></canvas>
 
       {/* HEADER */}
-      <header className="argus-header" style={{zIndex: 10, position: 'relative'}}>
+      <header className="argus-header">
         <div className="header-left">
           <div className="header-logo-wrapper" style={{ padding: 0, overflow: 'visible', border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', alignItems: 'center' }}>
-            <img src="/argus_logo_new.png" alt="ARGUS Logo" className="argus-logo-img" style={{ width: '44px', height: '44px', objectFit: 'contain', display: 'block' }} />
+            <ArgusLogo size={42} />
           </div>
           <div className="header-brand-title">
             <span className="brand-name">ARGUS</span>
@@ -399,24 +448,26 @@ const Login = () => {
             type="button" 
             className="theme-toggle-btn" 
             aria-label="Toggle Theme" 
-            onClick={() => {
-              const root = document.documentElement;
-              const newTheme = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-              if (newTheme === 'light') {
-                root.setAttribute('data-theme', 'light');
-              } else {
-                root.removeAttribute('data-theme');
-              }
-              if (window.toggleTheme) window.toggleTheme();
-              else {
-                localStorage.setItem('argus_theme', newTheme);
-              }
-            }}
-            style={{background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)', cursor: 'pointer', padding: '10px', borderRadius: '50%', marginRight: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'}}
+            title="Toggle Theme"
+            onClick={toggleTheme}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-            </svg>
+            {theme === 'dark' ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            )}
           </button>
 
           <div className="security-badge">
@@ -493,13 +544,13 @@ const Login = () => {
       </div>
 
       {/* RIGHT STAGE LOGIN CARD */}
-      <main className="page-center-stage" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '12vw', pointerEvents: 'none' }}>
+      <main className="page-center-stage" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '7vw', paddingTop: '40px', pointerEvents: 'none' }}>
         <div className="login-card-container" style={{ pointerEvents: 'auto' }}>
           <div className="login-card">
             
             {/* CARD TOP LOGO */}
             <div className="card-logo-wrapper" style={{ overflow: 'visible', border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', justifyContent: 'center' }}>
-              <img src="/argus_logo_new.png" alt="ARGUS Logo" className="argus-logo-img" style={{ width: '90px', height: '90px', objectFit: 'contain', display: 'block' }} />
+              <ArgusLogo size={46} />
             </div>
 
             <div className="card-title-group">
@@ -511,6 +562,11 @@ const Login = () => {
 
             {/* FORM */}
             <form id="login-form" className="login-form" onSubmit={handleLogin}>
+              {sessionNotice && !error && (
+                <div className="error-banner" style={{ backgroundColor: 'rgba(59, 130, 246, 0.12)', border: '1px solid #3b82f6', color: '#60a5fa' }}>
+                  {sessionNotice}
+                </div>
+              )}
               {error && <div className="error-banner">{error}</div>}
               {resetSuccess && (
                 <div className="error-banner" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid var(--success-green)', color: 'var(--success-green)' }}>
@@ -603,8 +659,8 @@ const Login = () => {
               )}
 
               {!isForgotPasswordMode && !isOtpMode && (
-                <div className="forgot-row" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-12px', marginBottom: '24px' }}>
-                  <a href="#" className="forgot-link" onClick={(e) => { e.preventDefault(); setIsForgotPasswordMode(true); setError(null); setResetSuccess(false); }} style={{ color: 'var(--brand-blue)', fontSize: '13px', fontWeight: '600', textDecoration: 'none', transition: 'opacity 0.2s' }}>Forgot credentials?</a>
+                <div className="forgot-row" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-8px', marginBottom: '14px' }}>
+                  <a href="#" className="forgot-link" onClick={(e) => { e.preventDefault(); setIsForgotPasswordMode(true); setError(null); setResetSuccess(false); }} style={{ color: 'var(--brand-blue)', fontSize: '12px', fontWeight: '600', textDecoration: 'none', transition: 'opacity 0.2s' }}>Forgot credentials?</a>
                 </div>
               )}
 

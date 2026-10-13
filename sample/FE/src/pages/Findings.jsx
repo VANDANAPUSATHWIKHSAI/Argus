@@ -61,10 +61,16 @@ const Findings = () => {
   const [severityFilter, setSeverityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedFinding, setSelectedFinding] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
 
   const closeAlert = () => setCustomAlert(prev => ({ ...prev, isOpen: false }));
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, severityFilter, statusFilter, activeCaseId]);
 
   useEffect(() => {
     const loadFindings = async () => {
@@ -258,7 +264,7 @@ const Findings = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredFindings.map((f) => {
+                    {filteredFindings.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map((f) => {
                       const isSelected = selectedFinding && selectedFinding.finding_id === f.finding_id;
                       return (
                         <tr 
@@ -271,7 +277,20 @@ const Findings = () => {
                             transition: 'background 0.2s'
                           }}
                         >
-                          <td style={{ padding: '14px 16px', fontWeight: '600', color: 'var(--brand-blue)' }}>{f.finding_id}</td>
+                          <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                            <span style={{ 
+                              fontFamily: 'monospace', 
+                              fontSize: '12px', 
+                              fontWeight: '700', 
+                              color: 'var(--blue)', 
+                              background: 'var(--blue-light, #eff6ff)', 
+                              border: '1px solid #bfdbfe', 
+                              padding: '3px 8px', 
+                              borderRadius: '6px' 
+                            }}>
+                              {f.finding_id}
+                            </span>
+                          </td>
                           <td style={{ padding: '14px 16px' }}><SeverityBadge severity={f.severity} /></td>
                           <td style={{ padding: '14px 16px', color: 'var(--text-main)', maxWidth: '300px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {f.sanitized_fact || f.fact}
@@ -283,6 +302,50 @@ const Findings = () => {
                     })}
                   </tbody>
                 </table>
+                
+                {/* PAGINATION CONTROLS */}
+                {filteredFindings.length > itemsPerPage && (
+                  <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    <span>
+                      Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredFindings.length)} of {filteredFindings.length}
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        style={{
+                          background: 'var(--bg-app)',
+                          border: '1px solid var(--border-color)',
+                          color: 'var(--text-main)',
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                          opacity: currentPage === 1 ? 0.5 : 1
+                        }}
+                      >
+                        Previous
+                      </button>
+                      <span style={{ display: 'flex', alignItems: 'center', fontWeight: 600, color: 'var(--text-main)' }}>
+                        {currentPage} / {Math.ceil(filteredFindings.length / itemsPerPage)}
+                      </span>
+                      <button
+                        onClick={() => setCurrentPage(prev => Math.min(Math.ceil(filteredFindings.length / itemsPerPage), prev + 1))}
+                        disabled={currentPage >= Math.ceil(filteredFindings.length / itemsPerPage)}
+                        style={{
+                          background: 'var(--bg-app)',
+                          border: '1px solid var(--border-color)',
+                          color: 'var(--text-main)',
+                          padding: '4px 10px',
+                          borderRadius: '4px',
+                          cursor: currentPage >= Math.ceil(filteredFindings.length / itemsPerPage) ? 'not-allowed' : 'pointer',
+                          opacity: currentPage >= Math.ceil(filteredFindings.length / itemsPerPage) ? 0.5 : 1
+                        }}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* FINDING DETAIL SIDE PANEL */}

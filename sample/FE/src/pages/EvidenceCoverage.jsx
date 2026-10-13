@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import '../css/style.css';
 import NotificationMenu from '../components/NotificationMenu';
 import { fetchEvidenceForCase, fetchCases } from '../js/api';
+import { safeFormatDateTime, safeFormatDateOnly } from '../js/dateUtils';
+import { logout } from '../js/authSession';
 
 // Incident Templates
 const INCIDENT_TEMPLATES = {
@@ -133,7 +135,8 @@ export default function EvidenceCoverage() {
       setSubmittedEvidence(mappedSubmitted);
 
       // Build Coverage items for classified state
-      const template = INCIDENT_TEMPLATES[incidentType] || [];
+      const activeCaseType = activeCase?.type || activeCase?.category || 'Network Intrusion';
+      const template = INCIDENT_TEMPLATES[activeCaseType] || INCIDENT_TEMPLATES['Network Intrusion'] || [];
       const matchedUploads = {};
       mappedSubmitted.forEach(item => {
         if (!matchedUploads[item.name]) matchedUploads[item.name] = item;
@@ -142,11 +145,7 @@ export default function EvidenceCoverage() {
       const coverageRows = template.map((tmpl, idx) => {
         const uploaded = matchedUploads[tmpl.name];
         if (uploaded) {
-          // If expecting multiple logs but got partial, map it. (Simulate Partial for demo)
-          let finalStatus = uploaded.status;
-          if (tmpl.name === 'Windows Event Logs' && finalStatus === 'Available') finalStatus = 'Partial';
-
-          return { ...uploaded, id: `cov-${idx}`, expectedScope: tmpl.expectedScope, status: finalStatus, isExpected: true };
+          return { ...uploaded, id: `cov-${idx}`, expectedScope: tmpl.expectedScope, status: uploaded.status, isExpected: true };
         }
         return {
           id: `cov-${idx}`, name: tmpl.name, type: tmpl.type, expectedScope: tmpl.expectedScope,
@@ -165,9 +164,7 @@ export default function EvidenceCoverage() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('argus_token');
-    localStorage.removeItem('argus_user');
-    navigate('/login');
+    logout();
   };
 
   const simulateClassification = () => {
@@ -310,7 +307,7 @@ export default function EvidenceCoverage() {
           </div>
           <div>
             <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 4 }}>Submitted On</div>
-            <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: 500 }}>{selectedEvidence.submittedOn !== '--' ? new Date(selectedEvidence.submittedOn).toLocaleString() : '--'}</div>
+            <div style={{ fontSize: '13px', color: 'var(--text-main)', fontWeight: 500 }}>{safeFormatDateTime(selectedEvidence.submittedOn, '--')}</div>
           </div>
         </div>
 
@@ -458,7 +455,7 @@ export default function EvidenceCoverage() {
                                   <Dot status={ev.status} />{ev.status}
                                 </div>
                               </td>
-                              <td style={{ padding: '14px 16px', fontSize: '13px', color: 'var(--text-muted)' }}>{ev.submittedOn !== '--' ? new Date(ev.submittedOn).toLocaleDateString() : '--'}</td>
+                              <td style={{ padding: '14px 16px', fontSize: '13px', color: 'var(--text-muted)' }}>{safeFormatDateOnly(ev.submittedOn, '--')}</td>
                               <td style={{ padding: '14px 16px' }} onClick={e => e.stopPropagation()}>
                                 {getActionBtn(ev.status)}
                               </td>

@@ -7,12 +7,12 @@ export default function AuditorDashboard() {
   const [stats, setStats] = useState(null);
   const [hoveredCase, setHoveredCase] = useState(null);
   const [severityFilter, setSeverityFilter] = useState('ALL');
-  const [caseLimit, setCaseLimit] = useState(8);
+  const [caseLimit, setCaseLimit] = useState(12);
 
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    fetchAuditorStats()
+    fetchAuditorStats(50)
       .then(res => {
         if (isMounted && res) {
           setStats(res);
@@ -106,7 +106,7 @@ export default function AuditorDashboard() {
               </span>
             </div>
             <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>
-              Shows severity classification and AI confidence score for recent completed cases in the past year.
+              Shows severity classification, AI confidence score (bar height & top badge), and recorded findings count (in the center of each bar).
             </p>
           </div>
 
@@ -218,14 +218,34 @@ export default function AuditorDashboard() {
 
                         {/* Bar */}
                         <div style={{ 
-                          width: '28px', 
+                          width: '32px', 
                           height: `${confVal}%`, 
                           background: sevStyles.gradient, 
                           borderRadius: '8px 8px 0 0',
                           transition: 'height 0.4s ease, transform 0.2s ease, box-shadow 0.2s ease',
                           transform: isHovered ? 'scaleY(1.02) translateY(-4px)' : 'none',
-                          boxShadow: isHovered ? `0 6px 16px ${sevStyles.bg}55` : '0 2px 4px rgba(0,0,0,0.05)'
-                        }} />
+                          boxShadow: isHovered ? `0 6px 16px ${sevStyles.bg}55` : '0 2px 4px rgba(0,0,0,0.05)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          position: 'relative'
+                        }}>
+                          {confVal >= 12 && (
+                            <span 
+                              title={`${c.total_findings} findings recorded`}
+                              style={{ 
+                                color: '#ffffff', 
+                                fontSize: '11px', 
+                                fontWeight: 700, 
+                                textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+                                userSelect: 'none',
+                                pointerEvents: 'none'
+                              }}
+                            >
+                              {c.total_findings}
+                            </span>
+                          )}
+                        </div>
 
                         {/* X-Axis Case Label */}
                         <div style={{ 
@@ -243,7 +263,8 @@ export default function AuditorDashboard() {
                         {isHovered && (
                           <div style={{ 
                             position: 'absolute', 
-                            bottom: `calc(${confVal}% + 34px)`, 
+                            bottom: confVal > 50 ? 'auto' : `calc(${confVal}% + 28px)`, 
+                            top: confVal > 50 ? '0px' : 'auto',
                             left: '50%', 
                             transform: 'translateX(-50%)', 
                             backgroundColor: 'rgba(15, 23, 42, 0.95)', 
@@ -254,7 +275,7 @@ export default function AuditorDashboard() {
                             fontSize: '12px', 
                             boxShadow: '0 12px 30px rgba(15, 23, 42, 0.4)', 
                             border: '1px solid rgba(255, 255, 255, 0.1)',
-                            zIndex: 20,
+                            zIndex: 30,
                             whiteSpace: 'nowrap',
                             pointerEvents: 'none'
                           }}>
@@ -297,7 +318,7 @@ export default function AuditorDashboard() {
             </div>
 
             {/* Severity Legend */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '32px', borderTop: '1px solid #f1f5f9', paddingTop: '18px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '28px', borderTop: '1px solid #f1f5f9', paddingTop: '18px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569', fontWeight: 500 }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#ef4444' }}></div>
                 Critical Severity
@@ -313,6 +334,10 @@ export default function AuditorDashboard() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569', fontWeight: 500 }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981' }}></div>
                 Low Severity
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', fontWeight: 600, borderLeft: '1px solid #e2e8f0', paddingLeft: '16px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '4px', backgroundColor: '#475569', color: '#fff', fontSize: '10px', fontWeight: 700 }}>N</span>
+                Bar Center = Findings Count
               </div>
             </div>
 

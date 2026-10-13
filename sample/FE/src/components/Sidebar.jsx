@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import ArgusLogo from './ArgusLogo';
+import { logout } from '../js/authSession';
 
 const Sidebar = () => {
   const location = useLocation();
@@ -39,20 +41,20 @@ const Sidebar = () => {
             const seenNotes = parseInt(localStorage.getItem(`seen_notes_${activeCaseId}`) || '0', 10);
             
             const latestUpdate = Math.max(0, ...notesData.map(n => {
-              const d = new Date(n.updatedAt || n.createdAt);
-              return isNaN(d.getTime()) ? 0 : d.getTime();
+              const val = n.updatedAt || n.createdAt;
+              const d = val ? new Date(String(val).replace(/\s+/, 'T')) : null;
+              return (d && !isNaN(d.getTime())) ? d.getTime() : 0;
             }));
             const lastSeenUpdate = parseInt(localStorage.getItem(`last_seen_update_${activeCaseId}`) || '0', 10);
 
             let unread = 0;
             if (lastSeenUpdate > 0) {
-              // Count all notes created or updated since the last time the page was visited
               unread = notesData.filter(n => {
-                const d = new Date(n.updatedAt || n.createdAt);
-                return !isNaN(d.getTime()) && d.getTime() > lastSeenUpdate;
+                const val = n.updatedAt || n.createdAt;
+                const d = val ? new Date(String(val).replace(/\s+/, 'T')) : null;
+                return d && !isNaN(d.getTime()) && d.getTime() > lastSeenUpdate;
               }).length;
             } else if (totalNotes > seenNotes) {
-              // Fallback for older localStorage state without timestamps
               unread = totalNotes - seenNotes;
             }
             setUnreadNotes(unread);
@@ -64,19 +66,13 @@ const Sidebar = () => {
   }, [location.pathname, user?.role]);
 
   const handleLogout = () => {
-    localStorage.removeItem('argus_token');
-    localStorage.removeItem('argus_user');
-    localStorage.removeItem('active_case_id');
-    localStorage.removeItem('active_case_name');
-    navigate('/login');
+    logout();
   };
 
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-wrapper" style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'visible', flexShrink: 0, background: 'transparent' }}>
-          <img src="/argus_logo_new.png" alt="ARGUS Logo" className="argus-logo-img" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-        </div>
+        <ArgusLogo size={36} />
         <div className="logo-text">
           <h1>ARGUS</h1>
           <p>AI for Digital Forensics</p>
@@ -93,6 +89,10 @@ const Sidebar = () => {
         
         {user?.role === 'admin' && (
           <>
+            <Link to="/cases" className={`nav-item ${currentPath === '/cases' ? 'active' : ''}`}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              <span>Previous Cases</span>
+            </Link>
             <Link to="/employees" className={`nav-item ${currentPath === '/employees' ? 'active' : ''}`}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               <span>Employees</span>
@@ -155,31 +155,24 @@ const Sidebar = () => {
         
       </nav>
       
-      <div className="sidebar-footer" style={{ 
-        marginTop: 'auto', 
-        width: '100%', 
-        boxSizing: 'border-box',
-        position: 'relative',
-        padding: '24px 32px 32px 32px',
-        overflow: 'hidden'
-      }}>
-        <div style={{ position: 'relative', zIndex: 2, display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-          <div style={{ width: '36px', height: '36px', borderRadius: '50%', background: '#e2e8f0', color: '#0f172a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 600, fontSize: '14px', flexShrink: 0 }}>
+      <div className="sidebar-footer">
+        <div className="sidebar-user-block">
+          <div className="sidebar-avatar">
             {user?.name ? user.name.charAt(0).toUpperCase() : 'S'}
           </div>
-          <div>
-            <div style={{ color: '#f1f5f9', fontWeight: 600, fontSize: '14px' }}>{user?.name || 'sathwik'}</div>
-            <div style={{ color: '#94a3b8', fontSize: '12px', textTransform: 'capitalize' }}>{user?.role?.replace('_', ' ') || 'Analyst'}</div>
+          <div className="sidebar-user-details">
+            <div className="sidebar-user-name">{user?.name || 'sathwik'}</div>
+            <div className="sidebar-user-role">{user?.role?.replace('_', ' ') || 'Analyst'}</div>
           </div>
         </div>
 
-        <button onClick={handleLogout} style={{ position: 'relative', zIndex: 2, background: 'transparent', border: '1px solid rgba(255, 255, 255, 0.1)', width: '100%', padding: '10px 16px', borderRadius: '8px', color: '#f1f5f9', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', transition: 'all 0.2s ease', outline: 'none' }} onMouseOver={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)'; }} onMouseOut={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)'; }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2">
+        <button onClick={handleLogout} className="sidebar-logout-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
             <polyline points="16 17 21 12 16 7"></polyline>
             <line x1="21" y1="12" x2="9" y2="12"></line>
           </svg>
-          <span style={{ fontSize: '13px', fontWeight: 500 }}>Logout</span>
+          <span>Logout</span>
         </button>
       </div>
     </aside>

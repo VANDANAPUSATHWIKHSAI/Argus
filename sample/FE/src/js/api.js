@@ -1,9 +1,18 @@
+import { logout, isTokenExpired } from './authSession';
+
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 export const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID || 'default';
 
 // Helper for authenticated requests
 export async function fetchWithAuth(url, options = {}) {
   const token = localStorage.getItem('argus_token');
+
+  // Proactive check: if token is expired before making request, log out immediately
+  if (token && isTokenExpired(token)) {
+    logout('session_expired');
+    throw new Error('Session expired. Please log in again.');
+  }
+
   const headers = {
     'Accept': 'application/json',
     'X-Tenant-ID': DEFAULT_TENANT_ID,
@@ -30,6 +39,12 @@ export async function fetchWithAuth(url, options = {}) {
       const errData = await response.json();
       errorMsg = errData.detail || errorMsg;
     } catch(e) {}
+
+    // Global 401 Unauthorized interceptor: automatically wipe session and redirect to login
+    if (response.status === 401) {
+      logout('session_expired');
+    }
+
     throw new Error(errorMsg);
   }
 
@@ -95,7 +110,7 @@ export async function fetchActivity() {
   return fetchWithAuth('/cases/activity');
 }
 
-export async function fetchAuditorStats() {
+export async function fetchAuditorStats(limit = 50) {
   const token = localStorage.getItem('argus_token');
   const headers = {
     'Accept': 'application/json',
@@ -104,9 +119,9 @@ export async function fetchAuditorStats() {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
-  const response = await fetch(`${API_BASE_URL}/cases/auditor-stats`, { headers });
+  const response = await fetch(`${API_BASE_URL}/cases/auditor-stats?limit=${limit}`, { headers });
   if (!response.ok) {
-    const fallbackRes = await fetch(`${API_BASE_URL}/cases/auditor-stats`, {
+    const fallbackRes = await fetch(`${API_BASE_URL}/cases/auditor-stats?limit=${limit}`, {
       headers: { 'Accept': 'application/json', 'X-Tenant-ID': DEFAULT_TENANT_ID }
     });
     if (fallbackRes.ok) return fallbackRes.json();

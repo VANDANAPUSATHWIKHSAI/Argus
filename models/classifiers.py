@@ -10,7 +10,6 @@ Loads pre-trained models for:
 
 import logging
 from typing import Any, List, Dict
-from transformers import pipeline
 
 logger = logging.getLogger(__name__)
 

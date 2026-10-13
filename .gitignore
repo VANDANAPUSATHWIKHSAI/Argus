@@ -68,4 +68,11 @@ sample/FE/dist/
 *.local
 
 # ── No duplicate frontend ─────────────────────────────────────
-# frontend/ is deleted. Do not re-add.
+# frontend/ is deleted. Do not re-add.
+
+# ── Local notes & scratch files ──────────────────────────────
+scratch/
+ARGUS/
+Details/
+sample/FE/scratch/
+

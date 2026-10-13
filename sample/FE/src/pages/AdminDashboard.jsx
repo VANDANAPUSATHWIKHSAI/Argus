@@ -4,6 +4,7 @@ import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import AlertModal from '../components/AlertModal';
+import { safeFormatDateOnly, safeFormatDateTime, safeFormatTime } from '../js/dateUtils';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -22,6 +23,37 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [hasOpenCase, setHasOpenCase] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [allCasesList, setAllCasesList] = useState([]);
+  const [caseSearchTerm, setCaseSearchTerm] = useState('');
+  const [caseStatusFilter, setCaseStatusFilter] = useState('all');
+
+  const handleSetActiveCase = (caseItem) => {
+    localStorage.setItem('active_case_id', caseItem.case_id);
+    if (caseItem.name) localStorage.setItem('active_case_name', caseItem.name);
+    setCurrentCase(caseItem);
+    setCustomAlert({
+      isOpen: true,
+      title: 'Active Case Switched',
+      message: `Case ${caseItem.case_id} (${caseItem.name || 'Unnamed'}) is now selected as the active case.`,
+      type: 'success'
+    });
+  };
+
+  const filteredCases = allCasesList.filter(c => {
+    const matchesSearch = 
+      !caseSearchTerm.trim() ||
+      (c.case_id && c.case_id.toLowerCase().includes(caseSearchTerm.toLowerCase())) ||
+      (c.name && c.name.toLowerCase().includes(caseSearchTerm.toLowerCase())) ||
+      (c.analyst_name && c.analyst_name.toLowerCase().includes(caseSearchTerm.toLowerCase())) ||
+      (c.senior_analyst_name && c.senior_analyst_name.toLowerCase().includes(caseSearchTerm.toLowerCase()));
+
+    const matchesStatus = 
+      caseStatusFilter === 'all' ||
+      (caseStatusFilter === 'open' && (c.status === 'open' || c.status === 'in_progress')) ||
+      (caseStatusFilter === 'closed' && (c.status === 'closed' || c.status === 'completed' || c.status === 'archived'));
+
+    return matchesSearch && matchesStatus;
+  });
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCaseName, setNewCaseName] = useState('');
@@ -195,6 +227,7 @@ const AdminDashboard = () => {
 
             // Sort newest first (reverse for created_at ascending)
             const sorted = enriched.reverse();
+            setAllCasesList(sorted);
             
             // Prefer any open case as the current case
             const activeId = localStorage.getItem('active_case_id');
@@ -204,6 +237,7 @@ const AdminDashboard = () => {
 
             setHasOpenCase(sorted.some(c => c.status === 'open' || c.status === 'in_progress'));
           } else {
+            setAllCasesList([]);
             setCurrentCase(null);
             setHasOpenCase(false);
           }
@@ -223,8 +257,26 @@ const AdminDashboard = () => {
     };
     
     fetchDashboardData();
-    const intervalId = setInterval(fetchDashboardData, 5000);
-    return () => clearInterval(intervalId);
+    
+    const handleInterval = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDashboardData();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        fetchDashboardData();
+      }
+    };
+
+    const intervalId = setInterval(handleInterval, 10000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [refreshTrigger]);
 
   return (
@@ -410,7 +462,9 @@ const AdminDashboard = () => {
               </div>
               <div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>Auditor</div>
-                <div style={{ fontSize: '15px', fontWeight: 500, color: 'var(--text-muted)' }}>Not Assigned</div>
+                <div style={{ fontSize: '15px', fontWeight: 600, color: currentCase && (currentCase.auditor_name || currentCase.auditor_id) ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                  {currentCase ? (currentCase.auditor_name || currentCase.auditor_id || 'Not Assigned') : '-'}
+                </div>
               </div>
             </div>
           </div>
@@ -423,7 +477,7 @@ const AdminDashboard = () => {
               </div>
               <div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>Created On</div>
-                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-main)' }}>{currentCase && currentCase.created_at ? new Date(currentCase.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'}) : '-'}</div>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-main)' }}>{safeFormatDateOnly(currentCase?.created_at)}</div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -432,7 +486,7 @@ const AdminDashboard = () => {
               </div>
               <div>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '2px' }}>Last Updated</div>
-                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-main)' }}>{currentCase && currentCase.created_at ? new Date(currentCase.created_at).toLocaleString('en-US', {month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'}) : '-'}</div>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-main)' }}>{safeFormatDateTime(currentCase?.created_at)}</div>
               </div>
             </div>
           </div>
@@ -458,8 +512,8 @@ const AdminDashboard = () => {
               {recentActivity.length > 0 ? recentActivity.slice(0, 5).map((activity, idx, arr) => (
                 <tr key={idx} style={{ borderBottom: idx === arr.length - 1 ? 'none' : '1px solid var(--border-subtle)' }}>
                   <td style={{ padding: '16px 0', fontSize: '13px', color: 'var(--text-muted)' }}>
-                    {activity.created_at ? new Date(activity.created_at).toLocaleDateString() : '-'}<br/>
-                    {activity.created_at ? new Date(activity.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}
+                    {safeFormatDateOnly(activity.created_at)}<br/>
+                    {safeFormatTime(activity.created_at, '')}
                   </td>
                   <td style={{ padding: '16px 0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

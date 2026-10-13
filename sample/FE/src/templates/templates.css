@@ -1,0 +1,182 @@
+/* ARGUS Design Exploration CSS - Refined Palette */
+
+:root {
+  --argus-white: #FFFFFF;
+  --argus-bg-light: #F4F5F6;
+  --argus-surface: #E9EDF1;
+  --argus-graphite: #20262E;
+  --argus-black: #111111;
+  --argus-text-subtle: #4B5563;
+  --argus-steel-blue: #405D78;
+  --argus-dark-steel: #304960;
+  --argus-border-strong: #C5CDD5;
+  --argus-border-light: #D7DDE3;
+  
+  --argus-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --argus-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --argus-serif: 'Georgia', serif;
+}
+
+.argus-preview-page {
+  font-family: var(--argus-sans);
+  color: var(--argus-graphite);
+  background-color: var(--argus-bg-light);
+  height: 100vh;
+  min-height: 100vh;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  overflow-y: auto;
+}
+
+.argus-sidebar-replica {
+  width: 250px;
+  flex-shrink: 0;
+  background: var(--argus-white);
+  border-right: 2px solid var(--argus-border-strong);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-sizing: border-box;
+}
+
+/* Persistent Preview Top Switcher Bar */
+.argus-top-switcher {
+  position: sticky;
+  top: 0;
+  z-index: 99999;
+  background: var(--argus-dark-steel);
+  color: #FFFFFF;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--argus-steel-blue);
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+}
+
+.argus-top-switcher .brand-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+}
+
+.argus-top-switcher .tag-badge {
+  background: var(--argus-steel-blue);
+  color: #FFFFFF;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.argus-top-switcher .btn-group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.argus-switcher-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: #E9EDF1;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.argus-switcher-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  color: #FFFFFF;
+}
+
+.argus-switcher-btn.active {
+  background: #FFFFFF;
+  color: var(--argus-graphite);
+  border-color: #FFFFFF;
+  font-weight: 700;
+}
+
+.argus-switcher-btn.prod-back {
+  background: var(--argus-black);
+  color: #FFFFFF;
+  border-color: #000000;
+  margin-left: 12px;
+}
+
+/* Card & Table Shared Styling */
+.argus-card {
+  background: var(--argus-white);
+  border: 1px solid var(--argus-border-strong);
+  border-radius: 4px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.argus-card-accent {
+  border-top: 3px solid var(--argus-steel-blue);
+}
+
+.argus-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.argus-table th {
+  background: var(--argus-bg-light);
+  border-bottom: 2px solid var(--argus-graphite);
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--argus-text-subtle);
+}
+
+.argus-table td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--argus-border-light);
+}
+
+.argus-badge-steel {
+  background: rgba(64, 93, 120, 0.12);
+  color: var(--argus-steel-blue);
+  border: 1px solid var(--argus-border-strong);
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--argus-mono);
+  text-transform: uppercase;
+}
+
+.argus-badge-dark {
+  background: var(--argus-graphite);
+  color: #FFFFFF;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--argus-mono);
+  text-transform: uppercase;
+}
+
+.argus-badge-critical {
+  background: var(--argus-black);
+  color: #FFFFFF;
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--argus-mono);
+  text-transform: uppercase;
+}

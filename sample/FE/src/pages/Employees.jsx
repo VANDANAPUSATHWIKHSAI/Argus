@@ -4,6 +4,8 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import { API_BASE_URL } from '../js/api';
 
+const EMAIL_REGEX = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$/;
+
 const Employees = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -13,6 +15,8 @@ const Employees = () => {
   const [editEmp, setEditEmp] = useState(null);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
   const navigate = useNavigate();
+  const currentUserStr = localStorage.getItem('argus_user');
+  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
 
   const closeAlert = () => setCustomAlert({ ...customAlert, isOpen: false });
 
@@ -47,8 +51,22 @@ const Employees = () => {
 
   const handleAddEmployee = async (e) => {
     e.preventDefault();
-    if (!newEmp.userid || !newEmp.name || !newEmp.email) {
+    const cleanUserId = newEmp.userid.trim();
+    const cleanName = newEmp.name.trim();
+    const cleanEmail = newEmp.email.trim();
+
+    if (!cleanUserId || !cleanName || !cleanEmail) {
       setCustomAlert({ isOpen: true, title: 'Validation', message: 'User ID, Full Name, and Email are required.', type: 'warning' });
+      return;
+    }
+
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      setCustomAlert({ 
+        isOpen: true, 
+        title: 'Invalid Email Format', 
+        message: 'Please enter a valid email address (e.g. employee@agency.gov).', 
+        type: 'warning' 
+      });
       return;
     }
     
@@ -57,7 +75,10 @@ const Employees = () => {
       // Send null instead of empty strings for optional fields
       const payload = {
         ...newEmp,
-        phone: newEmp.phone || null,
+        userid: cleanUserId,
+        name: cleanName,
+        email: cleanEmail.toLowerCase(),
+        phone: newEmp.phone ? newEmp.phone.trim() : null,
         doj: newEmp.doj || null,
       };
       const res = await fetch(`${API_BASE_URL}/auth/employees`, {
@@ -73,7 +94,11 @@ const Employees = () => {
         let errMsg = 'Failed to add employee';
         try {
           const errData = await res.json();
-          errMsg = errData.detail || errMsg;
+          if (Array.isArray(errData.detail)) {
+            errMsg = errData.detail.map(d => d.msg).join('; ');
+          } else if (typeof errData.detail === 'string') {
+            errMsg = errData.detail;
+          }
         } catch (_) {}
         throw new Error(errMsg);
       }
@@ -92,18 +117,31 @@ const Employees = () => {
 
   const handleEditEmployee = async (e) => {
     e.preventDefault();
-    if (!editEmp.name || !editEmp.email) {
+    const cleanName = editEmp.name.trim();
+    const cleanEmail = editEmp.email.trim();
+
+    if (!cleanName || !cleanEmail) {
       setCustomAlert({ isOpen: true, title: 'Validation', message: 'Full Name and Email are required.', type: 'warning' });
+      return;
+    }
+
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      setCustomAlert({ 
+        isOpen: true, 
+        title: 'Invalid Email Format', 
+        message: 'Please enter a valid email address (e.g. employee@agency.gov).', 
+        type: 'warning' 
+      });
       return;
     }
     
     try {
       const token = localStorage.getItem('argus_token');
       const payload = {
-        name: editEmp.name,
-        email: editEmp.email,
+        name: cleanName,
+        email: cleanEmail.toLowerCase(),
         role: editEmp.role,
-        phone: editEmp.phone || null,
+        phone: editEmp.phone ? editEmp.phone.trim() : null,
         doj: editEmp.doj || null,
       };
       if (editEmp.password) {
@@ -123,7 +161,11 @@ const Employees = () => {
         let errMsg = 'Failed to update employee';
         try {
           const errData = await res.json();
-          errMsg = errData.detail || errMsg;
+          if (Array.isArray(errData.detail)) {
+            errMsg = errData.detail.map(d => d.msg).join('; ');
+          } else if (typeof errData.detail === 'string') {
+            errMsg = errData.detail;
+          }
         } catch (_) {}
         throw new Error(errMsg);
       }
@@ -176,8 +218,8 @@ const Employees = () => {
               Add Employee
             </button>
             <div className="user-profile">
-              <div className="avatar">A</div>
-              <span style={{ fontWeight: 500 }}>Admin</span>
+              <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+              <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
             </div>
           </div>
         </header>
@@ -272,8 +314,29 @@ const Employees = () => {
                 <input type="text" value={newEmp.name} onChange={e => setNewEmp({...newEmp, name: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} placeholder="Jane Doe" />
               </div>
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Email Address</label>
-                <input type="text" value={newEmp.email} onChange={e => setNewEmp({...newEmp, email: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} placeholder="jane@agency.gov" />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)' }}>Email Address *</label>
+                  {newEmp.email && !EMAIL_REGEX.test(newEmp.email.trim()) && (
+                    <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 500 }}>Invalid email format</span>
+                  )}
+                </div>
+                <input 
+                  type="email" 
+                  value={newEmp.email} 
+                  onChange={e => setNewEmp({...newEmp, email: e.target.value})} 
+                  style={{ 
+                    width: '100%', 
+                    padding: '10px 12px', 
+                    borderRadius: '8px', 
+                    border: `1px solid ${newEmp.email && !EMAIL_REGEX.test(newEmp.email.trim()) ? '#ef4444' : 'var(--border-subtle)'}`, 
+                    background: 'var(--bg-surface)', 
+                    color: 'var(--text-main)', 
+                    outline: 'none',
+                    transition: 'border-color 0.2s'
+                  }} 
+                  placeholder="jane@agency.gov" 
+                  required 
+                />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>
@@ -327,8 +390,29 @@ const Employees = () => {
                 <input type="text" value={editEmp.name} onChange={e => setEditEmp({...editEmp, name: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} required />
               </div>
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Email Address</label>
-                <input type="email" value={editEmp.email} onChange={e => setEditEmp({...editEmp, email: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-subtle)', background: 'var(--bg-surface)', color: 'var(--text-main)', outline: 'none' }} required />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)' }}>Email Address *</label>
+                  {editEmp.email && !EMAIL_REGEX.test(editEmp.email.trim()) && (
+                    <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 500 }}>Invalid email format</span>
+                  )}
+                </div>
+                <input 
+                  type="email" 
+                  value={editEmp.email} 
+                  onChange={e => setEditEmp({...editEmp, email: e.target.value})} 
+                  style={{ 
+                    width: '100%', 
+                    padding: '10px 12px', 
+                    borderRadius: '8px', 
+                    border: `1px solid ${editEmp.email && !EMAIL_REGEX.test(editEmp.email.trim()) ? '#ef4444' : 'var(--border-subtle)'}`, 
+                    background: 'var(--bg-surface)', 
+                    color: 'var(--text-main)', 
+                    outline: 'none',
+                    transition: 'border-color 0.2s'
+                  }} 
+                  placeholder="jane@agency.gov" 
+                  required 
+                />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                 <div>

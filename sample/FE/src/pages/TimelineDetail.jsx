@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import NotificationMenu from '../components/NotificationMenu';
 import { fetchFindings } from '../js/api';
+import { safeFormatDateTime } from '../js/dateUtils';
 
 const SEVERITY_COLORS = {
   critical: '#ef4444',
@@ -38,10 +39,12 @@ const TimelineDetail = () => {
         
         if (dataList.length > 0) {
           const mapped = dataList.map((f, idx) => {
-            const timeStr = f.timestamp ? new Date(f.timestamp).toLocaleString() : `Event #${idx + 1}`;
+            const timeStr = f.timestamp ? safeFormatDateTime(f.timestamp) : `Event #${idx + 1}`;
+            const rawTs = f.timestamp ? new Date(String(f.timestamp).replace(/\s+/, 'T')).getTime() : 0;
             return {
               id: f.finding_id || `TL-${idx}`,
               time: timeStr,
+              rawTs: rawTs,
               category: f.layer ? f.layer.toUpperCase() : 'FORENSIC FINDING',
               severity: (f.severity || 'medium').toLowerCase(),
               title: f.finding_id || `Finding #${idx + 1}`,
@@ -52,7 +55,7 @@ const TimelineDetail = () => {
           });
 
           // Sort chronologically if valid timestamps exist
-          mapped.sort((a, b) => new Date(a.time) - new Date(b.time));
+          mapped.sort((a, b) => a.rawTs - b.rawTs);
           setTimelineData(mapped);
         } else {
           setTimelineData([]);

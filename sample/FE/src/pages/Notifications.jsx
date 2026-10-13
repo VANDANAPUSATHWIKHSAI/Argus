@@ -27,7 +27,8 @@ const Notifications = () => {
         const items = data.data || [];
 
         const mapped = items.map((a, i) => {
-          const age = a.created_at ? Date.now() - new Date(a.created_at).getTime() : 0;
+          const rawTs = a.created_at ? String(a.created_at).replace(/\s+/, 'T') : null;
+          const age = rawTs ? Date.now() - new Date(rawTs).getTime() : 0;
           const mins = Math.floor(age / 60000);
           const hrs  = Math.floor(age / 3600000);
           const days = Math.floor(age / 86400000);

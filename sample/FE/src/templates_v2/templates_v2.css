@@ -1,0 +1,275 @@
+/* ARGUS V2 Design Exploration CSS - High Contrast White & Monochromatic Forensics */
+
+:root {
+  --v2-bg: #F8FAFC;
+  --v2-white: #FFFFFF;
+  --v2-card-bg: #FFFFFF;
+  --v2-border: #111111;
+  --v2-border-light: #CBD5E1;
+  --v2-border-strong: #0F172A;
+  --v2-text-main: #0F172A;
+  --v2-text-muted: #475569;
+  --v2-text-subtle: #64748B;
+  
+  --v2-mono-font: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+  --v2-sans-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --v2-serif-font: 'Georgia', serif;
+}
+
+.v2-wrapper {
+  font-family: var(--v2-sans-font);
+  color: var(--v2-text-main);
+  background-color: var(--v2-bg);
+  min-height: 100vh;
+  box-sizing: border-box;
+}
+
+/* Persistent Top Switcher Bar */
+.v2-switcher-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10000;
+  background: #0F172A;
+  color: #FFFFFF;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid #111111;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.v2-switcher-links {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.v2-btn {
+  background: #1E293B;
+  color: #E2E8F0;
+  border: 1px solid #475569;
+  padding: 6px 14px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.v2-btn:hover {
+  background: #334155;
+  color: #FFFFFF;
+}
+
+.v2-btn.active {
+  background: #FFFFFF;
+  color: #0F172A;
+  border-color: #FFFFFF;
+  font-weight: 700;
+}
+
+.v2-btn.prod {
+  background: #3B82F6;
+  color: #FFFFFF;
+  border-color: #2563EB;
+  margin-left: 12px;
+}
+
+/* =========================================================
+   TEMPLATE 1 — MINIMAL & PROFESSIONAL
+   ========================================================= */
+.v2-minimal-layout {
+  display: flex;
+  min-height: calc(100vh - 50px);
+  background: #FFFFFF;
+}
+
+.v2-minimal-sidebar {
+  width: 240px;
+  background: #F8FAFC;
+  border-right: 2px solid #111111;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.v2-minimal-main {
+  flex: 1;
+  padding: 32px 40px;
+  background: #FFFFFF;
+}
+
+.v2-minimal-card {
+  background: #FFFFFF;
+  border: 2px solid #111111;
+  padding: 24px;
+  border-radius: 4px;
+  box-shadow: 4px 4px 0px #111111;
+  margin-bottom: 24px;
+}
+
+.v2-minimal-stat-box {
+  background: #F8FAFC;
+  border: 2px solid #111111;
+  padding: 20px;
+  border-radius: 4px;
+}
+
+/* =========================================================
+   TEMPLATE 2 — TECHNICAL INVESTIGATIVE WORKSTATION
+   ========================================================= */
+.v2-tech-layout {
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  height: calc(100vh - 50px);
+  background: #0F172A;
+  color: #F8FAFC;
+}
+
+.v2-tech-commandbar {
+  background: #1E293B;
+  border-bottom: 2px solid #334155;
+  padding: 10px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--v2-mono-font);
+  font-size: 12px;
+}
+
+.v2-tech-grid {
+  display: grid;
+  grid-template-columns: 260px 1fr 360px;
+  height: 100%;
+  overflow: hidden;
+  background: #FFFFFF;
+  color: #0F172A;
+}
+
+.v2-tech-panel {
+  border-right: 2px solid #111111;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #FFFFFF;
+}
+
+.v2-tech-panel-header {
+  background: #111111;
+  color: #FFFFFF;
+  padding: 8px 14px;
+  font-family: var(--v2-mono-font);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* =========================================================
+   TEMPLATE 3 — PREMIUM & DISTINCTIVE BRIEFING
+   ========================================================= */
+.v2-premium-hero {
+  background: #111111;
+  color: #FFFFFF;
+  padding: 48px 56px;
+  border-bottom: 4px solid #334155;
+}
+
+.v2-premium-grid {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 48px 56px;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 40px;
+}
+
+.v2-premium-card {
+  background: #FFFFFF;
+  border: 2px solid #111111;
+  border-radius: 6px;
+  padding: 28px;
+  box-shadow: 6px 6px 0px #111111;
+  margin-bottom: 24px;
+}
+
+/* =========================================================
+   TEMPLATE 4 — MODULAR KANBAN CANVAS OVERHAUL
+   ========================================================= */
+.v2-canvas-header {
+  background: #FFFFFF;
+  border-bottom: 2px solid #111111;
+  padding: 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.v2-canvas-board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  padding: 32px;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.v2-canvas-column {
+  background: #F1F5F9;
+  border: 2px solid #111111;
+  border-radius: 6px;
+  padding: 16px;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+}
+
+.v2-canvas-col-header {
+  font-weight: 800;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #111111;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.v2-canvas-card {
+  background: #FFFFFF;
+  border: 2px solid #111111;
+  border-radius: 4px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: 3px 3px 0px #111111;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.v2-canvas-card:hover {
+  transform: translateY(-2px);
+}
+
+/* Strong Severity Badges */
+.v2-tag {
+  display: inline-block;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: var(--v2-mono-font);
+  border: 1px solid #111111;
+  border-radius: 2px;
+  text-transform: uppercase;
+}
+
+.v2-tag-critical { background: #111111; color: #FFFFFF; }
+.v2-tag-high { background: #475569; color: #FFFFFF; }
+.v2-tag-medium { background: #E2E8F0; color: #0F172A; }
+.v2-tag-low { background: #FFFFFF; color: #0F172A; }

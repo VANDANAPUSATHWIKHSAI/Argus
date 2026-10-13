@@ -6,142 +6,179 @@ import { DEFAULT_TENANT_ID } from './api';
 
 class ArgusGraphRenderer {
   constructor() {
-    this.nodes = [
-      {
-        id: 'n1', type: 'finding', label: 'Suspicious Login', sublabel: 'Initial Access',
-        x: 50, y: 50,
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
-        critical: true,
-        details: {
-          title: 'Suspicious Login', subtitle: 'Event · Initial Access',
-          desc: 'Unusual login behavior detected, indicating possible credential compromise and use of automated tools.',
-          badge: 'High Risk', badgeColor: 'var(--red)', badgeBg: 'var(--red-light)',
-          list: [
-            { k: 'Type', v: 'Credential Harvesting' },
-            { k: 'First Seen', v: 'Nov 14, 2024 09:32 AM' },
-            { k: 'Associated User', v: 'john.doe@company.com' },
-            { k: 'Source IP', v: '🇺🇸 185.199.110.23', color: 'var(--blue)' }
-          ],
-          risk: 92
-        }
-      },
-      {
-        id: 'n2', type: 'device', label: 'DESKTOP-7G2K', sublabel: 'Windows 11',
-        x: 25, y: 40,
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>',
-        details: {
-          title: 'DESKTOP-7G2K', subtitle: 'Device · Workstation',
-          desc: 'Corporate workstation assigned to the engineering department. Shows signs of recent unauthorized software execution.',
-          badge: 'Compromised', badgeColor: 'var(--teal)', badgeBg: 'var(--teal-light)',
-          list: [
-            { k: 'Type', v: 'Windows 11' },
-            { k: 'First Seen', v: 'Nov 14, 2024 08:15 AM' },
-            { k: 'User', v: 'john.doe@company.com' },
-            { k: 'IP Address', v: '10.0.4.102' }
-          ],
-          risk: 45
-        }
-      },
-      {
-        id: 'n3', type: 'user', label: 'john.doe@company.com', sublabel: '2 accounts',
-        x: 50, y: 20,
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
-        details: {
-          title: 'John Doe', subtitle: 'User · Engineering Dept',
-          desc: 'Senior developer account with access to production environments and code repositories.',
-          badge: 'At Risk', badgeColor: 'var(--purple)', badgeBg: 'var(--purple-light)',
-          list: [
-            { k: 'Type', v: 'Domain User' },
-            { k: 'First Seen', v: 'Active' },
-            { k: 'User', v: 'john.doe@company.com' },
-            { k: 'IP Address', v: 'N/A' }
-          ],
-          risk: 60
-        }
-      },
-      {
-        id: 'n4', type: 'network', label: '185.199.110.23', sublabel: '2 connections',
-        x: 76, y: 37,
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
-        details: {
-          title: '185.199.110.23', subtitle: 'Network · External IP',
-          desc: 'Known tor exit node or proxy IP associated with credential stuffing attacks in the past 30 days.',
-          badge: 'Malicious', badgeColor: 'var(--cyan)', badgeBg: 'var(--cyan-light)',
-          list: [
-            { k: 'Type', v: 'External IP' },
-            { k: 'First Seen', v: 'Nov 14, 2024 09:32 AM' },
-            { k: 'User', v: 'N/A' },
-            { k: 'IP Address', v: '185.199.110.23' }
-          ],
-          risk: 85
-        }
-      },
-      {
-        id: 'n5', type: 'finding', label: 'Credential Harvesting', sublabel: 'High Confidence',
-        x: 76, y: 63,
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
-        details: {
-          title: 'Credential Harvesting', subtitle: 'Finding · Discovery',
-          desc: 'Automated script attempting to dump LSASS memory to extract plaintext credentials.',
-          badge: 'Critical', badgeColor: 'var(--red)', badgeBg: 'var(--red-light)',
-          list: [
-            { k: 'Type', v: 'Execution' },
-            { k: 'First Seen', v: 'Nov 14, 2024 09:35 AM' },
-            { k: 'User', v: 'SYSTEM' },
-            { k: 'IP Address', v: 'Local' }
-          ],
-          risk: 95
-        }
-      },
-      {
-        id: 'n6', type: 'process', label: 'powershell.exe', sublabel: '5 related files',
-        x: 50, y: 80,
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
-        details: {
-          title: 'powershell.exe', subtitle: 'Process · Execution',
-          desc: 'Executed with bypassed execution policy.',
-          badge: 'Suspicious', badgeColor: 'var(--orange)', badgeBg: 'var(--orange-light)',
-          list: [
-            { k: 'PID', v: '8432' },
-            { k: 'Parent Process', v: 'winword.exe' },
-            { k: 'Related Files', v: '5' }
-          ],
-          risk: 75
-        }
-      },
-      {
-        id: 'n7', type: 'evidence', label: 'suspicious.ps1', sublabel: '3 detections',
-        x: 24, y: 63,
-        icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>',
-        details: {
-          title: 'suspicious.ps1', subtitle: 'Evidence · File',
-          desc: 'Obfuscated PowerShell script dropped in Temp directory. Contains encoded Base64 commands.',
-          badge: 'Evidence', badgeColor: 'var(--blue)', badgeBg: 'var(--blue-light)',
-          list: [
-            { k: 'Type', v: 'File' },
-            { k: 'First Seen', v: 'Nov 14, 2024 09:33 AM' },
-            { k: 'User', v: 'john.doe@company.com' },
-            { k: 'IP Address', v: 'Local' }
-          ],
-          risk: 88
-        }
-      }
-    ];
-
-    this.edges = [
-      { source: 'n3', target: 'n2', label: 'logged in from', color: 'var(--teal)' },
-      { source: 'n2', target: 'n7', label: 'contains', color: 'var(--blue)' },
-      { source: 'n7', target: 'n6', label: 'executed by', color: 'var(--orange)' },
-      { source: 'n3', target: 'n1', label: 'associated with', color: 'var(--purple)' },
-      { source: 'n1', target: 'n4', label: 'connected to', color: 'var(--blue)' },
-      { source: 'n1', target: 'n5', label: 'supports', color: 'var(--red)' }
-    ];
-
+    this.nodes = [];
+    this.edges = [];
     this.selectedNodeId = null;
     this.scale = 1.0;
+    this.currentCaseId = null;
+    this.eventsBound = false;
   }
 
-  init() {
+  async loadDataForCase(caseId) {
+    if (!caseId) {
+      this.nodes = [];
+      this.edges = [];
+      return;
+    }
+
+    try {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+      const token = localStorage.getItem('argus_token');
+      const headers = {
+        'X-Tenant-ID': DEFAULT_TENANT_ID,
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      };
+
+      const [findingsRes, evidenceRes] = await Promise.all([
+        fetch(`${baseUrl}/cases/${caseId}/findings`, { headers }).catch(() => null),
+        fetch(`${baseUrl}/evidence/case/${caseId}`, { headers }).catch(() => null)
+      ]);
+
+      let rawFindings = [];
+      if (findingsRes && findingsRes.ok) {
+        const data = await findingsRes.json();
+        rawFindings = Array.isArray(data) ? data : (data.data || []);
+      }
+
+      let rawEvidence = [];
+      if (evidenceRes && evidenceRes.ok) {
+        const data = await evidenceRes.json();
+        rawEvidence = Array.isArray(data) ? data : (data.data || []);
+      }
+
+      this.buildGraphFromData(rawFindings, rawEvidence);
+    } catch (e) {
+      console.error('Failed to load graph data for case', caseId, e);
+      this.nodes = [];
+      this.edges = [];
+    }
+  }
+
+  buildGraphFromData(findings, evidenceList) {
+    const nodes = [];
+    const edges = [];
+    const evidenceMap = new Map();
+
+    const icons = {
+      finding: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>',
+      device: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>',
+      user: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>',
+      network: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>',
+      process: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>',
+      evidence: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>'
+    };
+
+    // 1. Process Evidence Items
+    evidenceList.forEach((ev, idx) => {
+      const evName = ev.filename || ev.id || `evidence-${idx}`;
+      const evNodeId = `ev-${idx}`;
+      evidenceMap.set(evName.toLowerCase(), evNodeId);
+
+      nodes.push({
+        id: evNodeId,
+        type: 'evidence',
+        label: evName,
+        sublabel: ev.status ? `Status: ${ev.status}` : 'Artifact',
+        icon: icons.evidence,
+        critical: false,
+        details: {
+          title: evName,
+          subtitle: 'Evidence · Artifact',
+          desc: `Uploaded file artifact. Status: ${ev.status || 'processed'}.`,
+          badge: 'Evidence',
+          badgeColor: 'var(--blue)',
+          badgeBg: 'var(--blue-light)',
+          list: [
+            { k: 'Filename', v: evName },
+            { k: 'Status', v: ev.status || 'N/A' },
+            { k: 'Type', v: ev.type || 'File' }
+          ],
+          risk: 50
+        }
+      });
+    });
+
+    // 2. Process Findings
+    findings.forEach((f, idx) => {
+      const fId = f.finding_id || f.id || `f-${idx}`;
+      const layer = (f.layer || 'finding').toLowerCase();
+      const nodeType = ['device', 'user', 'network', 'process', 'evidence'].includes(layer) ? layer : 'finding';
+      const sev = (f.severity || 'medium').toLowerCase();
+      const isCritical = sev === 'critical' || sev === 'high';
+      const conf = Math.round((f.confidence > 1 ? f.confidence : f.confidence * 100) || 75);
+
+      nodes.push({
+        id: fId,
+        type: nodeType,
+        label: f.fact ? (f.fact.length > 30 ? f.fact.substring(0, 27) + '...' : f.fact) : fId,
+        sublabel: `${sev.toUpperCase()} · ${conf}% conf`,
+        icon: icons[nodeType] || icons.finding,
+        critical: isCritical,
+        details: {
+          title: f.fact || fId,
+          subtitle: `Finding · ${f.layer ? f.layer.toUpperCase() : 'GENERAL'}`,
+          desc: f.fact || 'No description recorded.',
+          badge: sev.toUpperCase(),
+          badgeColor: isCritical ? 'var(--red)' : (sev === 'medium' ? 'var(--orange)' : 'var(--blue)'),
+          badgeBg: isCritical ? 'var(--red-light)' : (sev === 'medium' ? 'var(--orange-light)' : 'var(--blue-light)'),
+          list: [
+            { k: 'Finding ID', v: fId },
+            { k: 'Layer', v: f.layer || 'N/A' },
+            { k: 'MITRE Mapping', v: f.mitre_mapping || 'None' },
+            { k: 'Evidence Reference', v: f.evidence_reference || 'N/A' }
+          ],
+          risk: conf
+        }
+      });
+
+      // Link finding to evidence if reference matches
+      if (f.evidence_reference) {
+        const targetEvNodeId = evidenceMap.get(f.evidence_reference.toLowerCase());
+        if (targetEvNodeId) {
+          edges.push({
+            source: fId,
+            target: targetEvNodeId,
+            label: 'derived from',
+            color: 'var(--blue)'
+          });
+        }
+      }
+
+      // Link findings sequentially if multiple findings exist to construct execution chain
+      if (idx > 0) {
+        const prevFId = findings[idx - 1].finding_id || findings[idx - 1].id || `f-${idx - 1}`;
+        edges.push({
+          source: prevFId,
+          target: fId,
+          label: 'correlated with',
+          color: isCritical ? 'var(--red)' : 'var(--orange)'
+        });
+      }
+    });
+
+    // 3. Assign 2D Coordinates (x, y percentages)
+    const total = nodes.length;
+    if (total > 0) {
+      nodes.forEach((n, i) => {
+        const col = i % 4;
+        const row = Math.floor(i / 4);
+        const maxCols = Math.min(total, 4);
+        n.x = maxCols > 1 ? Math.round(15 + (70 / (maxCols - 1)) * col) : 50;
+        n.y = Math.round(25 + row * 30);
+      });
+    }
+
+    this.nodes = nodes;
+    this.edges = edges;
+  }
+
+  async init(caseIdOverride) {
+    const caseId = caseIdOverride || localStorage.getItem('active_case_id');
+    if (!this.currentCaseId || this.currentCaseId !== caseId || this.nodes.length === 0) {
+      this.currentCaseId = caseId;
+      await this.loadDataForCase(caseId);
+    }
+
     // Add SVG definitions for arrowheads
     const svgContainer = document.getElementById('graph-svg');
     if (svgContainer) {
@@ -172,12 +209,15 @@ class ArgusGraphRenderer {
     this.renderGraph();
     this.bindEvents();
     
-    // Select a node by default to show the new deep path highlighting
-    setTimeout(() => this.selectNode('n6'), 100);
+    // Select first node by default if available
+    if (this.nodes.length > 0) {
+      setTimeout(() => this.selectNode(this.nodes[0].id), 100);
+    }
     
-    // Re-render on container resize to fix absolute coordinates even when panel opens
+    // Re-render on container resize
     const container = document.getElementById('graph-container');
-    if (container) {
+    if (container && !this.resizeObserverBound) {
+      this.resizeObserverBound = true;
       const resizeObserver = new ResizeObserver(() => {
         this.renderGraph();
         if(this.selectedNodeId) this.selectNode(this.selectedNodeId);
@@ -197,6 +237,17 @@ class ArgusGraphRenderer {
     svgContainer.innerHTML = '';
     if(defs) svgContainer.appendChild(defs);
     htmlContainer.innerHTML = '';
+
+    if (this.nodes.length === 0) {
+      htmlContainer.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 14px; padding: 40px; text-align: center;">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 12px; opacity: 0.5;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+          <div style="font-weight: 600; margin-bottom: 4px;">No Graph Data Available</div>
+          <div style="font-size: 13px; max-width: 320px;">Upload evidence artifacts to generate findings and view the execution graph.</div>
+        </div>
+      `;
+      return;
+    }
 
     const width = svgContainer.clientWidth || 800;
     const height = svgContainer.clientHeight || 600;

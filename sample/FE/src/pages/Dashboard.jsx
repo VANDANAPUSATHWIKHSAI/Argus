@@ -8,7 +8,9 @@ import NotificationMenu from '../components/NotificationMenu';
 import AdminDashboard from './AdminDashboard';
 import SeniorDashboard from './SeniorDashboard';
 import AuditorDashboard from './AuditorDashboard';
+import ForensicGraph from '../components/ForensicGraph';
 import { fetchCases, fetchCaseSummary, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { safeFormatDateTime } from '../js/dateUtils';
 
 const Dashboard = () => {
   const [cases, setCases] = useState([]);
@@ -94,19 +96,7 @@ const Dashboard = () => {
     }
   }
 
-  // Re-initialize graph when dashboard is loaded
-  useEffect(() => {
-    if (!loading && cases.length > 0) {
-      setTimeout(() => {
-        if (window.argusApp && typeof window.argusApp.init === 'function') {
-          // ensure SVG container exists
-          if (document.getElementById('graph-svg')) {
-            window.argusApp.init();
-          }
-        }
-      }, 100);
-    }
-  }, [loading, cases]);
+  const activeCaseId = localStorage.getItem('active_case_id');
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadDashboard(); }, []);
@@ -317,14 +307,14 @@ const Dashboard = () => {
 
               {/* User profile */}
               <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
-                <div className="avatar">A</div>
-                <span style={{ fontWeight: 500 }}>{currentUser?.name || 'Analyst'}</span>
+                <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+                <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 {showUserDropdown && (
                   <div className="user-dropdown" style={{ display: 'block' }}>
                     <div className="user-dropdown-header">
-                      <div className="ud-name">{currentUser?.name || 'Analyst'}</div>
-                      <div className="ud-role">Digital Forensics Investigator</div>
+                      <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</div>
+                      <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
                     </div>
                   </div>
                 )}
@@ -403,7 +393,7 @@ const Dashboard = () => {
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                               <div>
                                 <span>Last Updated</span>
-                                <strong>{activeSummary.latest_timestamp ? new Date(activeSummary.latest_timestamp).toLocaleString() : '—'}</strong>
+                                <strong>{safeFormatDateTime(activeSummary.latest_timestamp, '—')}</strong>
                               </div>
                             </div>
                           </div>
@@ -461,96 +451,7 @@ const Dashboard = () => {
                     </div>
 
                     {/* Interactive Investigation Map */}
-                    <div className="main-grid" id="main-grid" style={{ flexShrink: 0 }}>
-                      <div className="panel-card map-panel">
-                        <div className="panel-header">
-                          <div>
-                            <h3>Investigation Map</h3>
-                            <p>Explore the relationships between evidence, users, devices, and network activity.</p>
-                          </div>
-                          <div className="panel-actions">
-                            <button className="btn btn-primary" onClick={() => setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Graph View is currently active.', type: 'info'})}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                              Graph View
-                            </button>
-                            <button className="btn btn-outline" onClick={() => navigate('/timeline')}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                              Timeline View
-                            </button>
-                            <button className="btn-icon" onClick={() => setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Fullscreen mode is not yet implemented in this prototype.', type: 'info'})}>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path></svg>
-                            </button>
-                          </div>
-                        </div>
-                        <div className="graph-container" id="graph-container">
-                          <div className="graph-legend">
-                            <div className="legend-item"><div className="legend-dot legend-evidence"></div> Evidence</div>
-                            <div className="legend-item"><div className="legend-dot legend-device"></div> Device</div>
-                            <div className="legend-item"><div className="legend-dot legend-user"></div> User</div>
-                            <div className="legend-item"><div className="legend-dot legend-process"></div> Process</div>
-                            <div className="legend-item"><div className="legend-dot legend-network"></div> Network</div>
-                            <div className="legend-item"><div className="legend-dot legend-finding"></div> Finding</div>
-                          </div>
-                          <div className="graph-controls">
-                            <button className="btn btn-icon" id="btn-zoom-in"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
-                            <button className="btn btn-icon" id="btn-zoom-out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"></line></svg></button>
-                            <button className="btn btn-outline" id="btn-fit-view" style={{ background: 'var(--bg-card)' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '6px' }}><polyline points="8 3 3 3 3 8"></polyline><polyline points="16 3 21 3 21 8"></polyline><polyline points="8 21 3 21 3 16"></polyline><polyline points="16 21 21 21 21 16"></polyline></svg><span className="fit-view-label"> Fit View</span></button>
-                          </div>
-                          <svg className="graph-svg" id="graph-svg"></svg>
-                          <div className="graph-html" id="graph-html"></div>
-                        </div>
-                      </div>
-
-                      {/* Node Details Panel */}
-                      <aside className="details-panel" id="details-panel">
-                        <div className="panel-header">
-                          <h3>Node Details</h3>
-                          <div className="panel-actions">
-                            <button className="btn-icon" style={{ color: 'var(--red)', background: 'var(--red-light)', border: 'none', borderRadius: '50%', cursor: 'pointer', pointerEvents: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', padding: '0', transition: 'all 0.2s' }} onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (window.argusApp && typeof window.argusApp.clearSelection === 'function') {
-                                window.argusApp.clearSelection();
-                              } else {
-                                const grid = document.getElementById('main-grid');
-                                if (grid) grid.classList.remove('has-selection');
-                              }
-                            }}>
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                            </button>
-                          </div>
-                        </div>
-                        <div className="details-content" id="details-content">
-                          <div className="details-header">
-                            <div className="details-icon" id="details-icon"></div>
-                            <div className="details-title-wrap">
-                              <h4 id="details-title">--</h4>
-                              <p id="details-subtitle">--</p>
-                            </div>
-                            <div id="details-badge"></div>
-                          </div>
-                          <div className="details-tabs">
-                            <div className="tab active">Overview</div>
-                            <div className="tab">Related Items (8)</div>
-                            <div className="tab">Connections (6)</div>
-                          </div>
-                          <p className="details-desc" id="details-desc">--</p>
-                          <div className="details-list" id="details-list"></div>
-                          <div className="risk-score-wrap" id="details-risk-wrap">
-                            <div className="risk-header">
-                              <span>Risk Score</span>
-                              <strong id="details-risk-val">0 / 100</strong>
-                            </div>
-                            <div className="risk-bar-bg">
-                              <div className="risk-bar-fill" id="details-risk-fill" style={{ width: '0%', backgroundColor: 'var(--text-light)' }}></div>
-                            </div>
-                          </div>
-                          <button className="btn btn-outline" style={{ width: '100%', justifyContent: 'center', color: 'var(--blue)', borderColor: 'var(--blue-light)', marginTop: 'auto' }}>
-                            View in Timeline →
-                          </button>
-                        </div>
-                      </aside>
-                    </div>
+                    <ForensicGraph caseId={activeCaseId} />
 
                     {/* Investigation Progress */}
                     <div className="timeline-card" style={{ flexShrink: 0 }}>

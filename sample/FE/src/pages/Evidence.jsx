@@ -7,6 +7,7 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import SearchableSelect from '../components/SearchableSelect';
+import { safeFormatDateOnly } from '../js/dateUtils';
 
 const Evidence = () => {
   const formatBytes = (bytes, decimals = 2) => {
@@ -105,7 +106,13 @@ const Evidence = () => {
 
   const filteredData = useMemo(() => {
     return evidenceData.filter(item => {
-      if (searchQuery && !item.name.toLowerCase().includes(searchQuery.toLowerCase()) && !item.source.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchName = item.name && item.name.toLowerCase().includes(q);
+        const matchSource = item.source && item.source.toLowerCase().includes(q);
+        const matchId = item.id && item.id.toLowerCase().includes(q);
+        if (!matchName && !matchSource && !matchId) return false;
+      }
       if (typeFilter && item.type !== typeFilter) return false;
       if (statusFilter && item.status !== statusFilter) return false;
       if (sourceFilter && item.source !== sourceFilter) return false;
@@ -199,14 +206,14 @@ const Evidence = () => {
         {localStorage.getItem('active_case_id') && <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>}
         <NotificationMenu />
         <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
-          <div className="avatar">A</div>
-          <span style={{fontWeight: '500'}}>Analyst</span>
+          <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+          <span style={{fontWeight: '500', textTransform: 'capitalize'}}>{currentUser?.name || 'sathwik'}</span>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           {showUserDropdown && (
             <div className="user-dropdown" style={{ display: 'block' }}>
               <div className="user-dropdown-header">
-                <div className="ud-name">Analyst</div>
-                <div className="ud-role">Digital Forensics Investigator</div>
+                <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</div>
+                <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
               </div>
               <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowProfileModal(true); setShowUserDropdown(false); }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -362,7 +369,7 @@ const Evidence = () => {
                   size="small"
                   options={[
                     { label: "All Status", value: "" },
-                    { label: "Parsed", value: "Parsed" },
+                    { label: "Stored", value: "Stored" },
                     { label: "Processing", value: "Processing" },
                     { label: "Failed", value: "Failed" }
                   ]}
@@ -418,6 +425,7 @@ const Evidence = () => {
               <thead>
                 <tr style={{borderBottom: '1px solid var(--border-strong)', fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600'}}>
                   <th style={{padding: '16px 24px', width: '40px'}}><input type="checkbox" onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Bulk selection is not yet implemented in this prototype.', type: 'info'}) }} /></th>
+                  <th style={{padding: '16px 12px'}}>Evidence ID</th>
                   <th style={{padding: '16px 12px'}}>Evidence Name</th>
                   <th style={{padding: '16px 12px'}}>Type</th>
                   <th style={{padding: '16px 12px'}}>Source</th>
@@ -432,7 +440,7 @@ const Evidence = () => {
                 <tbody id="evidence-tbody">
                   {currentItems.length === 0 ? (
                     <tr>
-                      <td colSpan="9" style={{textAlign: 'center', padding: '40px', color: 'var(--text-muted)'}}>
+                      <td colSpan="10" style={{textAlign: 'center', padding: '40px', color: 'var(--text-muted)'}}>
                         No evidence files found matching your criteria.
                       </td>
                     </tr>
@@ -440,6 +448,21 @@ const Evidence = () => {
                     currentItems.map(item => (
                       <tr key={item.id} className={`ev-row ${selectedItem?.id === item.id ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
                         <td style={{padding: '16px 24px'}}><input type="checkbox" onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item selection is not yet implemented in this prototype.', type: 'info'}) }} /></td>
+                        <td style={{padding: '16px 12px'}}>
+                          <span style={{ 
+                            fontFamily: 'monospace', 
+                            fontSize: '12px', 
+                            fontWeight: 600, 
+                            color: 'var(--blue)', 
+                            background: 'var(--blue-light, #eff6ff)', 
+                            border: '1px solid #dbeafe', 
+                            padding: '3px 8px', 
+                            borderRadius: '6px',
+                            whiteSpace: 'nowrap'
+                          }}>
+                            {item.id || '-'}
+                          </span>
+                        </td>
                         <td>
                           <div className="ev-name-cell" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <svg className="ev-file-icon" style={{ flexShrink: 0, color: 'var(--blue)' }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -458,7 +481,7 @@ const Evidence = () => {
                             {item.status}
                           </span>
                         </td>
-                        <td>{new Date(item.ingested_at).toLocaleDateString()}</td>
+                        <td>{safeFormatDateOnly(item.ingested_at)}</td>
                         <td>
                            <span style={{ color: item.risk === 'High' ? 'var(--red)' : item.risk === 'Medium' ? 'var(--orange)' : 'var(--text-muted)' }}>{item.risk || 'Low'}</span>
                         </td>

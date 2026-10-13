@@ -5,37 +5,38 @@ const ArgusLogo = ({ size = 36, className = '' }) => {
     <svg 
       width={size} 
       height={size} 
-      viewBox="0 0 36 36" 
+      viewBox="0 0 48 48" 
       fill="none" 
       xmlns="http://www.w3.org/2000/svg"
       className={`argus-logo-svg ${className}`}
       style={{ flexShrink: 0, display: 'block' }}
     >
-      <rect 
-        x="0.5" 
-        y="0.5" 
-        width="35" 
-        height="35" 
-        rx="9" 
-        className="argus-logo-bg"
-      />
-      {/* Outer Shield */}
+      {/* Minimalist Precision Shield Outline */}
       <path 
-        d="M18 7.5L26.5 11.5V17.5C26.5 22.8 22.8 26.8 18 28.5C13.2 26.8 9.5 22.8 9.5 17.5V11.5L18 7.5Z" 
-        className="argus-logo-shield"
-        strokeWidth="1.8" 
-        strokeLinejoin="round" 
-      />
-      {/* Forensic Scanning Iris */}
-      <path 
-        d="M13 18C13 18 15.2 14.8 18 14.8C20.8 14.8 23 18 23 18C23 18 20.8 21.2 18 21.2C15.2 21.2 13 18 13 18Z" 
-        className="argus-logo-iris"
-        strokeWidth="1.5" 
+        d="M24 6L38.5 11V23.5C38.5 32.5 30.8 39.5 24 42.5C17.2 39.5 9.5 32.5 9.5 23.5V11L24 6Z" 
+        stroke="var(--emblem-shield, #38bdf8)" 
+        strokeWidth="1.85" 
         strokeLinecap="round" 
         strokeLinejoin="round" 
+        className="argus-logo-shield"
       />
-      {/* Central Focal Lens Dot */}
-      <circle cx="18" cy="18" r="1.8" className="argus-logo-dot" />
+      {/* Minimalist Forensic Eye Scanning Contour */}
+      <path 
+        d="M17.5 24C19.5 19.8 28.5 19.8 30.5 24C28.5 28.2 19.5 28.2 17.5 24Z" 
+        stroke="var(--emblem-eye, #22d3ee)" 
+        strokeWidth="1.6" 
+        strokeLinecap="round" 
+        strokeLinejoin="round" 
+        className="argus-logo-iris"
+      />
+      {/* Centered Optical Pupil Focal Point */}
+      <circle 
+        cx="24" 
+        cy="24" 
+        r="2.2" 
+        fill="var(--emblem-shield, #38bdf8)" 
+        className="argus-logo-dot"
+      />
     </svg>
   );
 };

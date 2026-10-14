@@ -2,12 +2,50 @@
 Agent 2 — Evidence Correlation Schemas
 =======================================
 Defines Pydantic contracts for Agent 2 input, correlation signals,
-timeline clusters, graph communities, conflicts, claims, and final output payload.
+timeline events, graph status & communities, deterministic relationships,
+conflicts, claims, Qwen interpretation, provenance, and final output payload.
 """
 
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Literal
 from pydantic import BaseModel, Field
+
+
+class DeterministicRelationship(BaseModel):
+    """
+    Objective forensic relationship established between entities/findings.
+    Distinguishes deterministic rule match confidence (1.0 = rule satisfied) from Qwen model interpretation confidence.
+    """
+    relationship_id: str = Field(description="Unique ID of relationship, e.g. REL-001")
+    relationship_type: str = Field(
+        description="Type of relationship (e.g. CONNECTED_TO, CHILD_OF, RESOLVED, ACCESSED, MODIFIED, AUTHENTICATED_TO, SHARED_IP, SHARED_HASH, SHARED_USER, SHARED_ARTIFACT)"
+    )
+    source_entity: str = Field(description="Source node/entity ID or name")
+    target_entity: str = Field(description="Target node/entity ID or name")
+    evidence_ids: List[str] = Field(default_factory=list, description="FIR finding IDs supporting this relationship")
+    artifact_ids: List[str] = Field(default_factory=list, description="Artifact IDs supporting this relationship")
+    deterministic_basis: str = Field(description="Objective rule/source supporting this relationship")
+    deterministic_match: bool = Field(default=True, description="True if relationship is established by deterministic rule match")
+    rule_match_confidence: float = Field(default=1.0, description="Deterministic rule-match confidence (1.0 = rule satisfied)")
+    case_id: str = Field(default="default")
+    tenant_id: str = Field(default="default")
+
+
+class TimelineEvent(BaseModel):
+    """
+    Individual event entry in the Master Investigation Timeline.
+    """
+    event_id: str = Field(description="Unique timeline event ID or finding ID")
+    timestamp: Optional[datetime] = Field(default=None, description="Event timestamp")
+    timestamp_type: str = Field(default="event_time", description="Type of timestamp (e.g. event_time, created_at, modified_at)")
+    evidence_ids: List[str] = Field(default_factory=list, description="Source evidence/finding IDs")
+    source: str = Field(default="unknown", description="Source parser/layer generating event")
+    host: Optional[str] = Field(default=None, description="Host machine associated with event")
+    user: Optional[str] = Field(default=None, description="User account associated with event")
+    process: Optional[str] = Field(default=None, description="Process name or PID associated with event")
+    event_description: str = Field(description="Sanitized description of forensic event")
+    timestamp_conflict: bool = Field(default=False, description="True if conflicting timestamps were reported for event")
+    provenance: Dict[str, Any] = Field(default_factory=dict, description="Metadata lineage")
 
 
 class TemporalCluster(BaseModel):
@@ -35,17 +73,29 @@ class GraphCommunity(BaseModel):
     wcc_component_id: Optional[int] = Field(default=None, description="Weakly Connected Component numeric ID from Neo4j GDS")
 
 
+class GraphStatus(BaseModel):
+    """
+    Status and component summary of Neo4j graph representation.
+    """
+    status: Literal["AVAILABLE", "UNAVAILABLE"] = Field(default="AVAILABLE")
+    node_count: int = 0
+    relationship_count: int = 0
+    components: List[GraphCommunity] = Field(default_factory=list)
+
+
 class CorrelationConflict(BaseModel):
     """
     Deterministic contradiction or temporal anomaly detected across evidence findings.
     """
     conflict_id: str = Field(description="Unique ID of conflict, e.g. CONF-001")
     conflict_type: str = Field(
-        description="Category of deterministic conflict detected (e.g. timestamp_conflict, host_attribution_conflict, user_attribution_conflict, process_parent_conflict, artifact_identity_conflict, persistence_disagreement, malware_status_disagreement, severity_disagreement)"
+        description="Category of deterministic conflict detected (e.g. timestamp_conflict, host_attribution_conflict, user_attribution_conflict, process_parent_conflict, artifact_identity_conflict, hash_collision, persistence_disagreement, malware_status_disagreement, severity_disagreement)"
     )
     description: str = Field(description="Detailed explanation of the contradiction")
     involved_finding_ids: List[str] = Field(default_factory=list, description="FIR finding IDs involved in conflict")
     severity: Literal["high", "medium", "low"] = Field(default="medium", description="Severity level of conflict")
+    status: Literal["UNRESOLVED", "RESOLVED"] = Field(default="UNRESOLVED", description="Conflict status")
+    conflicting_values: Dict[str, Any] = Field(default_factory=dict, description="Conflicting entity values")
 
 
 class Agent2CorrelationSignal(BaseModel):
@@ -55,6 +105,7 @@ class Agent2CorrelationSignal(BaseModel):
     temporal_clusters: List[TemporalCluster] = Field(default_factory=list)
     graph_communities: List[GraphCommunity] = Field(default_factory=list)
     conflicts: List[CorrelationConflict] = Field(default_factory=list)
+    relationships: List[DeterministicRelationship] = Field(default_factory=list)
     total_nodes: int = 0
     total_edges: int = 0
     total_communities: int = 0
@@ -96,7 +147,7 @@ class Agent2Claim(BaseModel):
         description="Step-by-step reasoning logic connecting evidence graph signals to conclusions"
     )
 
-    # ── Deterministic Validation Results (Enforced by code) ──
+    # ── Deterministic Validation Results ──
     citation_valid: bool = Field(
         default=False,
         description="True if every cited ID strictly exists in FIR findings or lineage"
@@ -123,6 +174,27 @@ class Agent2Claim(BaseModel):
     )
 
 
+class QwenInterpretation(BaseModel):
+    """
+    Qwen interpretation of deterministic correlation signals.
+    """
+    correlated_observations: List[str] = Field(default_factory=list)
+    timeline_interpretation: List[str] = Field(default_factory=list)
+    conflict_interpretation: List[str] = Field(default_factory=list)
+    uncertainties: List[str] = Field(default_factory=list)
+
+
+class Agent2Provenance(BaseModel):
+    """
+    Lineage metadata tracking inputs and model version.
+    """
+    input_finding_ids: List[str] = Field(default_factory=list)
+    input_evidence_ids: List[str] = Field(default_factory=list)
+    graph_version: str = "1.0.0"
+    model: str = "Qwen3-8B"
+    prompt_version: str = "1.0.0"
+
+
 class Agent2Input(BaseModel):
     """
     Input request contract for Agent 2.
@@ -136,21 +208,36 @@ class Agent2Input(BaseModel):
 
 class Agent2Output(BaseModel):
     """
-    Structured Agent 2 output contract.
+    Structured Agent 2 output contract matching ARGUS evidence correlation specifications.
     """
+    agent: str = "agent_2"
+    agent_version: str = "1.0.0"
     case_id: str
     tenant_id: str = "default"
     agent_id: str = "agent2_evidence_correlation"
     model_used: str = "Qwen3-8B"
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    claims: List[Agent2Claim] = Field(default_factory=list)
-    total_findings_processed: int = 0
-    graph_metrics: Dict[str, Any] = Field(default_factory=dict)
-    sanitization_summary: Dict[str, Any] = Field(default_factory=dict)
+
     execution_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] = "SUCCESS"
     failure_type: Optional[str] = Field(
         default=None,
         description="Failure classification: NEO4J_UNAVAILABLE, GDS_UNAVAILABLE, MODEL_UNAVAILABLE, MALFORMED_OUTPUT, NO_EVIDENCE"
     )
     error_message: Optional[str] = None
+
+    graph: GraphStatus = Field(default_factory=GraphStatus)
+    correlation_signals: Agent2CorrelationSignal = Field(default_factory=Agent2CorrelationSignal)
+    relationships: List[DeterministicRelationship] = Field(default_factory=list)
+    timeline: List[TimelineEvent] = Field(default_factory=list)
+    conflicts: List[CorrelationConflict] = Field(default_factory=list)
+    claims: List[Agent2Claim] = Field(default_factory=list)
+
+    qwen_interpretation: QwenInterpretation = Field(default_factory=QwenInterpretation)
+    limitations: List[str] = Field(default_factory=list)
+    provenance: Agent2Provenance = Field(default_factory=Agent2Provenance)
+
+    total_findings_processed: int = 0
+    graph_metrics: Dict[str, Any] = Field(default_factory=dict)
+    sanitization_summary: Dict[str, Any] = Field(default_factory=dict)
+
 

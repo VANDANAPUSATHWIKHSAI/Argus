@@ -152,7 +152,7 @@ rule Test_Yara_Malware
 
     # ── 6. Deterministic Timeline Correlation Verification ─────────────────
     timeline_builder = TimelineBuilder(time_window_seconds=3600)
-    sorted_findings, clusters = timeline_builder.build_timeline([fir_sigma, fir_yara])
+    sorted_findings, clusters, _ = timeline_builder.build_timeline([fir_sigma, fir_yara])
 
     assert len(sorted_findings) == 2
     assert len(clusters) == 1  # Clustered within 1 hour window!

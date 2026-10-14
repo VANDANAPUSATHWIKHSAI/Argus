@@ -53,60 +53,83 @@ class FCREngine:
         if not artifacts:
             return []
 
-        # 1. Filter valid artifacts and group by case_id for strict case isolation
-        by_case: dict[str, list[Artifact]] = {}
+        # 1. Filter valid artifacts and group by (tenant_id, case_id) for strict tenant and case isolation
+        by_tenant_case: dict[tuple[str, str], list[Artifact]] = {}
         art_lookup: dict[str, Artifact] = {}
 
         for art in artifacts:
             if not isinstance(art, Artifact) or not art.artifact_id or not art.evidence_id:
                 continue
             case = (art.case_id or "default_case").strip()
-            by_case.setdefault(case, []).append(art)
+            raw_t = getattr(art, "tenant_id", None)
+            tenant = raw_t.strip() if isinstance(raw_t, str) and raw_t.strip() else "default"
+            by_tenant_case.setdefault((tenant, case), []).append(art)
             art_lookup[art.artifact_id] = art
 
-        # Map entities to artifacts if provided
+        # Map entities to artifacts if provided, enforcing strict tenant match
         entities_by_artifact: dict[str, list[ExtractedEntity]] = {}
         if extracted_entities:
             for ent in extracted_entities:
                 if ent.artifact_id in art_lookup:
-                    entities_by_artifact.setdefault(ent.artifact_id, []).append(ent)
+                    art = art_lookup[ent.artifact_id]
+                    ent_t = (getattr(ent, "tenant_id", None) or "default").strip()
+                    art_t = (getattr(art, "tenant_id", None) or "default").strip()
+                    if ent_t == art_t:
+                        entities_by_artifact.setdefault(ent.artifact_id, []).append(ent)
 
         raw_records: list[CorrelationRecord] = []
 
-        # 2. Process each case independently
-        for case_id, case_arts in by_case.items():
+        # 2. Process each (tenant_id, case_id) partition independently
+        for (tenant_id, case_id), case_arts in by_tenant_case.items():
             if len(case_arts) >= 2:
                 # Strategy A: Temporal Proximity Correlation
-                raw_records.extend(self._correlate_temporal(case_id, case_arts, window_seconds))
+                raw_records.extend(self._correlate_temporal(case_id, case_arts, window_seconds, tenant_id=tenant_id))
 
                 # Strategy B: Shared IOC Correlation
-                raw_records.extend(self._correlate_shared_ioc(case_id, case_arts, entities_by_artifact))
+                raw_records.extend(self._correlate_shared_ioc(case_id, case_arts, entities_by_artifact, tenant_id=tenant_id))
 
                 # Strategy C: Process Tree Correlation
-                raw_records.extend(self._correlate_process_tree(case_id, case_arts))
+                raw_records.extend(self._correlate_process_tree(case_id, case_arts, tenant_id=tenant_id))
 
                 # Strategy D: Network ↔ Process Correlation
-                raw_records.extend(self._correlate_network_process(case_id, case_arts))
+                raw_records.extend(self._correlate_network_process(case_id, case_arts, tenant_id=tenant_id))
 
             # Strategy E: Single-Artifact Standalone Correlation (if requested)
             if allow_single_artifact:
-                raw_records.extend(self._correlate_single_artifact(case_id, case_arts, raw_records))
+                raw_records.extend(self._correlate_single_artifact(case_id, case_arts, raw_records, tenant_id=tenant_id))
 
         # 3. Deduplicate correlation records
         return self._deduplicate(raw_records, art_lookup)
+
+    def _filter_scoped_artifacts(self, case_id: str, artifacts: list[Artifact], tenant_id: str) -> list[Artifact]:
+        """Strictly isolate artifacts to matching tenant_id and case_id."""
+        if not tenant_id or tenant_id in ("*", "") or not case_id:
+            return []
+        norm_tid = tenant_id.strip()
+        norm_cid = case_id.strip()
+        return [
+            a for a in artifacts
+            if (getattr(a, "tenant_id", None) or "default").strip() == norm_tid
+            and (a.case_id or "default_case").strip() == norm_cid
+        ]
 
     def _correlate_temporal(
         self,
         case_id: str,
         artifacts: list[Artifact],
-        window_seconds: float
+        window_seconds: float,
+        tenant_id: str = "default"
     ) -> list[CorrelationRecord]:
         """Correlate artifacts on the same host whose timestamps fall within window_seconds."""
+        scoped_arts = self._filter_scoped_artifacts(case_id, artifacts, tenant_id)
+        if len(scoped_arts) < 2:
+            return []
+
         records: list[CorrelationRecord] = []
 
         # Group by host (host_id or normalized_fields.host)
         by_host: dict[str, list[Artifact]] = {}
-        for art in artifacts:
+        for art in scoped_arts:
             host = self._get_host(art)
             if host and art.timestamp is not None:
                 by_host.setdefault(host, []).append(art)
@@ -144,12 +167,13 @@ class FCREngine:
                     distinct_types = len(set(a.artifact_type for a in window_group))
                     source_tools = len(set(a.source_tool for a in window_group))
                     confidence = compute_confidence(distinct_types, source_tools)
-                    corr_id = self._generate_corr_id(case_id, ["temporal_proximity"], art_ids, host)
+                    corr_id = self._generate_corr_id(case_id, ["temporal_proximity"], art_ids, host, tenant_id=tenant_id)
 
                     try:
                         rec = CorrelationRecord(
                             correlation_id=corr_id,
                             case_id=case_id,
+                            tenant_id=tenant_id,
                             artifact_ids=art_ids,
                             relationship_type=["temporal_proximity"],
                             source_count=source_tools,
@@ -171,13 +195,16 @@ class FCREngine:
         self,
         case_id: str,
         artifacts: list[Artifact],
-        entities_by_artifact: dict[str, list[ExtractedEntity]]
+        entities_by_artifact: dict[str, list[ExtractedEntity]],
+        tenant_id: str = "default"
     ) -> list[CorrelationRecord]:
         """Correlate artifacts sharing atomic IOC values (hash, IP, domain, URL, registry key, device serial)."""
-        records: list[CorrelationRecord] = []
+        scoped_arts = self._filter_scoped_artifacts(case_id, artifacts, tenant_id)
+        if len(scoped_arts) < 2:
+            return []
 
-        # Map (ioc_key, ioc_value) -> set(artifact_id)
-        ioc_groups: dict[tuple[str, str], set[str]] = {}
+        records: list[CorrelationRecord] = []
+        ioc_groups: dict[str, set[str]] = {}
 
         GENERIC_STOPWORDS = {
             "0.0.0.0", "127.0.0.1", "none", "null", "true", "false", "0", "1", "n/a", "unknown",
@@ -188,7 +215,8 @@ class FCREngine:
             "users", "public", "desktop", "documents", "downloads"
         }
 
-        for art in artifacts:
+        norm_tid = tenant_id.strip()
+        for art in scoped_arts:
             nf = art.normalized_fields
             # 1. From NormalizedFields
             candidates = [
@@ -207,42 +235,41 @@ class FCREngine:
             for key_name, val in candidates:
                 if val and str(val).strip():
                     norm_val = str(val).strip().lower()
-                    # Exclude trivial/generic values
                     if len(norm_val) > 2 and norm_val not in GENERIC_STOPWORDS:
                         ioc_groups.setdefault(norm_val, set()).add(art.artifact_id)
-                        if getattr(art, "source_artifact_id", None):
-                            ioc_groups.setdefault(norm_val, set()).add(art.source_artifact_id)
 
             # 2. From ExtractedEntities
             if art.artifact_id in entities_by_artifact:
                 for ent in entities_by_artifact[art.artifact_id]:
+                    ent_t = (getattr(ent, "tenant_id", None) or "default").strip()
+                    if ent_t != norm_tid:
+                        continue
                     if ent.value and ent.value.strip():
                         val_str = ent.value.strip().lower()
                         if len(val_str) > 2 and val_str not in GENERIC_STOPWORDS:
                             ioc_groups.setdefault(val_str, set()).add(art.artifact_id)
-                            if getattr(art, "source_artifact_id", None):
-                                ioc_groups.setdefault(val_str, set()).add(art.source_artifact_id)
 
-        art_dict = {a.artifact_id: a for a in artifacts}
+        art_dict = {a.artifact_id: a for a in scoped_arts}
 
         for ioc_value, art_id_set in ioc_groups.items():
             if len(art_id_set) < 2 or len(art_id_set) > 200:
                 continue
 
-            art_ids = sorted(list(art_id_set))
-            matched_arts = [art_dict[aid] for aid in art_ids if aid in art_dict]
+            matched_arts = [art_dict[aid] for aid in art_id_set if aid in art_dict]
             if len(matched_arts) < 2:
                 continue
 
+            art_ids = sorted(list(set(a.artifact_id for a in matched_arts)))
             distinct_types = len(set(a.artifact_type for a in matched_arts))
             source_tools = len(set(a.source_tool for a in matched_arts))
             confidence = compute_confidence(distinct_types, source_tools)
-            corr_id = self._generate_corr_id(case_id, ["shared_ioc"], art_ids, ioc_value)
+            corr_id = self._generate_corr_id(case_id, ["shared_ioc"], art_ids, ioc_value, tenant_id=tenant_id)
 
             try:
                 rec = CorrelationRecord(
                     correlation_id=corr_id,
                     case_id=case_id,
+                    tenant_id=tenant_id,
                     artifact_ids=art_ids,
                     relationship_type=["shared_ioc"],
                     source_count=source_tools,
@@ -260,12 +287,16 @@ class FCREngine:
 
         return records
 
-    def _correlate_process_tree(self, case_id: str, artifacts: list[Artifact]) -> list[CorrelationRecord]:
+    def _correlate_process_tree(self, case_id: str, artifacts: list[Artifact], tenant_id: str = "default") -> list[CorrelationRecord]:
         """Correlate parent and child processes on the same host where child.ppid == parent.pid."""
+        scoped_arts = self._filter_scoped_artifacts(case_id, artifacts, tenant_id)
+        if len(scoped_arts) < 2:
+            return []
+
         records: list[CorrelationRecord] = []
 
         by_host: dict[str, list[Artifact]] = {}
-        for art in artifacts:
+        for art in scoped_arts:
             host = self._get_host(art)
             if host and art.normalized_fields.process_id is not None:
                 by_host.setdefault(host, []).append(art)
@@ -288,12 +319,13 @@ class FCREngine:
                             distinct_types = len(set(a.artifact_type for a in matched))
                             source_tools = len(set(a.source_tool for a in matched))
                             confidence = compute_confidence(distinct_types, source_tools)
-                            corr_id = self._generate_corr_id(case_id, ["process_tree"], art_ids, f"{ppid}->{child.normalized_fields.process_id}")
+                            corr_id = self._generate_corr_id(case_id, ["process_tree"], art_ids, f"{ppid}->{child.normalized_fields.process_id}", tenant_id=tenant_id)
 
                             try:
                                 rec = CorrelationRecord(
                                     correlation_id=corr_id,
                                     case_id=case_id,
+                                    tenant_id=tenant_id,
                                     artifact_ids=art_ids,
                                     relationship_type=["process_tree"],
                                     source_count=source_tools,
@@ -311,12 +343,16 @@ class FCREngine:
 
         return records
 
-    def _correlate_network_process(self, case_id: str, artifacts: list[Artifact]) -> list[CorrelationRecord]:
+    def _correlate_network_process(self, case_id: str, artifacts: list[Artifact], tenant_id: str = "default") -> list[CorrelationRecord]:
         """Correlate process artifacts with network connection artifacts on the same host."""
+        scoped_arts = self._filter_scoped_artifacts(case_id, artifacts, tenant_id)
+        if len(scoped_arts) < 2:
+            return []
+
         records: list[CorrelationRecord] = []
 
         by_host: dict[str, list[Artifact]] = {}
-        for art in artifacts:
+        for art in scoped_arts:
             host = self._get_host(art)
             if host:
                 by_host.setdefault(host, []).append(art)
@@ -348,12 +384,13 @@ class FCREngine:
                         distinct_types = len(set(a.artifact_type for a in matched))
                         source_tools = len(set(a.source_tool for a in matched))
                         confidence = compute_confidence(distinct_types, source_tools)
-                        corr_id = self._generate_corr_id(case_id, ["network_process"], art_ids, reason)
+                        corr_id = self._generate_corr_id(case_id, ["network_process"], art_ids, reason, tenant_id=tenant_id)
 
                         try:
                             rec = CorrelationRecord(
                                 correlation_id=corr_id,
                                 case_id=case_id,
+                                tenant_id=tenant_id,
                                 artifact_ids=art_ids,
                                 relationship_type=["network_process"],
                                 source_count=source_tools,
@@ -372,24 +409,33 @@ class FCREngine:
         self,
         case_id: str,
         artifacts: list[Artifact],
-        existing_records: Optional[list[CorrelationRecord]] = None
+        existing_records: Optional[list[CorrelationRecord]] = None,
+        tenant_id: str = "default"
     ) -> list[CorrelationRecord]:
         """Correlate individual standalone evidence artifacts into single_artifact CorrelationRecords."""
+        scoped_arts = self._filter_scoped_artifacts(case_id, artifacts, tenant_id)
+        if not scoped_arts:
+            return []
+
+        norm_tid = tenant_id.strip()
+        norm_cid = case_id.strip()
         correlated_art_ids = set()
         if existing_records:
             for rec in existing_records:
-                correlated_art_ids.update(rec.artifact_ids)
+                if getattr(rec, "tenant_id", "default") == norm_tid and rec.case_id == norm_cid:
+                    correlated_art_ids.update(rec.artifact_ids)
 
         records: list[CorrelationRecord] = []
-        for art in artifacts:
+        for art in scoped_arts:
             if art.artifact_id in correlated_art_ids:
                 continue
             host = self._get_host(art)
-            corr_id = self._generate_corr_id(case_id, ["single_artifact"], [art.artifact_id], host)
+            corr_id = self._generate_corr_id(case_id, ["single_artifact"], [art.artifact_id], host, tenant_id=tenant_id)
             try:
                 rec = CorrelationRecord(
                     correlation_id=corr_id,
                     case_id=case_id,
+                    tenant_id=tenant_id,
                     artifact_ids=[art.artifact_id],
                     relationship_type=["single_artifact"],
                     source_count=1,
@@ -442,13 +488,13 @@ class FCREngine:
 
         return None
 
-    def _generate_corr_id(self, case_id: str, relationship_types: list[str], artifact_ids: list[str], extra: str = "") -> str:
+    def _generate_corr_id(self, case_id: str, relationship_types: list[str], artifact_ids: list[str], extra: str = "", tenant_id: str = "default") -> str:
         """
         Generate deterministic correlation ID matching ^CORR-[0-9]{5,}$.
         """
         rel_str = ",".join(sorted(relationship_types))
         art_str = ",".join(sorted(artifact_ids))
-        seed = f"{case_id}:{rel_str}:{art_str}:{extra}"
+        seed = f"{tenant_id}:{case_id}:{rel_str}:{art_str}:{extra}"
         digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()
         num_val = int(digest[:8], 16) % 1000000
         return f"CORR-{num_val:06d}"
@@ -456,13 +502,14 @@ class FCREngine:
     def _deduplicate(self, records: list[CorrelationRecord], art_lookup: dict[str, Artifact]) -> list[CorrelationRecord]:
         """
         Deduplicate correlation records based on:
-        (case_id, tuple(sorted(artifact_ids)), host, shared_value)
+        (tenant_id, case_id, tuple(sorted(artifact_ids)), host, shared_value)
         If duplicates overlap across strategies, merge relationship_type and strategy_params.
         """
         unique_map: dict[tuple, CorrelationRecord] = {}
 
         for rec in records:
             key = (
+                getattr(rec, "tenant_id", "default"),
                 rec.case_id,
                 tuple(sorted(rec.artifact_ids)),
                 rec.host,

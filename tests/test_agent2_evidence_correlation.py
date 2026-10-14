@@ -62,32 +62,46 @@ def sample_fir_findings():
 
 def test_timeline_builder(sample_fir_findings):
     builder = TimelineBuilder(time_window_seconds=3600.0) # 1 hour window
-    sorted_findings, clusters = builder.build_timeline(sample_fir_findings)
+    sorted_findings, clusters, master_timeline = builder.build_timeline(sample_fir_findings)
 
     assert len(sorted_findings) == 3
     assert sorted_findings[0].finding_id == "F-101"
     assert sorted_findings[1].finding_id == "F-102"
     assert sorted_findings[2].finding_id == "F-103"
 
-    # F-101 (10:00) and F-102 (10:15) belong to cluster 1; F-103 (11:30) starts cluster 2 (> 3600s gap)
     assert len(clusters) == 2
     assert clusters[0].finding_ids == ["F-101", "F-102"]
     assert clusters[1].finding_ids == ["F-103"]
 
+    assert len(master_timeline) == 3
+    assert master_timeline[0].event_id == "F-101"
+    assert master_timeline[0].source == "process_analysis"
+
 
 def test_graph_builder(sample_fir_findings):
-    gb = GraphBuilder(neo4j_client=None)
-    communities, metrics = gb.build_graph_and_communities("CASE-AGENT2-TEST", sample_fir_findings)
+    mock_neo4j = MagicMock(spec=["query"])
+    def query_handler(cypher, params=None):
+        if "SHOW PROCEDURES" in cypher or "CALL dbms.procedures" in cypher:
+            return [{"cnt": 1}]
+        elif "gds.wcc.stream" in cypher:
+            return [
+                {"node_id": "F-101", "labels": ["Artifact"], "communityId": 0},
+                {"node_id": "F-102", "labels": ["Artifact"], "communityId": 0},
+                {"node_id": "F-103", "labels": ["Artifact"], "communityId": 0},
+                {"node_id": "ip:192.168.1.50", "labels": ["Entity"], "communityId": 0}
+            ]
+        return []
+
+    mock_neo4j.query.side_effect = query_handler
+    gb = GraphBuilder(neo4j_client=mock_neo4j)
+    communities, metrics, deterministic_rels = gb.build_graph_and_communities("CASE-AGENT2-TEST", sample_fir_findings)
 
     assert metrics["total_nodes"] == 3
     assert metrics["total_communities"] >= 1
-    
-    # F-101 and F-102 share IP 192.168.1.50
-    # F-101 and F-103 share SHA256 hash e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-    # All 3 are in a single connected community!
     assert len(communities) == 1
     assert set(communities[0].finding_ids) == {"F-101", "F-102", "F-103"}
     assert "192.168.1.50" in communities[0].entity_names
+    assert len(deterministic_rels) > 0
 
 
 def test_conflict_detector():
@@ -119,6 +133,7 @@ def test_conflict_detector():
 
     assert len(conflicts) == 1
     assert conflicts[0].conflict_type == "hash_collision"
+    assert conflicts[0].status == "UNRESOLVED"
     assert set(conflicts[0].involved_finding_ids) == {"F-201", "F-202"}
 
 
@@ -156,7 +171,7 @@ def test_validator(sample_fir_findings):
     assert validated[1].invalid_citations == ["F-9999"]
     assert validated[1].is_valid_confidence is False
     assert validated[1].raw_model_confidence == 150.0
-    assert validated[1].confidence_score == 1.0 # Clamped from 150/100 -> 1.0 limit
+    assert validated[1].confidence_score == 1.0
 
 
 def test_agent2_full_execution_mock_model(sample_fir_findings):
@@ -175,7 +190,13 @@ def test_agent2_full_execution_mock_model(sample_fir_findings):
                 "timeline_sequence": ["F-101", "F-102"],
                 "reasoning_notes": "Both events involved identical C2 communications within a 15-minute window."
             }
-        ]
+        ],
+        "qwen_interpretation": {
+            "correlated_observations": ["Process cmd.exe spawned powershell connecting to 192.168.1.50."],
+            "timeline_interpretation": ["Sequence of events shows initial execution at 10:00 followed by network activity."],
+            "conflict_interpretation": [],
+            "uncertainties": []
+        }
     })
 
     mock_fir = MagicMock()
@@ -187,10 +208,23 @@ def test_agent2_full_execution_mock_model(sample_fir_findings):
         injection_flagged=False
     )
 
+    mock_neo4j = MagicMock(spec=["query"])
+    def query_handler(cypher, params=None):
+        if "SHOW PROCEDURES" in cypher or "CALL dbms.procedures" in cypher:
+            return [{"cnt": 1}]
+        elif "gds.wcc.stream" in cypher:
+            return [
+                {"node_id": "F-101", "labels": ["Artifact"], "communityId": 0},
+                {"node_id": "F-102", "labels": ["Artifact"], "communityId": 0}
+            ]
+        return []
+    mock_neo4j.query.side_effect = query_handler
+
     agent = EvidenceCorrelationAgent(
         model=mock_model,
         fir_repo=mock_fir,
         sanitization_gateway=mock_gateway,
+        neo4j_client=mock_neo4j,
         tenant_id="default"
     )
 
@@ -202,6 +236,8 @@ def test_agent2_full_execution_mock_model(sample_fir_findings):
     assert res["claims"][0]["claim_id"] == "CLM-AG2-001"
     assert res["claims"][0]["citation_verified"] is True
     assert res["claims"][0]["cited_evidence_ids"] == ["F-101", "F-102"]
+    assert len(res["timeline"]) == 3
+    assert res["graph"]["status"] == "AVAILABLE"
 
 
 def test_agent2_fail_closed_no_findings():
@@ -220,3 +256,4 @@ def test_agent2_fail_closed_no_findings():
     assert res["execution_status"] == "FAILED"
     assert "No FIR findings found" in res["error_message"]
     assert res["claims"] == []
+

@@ -1,9 +1,9 @@
 """
 Agent 2 — Deterministic Knowledge Graph & Community Engine
 ============================================================
-Extracts forensic entities (IPs, hashes, users, files, hosts, processes),
+Extracts forensic entities (IPs, domains, hashes, users, files, hosts, processes, registry objects),
 builds deterministic relationships, interacts with Neo4j / WCC, and enforces
-mandatory Neo4j + GDS execution.
+mandatory Neo4j + GDS execution with case and tenant isolation.
 """
 
 import re
@@ -11,16 +11,18 @@ import logging
 from typing import List, Dict, Any, Optional, Set, Tuple
 from collections import defaultdict
 
-from agents.agent2_evidence_correlation.schemas import GraphCommunity
+from agents.agent2_evidence_correlation.schemas import GraphCommunity, DeterministicRelationship
 
 logger = logging.getLogger(__name__)
 
 # Entity extraction regex patterns
 IPV4_REGEX = re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b')
+DOMAIN_REGEX = re.compile(r'\b(?:[a-zA-Z0-9\-]+\.)+(?:com|net|org|io|gov|edu|info|ru|cn|xyz|biz|uk|de)\b', re.IGNORECASE)
 SHA256_REGEX = re.compile(r'\b[a-fA-F0-9]{64}\b')
 MD5_REGEX = re.compile(r'\b[a-fA-F0-9]{32}\b')
-USER_REGEX = re.compile(r'\b(?:user|account|username|domain\\user)\s*[:=]\s*([a-zA-Z0-9_\-\.\\]+)', re.IGNORECASE)
-FILE_PROC_REGEX = re.compile(r'\b[a-zA-Z0-9_\-\.]+\.(?:exe|dll|ps1|bat|vbs|sys|elf)\b', re.IGNORECASE)
+USER_REGEX = re.compile(r'\b(?:user|account|username|domain\\user)\s*[:=\s]\s*([a-zA-Z0-9_\-\.\\]+)', re.IGNORECASE)
+FILE_PROC_REGEX = re.compile(r'\b[a-zA-Z0-9_\-\.]+\.(?:exe|dll|ps1|bat|vbs|sys|elf|doc|docx|xls|xlsx|pdf|zip|tar|gz)\b', re.IGNORECASE)
+REGISTRY_REGEX = re.compile(r'\b(?:HKLM|HKCU|HKU|HKCR|SOFTWARE|SYSTEM)\\[a-zA-Z0-9_\\\-\.]+\b', re.IGNORECASE)
 
 
 class GraphBuilder:
@@ -53,25 +55,30 @@ class GraphBuilder:
         case_id: str,
         findings: List[Any],
         tenant_id: str = "default"
-    ) -> Tuple[List[GraphCommunity], Dict[str, Any]]:
+    ) -> Tuple[List[GraphCommunity], Dict[str, Any], List[DeterministicRelationship]]:
         """
-        Processes FIR findings, extracts entities, builds Neo4j graph representation with tenant isolation,
+        Processes FIR findings, extracts entities and typed relationships,
+        builds Neo4j graph representation with tenant and case isolation,
         executes Neo4j GDS Weakly Connected Components (WCC), and returns:
-        (list_of_graph_communities, graph_metrics_dict)
+        (list_of_graph_communities, graph_metrics_dict, list_of_deterministic_relationships)
         
         Raises RuntimeError if Neo4j or GDS is unavailable.
         """
         if not self.neo4j_client:
             raise RuntimeError("Neo4j database connection unavailable. Neo4j + GDS is required for Agent 2 graph execution.")
 
-        # Step 1: Extract entities per finding
+        # Step 1: Extract entities and build deterministic typed relationships
         finding_entities: Dict[str, Dict[str, Set[str]]] = {}
-        entity_to_findings: Dict[Tuple[str, str], Set[str]] = defaultdict(set) # (type, value) -> set(finding_ids)
+        entity_to_findings: Dict[Tuple[str, str], Set[str]] = defaultdict(set)
+        deterministic_rels: List[DeterministicRelationship] = []
+        rel_idx = 1
 
         for finding in findings:
             fid = self._extract_finding_id(finding)
             fact_text = self._extract_text(finding)
-            
+            art_id = self._extract_artifact_id(finding) or fid
+            ev_refs = self._extract_evidence_refs(finding)
+
             extracted = self._extract_entities_from_finding(finding, fact_text)
             finding_entities[fid] = extracted
 
@@ -79,9 +86,38 @@ class GraphBuilder:
                 for val in values:
                     entity_to_findings[(etype, val)].add(fid)
 
+            # Extract specific process-network, process-child, user-host, registry, domain relationships
+            self._extract_typed_relationships(
+                finding, fid, fact_text, art_id, ev_refs, case_id, tenant_id, deterministic_rels, rel_idx
+            )
+            rel_idx = len(deterministic_rels) + 1
+
+        # Extract shared entity correlation relationships
+        for (etype, val), fids in entity_to_findings.items():
+            if len(fids) > 1:
+                fids_list = sorted(list(fids))
+                for i in range(len(fids_list)):
+                    for j in range(i + 1, len(fids_list)):
+                        src_fid = fids_list[i]
+                        tgt_fid = fids_list[j]
+                        deterministic_rels.append(
+                            DeterministicRelationship(
+                                relationship_id=f"REL-DET-{rel_idx:03d}",
+                                relationship_type=f"SHARED_{etype.upper()}",
+                                source_entity=src_fid,
+                                target_entity=tgt_fid,
+                                evidence_ids=[src_fid, tgt_fid],
+                                artifact_ids=[src_fid, tgt_fid],
+                                deterministic_basis=f"Shared forensic entity '{val}' of type '{etype}' across findings.",
+                                case_id=case_id,
+                                tenant_id=tenant_id
+                            )
+                        )
+                        rel_idx += 1
+
         # Step 2: Push nodes and relationships to Neo4j with strict case_id & tenant_id isolation
         try:
-            edge_count = self._sync_to_neo4j(case_id, tenant_id, finding_entities, entity_to_findings)
+            edge_count = self._sync_to_neo4j(case_id, tenant_id, finding_entities, entity_to_findings, deterministic_rels)
         except Exception as exc:
             logger.error("Neo4j graph construction error: %s", exc)
             raise RuntimeError(f"Neo4j graph construction failed: {exc}") from exc
@@ -98,32 +134,30 @@ class GraphBuilder:
             "total_nodes": len(all_finding_ids),
             "total_edges": edge_count,
             "total_communities": len(communities),
+            "total_relationships": len(deterministic_rels),
             "neo4j_synced": True,
             "gds_executed": wcc_success
         }
 
-        return communities, metrics
+        return communities, metrics, deterministic_rels
 
     def _sync_to_neo4j(
         self,
         case_id: str,
         tenant_id: str,
         finding_entities: Dict[str, Dict[str, Set[str]]],
-        entity_to_findings: Dict[Tuple[str, str], Set[str]]
+        entity_to_findings: Dict[Tuple[str, str], Set[str]],
+        deterministic_rels: List[DeterministicRelationship]
     ) -> int:
         """
         Pushes nodes and relationships to Neo4j with case_id and tenant_id isolation.
         """
-        edge_count = 0
-        
         # Determine query executor
         if hasattr(self.neo4j_client, "session"):
-            # Driver object
             with self.neo4j_client.session() as session:
-                return self._execute_cypher_sync(session.run, case_id, tenant_id, finding_entities, entity_to_findings)
+                return self._execute_cypher_sync(session.run, case_id, tenant_id, finding_entities, entity_to_findings, deterministic_rels)
         elif hasattr(self.neo4j_client, "query"):
-            # Custom client wrapper
-            return self._execute_cypher_sync(self.neo4j_client.query, case_id, tenant_id, finding_entities, entity_to_findings)
+            return self._execute_cypher_sync(self.neo4j_client.query, case_id, tenant_id, finding_entities, entity_to_findings, deterministic_rels)
         else:
             raise RuntimeError("Provided Neo4j client lacks session() or query() method.")
 
@@ -133,39 +167,58 @@ class GraphBuilder:
         case_id: str,
         tenant_id: str,
         finding_entities: Dict[str, Dict[str, Set[str]]],
-        entity_to_findings: Dict[Tuple[str, str], Set[str]]
+        entity_to_findings: Dict[Tuple[str, str], Set[str]],
+        deterministic_rels: List[DeterministicRelationship]
     ) -> int:
         edge_count = 0
 
-        # Step 0: Clear pre-existing graph nodes for this case_id & tenant_id to guarantee freshness
+        # Clear pre-existing graph nodes for this case_id & tenant_id to guarantee freshness
         query_fn(
             "MATCH (n {case_id: $case_id, tenant_id: $tenant_id}) DETACH DELETE n",
             {"case_id": case_id, "tenant_id": tenant_id}
         )
 
-        # Create Artifact nodes
+        # Create Artifact / Finding nodes
         for fid in finding_entities.keys():
             query_fn(
                 "MERGE (a:Artifact {id: $fid, case_id: $case_id, tenant_id: $tenant_id})",
                 {"fid": fid, "case_id": case_id, "tenant_id": tenant_id}
             )
 
-        # Create Entity nodes & CORRELATED relationships
+        # Create Entity nodes & HAS_ENTITY relationships
         for (etype, val), fids in entity_to_findings.items():
-            if len(fids) > 1:
-                entity_id = f"{etype}:{val}"
+            entity_id = f"{etype}:{val}"
+            query_fn(
+                "MERGE (e:Entity {id: $eid, type: $etype, value: $val, case_id: $case_id, tenant_id: $tenant_id})",
+                {"eid": entity_id, "etype": etype, "val": val, "case_id": case_id, "tenant_id": tenant_id}
+            )
+            for fid in fids:
                 query_fn(
-                    "MERGE (e:Entity {id: $eid, type: $etype, value: $val, case_id: $case_id, tenant_id: $tenant_id})",
-                    {"eid": entity_id, "etype": etype, "val": val, "case_id": case_id, "tenant_id": tenant_id}
+                    "MATCH (a:Artifact {id: $fid, case_id: $case_id, tenant_id: $tenant_id}), "
+                    "(e:Entity {id: $eid, case_id: $case_id, tenant_id: $tenant_id}) "
+                    "MERGE (a)-[r:CORRELATED {rel_type: $rel_type, case_id: $case_id, tenant_id: $tenant_id}]->(e)",
+                    {"fid": fid, "eid": entity_id, "case_id": case_id, "tenant_id": tenant_id, "rel_type": f"HAS_{etype.upper()}"}
                 )
-                for fid in fids:
-                    query_fn(
-                        "MATCH (a:Artifact {id: $fid, case_id: $case_id, tenant_id: $tenant_id}), "
-                        "(e:Entity {id: $eid, case_id: $case_id, tenant_id: $tenant_id}) "
-                        "MERGE (a)-[r:CORRELATED {rel_type: $rel_type, case_id: $case_id, tenant_id: $tenant_id}]->(e)",
-                        {"fid": fid, "eid": entity_id, "case_id": case_id, "tenant_id": tenant_id, "rel_type": f"HAS_{etype.upper()}"}
-                    )
-                    edge_count += 1
+                edge_count += 1
+
+        # Push typed deterministic relationships between nodes
+        for rel in deterministic_rels:
+            query_fn(
+                "MATCH (a1 {id: $src, case_id: $case_id, tenant_id: $tenant_id}), "
+                "(a2 {id: $tgt, case_id: $case_id, tenant_id: $tenant_id}) "
+                "MERGE (a1)-[r:DETERMINISTIC_REL {rel_type: $rtype, rel_id: $rid, basis: $basis, case_id: $case_id, tenant_id: $tenant_id}]->(a2)",
+                {
+                    "src": rel.source_entity,
+                    "tgt": rel.target_entity,
+                    "rtype": rel.relationship_type,
+                    "rid": rel.relationship_id,
+                    "basis": rel.deterministic_basis,
+                    "case_id": case_id,
+                    "tenant_id": tenant_id
+                }
+            )
+            edge_count += 1
+
         return edge_count
 
     def _run_neo4j_gds_wcc(
@@ -224,12 +277,12 @@ class GraphBuilder:
             except Exception:
                 pass
 
-            # Project graph via Cypher in GDS
+            # Project graph via Cypher in GDS with strict tenant and case filtering
             project_cypher = """
             CALL gds.graph.project.cypher(
                 $graph_name,
                 'MATCH (n) WHERE n.case_id = $case_id AND n.tenant_id = $tenant_id RETURN id(n) AS id, labels(n) AS labels',
-                'MATCH (s)-[r:CORRELATED]->(t) WHERE r.case_id = $case_id AND r.tenant_id = $tenant_id RETURN id(s) AS source, id(t) AS target, type(r) AS type',
+                'MATCH (s)-[r]->(t) WHERE r.case_id = $case_id AND r.tenant_id = $tenant_id RETURN id(s) AS source, id(t) AS target, type(r) AS type',
                 {parameters: {case_id: $case_id, tenant_id: $tenant_id}}
             )
             """
@@ -308,7 +361,10 @@ class GraphBuilder:
             for ip in IPV4_REGEX.findall(text):
                 if not ip.startswith("127.") and not ip == "0.0.0.0":
                     entities["ip"].add(ip)
-            
+
+            for dom in DOMAIN_REGEX.findall(text):
+                entities["domain"].add(dom.lower())
+
             for sha in SHA256_REGEX.findall(text):
                 entities["sha256"].add(sha.lower())
 
@@ -320,6 +376,9 @@ class GraphBuilder:
 
             for proc in FILE_PROC_REGEX.findall(text):
                 entities["process_or_file"].add(proc.lower())
+
+            for reg in REGISTRY_REGEX.findall(text):
+                entities["registry"].add(reg.lower())
 
         meta = {}
         if isinstance(finding, dict):
@@ -334,6 +393,107 @@ class GraphBuilder:
             entities["artifact_id"].add(str(source_art))
 
         return entities
+
+    def _extract_typed_relationships(
+        self,
+        finding: Any,
+        fid: str,
+        text: str,
+        art_id: str,
+        ev_refs: List[str],
+        case_id: str,
+        tenant_id: str,
+        rels: List[DeterministicRelationship],
+        start_idx: int
+    ):
+        """
+        Rule-based extraction of explicit process-child, process-network, process-registry,
+        and user-host relationships supported by evidence.
+        """
+        idx = start_idx
+        # Process Parent/Child relationship
+        pid_match = re.search(r'\bpid[:=\s]+(\d+)\b', text, re.IGNORECASE)
+        ppid_match = re.search(r'\bppid[:=\s]+(\d+)\b', text, re.IGNORECASE)
+        proc_matches = FILE_PROC_REGEX.findall(text)
+
+        if pid_match and ppid_match:
+            pid = pid_match.group(1)
+            ppid = ppid_match.group(1)
+            rels.append(
+                DeterministicRelationship(
+                    relationship_id=f"REL-PROC-{idx:03d}",
+                    relationship_type="CHILD_OF",
+                    source_entity=f"Process:PID_{pid}",
+                    target_entity=f"Process:PID_{ppid}",
+                    evidence_ids=[fid],
+                    artifact_ids=[art_id],
+                    deterministic_basis=f"Process tree evidence: PID {pid} is child of parent PID {ppid}.",
+                    case_id=case_id,
+                    tenant_id=tenant_id
+                )
+            )
+            idx += 1
+
+        # Process Network Connection relationship
+        ips = IPV4_REGEX.findall(text)
+        for ip in ips:
+            if not ip.startswith("127.") and ip != "0.0.0.0" and proc_matches:
+                proc_name = proc_matches[0]
+                rels.append(
+                    DeterministicRelationship(
+                        relationship_id=f"REL-NET-{idx:03d}",
+                        relationship_type="CONNECTED_TO",
+                        source_entity=f"Process:{proc_name.lower()}",
+                        target_entity=f"IP:{ip}",
+                        evidence_ids=[fid],
+                        artifact_ids=[art_id],
+                        deterministic_basis=f"Process '{proc_name}' generated network connection to IP '{ip}'.",
+                        case_id=case_id,
+                        tenant_id=tenant_id
+                    )
+                )
+                idx += 1
+
+        # User Authentication / Host relationship
+        user_matches = USER_REGEX.findall(text)
+        host_match = re.search(r'\bhost(?:name)?[:=\s]+([a-zA-Z0-9_\-\.]+)\b', text, re.IGNORECASE)
+        if user_matches and host_match:
+            user = user_matches[0]
+            host = host_match.group(1)
+            rels.append(
+                DeterministicRelationship(
+                    relationship_id=f"REL-AUTH-{idx:03d}",
+                    relationship_type="AUTHENTICATED_TO",
+                    source_entity=f"User:{user.lower()}",
+                    target_entity=f"Host:{host.lower()}",
+                    evidence_ids=[fid],
+                    artifact_ids=[art_id],
+                    deterministic_basis=f"User '{user}' authenticated to host '{host}'.",
+                    case_id=case_id,
+                    tenant_id=tenant_id
+                )
+            )
+            idx += 1
+
+        # Registry Modification relationship
+        regs = REGISTRY_REGEX.findall(text)
+        for reg in regs:
+            if proc_matches:
+                proc_name = proc_matches[0]
+                rels.append(
+                    DeterministicRelationship(
+                        relationship_id=f"REL-REG-{idx:03d}",
+                        relationship_type="MODIFIED_REGISTRY",
+                        source_entity=f"Process:{proc_name.lower()}",
+                        target_entity=f"Registry:{reg.lower()}",
+                        evidence_ids=[fid],
+                        artifact_ids=[art_id],
+                        deterministic_basis=f"Process '{proc_name}' modified registry path '{reg}'.",
+                        case_id=case_id,
+                        tenant_id=tenant_id
+                    )
+                )
+                idx += 1
 
     def _extract_finding_id(self, finding: Any) -> str:
         if isinstance(finding, dict):
@@ -352,4 +512,20 @@ class GraphBuilder:
         elif hasattr(finding, "fact"):
             return str(getattr(finding, "fact"))
         return ""
+
+    def _extract_artifact_id(self, finding: Any) -> Optional[str]:
+        if isinstance(finding, dict):
+            return finding.get("source_artifact_id") or finding.get("artifact_id")
+        return getattr(finding, "source_artifact_id", None) or getattr(finding, "artifact_id", None)
+
+    def _extract_evidence_refs(self, finding: Any) -> List[str]:
+        refs = []
+        if isinstance(finding, dict):
+            refs = finding.get("evidence_reference", [])
+        elif hasattr(finding, "evidence_reference"):
+            refs = getattr(finding, "evidence_reference", [])
+        if isinstance(refs, str):
+            return [r.strip() for r in refs.split(",") if r.strip()]
+        return [str(r).strip() for r in refs if r]
+
 

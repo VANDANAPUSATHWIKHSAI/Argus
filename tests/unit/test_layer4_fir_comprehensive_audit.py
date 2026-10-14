@@ -181,7 +181,7 @@ def test_L4_T07_duplicate_finding_suppression():
     stored2 = repo.insert(fir2)
 
     assert stored1.finding_id == stored2.finding_id
-    assert len(repo.get_by_case(case_id="CASE-DUP")) == 1
+    assert len(repo.get_by_case(case_id="CASE-DUP", tenant_id="default")) == 1
 
 
 # L4-T08: confidence calculation
@@ -489,7 +489,7 @@ def test_L4_T21_case_isolation():
     repo.insert(fir1)
     repo.insert(fir2)
 
-    list_alpha = repo.get_by_case(case_id="CASE-ALPHA")
+    list_alpha = repo.get_by_case(case_id="CASE-ALPHA", tenant_id="default")
     assert len(list_alpha) == 1
     assert list_alpha[0].finding_id == "fir_c1"
 
@@ -539,7 +539,7 @@ def test_L4_T23_transactional_consistency():
         layer="endpoint"
     )
     stored = repo.insert(fir)
-    assert repo.get_by_id(stored.finding_id) is not None
+    assert repo.get_by_id(stored.tenant_id, stored.finding_id) is not None
 
 
 # L4-T24: failure semantics

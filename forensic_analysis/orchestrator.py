@@ -82,8 +82,8 @@ def process_fcr_batch(
                 findings = engine.analyze([fcr], artifacts_by_id)
                 logger.info("Orchestrator: Engine '%s' returned %d findings for FCR '%s'.", engine_name, len(findings), getattr(fcr, "correlation_id", "UNKNOWN"))
                 for finding in findings:
-                    if tenant_id and tenant_id != "default":
-                        finding.tenant_id = tenant_id
+                    effective_tenant = tenant_id if (tenant_id and tenant_id != "default") else (getattr(fcr, "tenant_id", None) or tenant_id or "default")
+                    finding.tenant_id = effective_tenant
                     all_findings.append(finding)
                     # Write to Unified Evidence Store
                     target_store.write_finding(finding)
@@ -91,7 +91,7 @@ def process_fcr_batch(
                     # Adapt & Insert into FIR Repository with SanitizationGateway
                     if fir_repo is not None and sanitizer is not None:
                         ctx = sanitizer.sanitize_finding(finding)
-                        fir_finding = finding_to_fir(finding)
+                        fir_finding = finding_to_fir(finding, tenant_id=effective_tenant)
                         fir_finding.sanitized_fact = ctx.sanitized_fact
                         fir_finding.injection_flagged = ctx.injection_flagged
                         fir_finding.injection_score = ctx.injection_score

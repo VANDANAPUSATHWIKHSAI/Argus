@@ -43,6 +43,7 @@ class CorrelationRecord(BaseModel):
     """
     correlation_id:          str
     case_id:                 str
+    tenant_id:               str                = "default"
     artifact_ids:            list[str]
     relationship_type:       list[str]
     source_count:            int                                      # Number of distinct source_tools (>= 1)
@@ -65,6 +66,13 @@ class CorrelationRecord(BaseModel):
     def _validate_case_id(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("case_id cannot be empty.")
+        return v.strip()
+
+    @field_validator("tenant_id")
+    @classmethod
+    def _validate_tenant_id(cls, v: str) -> str:
+        if not v or not v.strip() or v.strip() == "*":
+            raise ValueError("tenant_id must be a non-empty string and cannot be '*'.")
         return v.strip()
 
     @field_validator("artifact_ids")

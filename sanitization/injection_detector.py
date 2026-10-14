@@ -11,7 +11,6 @@ Heuristic checks are applied to all text fields.
 import re
 import logging
 from typing import Dict, List, Tuple, Any
-from models.classifiers import ClassifierLoader
 
 class ModelUnavailableError(Exception):
     """Raised when an ML model is required but unavailable in production fail-closed mode."""
@@ -101,48 +100,19 @@ class InjectionDetector:
 
     def check_model(self, text: str) -> Tuple[bool, float]:
         """
-        Runs ML model prompt injection detection on text.
-        Raises ModelUnavailableError in fail-closed mode when the classifier cannot be loaded.
+        No-op stub: Prompt injection model removed in favor of fast forensic regex heuristics.
+        Returns (False, 0.0) for backwards compatibility.
         """
-        import os
-        from config.settings import settings
-        from models.classifiers import ClassifierLoader
-        
-        app_env = os.getenv("APP_ENV") or getattr(settings, "app_env", "development")
-        fail_closed = app_env == "production" or os.getenv("ARGUS_FAIL_CLOSED") == "1"
-
-        loader = ClassifierLoader()
-        try:
-            active = loader.verify_semantic_layer()
-        except Exception as e:
-            raise ModelUnavailableError(f"ML model unavailable: {e}") from e
-
-        if not active:
-            raise ModelUnavailableError("Semantic ML layer is inactive or unavailable.")
-
-        try:
-            detector = loader.load_injection_detector()
-            res = detector(text[:512])
-            if res and isinstance(res, list):
-                label = str(res[0].get("label", "")).lower()
-                score = float(res[0].get("score", 0.0))
-                is_inj = label in ("injection", "malicious", "label_1", "1")
-                return is_inj, score
-        except Exception as e:
-            if isinstance(e, ModelUnavailableError):
-                raise e
-            raise ModelUnavailableError(f"Injection classification failed: {e}") from e
-
         return False, 0.0
 
     def is_injection(self, text: str, is_unstructured: bool = False) -> Tuple[bool, Dict[str, Any]]:
         """
-        Runs heuristic injection detection and ML model checks on text.
+        Runs fast regex heuristic prompt injection detection on text.
         """
         if not text:
             return False, {"reason": "empty"}
 
-        # ── 1. Heuristics (Instant - Run on ALL fields) ──────────────
+        # ── Heuristics (Instant - Run on ALL fields) ──────────────
         heuristic_hit, matched_rules = self.check_heuristics(text)
         if heuristic_hit:
             return True, {
@@ -150,15 +120,6 @@ class InjectionDetector:
                 "reason": "matched_forensic_override_patterns",
                 "matched_patterns": matched_rules,
                 "confidence": 1.0
-            }
-
-        # ── 2. Model-based Check ──────────────────────────────────
-        is_model_inj, score = self.check_model(text)
-        if is_model_inj:
-            return True, {
-                "layer": "model",
-                "reason": "neural_injection_classifier_flagged",
-                "confidence": score
             }
 
         return False, {"status": "clean"}

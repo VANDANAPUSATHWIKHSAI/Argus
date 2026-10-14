@@ -97,11 +97,14 @@ class EvidenceConsolidationRepository:
         with self._lock:
             return self._uais.get(unified_artifact_id)
 
-    def get_by_case(self, case_id: str) -> list[UnifiedArtifact]:
-        """List UnifiedArtifacts for a given case_id."""
+    def get_by_case(self, case_id: str, tenant_id: Optional[str] = None) -> list[UnifiedArtifact]:
+        """List UnifiedArtifacts for a given case_id, optionally filtered by tenant_id."""
         with self._lock:
             uids = self._by_case.get(case_id, [])
-            return [self._uais[uid] for uid in uids if uid in self._uais]
+            res = [self._uais[uid] for uid in uids if uid in self._uais]
+            if tenant_id:
+                res = [u for u in res if u.tenant_id == tenant_id]
+            return res
 
     def get_by_tenant(self, tenant_id: str) -> list[UnifiedArtifact]:
         """List UnifiedArtifacts for a given tenant_id."""
@@ -127,11 +130,14 @@ class EvidenceConsolidationRepository:
             uids = self._by_type.get(canonical_type, [])
             return [self._uais[uid] for uid in uids if uid in self._uais]
 
-    def get_conflicts(self, case_id: str) -> list[ConflictRecord]:
-        """List ConflictRecords for a case."""
+    def get_conflicts(self, case_id: str, tenant_id: Optional[str] = None) -> list[ConflictRecord]:
+        """List ConflictRecords for a case, optionally filtered by tenant_id."""
         with self._lock:
             cids = self._conflicts_by_case.get(case_id, [])
-            return [self._conflicts[cid] for cid in cids if cid in self._conflicts]
+            res = [self._conflicts[cid] for cid in cids if cid in self._conflicts]
+            if tenant_id:
+                res = [c for c in res if getattr(c, "tenant_id", None) == tenant_id]
+            return res
 
     def get_missing_evidence(self, case_id: str) -> Optional[CompletenessMetadata]:
         """Get CompletenessMetadata for a case."""
@@ -159,16 +165,16 @@ class EvidenceConsolidationRepository:
             "provenance_reference": uai.provenance_reference
         }
 
-    def list_consolidated_evidence(self, case_id: str) -> list[UnifiedArtifact]:
+    def list_consolidated_evidence(self, case_id: str, tenant_id: Optional[str] = None) -> list[UnifiedArtifact]:
         """Alias for get_by_case."""
-        return self.get_by_case(case_id)
+        return self.get_by_case(case_id, tenant_id=tenant_id)
 
-    def to_fir_handoff(self, case_id: str) -> list[FIRFinding]:
+    def to_fir_handoff(self, case_id: str, tenant_id: Optional[str] = None) -> list[FIRFinding]:
         """
         Export all UnifiedArtifacts in a case as FIRFinding objects for FIR handoff.
         Does NOT create a second FIR database.
         """
-        uais = self.get_by_case(case_id)
+        uais = self.get_by_case(case_id, tenant_id=tenant_id)
         return [uai.to_fir_handoff() for uai in uais]
 
     def clear(self) -> None:

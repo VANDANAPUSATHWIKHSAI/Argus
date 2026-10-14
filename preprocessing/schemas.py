@@ -174,6 +174,7 @@ class Artifact(BaseModel):
     """
     artifact_id:       str                = Field(default_factory=lambda: str(uuid.uuid4()))
     case_id:           str                = ""                      # FK → CaseSession.case_id
+    tenant_id:         Optional[str]      = "default"               # Multi-tenant partitioning
     evidence_id:       str                                          # FK → infrastructure.Evidence.evidence_id
     source_tool:       str                                          # e.g. "hayabusa", "volatility3", "zeek"
     artifact_type:     str                                          # e.g. "process_event", "dns_query"
@@ -248,6 +249,7 @@ class ExtractedEntity(BaseModel):
     
     # Forensic Provenance Extension Fields
     case_id:            Optional[str] = ""     # FK -> CaseSession.case_id
+    tenant_id:          Optional[str] = "default" # Multi-tenant partitioning
     host_id:            Optional[str] = None   # Host identifier
     timestamp:          Optional[datetime] = None # Optional event timestamp
     byte_offset:        Optional[int] = None   # byte offset in original stream

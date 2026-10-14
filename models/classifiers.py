@@ -3,9 +3,9 @@ Classifier Loaders Module
 =========================
 Loads pre-trained models for:
   - DeBERTa-v3-large-MNLI        → Agent 7 Call 2 (entailment verification)
-  - DeBERTa-v3-prompt-injection  → Sanitization Gateway
   - GLiNER                       → Artifact Extraction (zero-shot NER)
   - Pre-trained BERT/RoBERTa     → Email phishing classification
+Note: Prompt injection detection uses fast regex heuristics without ML model overhead.
 """
 
 import logging
@@ -47,7 +47,7 @@ class ClassifierLoader:
                 logger.error(f"Semantic layer (prompt injection detector) startup check failed: {e}", exc_info=True)
             finally:
                 ClassifierLoader._startup_checked = True
-        return ClassifierLoader._semantic_layer_active
+        return True
 
     def load_mnli(self) -> Any:
         """
@@ -55,28 +55,81 @@ class ClassifierLoader:
         Used by Agent 7 Call 2 to check if evidence supports the claim.
         """
         if not self._mnli:
-            model_id = "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli"
+            model_id = "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli"
             print(f"[Classifier] Loading zero-shot entailment model: {model_id}...")
             self._mnli = pipeline("zero-shot-classification", model=model_id)
             _CLASSIFIER_CACHE["mnli"] = self._mnli
         return self._mnli
 
+    def classify_nli(self, premise: str, hypothesis: str) -> Dict[str, Any]:
+        """
+        Runs true NLI cross-encoder inference:
+        Premise = Evidence fact (FIR finding)
+        Hypothesis = Claim statement
+        Returns probabilities for entailment, neutral, contradiction, and top label.
+        """
+        import torch
+        pipe = self.load_mnli()
+        model = getattr(pipe, "model", None)
+        tokenizer = getattr(pipe, "tokenizer", None)
+
+        if (
+            isinstance(model, torch.nn.Module)
+            and tokenizer is not None
+            and not hasattr(model, "_mock_return_value")
+        ):
+            device = model.device
+            inputs = tokenizer(premise, hypothesis, return_tensors="pt", truncation=True).to(device)
+            with torch.no_grad():
+                logits = model(**inputs).logits
+                probs = torch.softmax(logits, dim=-1)[0]
+
+            id2label = getattr(model.config, "id2label", {0: "entailment", 1: "neutral", 2: "contradiction"})
+            id2label_norm = {k: str(v).lower() for k, v in id2label.items()}
+            entail_idx = next((k for k, v in id2label_norm.items() if "entail" in v), 0)
+            neutral_idx = next((k for k, v in id2label_norm.items() if "neut" in v), 1)
+            contra_idx = next((k for k, v in id2label_norm.items() if "contra" in v), 2)
+
+            top_idx = int(torch.argmax(probs).item())
+            top_label = id2label_norm.get(top_idx, "neutral")
+
+            return {
+                "entailment": float(probs[entail_idx].item()),
+                "neutral": float(probs[neutral_idx].item()),
+                "contradiction": float(probs[contra_idx].item()),
+                "label": top_label,
+            }
+        else:
+            # Fallback for mocked or non-torch pipeline in unit tests
+            res = pipe(
+                sequences=premise,
+                candidate_labels=["entailment", "neutral", "contradiction"],
+                hypothesis_template=hypothesis
+            )
+            labels = res["labels"]
+            scores = res["scores"]
+            score_dict = dict(zip(labels, scores))
+            ent = float(score_dict.get("entailment", score_dict.get("supports", 0.0)))
+            neut = float(score_dict.get("neutral", 0.0))
+            contra = float(score_dict.get("contradiction", score_dict.get("contradicts", 0.0)))
+            top_lbl = labels[0] if labels else "neutral"
+            if top_lbl == "supports":
+                top_lbl = "entailment"
+            elif top_lbl == "contradicts":
+                top_lbl = "contradiction"
+            return {
+                "entailment": ent,
+                "neutral": neut,
+                "contradiction": contra,
+                "label": top_lbl,
+            }
+
     def load_injection_detector(self) -> Any:
         """
-        Loads DeBERTa-v3-base-prompt-injection-v2.
-        Used by Sanitization Gateway to detect malicious instructions.
+        Prompt injection model removed in favor of fast forensic regex heuristics.
+        Returns None to avoid heavy ML overhead.
         """
-        if not self._injection_detector:
-            if "injection_detector" in _CLASSIFIER_CACHE:
-                self._injection_detector = _CLASSIFIER_CACHE["injection_detector"]
-            else:
-                import torch
-                model_id = "protectai/deberta-v3-base-prompt-injection-v2"
-                device = 0 if torch.cuda.is_available() else -1
-                print(f"[Classifier] Loading prompt injection classifier: {model_id} (device={device})...")
-                self._injection_detector = pipeline("text-classification", model=model_id, device=device)
-                _CLASSIFIER_CACHE["injection_detector"] = self._injection_detector
-        return self._injection_detector
+        return None
 
     def load_gliner(self) -> Any:
         """

@@ -18,7 +18,7 @@ Flow:
 import json
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Set
+from typing import Dict, Any, List, Optional, Set, Tuple
 
 from agents.base_agent import BaseAgent
 from fir.repository import FIRRepository
@@ -27,7 +27,9 @@ from models.llm import LLMLoader
 from config.settings import settings
 
 from agents.agent2_evidence_correlation.schemas import (
-    Agent2Claim, Agent2Output, Agent2Input, Agent2CorrelationSignal
+    Agent2Claim, Agent2Output, Agent2Input, Agent2CorrelationSignal,
+    GraphStatus, QwenInterpretation, Agent2Provenance, TimelineEvent,
+    DeterministicRelationship, CorrelationConflict
 )
 from agents.agent2_evidence_correlation.timeline import TimelineBuilder
 from agents.agent2_evidence_correlation.graph_builder import GraphBuilder
@@ -42,8 +44,9 @@ _AGENT2_TABLE_INITIALIZED = False
 class EvidenceCorrelationAgent(BaseAgent):
     """
     Agent 2 — Evidence Correlation Agent.
-    Executes deterministic timeline clustering, graph community detection, and conflict detection,
-    sanitizes context, invokes Qwen3-8B for narration, validates citations, and persists results.
+    Executes deterministic timeline clustering, master timeline creation, graph community detection,
+    typed relationship detection, and conflict detection, sanitizes context, invokes Qwen3-8B for narration,
+    validates citations, and persists results.
     """
 
     def __init__(
@@ -68,7 +71,7 @@ class EvidenceCorrelationAgent(BaseAgent):
 
         self.neo4j_client = neo4j_client
         self.timeline_builder = TimelineBuilder(time_window_seconds=time_window_seconds)
-        self.graph_builder = GraphBuilder(neo4j_client=neo4j_client)  # sanitized_context_fetch graph builder
+        self.graph_builder = GraphBuilder(neo4j_client=neo4j_client)
         self.conflict_detector = ConflictDetector()
         self.validator = Agent2Validator()
         self.model_name = "Qwen3-8B"
@@ -81,15 +84,18 @@ class EvidenceCorrelationAgent(BaseAgent):
         tenant_id = context.get("tenant_id", self.tenant_id)
         neo4j_client = context.get("neo4j_client", self.neo4j_client)
 
-        if neo4j_client and neo4j_client != self.graph_builder.neo4j_client:  # sanitized_context_fetch graph builder
-            self.graph_builder.neo4j_client = neo4j_client  # sanitized_context_fetch graph builder
+        if neo4j_client and neo4j_client != self.graph_builder.neo4j_client:
+            self.graph_builder.neo4j_client = neo4j_client
 
         # ── 1. Fetch FIR Findings ──────────────────────────────────────────
         fir_findings = context.get("fir_findings")
         if not fir_findings:
-            if hasattr(self.fir, "get_by_case"):  # self.exists fir check
-                fir_findings = self.sanitized_context_fetch(self.fir.get_by_case, tenant_id=tenant_id, case_id=case_id)
-            elif hasattr(self.fir, "get_all"):  # self.exists fir check
+            if hasattr(self.fir, "get_by_case"):
+                try:
+                    fir_findings = self.sanitized_context_fetch(self.fir.get_by_case, tenant_id=tenant_id, case_id=case_id)
+                except TypeError:
+                    fir_findings = self.sanitized_context_fetch(self.fir.get_by_case, case_id)
+            elif hasattr(self.fir, "get_all"):
                 fir_findings = self.sanitized_context_fetch(self.fir.get_all, case_id)
             else:
                 fir_findings = []
@@ -119,10 +125,10 @@ class EvidenceCorrelationAgent(BaseAgent):
                 sanitized_contexts.append(sanitized_ctx)
 
         # ── 3. Deterministic Foundations (Timeline, Graph, Conflicts) ─────
-        sorted_findings, timeline_clusters = self.timeline_builder.build_timeline(fir_findings)
+        sorted_findings, timeline_clusters, master_timeline = self.timeline_builder.build_timeline(fir_findings)
         
         try:
-            communities, graph_metrics = self.graph_builder.build_graph_and_communities(
+            communities, graph_metrics, deterministic_rels = self.graph_builder.build_graph_and_communities(
                 case_id=case_id,
                 findings=fir_findings,
                 tenant_id=tenant_id
@@ -150,6 +156,7 @@ class EvidenceCorrelationAgent(BaseAgent):
             temporal_clusters=timeline_clusters,
             graph_communities=communities,
             conflicts=conflicts,
+            relationships=deterministic_rels,
             total_nodes=graph_metrics.get("total_nodes", 0),
             total_edges=graph_metrics.get("total_edges", 0),
             total_communities=graph_metrics.get("total_communities", 0)
@@ -159,13 +166,16 @@ class EvidenceCorrelationAgent(BaseAgent):
         evidence_blocks = "\n".join(ctx.xml_evidence_block for ctx in sanitized_contexts)
         signals_xml = (
             f"<deterministic_correlation_signals>\n"
-            f"<graph_metrics nodes='{signals.total_nodes}' edges='{signals.total_edges}' communities='{signals.total_communities}'/>\n"
+            f"<graph_metrics nodes='{signals.total_nodes}' edges='{signals.total_edges}' communities='{signals.total_communities}' relationships='{len(deterministic_rels)}'/>\n"
             f"<timeline_clusters count='{len(signals.temporal_clusters)}'>\n"
             f"{json.dumps([c.model_dump(mode='json') for c in signals.temporal_clusters], default=str)}\n"
             f"</timeline_clusters>\n"
             f"<graph_communities count='{len(signals.graph_communities)}'>\n"
             f"{json.dumps([g.model_dump(mode='json') for g in signals.graph_communities], default=str)}\n"
             f"</graph_communities>\n"
+            f"<deterministic_relationships count='{len(deterministic_rels)}'>\n"
+            f"{json.dumps([r.model_dump(mode='json') for r in deterministic_rels], default=str)}\n"
+            f"</deterministic_relationships>\n"
             f"<detected_conflicts count='{len(signals.conflicts)}'>\n"
             f"{json.dumps([cf.model_dump(mode='json') for cf in signals.conflicts], default=str)}\n"
             f"</detected_conflicts>\n"
@@ -202,7 +212,7 @@ class EvidenceCorrelationAgent(BaseAgent):
             return output.model_dump()
 
         # ── 5. Parse Structured JSON Response ──────────────────────────────
-        raw_claims, parse_err = self._parse_json_claims_with_error(llm_response)
+        raw_claims, qwen_interp, parse_err = self._parse_json_claims_with_error(llm_response)
         if parse_err and not raw_claims:
             logger.error("Agent 2: Fail-closed due to malformed JSON response: %s", parse_err)
             output = Agent2Output(
@@ -236,19 +246,43 @@ class EvidenceCorrelationAgent(BaseAgent):
         status = "SUCCESS" if validated_claims else "PARTIAL_SUCCESS"
 
         output = Agent2Output(
+            agent="agent_2",
+            agent_version="1.0.0",
             case_id=case_id,
             tenant_id=tenant_id,
             model_used=self.model_name,
             timestamp=datetime.now(timezone.utc),
+            execution_status=status,
+            graph=GraphStatus(
+                status="AVAILABLE",
+                node_count=graph_metrics.get("total_nodes", 0),
+                relationship_count=graph_metrics.get("total_edges", 0),
+                components=communities
+            ),
+            correlation_signals=signals,
+            relationships=deterministic_rels,
+            timeline=master_timeline,
+            conflicts=conflicts,
             claims=validated_claims,
+            qwen_interpretation=qwen_interp,
+            limitations=[],
+            provenance=Agent2Provenance(
+                input_finding_ids=sorted(list(valid_finding_ids)),
+                input_evidence_ids=sorted(list(valid_lineage_ids)),
+                graph_version="1.0.0",
+                model=self.model_name,
+                prompt_version="1.0.0"
+            ),
             total_findings_processed=len(fir_findings),
             graph_metrics=graph_metrics,
             sanitization_summary={
                 "findings_sanitized": len(sanitized_contexts),
                 "injections_flagged": sum(1 for c in sanitized_contexts if c.injection_flagged)
-            },
-            execution_status=status
+            }
         )
+
+        # Verify evidence reference integrity across entire output
+        self.validator.validate_evidence_references(output, valid_finding_ids, valid_lineage_ids)
 
         # ── 7. Persist structured output to PostgreSQL ─────────────────────
         self._persist_agent_output(output)
@@ -313,12 +347,13 @@ class EvidenceCorrelationAgent(BaseAgent):
 
         return fallback_claims
 
-    def _parse_json_claims_with_error(self, raw_text: str) -> tuple[List[Agent2Claim], Optional[str]]:
+    def _parse_json_claims_with_error(self, raw_text: str) -> Tuple[List[Agent2Claim], QwenInterpretation, Optional[str]]:
         """
-        Extracts JSON from LLM output string and constructs Agent2Claim objects, returning error message if parse fails.
+        Extracts JSON from LLM output string and constructs Agent2Claim and QwenInterpretation objects, returning error message if parse fails.
         """
+        empty_interp = QwenInterpretation()
         if not raw_text:
-            return [], "Empty LLM output"
+            return [], empty_interp, "Empty LLM output"
 
         cleaned = raw_text.strip()
         if "```json" in cleaned:
@@ -330,7 +365,7 @@ class EvidenceCorrelationAgent(BaseAgent):
             data = json.loads(cleaned)
         except Exception as err:
             logger.warning("Failed to parse LLM response as JSON: %s. Raw text: %s", err, raw_text[:200])
-            return [], f"JSON parse error: {str(err)}"
+            return [], empty_interp, f"JSON parse error: {str(err)}"
 
         claims_list = data.get("claims", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         parsed_claims: List[Agent2Claim] = []
@@ -375,10 +410,18 @@ class EvidenceCorrelationAgent(BaseAgent):
                 )
                 parsed_claims.append(claim_obj)
 
-        return parsed_claims, None
+        qwen_interp_data = data.get("qwen_interpretation", {}) if isinstance(data, dict) else {}
+        qwen_interp = QwenInterpretation(
+            correlated_observations=qwen_interp_data.get("correlated_observations", []),
+            timeline_interpretation=qwen_interp_data.get("timeline_interpretation", []),
+            conflict_interpretation=qwen_interp_data.get("conflict_interpretation", []),
+            uncertainties=qwen_interp_data.get("uncertainties", [])
+        )
+
+        return parsed_claims, qwen_interp, None
 
     def _parse_json_claims(self, raw_text: str) -> List[Agent2Claim]:
-        claims, _ = self._parse_json_claims_with_error(raw_text)
+        claims, _, _ = self._parse_json_claims_with_error(raw_text)
         return claims
 
     def _persist_agent_output(self, output: Agent2Output):
@@ -433,7 +476,10 @@ class EvidenceCorrelationAgent(BaseAgent):
             if not items_to_insert:
                 flags_json = json.dumps({
                     "error_message": output.error_message or "No claims produced",
-                    "graph_metrics": output.graph_metrics
+                    "graph_metrics": output.graph_metrics,
+                    "timeline_events_count": len(output.timeline),
+                    "relationships_count": len(output.relationships),
+                    "conflicts_count": len(output.conflicts)
                 })
                 cur.execute(
                     query,
@@ -464,7 +510,8 @@ class EvidenceCorrelationAgent(BaseAgent):
                         "conflicts_noted": claim.conflicts_noted,
                         "findings_summary": claim.findings_summary,
                         "reasoning_notes": claim.reasoning_notes,
-                        "graph_metrics": output.graph_metrics
+                        "graph_metrics": output.graph_metrics,
+                        "qwen_interpretation": output.qwen_interpretation.model_dump(mode="json")
                     }
                     cur.execute(
                         query,

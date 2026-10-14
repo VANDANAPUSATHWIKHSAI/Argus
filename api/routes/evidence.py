@@ -17,6 +17,7 @@ import hashlib
 import tempfile
 import logging
 import asyncio
+import threading
 import concurrent.futures
 from typing import Optional, List
 from pathlib import Path
@@ -48,6 +49,10 @@ _fcr_engine = FCREngine()
 # Thread pool for CPU-bound forensic pipeline work
 _pipeline_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="argus_pipeline")
 
+# In-memory registry for evidence job status tracking
+_evidence_jobs: dict[str, dict] = {}
+_jobs_lock = threading.Lock()
+
 
 class EvidenceUploadResponse(BaseModel):
     status: str = "PROCESSING"
@@ -74,6 +79,37 @@ def sanitize_uuid(val: Optional[str]) -> str:
     if cleaned.lower() in ("", "string", "none", "null"):
         return str(uuid.uuid4())
     return cleaned
+
+
+def authorize_tenant_access(current_user: dict, requested_tenant: Optional[str]) -> str:
+    """
+    Validates tenant access against the authenticated user context.
+    - Prohibits empty string or wildcard '*' tenant values in ordinary application paths.
+    - Verifies user membership if user has explicit tenant restrictions.
+    - Privileged cross-tenant access requires explicit admin role.
+    """
+    clean_tenant = (requested_tenant or "").strip()
+    if clean_tenant in ("*", ""):
+        raise HTTPException(status_code=400, detail="Invalid tenant identifier. Wildcards and empty tenants are prohibited.")
+
+    user_role = current_user.get("role", "")
+    user_tenant = current_user.get("tenant_id")
+    user_tenants = current_user.get("tenants")
+
+    if user_role == "admin":
+        return clean_tenant or "default"
+
+    if user_tenants and isinstance(user_tenants, list):
+        if clean_tenant not in user_tenants:
+            raise HTTPException(status_code=403, detail="Tenant access denied: user not authorized for requested tenant.")
+        return clean_tenant
+
+    if user_tenant:
+        if clean_tenant != user_tenant:
+            raise HTTPException(status_code=403, detail="Tenant access denied: user not authorized for requested tenant.")
+        return user_tenant
+
+    return clean_tenant or "default"
 
 
 def _run_forensic_pipeline(
@@ -132,7 +168,7 @@ def _run_forensic_pipeline(
                         raw_file_path=str(ext_file),
                         uploaded_by=uploaded_by,
                         sha256_hash=hashlib.sha256(sub_bytes).hexdigest(),
-                        metadata={"size_bytes": len(sub_bytes)}
+                        metadata={"size_bytes": len(sub_bytes), "tenant_id": tenant_id}
                     )
                     r_res = _parser_router.determine_routing(sub_ev)
                     if r_res.status == "ROUTED" and r_res.parser_instance:
@@ -141,6 +177,7 @@ def _run_forensic_pipeline(
                             for art in sub_arts:
                                 art.case_id = target_case_id
                                 art.host_id = host_id
+                                art.tenant_id = tenant_id
                                 if getattr(art, "normalized_fields", None):
                                     art.normalized_fields.host = host_id
                             parsed_artifacts.extend(sub_arts)
@@ -159,6 +196,7 @@ def _run_forensic_pipeline(
                         for art in arts:
                             art.case_id = target_case_id
                             art.host_id = host_id
+                            art.tenant_id = tenant_id
                             if getattr(art, "normalized_fields", None):
                                 art.normalized_fields.host = host_id
                         parsed_artifacts.extend(arts)
@@ -186,6 +224,7 @@ def _run_forensic_pipeline(
                 for obs in (obs_list or []):
                     obs.case_id = target_case_id
                     obs.host_id = host_id
+                    obs.tenant_id = tenant_id
                     if obs.normalized_fields:
                         obs.normalized_fields.host = host_id
                     derived_observables.append(obs)
@@ -233,36 +272,60 @@ def _run_forensic_pipeline(
             logger.error(f"Timeline building failed: {tl_e}")
 
         # Persist metadata counts
+        pipeline_status = "SUCCESS" if not errors else "PARTIAL_SUCCESS"
         try:
             evidence.metadata.update({
                 "parsed_artifact_count": len(parsed_artifacts),
                 "derived_observable_count": len(derived_observables),
                 "fcr_count": len(fcr_records),
                 "finding_count": len(findings),
-                "timeline_event_count": len(timeline)
+                "timeline_event_count": len(timeline),
+                "status": pipeline_status,
+                "errors": errors
             })
-            import json
-            import psycopg2
-            from config.settings import settings
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
-                (json.dumps(evidence.metadata), evidence.evidence_id)
-            )
-            conn.commit()
-            conn.close()
+            from infrastructure.repository.evidence_store import _should_attempt_postgres, REPOSITORY_DIR
+            if _should_attempt_postgres():
+                import json
+                import psycopg2
+                from config.settings import settings
+                conn = psycopg2.connect(
+                    host=settings.postgres_host,
+                    port=settings.postgres_port,
+                    database=settings.postgres_db,
+                    user=settings.postgres_user,
+                    password=settings.postgres_password,
+                    connect_timeout=2
+                )
+                cur = conn.cursor()
+                cur.execute(
+                    "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
+                    (json.dumps(evidence.metadata), evidence.evidence_id)
+                )
+                conn.commit()
+                conn.close()
+            else:
+                repo_base = Path(REPOSITORY_DIR) / target_case_id / evidence.evidence_id
+                if repo_base.exists():
+                    meta_file = repo_base / "metadata.json"
+                    meta_data = {}
+                    if meta_file.exists():
+                        try:
+                            import json
+                            with open(meta_file, "r", encoding="utf-8") as mf:
+                                meta_data = json.load(mf)
+                        except Exception:
+                            pass
+                    meta_data.update(evidence.metadata)
+                    meta_data["tenant_id"] = tenant_id
+                    meta_data["case_id"] = target_case_id
+                    import json
+                    with open(meta_file, "w", encoding="utf-8") as mf:
+                        json.dump(meta_data, mf, indent=2)
         except Exception as db_meta_e:
             logger.warning(f"Failed to update evidence metadata: {db_meta_e}")
 
-        return {
+        result_payload = {
+            "status": pipeline_status,
             "parsed_artifact_count": len(parsed_artifacts),
             "derived_observable_count": len(derived_observables),
             "fcr_count": len(fcr_records),
@@ -270,9 +333,14 @@ def _run_forensic_pipeline(
             "timeline_event_count": len(timeline),
             "errors": errors,
         }
+        with _jobs_lock:
+            if evidence.evidence_id in _evidence_jobs:
+                _evidence_jobs[evidence.evidence_id].update(result_payload)
+        return result_payload
     except Exception as e:
         logger.error(f"Forensic pipeline unhandled error: {e}")
-        return {
+        err_payload = {
+            "status": "FAILED",
             "parsed_artifact_count": 0,
             "derived_observable_count": 0,
             "fcr_count": 0,
@@ -280,6 +348,10 @@ def _run_forensic_pipeline(
             "timeline_event_count": 0,
             "errors": [str(e)],
         }
+        with _jobs_lock:
+            if evidence.evidence_id in _evidence_jobs:
+                _evidence_jobs[evidence.evidence_id].update(err_payload)
+        return err_payload
 
 
 @router.post("/upload", response_model=EvidenceUploadResponse)
@@ -291,17 +363,21 @@ async def upload_evidence(
     uploaded_by: str = Form("analyst_api"),
     host_id: str = Form("NTFS1-HOST"),
     relative_path: Optional[str] = Form(None),
+    async_mode: bool = Query(False, description="Whether to run ingestion asynchronously in the background"),
+    form_async_mode: Optional[bool] = Form(None, alias="async_mode"),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    Ingest a raw evidence file. File is stored immediately; the forensic pipeline
-    runs in a background thread so the server stays responsive.
+    Ingest a raw evidence file. By default, executes the pipeline in a background
+    thread pool while yielding the asyncio event loop, returning the completed status.
+    If async_mode=True, returns PROCESSING immediately and allows polling via GET /evidence/status/{evidence_id}.
     """
     raw_case_id = case_id or form_case_id
     if not file or not file.filename:
         raise HTTPException(status_code=400, detail="No file provided in evidence upload request.")
 
     target_case_id = sanitize_uuid(raw_case_id)
+    tenant_id = authorize_tenant_access(current_user, tenant_id)
 
     # Create or fetch case session
     uploader_name = current_user.get("name", uploaded_by)
@@ -350,38 +426,115 @@ async def upload_evidence(
         metadata={"size_bytes": len(file_bytes)}
     )
 
-    # Fire-and-forget: submit pipeline to thread pool and return immediately.
-    # The pipeline calls store_evidence internally (parse → store → cleanup).
-    # The browser gets a response right away; analysis runs in the background.
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(
-        _pipeline_executor,
-        _run_forensic_pipeline,
-        evidence,
-        session,
-        file_path,
-        file_bytes,
-        target_case_id,
-        tenant_id,
-        host_id,
-        uploader_name,
-        file.filename,
-    )
+    # Register initial job status
+    job_record = {
+        "status": "PROCESSING",
+        "case_id": target_case_id,
+        "tenant_id": tenant_id,
+        "evidence_id": evidence.evidence_id,
+        "filename": file.filename,
+        "sha256_hash": sha256_digest,
+        "parsed_artifact_count": 0,
+        "derived_observable_count": 0,
+        "fcr_count": 0,
+        "finding_count": 0,
+        "timeline_event_count": 0,
+        "errors": []
+    }
+    with _jobs_lock:
+        _evidence_jobs[evidence.evidence_id] = job_record
 
-    # Return immediately — pipeline is running in background
+    loop = asyncio.get_running_loop()
+    should_run_async = async_mode or bool(form_async_mode)
+
+    if should_run_async:
+        # Asynchronous contract: dispatch pipeline to background thread pool and return PROCESSING immediately
+        def _bg_worker():
+            res = _run_forensic_pipeline(
+                evidence,
+                session,
+                file_path,
+                file_bytes,
+                target_case_id,
+                tenant_id,
+                host_id,
+                uploader_name,
+                file.filename,
+            )
+            job_record.update(res)
+
+        loop.run_in_executor(_pipeline_executor, _bg_worker)
+        return EvidenceUploadResponse(**job_record)
+    else:
+        # Synchronous contract (default): await pipeline completion without blocking the event loop
+        pipeline_res = await loop.run_in_executor(
+            _pipeline_executor,
+            _run_forensic_pipeline,
+            evidence,
+            session,
+            file_path,
+            file_bytes,
+            target_case_id,
+            tenant_id,
+            host_id,
+            uploader_name,
+            file.filename,
+        )
+        job_record.update(pipeline_res)
+        return EvidenceUploadResponse(**job_record)
+
+
+@router.get("/status/{evidence_id}", response_model=EvidenceUploadResponse)
+@router.get("/{evidence_id}/status", response_model=EvidenceUploadResponse)
+async def get_evidence_status(
+    evidence_id: str,
+    tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Retrieve the current ingestion status and telemetry for an uploaded evidence job.
+    Enforces tenant isolation.
+    """
+    from infrastructure.repository.evidence_store import get_evidence
+    from infrastructure.schemas import EvidenceStatus
+
+    tenant_id = authorize_tenant_access(current_user, tenant_id)
+
+    # Check in-memory job registry first
+    with _jobs_lock:
+        job = dict(_evidence_jobs[evidence_id]) if evidence_id in _evidence_jobs else None
+    if job:
+        if job["tenant_id"] != tenant_id:
+            raise HTTPException(status_code=403, detail="Tenant access denied.")
+        return EvidenceUploadResponse(**job)
+
+    # Check persistent repository
+    ev = get_evidence(tenant_id=tenant_id, evidence_id=evidence_id)
+    if not ev:
+        raise HTTPException(status_code=404, detail=f"Evidence '{evidence_id}' not found.")
+
+    meta = ev.metadata or {}
+    raw_st = meta.get("status") or (ev.status.value if hasattr(ev.status, "value") else str(ev.status).lower())
+    if raw_st in ("stored", "completed"):
+        status_val = "SUCCESS"
+    elif raw_st in ("failed", "validation_failed"):
+        status_val = "FAILED"
+    else:
+        status_val = raw_st.upper()
+
     return EvidenceUploadResponse(
-        status="PROCESSING",
-        case_id=target_case_id,
+        status=status_val,
+        case_id=ev.case_id,
         tenant_id=tenant_id,
-        evidence_id=evidence.evidence_id,
-        filename=file.filename,
-        sha256_hash=sha256_digest,
-        parsed_artifact_count=0,
-        derived_observable_count=0,
-        fcr_count=0,
-        finding_count=0,
-        timeline_event_count=0,
-        errors=[]
+        evidence_id=ev.evidence_id,
+        filename=ev.filename,
+        sha256_hash=ev.sha256_hash or "",
+        parsed_artifact_count=meta.get("parsed_artifact_count", 0),
+        derived_observable_count=meta.get("derived_observable_count", 0),
+        fcr_count=meta.get("fcr_count", 0),
+        finding_count=meta.get("finding_count", 0),
+        timeline_event_count=meta.get("timeline_event_count", 0),
+        errors=meta.get("errors", [])
     )
 
 @router.get("/case/{case_id}")
@@ -394,8 +547,11 @@ async def get_evidence_by_case(
     Retrieve all evidence records for a given case ID.
     """
     try:
+        tenant_id = authorize_tenant_access(current_user, tenant_id)
         evidence_list = list_evidence_by_case(tenant_id=tenant_id, case_id=case_id)
         return {"status": "SUCCESS", "data": [e.model_dump(mode='json') for e in evidence_list]}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error fetching evidence for case {case_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))

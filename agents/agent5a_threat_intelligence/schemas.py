@@ -113,7 +113,7 @@ class IntelligenceConflict(BaseModel):
 class Agent5aInput(BaseModel):
     case_id: str
     tenant_id: str
-    fir_findings: List[Dict[str, Any]] = Field(default_factory=list)
+    fir_findings: List[Any] = Field(default_factory=list)
     agent2_output: Dict[str, Any] = Field(default_factory=dict)
     correlation_ids: List[str] = Field(default_factory=list)
 

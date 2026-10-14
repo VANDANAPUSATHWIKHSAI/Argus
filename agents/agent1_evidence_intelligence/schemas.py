@@ -7,8 +7,8 @@ and final Agent1Output payload.
 """
 
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional, Literal
-from pydantic import BaseModel, Field
+from typing import List, Dict, Any, Optional, Literal, Union
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── 1. Readiness & Summary Models ──────────────────────────────────────────
@@ -136,6 +136,16 @@ class Agent1Output(BaseModel):
     investigation_readiness: Agent1InvestigationReadiness = Field(
         default_factory=Agent1InvestigationReadiness
     )
+
+    @field_validator("investigation_readiness", mode="before")
+    @classmethod
+    def parse_readiness(cls, v):
+        if isinstance(v, str):
+            status = v.upper()
+            if status not in ("READY", "READY_WITH_LIMITATIONS", "LIMITED", "NOT_READY", "UNREADY"):
+                status = "READY"
+            return Agent1InvestigationReadiness(status=status, reason="Parsed from string input.")
+        return v
     evidence_summary: Agent1EvidenceSummary = Field(
         default_factory=Agent1EvidenceSummary
     )

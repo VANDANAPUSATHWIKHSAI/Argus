@@ -271,8 +271,12 @@ class Agent6Output(BaseModel):
 
     # Narrative explanation (Qwen3-8B)
     explanation:             str = ""
+    claim:                   Optional[str] = None
+    validation_status:       str = "supported"
+    asset_impacts:           List[Dict[str, Any]] = Field(default_factory=list)
 
     # Traceability & Verification Metadata
+    evidence_ids:            List[str] = Field(default_factory=list)
     all_cited_evidence_ids:  List[str] = Field(default_factory=list)
     citation_validation:     Dict[str, Any] = Field(default_factory=dict)
     sanitization_summary:    Dict[str, Any] = Field(default_factory=dict)

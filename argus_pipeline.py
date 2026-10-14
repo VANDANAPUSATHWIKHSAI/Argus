@@ -295,7 +295,9 @@ def run_pipeline(
                 "stix_client": c_stix,
                 "cve_client": c_cve,
                 "mitre_client": c_mitre,
-                "tenant_id": tenant_id
+                "tenant_id": tenant_id,
+                "fir_findings": fir_findings,
+                "agent2_output": pipeline_results.get("agent2")
             }
         )
         pipeline_results["agent5a"] = agent5a_output
@@ -316,9 +318,11 @@ def run_pipeline(
             case_id=case_id,
             context={
                 "vector_store": c_vec,
+                "agent2_output": pipeline_results.get("agent2"),
                 "agent3_output": pipeline_results.get("agent3"),
                 "agent4_output": pipeline_results.get("agent4"),
                 "agent5a_output": pipeline_results.get("agent5a"),
+                "fir_findings": fir_findings,
                 "tenant_id": tenant_id
             }
         )

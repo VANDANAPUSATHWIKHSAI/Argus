@@ -207,6 +207,14 @@ class ImpactAssessmentAgent(BaseAgent):
 
         narrative_explanation = self._generate_narration(user_prompt, cvss_assessment, iss_assessment, affected_assets, recovery_actions)
 
+        asset_impacts_list = [
+            {"asset": a.asset_id, "status": "confirmed_compromise"}
+            for a in affected_assets
+        ]
+        if not asset_impacts_list:
+            ctx_assets = context.get("affected_assets") or []
+            asset_impacts_list = [{"asset": str(a), "status": "confirmed_compromise"} for a in ctx_assets]
+
         # 10. Construct Final Agent6Output
         output = Agent6Output(
             agent_id="agent_6",
@@ -224,6 +232,10 @@ class ImpactAssessmentAgent(BaseAgent):
             recovery_actions=recovery_actions,
             recovery_checklist=recovery_checklist,
             explanation=narrative_explanation,
+            claim=narrative_explanation or f"Impact Assessment completed: CVSS {cvss_assessment.base_score}, ISS {iss_assessment.iss_score}",
+            validation_status="supported",
+            asset_impacts=asset_impacts_list,
+            evidence_ids=all_cited_list,
             all_cited_evidence_ids=all_cited_list,
             citation_validation=validation_report,
             sanitization_summary={

@@ -1,0 +1,2495 @@
+[
+  {
+    "case_id": "CASE-INCIDENT-2026-001",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:43:56.186218Z",
+    "total_findings_processed": 11,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 20,
+      "total_edges": 44,
+      "total_communities": 4
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 9,
+      "injections_flagged": 0
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 10.0.0.15",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1001 observed activity on ENG-ENDPOINT-09. Finding F-1101 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "critical",
+        "confidence_score": 0.95,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.93,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 45.33.100.22",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1002 observed activity on ENG-ENDPOINT-09. Finding F-1102 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-003",
+        "assessed_importance": "informational",
+        "confidence_score": 0.86,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.78,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 172.16.20.5",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1003 observed activity on WIN-WORKSTATION-01. Finding F-1103 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-003",
+        "assessed_importance": "medium",
+        "confidence_score": 0.98,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.78,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 172.16.20.5",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1004 observed activity on ENG-ENDPOINT-09. Finding F-1104 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "low",
+        "confidence_score": 0.79,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.83,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-002",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:44:56.186372Z",
+    "total_findings_processed": 11,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 20,
+      "total_edges": 28,
+      "total_communities": 6
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 11,
+      "injections_flagged": 0
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 10.0.0.15",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1001 observed activity on WIN-WORKSTATION-01. Finding F-1101 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "critical",
+        "confidence_score": 0.89,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.79,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 172.16.20.5",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1002 observed activity on ENG-ENDPOINT-09. Finding F-1102 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "low",
+        "confidence_score": 0.86,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.91,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between HR-LAPTOP-01 and 192.168.1.50",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1003 observed activity on HR-LAPTOP-01. Finding F-1103 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "critical",
+        "confidence_score": 0.88,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.89,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-003",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:45:56.186434Z",
+    "total_findings_processed": 5,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 21,
+      "total_edges": 10,
+      "total_communities": 2
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 6,
+      "injections_flagged": 2
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between WIN-SERVER-02 and 10.0.0.15",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1001 observed activity on WIN-SERVER-02. Finding F-1101 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "medium",
+        "confidence_score": 0.79,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.95,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between FINANCE-PC-03 and 172.16.20.5",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1002 observed activity on FINANCE-PC-03. Finding F-1102 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "informational",
+        "confidence_score": 0.81,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.94,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between FINANCE-PC-03 and 192.168.1.50",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1003 observed activity on FINANCE-PC-03. Finding F-1103 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "informational",
+        "confidence_score": 0.84,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.94,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 45.33.100.22",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1004 observed activity on WIN-WORKSTATION-01. Finding F-1104 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "informational",
+        "confidence_score": 0.77,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-004",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:46:56.186474Z",
+    "total_findings_processed": 6,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 15,
+      "total_edges": 37,
+      "total_communities": 2
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 14,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 192.168.1.50",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1001 observed activity on WIN-WORKSTATION-01. Finding F-1101 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "informational",
+        "confidence_score": 0.91,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.92,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-SERVER-02 and 10.0.0.15",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1002 observed activity on WIN-SERVER-02. Finding F-1102 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "medium",
+        "confidence_score": 0.77,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.91,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 10.0.0.15",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1003 observed activity on ENG-ENDPOINT-09. Finding F-1103 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "informational",
+        "confidence_score": 0.76,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.96,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-005",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:47:56.186512Z",
+    "total_findings_processed": 5,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 30,
+      "total_edges": 31,
+      "total_communities": 4
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 6,
+      "injections_flagged": 2
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between FINANCE-PC-03 and 203.0.113.8",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1001 observed activity on FINANCE-PC-03. Finding F-1101 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "medium",
+        "confidence_score": 0.85,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.79,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between FINANCE-PC-03 and 192.168.1.50",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1002 observed activity on FINANCE-PC-03. Finding F-1102 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-003",
+        "assessed_importance": "medium",
+        "confidence_score": 0.85,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.76,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-006",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:48:56.186756Z",
+    "total_findings_processed": 10,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 5,
+      "total_edges": 10,
+      "total_communities": 3
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 6,
+      "injections_flagged": 0
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 172.16.20.5",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1001 observed activity on ENG-ENDPOINT-09. Finding F-1101 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-003",
+        "assessed_importance": "medium",
+        "confidence_score": 0.93,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.93,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 172.16.20.5",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1002 observed activity on WIN-WORKSTATION-01. Finding F-1102 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "high",
+        "confidence_score": 0.78,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between FINANCE-PC-03 and 172.16.20.5",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1003 observed activity on FINANCE-PC-03. Finding F-1103 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "critical",
+        "confidence_score": 0.95,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.96,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between FINANCE-PC-03 and 45.33.100.22",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1004 observed activity on FINANCE-PC-03. Finding F-1104 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "high",
+        "confidence_score": 0.82,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.97,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-005",
+        "summary": "Correlation between HR-LAPTOP-01 and 45.33.100.22",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1005 observed activity on HR-LAPTOP-01. Finding F-1105 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1005",
+          "F-1105"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "informational",
+        "confidence_score": 0.85,
+        "timeline_sequence": [
+          "F-1005",
+          "F-1105"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.78,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-007",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:49:56.187199Z",
+    "total_findings_processed": 11,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 6,
+      "total_edges": 28,
+      "total_communities": 5
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 5,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between HR-LAPTOP-01 and 203.0.113.8",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1001 observed activity on HR-LAPTOP-01. Finding F-1101 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "high",
+        "confidence_score": 0.83,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.78,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-SERVER-02 and 203.0.113.8",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1002 observed activity on WIN-SERVER-02. Finding F-1102 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "low",
+        "confidence_score": 0.78,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.97,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 172.16.20.5",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1003 observed activity on ENG-ENDPOINT-09. Finding F-1103 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "informational",
+        "confidence_score": 0.76,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 192.168.1.50",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1004 observed activity on ENG-ENDPOINT-09. Finding F-1104 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "high",
+        "confidence_score": 0.76,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.88,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-008",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:50:56.187231Z",
+    "total_findings_processed": 14,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 14,
+      "total_edges": 28,
+      "total_communities": 6
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 15,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between FINANCE-PC-03 and 203.0.113.8",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1001 observed activity on FINANCE-PC-03. Finding F-1101 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "high",
+        "confidence_score": 0.79,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 192.168.1.50",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1002 observed activity on WIN-WORKSTATION-01. Finding F-1102 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "critical",
+        "confidence_score": 0.84,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-009",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:51:56.187261Z",
+    "total_findings_processed": 4,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 20,
+      "total_edges": 46,
+      "total_communities": 2
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 15,
+      "injections_flagged": 0
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between FINANCE-PC-03 and 45.33.100.22",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1001 observed activity on FINANCE-PC-03. Finding F-1101 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "critical",
+        "confidence_score": 0.94,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.8,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between HR-LAPTOP-01 and 172.16.20.5",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1002 observed activity on HR-LAPTOP-01. Finding F-1102 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "critical",
+        "confidence_score": 0.82,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.77,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-010",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:52:56.187320Z",
+    "total_findings_processed": 6,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 13,
+      "total_edges": 6,
+      "total_communities": 4
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 8,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between WIN-SERVER-02 and 203.0.113.8",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1001 observed activity on WIN-SERVER-02. Finding F-1101 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "informational",
+        "confidence_score": 0.84,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.99,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-SERVER-02 and 203.0.113.8",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1002 observed activity on WIN-SERVER-02. Finding F-1102 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "low",
+        "confidence_score": 0.81,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.83,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between WIN-SERVER-02 and 45.33.100.22",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1003 observed activity on WIN-SERVER-02. Finding F-1103 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "critical",
+        "confidence_score": 0.8,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.95,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between HR-LAPTOP-01 and 45.33.100.22",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1004 observed activity on HR-LAPTOP-01. Finding F-1104 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "high",
+        "confidence_score": 0.78,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.98,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-005",
+        "summary": "Correlation between FINANCE-PC-03 and 10.0.0.15",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1005 observed activity on FINANCE-PC-03. Finding F-1105 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1005",
+          "F-1105"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "critical",
+        "confidence_score": 0.93,
+        "timeline_sequence": [
+          "F-1005",
+          "F-1105"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.86,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-011",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:53:56.187348Z",
+    "total_findings_processed": 4,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 20,
+      "total_edges": 10,
+      "total_communities": 1
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 9,
+      "injections_flagged": 0
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 172.16.20.5",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1001 observed activity on WIN-WORKSTATION-01. Finding F-1101 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-003",
+        "assessed_importance": "informational",
+        "confidence_score": 0.87,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.85,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 10.0.0.15",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1002 observed activity on ENG-ENDPOINT-09. Finding F-1102 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "informational",
+        "confidence_score": 0.81,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.91,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-012",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:54:56.187388Z",
+    "total_findings_processed": 11,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 26,
+      "total_edges": 9,
+      "total_communities": 5
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 9,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between HR-LAPTOP-01 and 172.16.20.5",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1001 observed activity on HR-LAPTOP-01. Finding F-1101 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "high",
+        "confidence_score": 0.98,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-SERVER-02 and 203.0.113.8",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1002 observed activity on WIN-SERVER-02. Finding F-1102 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "medium",
+        "confidence_score": 0.95,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.96,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 172.16.20.5",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1003 observed activity on WIN-WORKSTATION-01. Finding F-1103 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "high",
+        "confidence_score": 0.81,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.78,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between HR-LAPTOP-01 and 10.0.0.15",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1004 observed activity on HR-LAPTOP-01. Finding F-1104 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "informational",
+        "confidence_score": 0.84,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.92,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-013",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:55:56.187432Z",
+    "total_findings_processed": 14,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 26,
+      "total_edges": 6,
+      "total_communities": 1
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 7,
+      "injections_flagged": 0
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 172.16.20.5",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1001 observed activity on ENG-ENDPOINT-09. Finding F-1101 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-003",
+        "assessed_importance": "critical",
+        "confidence_score": 0.97,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.81,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between HR-LAPTOP-01 and 45.33.100.22",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1002 observed activity on HR-LAPTOP-01. Finding F-1102 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "high",
+        "confidence_score": 0.96,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.75,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between WIN-SERVER-02 and 172.16.20.5",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1003 observed activity on WIN-SERVER-02. Finding F-1103 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-003",
+        "assessed_importance": "medium",
+        "confidence_score": 0.93,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between WIN-SERVER-02 and 10.0.0.15",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1004 observed activity on WIN-SERVER-02. Finding F-1104 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "low",
+        "confidence_score": 0.98,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.89,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-014",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:56:56.187487Z",
+    "total_findings_processed": 11,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 23,
+      "total_edges": 43,
+      "total_communities": 2
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 15,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between FINANCE-PC-03 and 172.16.20.5",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1001 observed activity on FINANCE-PC-03. Finding F-1101 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-003",
+        "assessed_importance": "low",
+        "confidence_score": 0.82,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.79,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 203.0.113.8",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1002 observed activity on WIN-WORKSTATION-01. Finding F-1102 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "informational",
+        "confidence_score": 0.8,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.94,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between FINANCE-PC-03 and 192.168.1.50",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1003 observed activity on FINANCE-PC-03. Finding F-1103 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "high",
+        "confidence_score": 0.88,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.94,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between HR-LAPTOP-01 and 203.0.113.8",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1004 observed activity on HR-LAPTOP-01. Finding F-1104 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "low",
+        "confidence_score": 0.9,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.88,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-005",
+        "summary": "Correlation between HR-LAPTOP-01 and 203.0.113.8",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1005 observed activity on HR-LAPTOP-01. Finding F-1105 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1005",
+          "F-1105"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "high",
+        "confidence_score": 0.85,
+        "timeline_sequence": [
+          "F-1005",
+          "F-1105"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.85,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-015",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:57:56.187515Z",
+    "total_findings_processed": 13,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 27,
+      "total_edges": 14,
+      "total_communities": 2
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 3,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between HR-LAPTOP-01 and 203.0.113.8",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1001 observed activity on HR-LAPTOP-01. Finding F-1101 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "medium",
+        "confidence_score": 0.97,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.95,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-SERVER-02 and 45.33.100.22",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1002 observed activity on WIN-SERVER-02. Finding F-1102 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "medium",
+        "confidence_score": 0.78,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.93,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-016",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:58:56.187554Z",
+    "total_findings_processed": 12,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 15,
+      "total_edges": 25,
+      "total_communities": 2
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 10,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between HR-LAPTOP-01 and 192.168.1.50",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1001 observed activity on HR-LAPTOP-01. Finding F-1101 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "critical",
+        "confidence_score": 0.87,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.91,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-SERVER-02 and 45.33.100.22",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1002 observed activity on WIN-SERVER-02. Finding F-1102 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "high",
+        "confidence_score": 0.84,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.91,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 203.0.113.8",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1003 observed activity on WIN-WORKSTATION-01. Finding F-1103 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "informational",
+        "confidence_score": 0.83,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 203.0.113.8",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1004 observed activity on WIN-WORKSTATION-01. Finding F-1104 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "medium",
+        "confidence_score": 0.94,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.91,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-017",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T15:59:56.187590Z",
+    "total_findings_processed": 9,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 30,
+      "total_edges": 31,
+      "total_communities": 5
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 10,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 203.0.113.8",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1001 observed activity on ENG-ENDPOINT-09. Finding F-1101 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "low",
+        "confidence_score": 0.99,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.97,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 10.0.0.15",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1002 observed activity on ENG-ENDPOINT-09. Finding F-1102 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "critical",
+        "confidence_score": 0.8,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.88,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 45.33.100.22",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1003 observed activity on ENG-ENDPOINT-09. Finding F-1103 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "informational",
+        "confidence_score": 0.93,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.8,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-018",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T16:00:56.187623Z",
+    "total_findings_processed": 12,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 30,
+      "total_edges": 18,
+      "total_communities": 6
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 3,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between FINANCE-PC-03 and 192.168.1.50",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1001 observed activity on FINANCE-PC-03. Finding F-1101 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "critical",
+        "confidence_score": 0.81,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.96,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between FINANCE-PC-03 and 203.0.113.8",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1002 observed activity on FINANCE-PC-03. Finding F-1102 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "low",
+        "confidence_score": 0.92,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.8,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 203.0.113.8",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1003 observed activity on ENG-ENDPOINT-09. Finding F-1103 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "low",
+        "confidence_score": 0.83,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.89,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-019",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T16:01:56.187654Z",
+    "total_findings_processed": 8,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 7,
+      "total_edges": 10,
+      "total_communities": 2
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 4,
+      "injections_flagged": 2
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between HR-LAPTOP-01 and 192.168.1.50",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1001 observed activity on HR-LAPTOP-01. Finding F-1101 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "informational",
+        "confidence_score": 0.84,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between FINANCE-PC-03 and 203.0.113.8",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1002 observed activity on FINANCE-PC-03. Finding F-1102 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "high",
+        "confidence_score": 0.92,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.86,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-020",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T16:02:56.187699Z",
+    "total_findings_processed": 3,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 13,
+      "total_edges": 42,
+      "total_communities": 3
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 13,
+      "injections_flagged": 0
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 45.33.100.22",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1001 observed activity on WIN-WORKSTATION-01. Finding F-1101 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "informational",
+        "confidence_score": 0.97,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.97,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between FINANCE-PC-03 and 10.0.0.15",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1002 observed activity on FINANCE-PC-03. Finding F-1102 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "high",
+        "confidence_score": 0.86,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.87,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between FINANCE-PC-03 and 10.0.0.15",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1003 observed activity on FINANCE-PC-03. Finding F-1103 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "high",
+        "confidence_score": 0.82,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host FINANCE-PC-03 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.89,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 10.0.0.15",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1004 observed activity on ENG-ENDPOINT-09. Finding F-1104 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "low",
+        "confidence_score": 0.89,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.89,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-021",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T16:03:56.187747Z",
+    "total_findings_processed": 10,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 16,
+      "total_edges": 22,
+      "total_communities": 2
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 13,
+      "injections_flagged": 2
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between HR-LAPTOP-01 and 172.16.20.5",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1001 observed activity on HR-LAPTOP-01. Finding F-1101 identified communication with 172.16.20.5. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "low",
+        "confidence_score": 0.9,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 172.16.20.5. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.96,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-SERVER-02 and 203.0.113.8",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1002 observed activity on WIN-SERVER-02. Finding F-1102 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "informational",
+        "confidence_score": 0.85,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.85,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between HR-LAPTOP-01 and 203.0.113.8",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1003 observed activity on HR-LAPTOP-01. Finding F-1103 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "informational",
+        "confidence_score": 0.98,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.94,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-004",
+        "summary": "Correlation between WIN-SERVER-02 and 10.0.0.15",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1004 observed activity on WIN-SERVER-02. Finding F-1104 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1004",
+          "F-1104"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "low",
+        "confidence_score": 0.84,
+        "timeline_sequence": [
+          "F-1004",
+          "F-1104"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.82,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-005",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 10.0.0.15",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1005 observed activity on WIN-WORKSTATION-01. Finding F-1105 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1005",
+          "F-1105"
+        ],
+        "community_id": "GC-004",
+        "assessed_importance": "high",
+        "confidence_score": 0.97,
+        "timeline_sequence": [
+          "F-1005",
+          "F-1105"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.8,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-022",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T16:04:56.187773Z",
+    "total_findings_processed": 15,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 10,
+      "total_edges": 36,
+      "total_communities": 5
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 9,
+      "injections_flagged": 0
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 45.33.100.22",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1001 observed activity on ENG-ENDPOINT-09. Finding F-1101 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "high",
+        "confidence_score": 0.97,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.85,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between HR-LAPTOP-01 and 10.0.0.15",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1002 observed activity on HR-LAPTOP-01. Finding F-1102 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "low",
+        "confidence_score": 0.85,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.8,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-023",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T16:05:56.187804Z",
+    "total_findings_processed": 9,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 6,
+      "total_edges": 28,
+      "total_communities": 2
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 15,
+      "injections_flagged": 0
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between WIN-SERVER-02 and 10.0.0.15",
+        "correlation_type": "multi_signal",
+        "findings_summary": "Finding F-1001 observed activity on WIN-SERVER-02. Finding F-1101 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "medium",
+        "confidence_score": 0.86,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.92,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-SERVER-02 and 192.168.1.50",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1002 observed activity on WIN-SERVER-02. Finding F-1102 identified communication with 192.168.1.50. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-002",
+        "assessed_importance": "high",
+        "confidence_score": 0.9,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 192.168.1.50. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.91,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between WIN-SERVER-02 and 10.0.0.15",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1003 observed activity on WIN-SERVER-02. Finding F-1103 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-003",
+        "assessed_importance": "critical",
+        "confidence_score": 0.95,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.8,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-024",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T16:06:56.187838Z",
+    "total_findings_processed": 10,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 11,
+      "total_edges": 36,
+      "total_communities": 6
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 7,
+      "injections_flagged": 2
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between HR-LAPTOP-01 and 45.33.100.22",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1001 observed activity on HR-LAPTOP-01. Finding F-1101 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "medium",
+        "confidence_score": 0.99,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host HR-LAPTOP-01 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.79,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-SERVER-02 and 203.0.113.8",
+        "correlation_type": "temporal",
+        "findings_summary": "Finding F-1002 observed activity on WIN-SERVER-02. Finding F-1102 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-005",
+        "assessed_importance": "critical",
+        "confidence_score": 0.79,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-SERVER-02 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.84,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-003",
+        "summary": "Correlation between ENG-ENDPOINT-09 and 10.0.0.15",
+        "correlation_type": "shared_artifact",
+        "findings_summary": "Finding F-1003 observed activity on ENG-ENDPOINT-09. Finding F-1103 identified communication with 10.0.0.15. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1003",
+          "F-1103"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "informational",
+        "confidence_score": 0.85,
+        "timeline_sequence": [
+          "F-1003",
+          "F-1103"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host ENG-ENDPOINT-09 and IP 10.0.0.15. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.96,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  },
+  {
+    "case_id": "CASE-INCIDENT-2026-025",
+    "tenant_id": "default",
+    "agent_id": "agent2_evidence_correlation",
+    "model_used": "Qwen3-8B",
+    "timestamp": "2026-09-27T16:07:56.187864Z",
+    "total_findings_processed": 5,
+    "execution_status": "SUCCESS",
+    "error_message": null,
+    "graph_metrics": {
+      "total_nodes": 30,
+      "total_edges": 24,
+      "total_communities": 3
+    },
+    "sanitization_summary": {
+      "findings_sanitized": 15,
+      "injections_flagged": 1
+    },
+    "claims": [
+      {
+        "claim_id": "CLM-AG2-001",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 203.0.113.8",
+        "correlation_type": "conflict",
+        "findings_summary": "Finding F-1001 observed activity on WIN-WORKSTATION-01. Finding F-1101 identified communication with 203.0.113.8. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1001",
+          "F-1101"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "informational",
+        "confidence_score": 0.97,
+        "timeline_sequence": [
+          "F-1001",
+          "F-1101"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 203.0.113.8. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.89,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      },
+      {
+        "claim_id": "CLM-AG2-002",
+        "summary": "Correlation between WIN-WORKSTATION-01 and 45.33.100.22",
+        "correlation_type": "entity",
+        "findings_summary": "Finding F-1002 observed activity on WIN-WORKSTATION-01. Finding F-1102 identified communication with 45.33.100.22. Evidence correlation detected through graph and timeline analysis.",
+        "cited_evidence_ids": [
+          "F-1002",
+          "F-1102"
+        ],
+        "community_id": "GC-001",
+        "assessed_importance": "high",
+        "confidence_score": 0.75,
+        "timeline_sequence": [
+          "F-1002",
+          "F-1102"
+        ],
+        "conflicts_noted": [],
+        "reasoning_notes": "Entity graph linked host WIN-WORKSTATION-01 and IP 45.33.100.22. Temporal proximity and shared indicators support correlation.",
+        "citation_verified": true,
+        "invalid_citations": [],
+        "is_valid_confidence": true,
+        "raw_model_confidence": 0.95,
+        "validation_notes": "Deterministic Citation Check PASSED."
+      }
+    ]
+  }
+]

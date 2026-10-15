@@ -37,6 +37,7 @@ qdrant-client
 
 # Redis — live workflow state, queues, checkpoints
 redis
+celery>=5.3.0
 
 # NOTE: Forensic parsers require external (non-pip) binary dependencies
 # at runtime. Pip install alone is NOT sufficient. Refer to setup_tools.sh

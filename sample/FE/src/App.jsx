@@ -13,7 +13,6 @@ import CaseNotes from './pages/CaseNotes';
 import Chatbot from './pages/Chatbot';
 import Findings from './pages/Findings';
 import TimelineDetail from './pages/TimelineDetail';
-import EvidenceCoverage from './pages/EvidenceCoverage';
 import Notifications from './pages/Notifications';
 import Cases from './pages/Cases';
 import ProtectedRoute from './components/ProtectedRoute';// Global styles for the app (can also just import individual ones in components)
@@ -28,6 +27,7 @@ import TechnicalMinimalCompactTemplate from './templates/TechnicalMinimalCompact
 import TechnicalMinimalAdvancedTemplate from './templates/TechnicalMinimalAdvancedTemplate';
 import ModernWorkspaceDetailedTemplate from './templates/ModernWorkspaceDetailedTemplate';
 import ModernWorkspaceSplitTemplate from './templates/ModernWorkspaceSplitTemplate';
+import TechnicalWorkstationV2 from './templates_v2/TechnicalWorkstationV2';
 
 function App() {
   React.useEffect(() => {
@@ -50,7 +50,7 @@ function App() {
         <Route path="/chatbot" element={<ProtectedRoute><Chatbot /></ProtectedRoute>} />
         <Route path="/findings" element={<ProtectedRoute><Findings /></ProtectedRoute>} />
         <Route path="/timeline" element={<ProtectedRoute><TimelineDetail /></ProtectedRoute>} />
-        <Route path="/evidence-coverage" element={<ProtectedRoute><EvidenceCoverage /></ProtectedRoute>} />
+        <Route path="/evidence-coverage" element={<Navigate to="/evidence" replace />} />
         <Route path="/index.html" element={<Navigate to="/dashboard" replace />} />
         <Route path="/evidence" element={<ProtectedRoute><Evidence /></ProtectedRoute>} />
         <Route path="/evidence.html" element={<Navigate to="/evidence" replace />} />
@@ -71,6 +71,7 @@ function App() {
         <Route path="/templates/technical-minimal-advanced" element={<TechnicalMinimalAdvancedTemplate />} />
         <Route path="/templates/modern-workspace-detailed" element={<ModernWorkspaceDetailedTemplate />} />
         <Route path="/templates/modern-workspace-split" element={<ModernWorkspaceSplitTemplate />} />
+        <Route path="/templates/v2-technical" element={<TechnicalWorkstationV2 />} />
       </Routes>
     </Router>
   );

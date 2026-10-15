@@ -50,7 +50,7 @@ class TestApiAndReportGeneration:
 
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] in ("SUCCESS", "PARTIAL_SUCCESS")
+        assert data["status"] in ("SUCCESS", "PARTIAL_SUCCESS", "PROCESSING")
         assert data["case_id"] == test_case_id
         assert data["tenant_id"] == "tenant-api"
         assert data["filename"] == "narrative.txt"

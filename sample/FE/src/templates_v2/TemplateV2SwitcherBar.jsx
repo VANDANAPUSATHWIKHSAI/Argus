@@ -15,22 +15,9 @@ export default function TemplateV2SwitcherBar({ activeName }) {
       </div>
 
       <div className="v2-switcher-links">
-        <Link to="/templates-v2" className={`v2-btn ${path === '/templates-v2' ? 'active' : ''}`}>
-          Hub Showcase
+        <Link to="/templates/v2-technical" className="v2-btn active">
+          Technical Workstation
         </Link>
-        <Link to="/templates/v2-minimal" className={`v2-btn ${path === '/templates/v2-minimal' ? 'active' : ''}`}>
-          1: Minimal & Professional
-        </Link>
-        <Link to="/templates/v2-technical" className={`v2-btn ${path === '/templates/v2-technical' ? 'active' : ''}`}>
-          2: Technical Workstation
-        </Link>
-        <Link to="/templates/v2-premium" className={`v2-btn ${path === '/templates/v2-premium' ? 'active' : ''}`}>
-          3: Premium Briefing
-        </Link>
-        <Link to="/templates/v2-overhaul" className={`v2-btn ${path === '/templates/v2-overhaul' ? 'active' : ''}`}>
-          4: Canvas Kanban Overhaul
-        </Link>
-
         <Link to="/dashboard" className="v2-btn prod">
           ← Back to Production App
         </Link>

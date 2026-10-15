@@ -62,6 +62,8 @@ class EvidenceUploadResponse(BaseModel):
     finding_count: int
     timeline_event_count: int
     errors: List[str] = Field(default_factory=list)
+    task_id: Optional[str] = None
+    engine: str = "thread_pool"
 
 
 import uuid
@@ -350,23 +352,51 @@ async def upload_evidence(
         metadata={"size_bytes": len(file_bytes)}
     )
 
-    # Fire-and-forget: submit pipeline to thread pool and return immediately.
-    # The pipeline calls store_evidence internally (parse → store → cleanup).
-    # The browser gets a response right away; analysis runs in the background.
-    loop = asyncio.get_event_loop()
-    loop.run_in_executor(
-        _pipeline_executor,
-        _run_forensic_pipeline,
-        evidence,
-        session,
-        file_path,
-        file_bytes,
-        target_case_id,
-        tenant_id,
-        host_id,
-        uploader_name,
-        file.filename,
-    )
+    # Background forensic pipeline execution:
+    # 1. Prefer Celery distributed task queue if Redis broker is available.
+    # 2. Fall back to local ThreadPoolExecutor if Redis/Celery is offline.
+    task_id = None
+    engine_used = "thread_pool"
+
+    try:
+        from tasks.celery_app import is_celery_broker_available
+        from tasks.forensic_tasks import process_forensic_pipeline_task, run_pipeline_core
+
+        if is_celery_broker_available():
+            celery_task = process_forensic_pipeline_task.delay(
+                evidence_dict=evidence.model_dump(mode="json"),
+                session_dict=session.model_dump(mode="json"),
+                file_path_str=str(file_path),
+                target_case_id=target_case_id,
+                tenant_id=tenant_id,
+                host_id=host_id,
+                uploaded_by=uploader_name,
+                filename_original=file.filename,
+            )
+            task_id = celery_task.id
+            engine_used = "celery"
+            logger.info(f"Dispatched Celery task {task_id} for evidence {evidence.evidence_id}")
+    except Exception as cel_e:
+        logger.warning(f"Celery dispatch check failed ({cel_e}), falling back to thread pool.")
+        task_id = None
+
+    if not task_id:
+        from tasks.forensic_tasks import run_pipeline_core
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(
+            _pipeline_executor,
+            run_pipeline_core,
+            evidence.model_dump(mode="json"),
+            session.model_dump(mode="json"),
+            str(file_path),
+            target_case_id,
+            tenant_id,
+            host_id,
+            uploader_name,
+            file.filename,
+        )
+        engine_used = "thread_pool"
+        logger.info(f"Dispatched thread pool worker for evidence {evidence.evidence_id}")
 
     # Return immediately — pipeline is running in background
     return EvidenceUploadResponse(
@@ -381,8 +411,42 @@ async def upload_evidence(
         fcr_count=0,
         finding_count=0,
         timeline_event_count=0,
-        errors=[]
+        errors=[],
+        task_id=task_id,
+        engine=engine_used,
     )
+
+
+@router.get("/task/{task_id}")
+async def get_task_status(
+    task_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Check real-time status of a background Celery forensic pipeline task.
+    Returns: PENDING | STARTED | PROGRESS | SUCCESS | FAILURE along with progress metadata.
+    """
+    try:
+        from tasks.celery_app import celery_app
+        from celery.result import AsyncResult
+
+        res = AsyncResult(task_id, app=celery_app)
+        task_info = {
+            "task_id": task_id,
+            "status": res.status,
+            "ready": res.ready(),
+            "successful": res.successful() if res.ready() else False,
+        }
+
+        if res.info and isinstance(res.info, dict):
+            task_info["metadata"] = res.info
+        elif res.failed():
+            task_info["error"] = str(res.result)
+
+        return task_info
+    except Exception as e:
+        logger.error(f"Error querying task {task_id}: {e}")
+        return {"task_id": task_id, "status": "UNKNOWN", "error": str(e)}
 
 @router.get("/case/{case_id}")
 async def get_evidence_by_case(

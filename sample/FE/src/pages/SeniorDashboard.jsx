@@ -203,8 +203,8 @@ const SeniorDashboard = () => {
                 <span style={{ color: '#f59e0b' }}>{evidenceStats.partial} Partial</span>
                 <span style={{ color: '#ef4444' }}>{evidenceStats.missing} Missing</span>
               </div>
-              <button onClick={() => navigate('/evidence-coverage')} style={{ width: '100%', padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
-                View Coverage
+              <button onClick={() => navigate('/evidence')} style={{ width: '100%', padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
+                View Evidence
               </button>
             </div>
 

@@ -246,6 +246,20 @@ class EvidenceIntelligenceAgent(BaseAgent):
         # FIX #1 & #6: Trust score depends on provenance ratio & genuine forensic conflicts (NOT prompt injection flags)
         trust_score = round(min(1.0, max(0.0, prov_ratio * 0.7 + (1.0 - forensic_conflict_count / max(1, total_findings)) * 0.3)), 2)
 
+        # Disambiguate performed from possible analyses without false reporting
+        performed_analyses: List[str] = list(context.get("worker_performed_analyses_union", []))
+        possible_analyses: List[str] = []
+        if inventory["memory"] > 0:
+            possible_analyses.append("Memory analysis")
+        if inventory["filesystem"] > 0 or inventory["registry"] > 0:
+            possible_analyses.append("Filesystem/Registry forensic analysis")
+        if inventory["network"] > 0:
+            possible_analyses.append("Network packet & connection analysis")
+        if inventory["logs"] > 0:
+            possible_analyses.append("Event log analysis")
+        if inventory["processes"] > 0:
+            possible_analyses.append("Process execution analysis")
+
         return {
             "total_findings": total_findings,
             "unique_fingerprints": len(fingerprints),
@@ -261,7 +275,11 @@ class EvidenceIntelligenceAgent(BaseAgent):
             "readiness_reason": readiness_reason,
             "readiness_blockers": readiness_blockers,
             "trust_score": trust_score,
+            "performed_analyses": performed_analyses,
+            "possible_analyses": possible_analyses,
         }
+
+    _compute_deterministic_metrics = _compute_deterministic_preprocessing
 
     def run(self, case_id: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """

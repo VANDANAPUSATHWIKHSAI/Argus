@@ -80,8 +80,9 @@ class SanitizationGateway:
         "raw_text", "unstructured", "fact"
     }
 
-    def __init__(self):
-        self.detector = InjectionDetector()
+    def __init__(self, safety_classifier: Optional[Any] = None):
+        self.safety_classifier = safety_classifier
+        self.detector = InjectionDetector(safety_classifier=safety_classifier)
         self.pii_redactor = PIIRedactor()
 
     def redact_pii(self, text: str) -> str:
@@ -126,7 +127,7 @@ class SanitizationGateway:
             f'</evidence_data>'
         )
 
-    def sanitize_structured(self, text: str, field_name: str) -> SanitizationResult:
+    def sanitize_structured(self, text: str, field_name: str, tenant_id: str = "default") -> SanitizationResult:
         """
         Single-pass structured sanitization over raw text:
           1. Normalizes homoglyphs (NFKC) and strips control bytes.
@@ -166,7 +167,7 @@ class SanitizationGateway:
             for comment in comment_pattern.findall(redacted_text):
                 comment_clean = comment.strip()
                 if comment_clean:
-                    is_malicious, details = self.detector.is_injection(comment_clean, is_unstructured=is_unstructured)
+                    is_malicious, details = self.detector.is_injection(comment_clean, is_unstructured=is_unstructured, tenant_id=tenant_id)
                     if is_malicious:
                         details["layer"] = "markdown_comment"
                         self.log_sanitization_event(field_name, "markdown_comment", details.get("reason"), details)
@@ -266,7 +267,7 @@ class SanitizationGateway:
                 pass
 
             # ── 6. Run layered injection detection on final text ─────────
-            is_malicious, details = self.detector.is_injection(redacted_text, is_unstructured=is_unstructured)
+            is_malicious, details = self.detector.is_injection(redacted_text, is_unstructured=is_unstructured, tenant_id=tenant_id)
             if is_malicious:
                 self.log_sanitization_event(field_name, details.get("layer"), details.get("reason"), details)
                 return SanitizationResult(
@@ -313,12 +314,12 @@ class SanitizationGateway:
                 status="FAIL_CLOSED"
             )
 
-    def sanitize(self, text: str, field_name: str) -> str:
+    def sanitize(self, text: str, field_name: str, tenant_id: str = "default") -> str:
         """
         Sanitizes raw text and returns XML evidence block string.
         Maintains backward compatibility with string-expecting callers.
         """
-        return self.sanitize_structured(text, field_name).xml_evidence_block
+        return self.sanitize_structured(text, field_name, tenant_id=tenant_id).xml_evidence_block
 
     def sanitize_finding(self, finding: Any) -> SanitizedAgentContext:
         """
@@ -359,7 +360,7 @@ class SanitizationGateway:
             conf_val = getattr(finding, "confidence", 1.0)
 
             # Single-pass structured sanitization over fact_raw
-            s_res = self.sanitize_structured(fact_raw, field_name="fact")
+            s_res = self.sanitize_structured(fact_raw, field_name="fact", tenant_id=tenant_id)
 
             # If self.sanitize was patched in a test fixture, invoke it to trigger the mock/side-effect
             if type(self.sanitize).__name__ in ("MagicMock", "Mock") or hasattr(self.sanitize, "side_effect"):

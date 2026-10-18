@@ -32,7 +32,22 @@ class MultiVectorEngine:
     VECTOR_DIM = 384  # Standard embedding dimension (matches MiniLM / Qwen embedding projection)
 
     def __init__(self, embedder=None):
-        self.embedder = embedder
+        self.fallback_reason = None
+        if embedder is not None:
+            self.embedder = embedder
+            self.is_fallback = getattr(embedder, "is_fallback", False)
+            self.fallback_reason = getattr(embedder, "fallback_reason", None)
+        else:
+            try:
+                from models.embeddings import EmbeddingLoader
+                self.embedder = EmbeddingLoader()
+                self.is_fallback = getattr(self.embedder, "is_fallback", False)
+                self.fallback_reason = getattr(self.embedder, "fallback_reason", None)
+            except Exception as e:
+                logger.info("EmbeddingLoader not available (%s); defaulting to semantic feature projection fallback.", e)
+                self.embedder = None
+                self.is_fallback = True
+                self.fallback_reason = f"EmbeddingLoader initialization error: {e}"
 
     def generate_vectors(self, signature: CaseBehavioralSignature) -> MultiVector:
         """
@@ -58,7 +73,8 @@ class MultiVectorEngine:
     def encode_text(self, text: str) -> List[float]:
         """
         Encodes a single text string into a normalized dense vector.
-        Uses injected embedder if available, else semantic hashing fallback.
+        Uses injected embedder if available, else semantic hashing fallback in dev/test.
+        Fails closed in production if embedder fails or is unavailable.
         """
         if not text.strip():
             return [0.0] * self.VECTOR_DIM
@@ -74,9 +90,24 @@ class MultiVectorEngine:
                             vec = vec.tolist()
                         return self._normalize(vec)
             except Exception as e:
+                from config.settings import settings
+                is_prod = getattr(settings, "app_env", "development") == "production"
+                if is_prod:
+                    raise RuntimeError(f"Embedding encoding failed in production mode: {e}") from e
                 logger.warning(f"Embedding model failed: {e}. Falling back to semantic vectorizer.")
+                self.is_fallback = True
+                self.fallback_reason = f"Runtime embedder encoding exception: {e}"
 
+        from config.settings import settings
+        is_prod = getattr(settings, "app_env", "development") == "production"
+        if is_prod:
+            raise RuntimeError("CRITICAL: Unapproved semantic projection hash fallback in production mode.")
+
+        self.is_fallback = True
+        if not self.fallback_reason:
+            self.fallback_reason = "Deterministic token-weighted semantic feature projection"
         return self._semantic_hash_vector(text)
+
 
     @classmethod
     def cosine_similarity(cls, vec1: List[float], vec2: List[float]) -> float:

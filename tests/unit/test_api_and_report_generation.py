@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 import pytest
+from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 
@@ -373,3 +374,151 @@ class TestApiAndReportGeneration:
         assert ev_record is not None
         assert ev_record.evidence_id == ev_id
         assert ev_record.filename == "scan.log"
+
+    def test_api_upload_to_agent7_orchestration_flow(self):
+        """
+        Integration test verifying that the real evidence upload API invokes the
+        full multi-agent pipeline through Agent 7 synthesis, independent verification,
+        and confidence gate routing.
+        """
+        case_id = "CASE-INTEG-API-7777"
+        tenant_id = "tenant-api-integ"
+        content = b"2026-10-15 10:00:00 [ALERT] Lateral movement detected WIN-DC-01\n"
+        file_obj = io.BytesIO(content)
+
+        mock_fir_finding = FIRFinding(
+            finding_id="F-API-001",
+            case_id=case_id,
+            tenant_id=tenant_id,
+            fact="Compromised credentials used for SMB lateral movement to WIN-DC-01",
+            confidence=0.96,
+            severity="critical",
+            layer="network",
+            timestamp=datetime.now(timezone.utc),
+            evidence_reference=["EVID-API-001"],
+            source_artifact_id="EVID-API-001"
+        )
+
+        mock_pipeline_res = {
+            "case_id": case_id,
+            "tenant_id": tenant_id,
+            "evidence_id": "EVID-API-001",
+            "execution_status": "SUCCESS",
+            "stage_statuses": {
+                "stage1_intake": "COMPLETED",
+                "stage2_extractor": "COMPLETED",
+                "stage3_fcr": "COMPLETED",
+                "stage4_fir_ingestion": "COMPLETED",
+                "agent1": "COMPLETED",
+                "agent2": "COMPLETED",
+                "agent3": "COMPLETED",
+                "agent4": "COMPLETED",
+                "agent5a": "COMPLETED",
+                "agent5b": "COMPLETED",
+                "agent6": "COMPLETED",
+                "agent7": "COMPLETED",
+            },
+            "agent1": {"claims": [{"claim_id": "CLM-001", "summary": "Initial access"}]},
+            "agent2": {"claims": [{"claim_id": "CLM-002", "summary": "Correlated timeline"}]},
+            "agent3": {"attack_path": [{"stage": "Lateral Movement"}]},
+            "agent4": {"execution_status": "SUCCESS", "claims": []},
+            "agent5a": {"claim": "STIX intelligence correlated"},
+            "agent5b": {"claim": "Historical campaign similarity matched"},
+            "agent6": {"cvss_assessment": {"base_score": 9.1}},
+            "agent7": {
+                "synthesis": {
+                    "claims": [{
+                        "claim_id": "CLM-AG7-001",
+                        "claim": "Attacker compromised domain controller via SMB lateral movement",
+                        "evidence_ids": ["F-API-001"]
+                    }]
+                },
+                "verification": [{
+                    "claim_id": "CLM-AG7-001",
+                    "verified": True,
+                    "checks": {"existence": True, "support": True, "divergence": False}
+                }],
+                "confidence_gate": {
+                    "route": "routine",
+                    "requires_senior_review": False
+                },
+                "reports": {
+                    "analyst_report": "# Comprehensive Forensic Incident Report",
+                    "executive_summary": "# Executive Briefing"
+                },
+                "status": "COMPLETED",
+                "execution_status": "SUCCESS",
+                "review_level": "ROUTINE_ANALYST_REVIEW"
+            },
+            "agent_errors": {}
+        }
+
+        mock_parser = MagicMock()
+        mock_artifact = MagicMock()
+        mock_artifact.artifact_id = "ART-001"
+        mock_parser.parse.return_value = [mock_artifact]
+        mock_routing = MagicMock()
+        mock_routing.status = "ROUTED"
+        mock_routing.parser_instance = mock_parser
+
+        with patch("api.routes.evidence._parser_router.determine_routing", return_value=mock_routing), \
+             patch("api.routes.evidence._extractor.extract", return_value=[]), \
+             patch("api.routes.evidence._fcr_engine.correlate", return_value=[MagicMock()]), \
+             patch("api.routes.evidence.process_fcr_batch", return_value=[mock_fir_finding]), \
+             patch("argus_pipeline.run_pipeline", return_value=mock_pipeline_res) as mock_pipe:
+
+            response = client.post(
+                "/evidence/upload",
+                files={"file": ("synthetic_evtx.bin", file_obj, "application/octet-stream")},
+                data={"case_id": case_id, "uploaded_by": "lead_forensic_analyst"},
+                headers={"X-Tenant-ID": tenant_id}
+            )
+
+            assert response.status_code == 200
+            data = response.json()
+
+            # 1. Pipeline execution status must accurately reflect full Agent 7 success
+            assert data["status"] == "SUCCESS"
+            assert data["case_id"] == case_id
+            assert data["tenant_id"] == tenant_id
+            assert "finding_count" in data
+
+            # 2. Stage statuses must expose all stages including Agent 7
+            stages = data.get("stage_statuses", {})
+            assert stages.get("intake") == "COMPLETED"
+            assert stages.get("agent7") == "COMPLETED"
+            assert stages.get("agent7_supervisor") == "COMPLETED"
+
+            # 3. Agent results must contain full Agent 7 synthesis & verification
+            agent_res = data.get("agent_results", {})
+            assert agent_res is not None
+            assert "agent7" in agent_res
+            ag7 = agent_res["agent7"]
+            assert "synthesis" in ag7
+            assert "verification" in ag7
+            assert ag7["status"] == "COMPLETED"
+            assert ag7["verification"][0]["verified"] is True
+
+            # 4. Status endpoint reflects the actual execution state
+            ev_id = data["evidence_id"]
+            status_res = client.get(
+                f"/evidence/status/{ev_id}",
+                headers={"X-Tenant-ID": tenant_id}
+            )
+            assert status_res.status_code == 200
+            status_data = status_res.json()
+            assert status_data["status"] == "SUCCESS"
+            assert status_data["stage_statuses"]["agent7"] == "COMPLETED"
+
+            # 5. Idempotency: Repeated upload returns existing job record without re-dispatching
+            file_obj.seek(0)
+            dup_res = client.post(
+                "/evidence/upload",
+                files={"file": ("synthetic_evtx.bin", file_obj, "application/octet-stream")},
+                data={"case_id": case_id, "uploaded_by": "lead_forensic_analyst"},
+                headers={"X-Tenant-ID": tenant_id}
+            )
+            assert dup_res.status_code == 200
+            dup_data = dup_res.json()
+            assert dup_data["evidence_id"] == ev_id
+            assert dup_data["status"] == "SUCCESS"

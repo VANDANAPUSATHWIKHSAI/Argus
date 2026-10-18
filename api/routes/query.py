@@ -5,6 +5,7 @@ from api.routes.auth import get_current_user
 from sanitization.injection_gate import InjectionGate
 from fir.repository import FIRRepository
 from models.llm import OllamaWrapper
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,8 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
 
     # 5. Query the LLM model with graceful offline fallback
     try:
-        llm = OllamaWrapper(model_name="qwen3-14b", base_url="http://localhost:11434")
+        model_name = getattr(settings, "llm_model_name", "Qwen/Qwen3-8B")
+        llm = OllamaWrapper(model_name=model_name, base_url="http://localhost:11434")
         response_text = llm.generate(prompt)
     except Exception as e:
         logger.warning(f"Ollama LLM connection failed: {e}. Falling back to structured evidence summary.")

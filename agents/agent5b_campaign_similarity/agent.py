@@ -122,13 +122,14 @@ class CampaignSimilarityAgent(BaseAgent):
 
         # 1. Collect Authorized Evidence IDs from FIR repository or explicit evidence scope
         authorized_evidence_ids: Set[str] = set(evidence_ids or [])
-        if self.fir and hasattr(self.fir, "get_all_by_case"):
+        lookup_fn = getattr(self.fir, "get_by_case", getattr(self.fir, "get_all_by_case", None)) if self.fir else None
+        if callable(lookup_fn):
             try:
-                repo_firs = self.fir.get_all_by_case(target_tenant, case_id)
+                repo_firs = lookup_fn(target_tenant, case_id)
                 for f in repo_firs:
-                    fid = getattr(f, "finding_id", f.get("finding_id", ""))
+                    fid = getattr(f, "finding_id", f.get("finding_id", "") if isinstance(f, dict) else "")
                     if fid:
-                        authorized_evidence_ids.add(fid)
+                        authorized_evidence_ids.add(str(fid))
                 validation_decisions.append(f"Loaded {len(repo_firs)} authoritative FIR records from database.")
             except Exception as e:
                 logger.warning(f"Error reading FIR findings: {e}")
@@ -138,10 +139,16 @@ class CampaignSimilarityAgent(BaseAgent):
         input_eids: Set[str] = set()
         for inp in [agent2_output, agent3_output, agent4_output, agent5a_output]:
             if isinstance(inp, dict):
-                eids = inp.get("evidence_ids") or []
-                input_eids.update(eids)
-                erefs = inp.get("evidence_references") or []
-                input_eids.update(erefs)
+                for item in (inp.get("evidence_ids") or []):
+                    if isinstance(item, str) and item.strip():
+                        input_eids.add(item.strip())
+                for item in (inp.get("evidence_references") or []):
+                    if isinstance(item, str) and item.strip():
+                        input_eids.add(item.strip())
+                    elif isinstance(item, dict):
+                        val = item.get("finding_id") or item.get("evidence_id") or item.get("id")
+                        if isinstance(val, str) and val.strip():
+                            input_eids.add(val.strip())
 
         effective_authorized_ids = authorized_evidence_ids if authorized_evidence_ids else input_eids
 

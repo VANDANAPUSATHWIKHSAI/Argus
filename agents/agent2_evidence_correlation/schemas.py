@@ -224,6 +224,9 @@ class Agent2Output(BaseModel):
         description="Failure classification: NEO4J_UNAVAILABLE, GDS_UNAVAILABLE, MODEL_UNAVAILABLE, MALFORMED_OUTPUT, NO_EVIDENCE"
     )
     error_message: Optional[str] = None
+    is_degraded: bool = Field(default=False, description="True when GDS is unavailable and pure-Cypher fallback ran")
+    degraded_reason: Optional[str] = Field(default=None, description="Explanation of degraded execution capability")
+    algorithm_executed: Optional[str] = Field(default=None, description="Actual algorithm and implementation that executed (e.g. gds.wcc.stream)")
 
     graph: GraphStatus = Field(default_factory=GraphStatus)
     correlation_signals: Agent2CorrelationSignal = Field(default_factory=Agent2CorrelationSignal)

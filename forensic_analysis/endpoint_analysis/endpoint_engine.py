@@ -28,6 +28,7 @@ from forensic_analysis.endpoint_analysis.registry_analyzer import RegistryAnalyz
 from forensic_analysis.endpoint_analysis.browser_analyzer import BrowserAnalyzer
 from forensic_analysis.endpoint_analysis.usb_analyzer import USBAnalyzer
 from forensic_analysis.endpoint_analysis.user_activity_analyzer import UserActivityAnalyzer
+from forensic_analysis.rules.yara_engine import YaraRuleEngine
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +36,18 @@ logger = logging.getLogger(__name__)
 class EndpointAnalysisEngine:
     """
     Deterministic Endpoint Forensic Analysis Engine.
-    Orchestrates the 6 endpoint sub-analyzers over input FCRs and Artifact stores.
+    Orchestrates the 6 endpoint sub-analyzers over input FCRs and Artifact stores,
+    and runs deterministic YARA malware rule matching over binary/file artifacts.
     """
 
-    def __init__(self):
+    def __init__(self, yara_rules_dir: Optional[str] = None):
         self.persistence_analyzer = PersistenceAnalyzer()
         self.filesystem_analyzer = FilesystemAnalyzer()
         self.registry_analyzer = RegistryAnalyzer()
         self.browser_analyzer = BrowserAnalyzer()
         self.usb_analyzer = USBAnalyzer()
         self.user_activity_analyzer = UserActivityAnalyzer()
+        self.yara_engine = YaraRuleEngine(rules_dir=yara_rules_dir)
 
     def analyze(
         self,
@@ -124,6 +127,12 @@ class EndpointAnalysisEngine:
                     raw_findings.extend(self.filesystem_analyzer.analyze(filesystem_arts, case_id, fcr_ref=fcr_id))
             except Exception as e:
                 logger.error("FilesystemAnalyzer failed on FCR %s: %s", fcr_id, e, exc_info=True)
+
+            try:
+                if filesystem_arts:
+                    raw_findings.extend(self.yara_engine.evaluate_artifacts(case_id, filesystem_arts, fcr_id))
+            except Exception as e:
+                logger.error("YaraRuleEngine failed on filesystem artifacts in FCR %s: %s", fcr_id, e, exc_info=True)
 
             try:
                 if registry_arts:

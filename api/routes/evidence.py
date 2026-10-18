@@ -19,7 +19,7 @@ import logging
 import asyncio
 import threading
 import concurrent.futures
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pathlib import Path
 
 from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException, Query, Depends, BackgroundTasks
@@ -66,6 +66,8 @@ class EvidenceUploadResponse(BaseModel):
     fcr_count: int
     finding_count: int
     timeline_event_count: int
+    stage_statuses: Dict[str, str] = Field(default_factory=dict)
+    agent_results: Optional[Dict[str, Any]] = None
     errors: List[str] = Field(default_factory=list)
 
 
@@ -271,8 +273,62 @@ def _run_forensic_pipeline(
         except Exception as tl_e:
             logger.error(f"Timeline building failed: {tl_e}")
 
-        # Persist metadata counts
-        pipeline_status = "SUCCESS" if not errors else "PARTIAL_SUCCESS"
+        # Stage 5+ — Multi-Agent Ingestion & Reasoning (Agents 1-7 via unified orchestrator)
+        stage_statuses = {
+            "intake": "COMPLETED",
+            "preprocessing": "COMPLETED" if parsed_artifacts else ("FAILED" if errors else "SKIPPED"),
+            "extractor": "COMPLETED" if derived_observables else "SKIPPED",
+            "fcr_engine": "COMPLETED" if fcr_records else "SKIPPED",
+            "analysis_fir": "COMPLETED" if findings else "SKIPPED",
+            "timeline": "COMPLETED" if timeline else "SKIPPED",
+            "agent_reasoning": "PENDING",
+            "agent7_supervisor": "PENDING",
+        }
+        agent_pipeline_results = None
+        current_case_findings = findings or _fir_repo.get_by_case(tenant_id, target_case_id)
+        if current_case_findings:
+            try:
+                from argus_pipeline import run_pipeline
+                agent_pipeline_results = run_pipeline(
+                    case_id=target_case_id,
+                    tenant_id=tenant_id,
+                    fir_findings=current_case_findings,
+                    stop_on_error=False
+                )
+                if agent_pipeline_results:
+                    if "stage_statuses" in agent_pipeline_results:
+                        stage_statuses.update(agent_pipeline_results["stage_statuses"])
+                    agent_status = agent_pipeline_results.get("execution_status", "COMPLETED")
+                    stage_statuses["agent_reasoning"] = agent_status
+                    ag7_out = agent_pipeline_results.get("agent7", {})
+                    stage_statuses["agent7_supervisor"] = ag7_out.get("status") or ag7_out.get("execution_status", "COMPLETED")
+            except Exception as agent_e:
+                err_text = f"Agent pipeline execution error: {agent_e}"
+                logger.error(err_text)
+                errors.append(err_text)
+                stage_statuses["agent_reasoning"] = "FAILED"
+                stage_statuses["agent7_supervisor"] = "FAILED"
+        else:
+            stage_statuses["agent_reasoning"] = "SKIPPED"
+            stage_statuses["agent7_supervisor"] = "SKIPPED"
+
+        # The upload path must not report full investigation success when only preprocessing completed.
+        # It must accurately reflect downstream agent completion.
+        if errors:
+            pipeline_status = "PARTIAL_SUCCESS"
+        elif not current_case_findings:
+            pipeline_status = "PARTIAL_SUCCESS"
+        elif agent_pipeline_results and agent_pipeline_results.get("execution_status") == "SUCCESS":
+            ag7_status = (agent_pipeline_results.get("agent7") or {}).get("status")
+            if ag7_status == "COMPLETED":
+                pipeline_status = "SUCCESS"
+            elif ag7_status == "NEEDS_REVIEW":
+                pipeline_status = "NEEDS_REVIEW"
+            else:
+                pipeline_status = "PARTIAL_SUCCESS"
+        else:
+            pipeline_status = "PARTIAL_SUCCESS"
+
         try:
             evidence.metadata.update({
                 "parsed_artifact_count": len(parsed_artifacts),
@@ -280,6 +336,8 @@ def _run_forensic_pipeline(
                 "fcr_count": len(fcr_records),
                 "finding_count": len(findings),
                 "timeline_event_count": len(timeline),
+                "stage_statuses": stage_statuses,
+                "agent_results": agent_pipeline_results,
                 "status": pipeline_status,
                 "errors": errors
             })
@@ -299,7 +357,7 @@ def _run_forensic_pipeline(
                 cur = conn.cursor()
                 cur.execute(
                     "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
-                    (json.dumps(evidence.metadata), evidence.evidence_id)
+                    (json.dumps(evidence.metadata, default=str), evidence.evidence_id)
                 )
                 conn.commit()
                 conn.close()
@@ -320,17 +378,24 @@ def _run_forensic_pipeline(
                     meta_data["case_id"] = target_case_id
                     import json
                     with open(meta_file, "w", encoding="utf-8") as mf:
-                        json.dump(meta_data, mf, indent=2)
+                        json.dump(meta_data, mf, indent=2, default=str)
         except Exception as db_meta_e:
             logger.warning(f"Failed to update evidence metadata: {db_meta_e}")
 
         result_payload = {
             "status": pipeline_status,
+            "case_id": target_case_id,
+            "tenant_id": tenant_id,
+            "evidence_id": evidence.evidence_id,
+            "filename": filename_original,
+            "sha256_hash": evidence.sha256_hash,
             "parsed_artifact_count": len(parsed_artifacts),
             "derived_observable_count": len(derived_observables),
             "fcr_count": len(fcr_records),
             "finding_count": len(findings),
             "timeline_event_count": len(timeline),
+            "stage_statuses": stage_statuses,
+            "agent_results": agent_pipeline_results,
             "errors": errors,
         }
         with _jobs_lock:
@@ -415,6 +480,16 @@ async def upload_evidence(
 
     sha256_digest = hashlib.sha256(file_bytes).hexdigest()
 
+    # Idempotency / duplicate-work prevention: if identical file is already processing or completed for this tenant & case, return existing job
+    with _jobs_lock:
+        for j_id, j_rec in _evidence_jobs.items():
+            if (j_rec.get("tenant_id") == tenant_id and
+                j_rec.get("case_id") == target_case_id and
+                j_rec.get("sha256_hash") == sha256_digest and
+                j_rec.get("status") in ("PROCESSING", "SUCCESS", "COMPLETED_PREPROCESSING_ONLY", "NEEDS_REVIEW", "PARTIAL_SUCCESS")):
+                logger.info(f"Duplicate upload detected: evidence '{j_id}' with hash '{sha256_digest}' already exists in registry.")
+                return EvidenceUploadResponse(**j_rec)
+
     # Create evidence object
     evidence = Evidence(
         case_id=target_case_id,
@@ -439,6 +514,16 @@ async def upload_evidence(
         "fcr_count": 0,
         "finding_count": 0,
         "timeline_event_count": 0,
+        "stage_statuses": {
+            "intake": "COMPLETED",
+            "preprocessing": "PROCESSING",
+            "fcr_engine": "PENDING",
+            "analysis_fir": "PENDING",
+            "timeline": "PENDING",
+            "agent_reasoning": "PENDING",
+            "agent7_supervisor": "PENDING",
+        },
+        "agent_results": None,
         "errors": []
     }
     with _jobs_lock:
@@ -534,6 +619,8 @@ async def get_evidence_status(
         fcr_count=meta.get("fcr_count", 0),
         finding_count=meta.get("finding_count", 0),
         timeline_event_count=meta.get("timeline_event_count", 0),
+        stage_statuses=meta.get("stage_statuses", {}),
+        agent_results=meta.get("agent_results"),
         errors=meta.get("errors", [])
     )
 

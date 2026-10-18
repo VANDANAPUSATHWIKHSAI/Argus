@@ -10,9 +10,16 @@ add it here first and tell the team, don't quietly rename something.
 from __future__ import annotations
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 import uuid
+
+
+class RFC3161VerificationStatus(str, Enum):
+    VERIFIED_EXTERNAL_TSA = "VERIFIED_EXTERNAL_TSA"
+    LOCAL_TIMESTAMP_ONLY  = "LOCAL_TIMESTAMP_ONLY"
+    TSA_FAILED            = "TSA_FAILED"
+    UNVERIFIED_PENDING    = "UNVERIFIED_PENDING"
 
 
 class EvidenceStatus(str, Enum):
@@ -56,13 +63,21 @@ class TimestampRecord(BaseModel):
     sha256_hash:                   str
     timestamp_token:               str
     tsa_url:                       str
-    timestamp_source:              str                       # "tsa" or "mock"
+    timestamp_source:              str                       # "tsa" or "mock" / "local_fallback"
     timestamped_at:                datetime = Field(default_factory=datetime.utcnow)
     timestamp_algorithm:           str  = "sha256"
-    timestamp_verification_status: str  = "unverified"        # "verified", "unverified", "failed"
+    timestamp_verification_status: str  = "unverified"        # "VERIFIED_EXTERNAL_TSA", "LOCAL_TIMESTAMP_ONLY", "TSA_FAILED", "verified", "failed"
     evidence_id:                   Optional[str] = None
     case_id:                       Optional[str] = None
     tenant_id:                     Optional[str] = None
+    authority_name:                Optional[str] = None
+    nonce:                         Optional[int] = None
+    policy_id:                     Optional[str] = None
+    serial_number:                 Optional[str] = None
+    signer_certificate_subject:    Optional[str] = None
+    signer_certificate_issuer:     Optional[str] = None
+    signer_certificate_not_after:  Optional[datetime] = None
+    verification_details:          Dict[str, Any] = Field(default_factory=dict)
 
 
 class CaseSession(BaseModel):

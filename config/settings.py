@@ -5,7 +5,7 @@ from typing import Optional
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     # ── LLM ──────────────────────────────────────
-    llm_model_name: str = "Qwen/Qwen3-14B"
+    llm_model_name: str = "Qwen/Qwen3-8B"
     llm_fallback_model: str = "Qwen/Qwen3-8B"
     embedding_model: str = "Qwen/Qwen3-Embedding-4B"
 
@@ -40,6 +40,8 @@ class Settings(BaseSettings):
     # Agent 5b — RAG against Validated Case Repository
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: Optional[str] = None
+    qdrant_verify_tls: bool = True
+    qdrant_tls_cert_path: Optional[str] = None
 
     # ── Redis (live state / queues / checkpoints) ──
     redis_host: str = "localhost"
@@ -51,12 +53,25 @@ class Settings(BaseSettings):
     # ── Threat Intel ─────────────────────────────
     taxii_server_url: Optional[str] = None
     taxii_api_key: Optional[str] = None
+    taxii_username: Optional[str] = None
+    taxii_password: Optional[str] = None
+    taxii_collection_id: Optional[str] = None
+    taxii_verify_tls: bool = True
+    taxii_ca_cert_path: Optional[str] = None
+    taxii_polling_interval_seconds: int = 3600
+    taxii_cache_ttl_seconds: int = 86400
+    taxii_rate_limit_backoff: float = 2.0
+    taxii_max_retries: int = 3
     nvd_api_key: Optional[str] = None
     cisa_kev_url: str = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
     # ── Security ─────────────────────────────────
     evidence_encryption_key: Optional[str] = None
     rfc3161_tsa_url: str = "https://freetsa.org/tsr"
+
+    # ── External Tools & Raw Evidence Locations ──
+    external_tools_dir: str = "c:/Users/Sudeep/Downloads/argus components/external_tools"
+    raw_evidence_dir: str = "c:/Users/Sudeep/Downloads/argus components/raw evidence"
 
     # ── App ──────────────────────────────────────
     app_env: str = "development"

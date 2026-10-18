@@ -36,16 +36,51 @@ class RedisClient:
             self.connect()
         return self._client
 
-    def set_checkpoint(self, case_id: str, stage: str, data: str, ttl: int = 86400) -> bool:
-        """Stores a workflow checkpoint for a case stage."""
+    def set_checkpoint(
+        self,
+        case_id: str,
+        stage: str,
+        data: str,
+        ttl: Optional[int] = 86400,
+        persist: bool = False,
+    ) -> bool:
+        """Stores a workflow checkpoint for a case stage with safe persistence."""
         try:
             client = self.get_client()
             if client:
                 key = f"checkpoint:{case_id}:{stage}"
+                if persist or ttl is None:
+                    return bool(client.set(key, data))
                 return bool(client.set(key, data, ex=ttl))
         except Exception as exc:
             logger.warning(f"Redis set_checkpoint failed: {exc}")
         return False
+
+    def persist_checkpoint(self, case_id: str, stage: str) -> bool:
+        """Removes expiration from an existing checkpoint key, making it persistent."""
+        try:
+            client = self.get_client()
+            if client:
+                key = f"checkpoint:{case_id}:{stage}"
+                return bool(client.persist(key))
+        except Exception as exc:
+            logger.warning(f"Redis persist_checkpoint failed: {exc}")
+        return False
+
+    def get_eviction_policy(self) -> dict[str, str]:
+        """Queries Redis memory and persistence settings to verify checkpoint safety."""
+        info = {}
+        try:
+            client = self.get_client()
+            if client:
+                cfg = client.config_get("maxmemory-policy")
+                info["maxmemory_policy"] = cfg.get("maxmemory-policy", "unknown")
+                save_cfg = client.config_get("save")
+                info["rdb_save"] = save_cfg.get("save", "unknown")
+        except Exception as exc:
+            logger.warning(f"Failed to query Redis eviction policy: {exc}")
+            info["error"] = str(exc)
+        return info
 
     def get_checkpoint(self, case_id: str, stage: str) -> Optional[str]:
         """Retrieves a workflow checkpoint for a case stage."""

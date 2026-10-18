@@ -55,9 +55,10 @@ class SupervisorVerification(BaseAgent):
         """
         claims = context.get("claims", [])
         tenant_id = context.get("tenant_id") or getattr(self, "tenant_id", "default")
+        fir_records = context.get("fir_records") or context.get("fir_findings")
         results = []
         for claim in claims:
-            res = self.verify(claim, tenant_id=tenant_id, case_id=case_id)
+            res = self.verify(claim, fir_records=fir_records, tenant_id=tenant_id, case_id=case_id)
             results.append(res)
 
         # Empty claims or empty results cannot satisfy mandatory verification
@@ -99,16 +100,8 @@ class SupervisorVerification(BaseAgent):
             except (ValueError, TypeError):
                 pass
 
-        # 1. Resolve cited evidence IDs
-        evidence_ids = list(claim.get("evidence_ids", []))
-        if not evidence_ids and fir_records:
-            for r in fir_records:
-                if isinstance(r, dict):
-                    fid = r.get("finding_id") or r.get("id")
-                else:
-                    fid = getattr(r, "finding_id", None) or getattr(r, "id", None)
-                if fid:
-                    evidence_ids.append(fid)
+        # 1. Resolve cited evidence IDs (Must NOT automatically backfill missing IDs from all FIR records)
+        evidence_ids = [str(eid).strip() for eid in claim.get("evidence_ids", []) if str(eid).strip()]
 
         flags: List[str] = []
         evidence_details: List[Dict[str, Any]] = []
@@ -131,25 +124,18 @@ class SupervisorVerification(BaseAgent):
                     except Exception as lookup_err:
                         logger.warning(f"Error querying FIR for evidence {fid}: {lookup_err}")
 
-                if finding is None:
-                    # Check for cross-tenant breach attempt
-                    raw_finding = None
-                    if hasattr(self.fir, "get_by_id"):
-                        try:
-                            raw_finding = self.fir.get_by_id(fid)
-                        except TypeError:
-                            pass
-                        except Exception:
-                            pass
+                if finding is None and fir_records:
+                    for r in fir_records:
+                        r_fid = r.get("finding_id") if isinstance(r, dict) else getattr(r, "finding_id", None)
+                        r_tenant = r.get("tenant_id") if isinstance(r, dict) else getattr(r, "tenant_id", None)
+                        r_case = r.get("case_id") if isinstance(r, dict) else getattr(r, "case_id", None)
+                        if str(r_fid) == str(fid):
+                            finding = r
+                            break
 
-                    if raw_finding and getattr(raw_finding, "tenant_id", "") not in ("", t_id):
-                        existence_passed = False
-                        flags.append(
-                            f"Evidence ID [{fid}] not found in FIR for tenant '{t_id}' (Cross-tenant access violation: belongs to tenant '{getattr(raw_finding, 'tenant_id', '')}')"
-                        )
-                    else:
-                        existence_passed = False
-                        flags.append(f"Evidence ID [{fid}] not found in FIR for tenant '{t_id}'")
+                if finding is None:
+                    existence_passed = False
+                    flags.append(f"Evidence ID [{fid}] not found in FIR for tenant '{t_id}'")
                 else:
                     # Every evidence record must be verified against authorized tenant and active case.
                     # Legacy or missing tenant metadata must not automatically authorize the record.
@@ -157,7 +143,7 @@ class SupervisorVerification(BaseAgent):
                     if not finding_tenant or (t_id and str(finding_tenant) != str(t_id)):
                         existence_passed = False
                         flags.append(
-                            f"Tenant boundary violation: Evidence ID [{fid}] tenant '{finding_tenant}' does not match authorized tenant '{t_id}'"
+                            f"Tenant boundary violation: Evidence ID [{fid}] does not match authorized tenant '{t_id}'"
                         )
                         continue
 

@@ -111,9 +111,17 @@ class CaseSignatureBuilder:
         all_eids = set(evidence_ids or [])
         for src in [agent2_data, agent3_data, agent4_data, agent5a_data]:
             if "evidence_ids" in src and isinstance(src["evidence_ids"], list):
-                all_eids.update(src["evidence_ids"])
+                for item in src["evidence_ids"]:
+                    if isinstance(item, str) and item.strip():
+                        all_eids.add(item.strip())
             if "evidence_references" in src and isinstance(src["evidence_references"], list):
-                all_eids.update(src["evidence_references"])
+                for item in src["evidence_references"]:
+                    if isinstance(item, str) and item.strip():
+                        all_eids.add(item.strip())
+                    elif isinstance(item, dict):
+                        val = item.get("finding_id") or item.get("evidence_id") or item.get("id")
+                        if isinstance(val, str) and val.strip():
+                            all_eids.add(val.strip())
 
         return CaseBehavioralSignature(
             case_id=case_id,

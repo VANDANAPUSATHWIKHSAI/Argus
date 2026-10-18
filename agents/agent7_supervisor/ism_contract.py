@@ -1,7 +1,7 @@
 """
 Agent 7 — Future Investigation State Machine (ISM) Integration Contract
 ========================================================================
-STATUS: NOT IMPLEMENTED (Future Architectural Specification)
+STATUS: IMPLEMENTED (Aligned with ism/state_machine.py)
 
 Defines the clean boundary contract for the future Investigation State Machine (ISM).
 Agent 7 implements this contract to expose execution state, idempotency keys, and

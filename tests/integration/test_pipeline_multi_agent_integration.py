@@ -162,8 +162,28 @@ class MockQwenModel:
         prompt_lower = prompt.lower()
         system_lower = (system_prompt or "").lower()
 
-        # 1. Agent 3: Attack Reconstruction
-        if "agent 3" in system_lower or "attack reconstruction" in system_lower or "reconstruct the attack timeline" in prompt_lower:
+        # 1. Agent 2: Evidence Correlation
+        if "agent 2" in system_lower or "evidence correlation" in system_lower or "deterministic correlation signals" in prompt_lower or "<deterministic_correlation_signals>" in prompt:
+            return json.dumps({
+                "claims": [
+                    {
+                        "claim_id": "CLM-AG2-001",
+                        "summary": "Correlated phishing delivery to credential harvesting",
+                        "correlation_type": "temporal",
+                        "findings_summary": "Findings F-TEST-001 and F-TEST-002 share timeline proximity",
+                        "cited_evidence_ids": ["F-TEST-001", "F-TEST-002"],
+                        "community_id": "GC-001",
+                        "assessed_importance": "critical",
+                        "confidence_score": 0.95,
+                        "timeline_sequence": ["F-TEST-001", "F-TEST-002"],
+                        "conflicts_noted": [],
+                        "reasoning_notes": "Temporal sequence aligns with initial access and execution."
+                    }
+                ]
+            })
+
+        # 2. Agent 3: Attack Reconstruction
+        elif ("agent 3" in system_lower or "attack reconstruction" in system_lower or "reconstruct the attack timeline" in prompt_lower) and "agent 2" not in system_lower:
             return json.dumps({
                 "infection_path": {
                     "entry_point": "Inbound remote network phishing email with attachment security_update.bat (F-TEST-001)",
@@ -269,25 +289,7 @@ class MockQwenModel:
                 "overall_confidence": 0.95
             })
 
-        # 2. Agent 2: Evidence Correlation
-        elif "agent 2" in system_lower or "evidence correlation" in system_lower or "deterministic correlation signals" in prompt_lower or "<deterministic_correlation_signals>" in prompt:
-            return json.dumps({
-                "claims": [
-                    {
-                        "claim_id": "CLM-AG2-001",
-                        "summary": "Correlated phishing delivery to credential harvesting",
-                        "correlation_type": "temporal",
-                        "findings_summary": "Findings F-TEST-001 and F-TEST-002 share timeline proximity",
-                        "cited_evidence_ids": ["F-TEST-001", "F-TEST-002"],
-                        "community_id": "GC-001",
-                        "assessed_importance": "critical",
-                        "confidence_score": 0.95,
-                        "timeline_sequence": ["F-TEST-001", "F-TEST-002"],
-                        "conflicts_noted": [],
-                        "reasoning_notes": "Temporal sequence aligns with initial access and execution."
-                    }
-                ]
-            })
+
 
         # 3. Agent 1: Evidence Intelligence
         elif "agent 1" in system_lower or "evidence intelligence" in system_lower or "synthesize initial structured claims" in prompt_lower:
@@ -311,9 +313,75 @@ class MockQwenModel:
                 ]
             })
 
-        # Fallback / Supervisor Synthesis
+        # 4. Agent 7: Supervisor Synthesis & Verification
+        elif "supervisor" in system_lower or "synthesis" in system_lower:
+            return json.dumps({
+                "executive_summary": "Comprehensive forensic synthesis of multi-stage intrusion.",
+                "incident_narrative": "Adversary gained initial access via phishing email and escalated laterally to Domain Controller.",
+                "claims": [
+                    {
+                        "claim_id": "CLM-001",
+                        "claim": "Inbound phishing email with malicious script delivered to workstation.",
+                        "evidence_ids": ["F-TEST-001"],
+                        "severity": "high",
+                        "is_attribution": False,
+                        "confidence": 0.95,
+                        "mitre_tactics": ["Initial Access"],
+                        "mitre_techniques": ["T1566.001"]
+                    },
+                    {
+                        "claim_id": "CLM-002",
+                        "claim": "PowerShell execution of obfuscated payload connecting to external command-and-control.",
+                        "evidence_ids": ["F-TEST-002"],
+                        "severity": "critical",
+                        "is_attribution": False,
+                        "confidence": 0.98,
+                        "mitre_tactics": ["Execution"],
+                        "mitre_techniques": ["T1059.001"]
+                    },
+                    {
+                        "claim_id": "CLM-003",
+                        "claim": "SMB lateral movement to Domain Controller using compromised administrative credentials.",
+                        "evidence_ids": ["F-TEST-005"],
+                        "severity": "critical",
+                        "is_attribution": False,
+                        "confidence": 0.94,
+                        "mitre_tactics": ["Lateral Movement"],
+                        "mitre_techniques": ["T1021.002"]
+                    }
+                ],
+                "attack_timeline": [
+                    {
+                        "timestamp": "2026-10-01T08:15:00Z",
+                        "stage": "Initial Access",
+                        "summary": "Phishing email received",
+                        "source_tool": "email_gateway",
+                        "evidence_id": "F-TEST-001"
+                    }
+                ],
+                "conflicts_resolved": [],
+                "confidence_score": 0.95
+            })
+
+        elif "respond only with 'yes' or 'no'" in prompt_lower or "determine if the evidence strictly supports" in prompt_lower:
+            return "YES"
+
+        # Fallback / General JSON Response
         else:
-            return "Synthesized claim grounded strictly in forensic findings."
+            return json.dumps({
+                "executive_summary": "Forensic claim grounded strictly in findings.",
+                "claims": [
+                    {
+                        "claim_id": "CLM-DEF-001",
+                        "claim": "Forensic claim grounded strictly in findings.",
+                        "evidence_ids": ["F-TEST-001"],
+                        "severity": "medium",
+                        "is_attribution": False,
+                        "confidence": 0.90
+                    }
+                ],
+                "confidence_score": 0.90
+            })
 
 
 # ── TEST SUITE ────────────────────────────────────────────────────────────────
@@ -352,13 +420,25 @@ class TestMultiAgentPipelineIntegration:
         """
         # Mock external threat feeds and vector store
         mock_stix = MagicMock()
-        mock_stix.check_ioc.return_value = {"ioc": "192.168.1.50", "threat_score": 95, "family": "CobaltStrike"}
+        mock_stix.last_updated = datetime.now(timezone.utc)
+        mock_stix.max_age_seconds = 86400
+        mock_stix.check_ioc.side_effect = lambda ioc: {
+            "id": f"stix-{ioc}",
+            "pattern": f"[ipv4-addr:value = '{ioc}']" if ioc == "192.168.1.50" else f"[domain-name:value = '{ioc}']",
+            "description": "Known malicious indicator",
+            "tags": ["malware", "family:CobaltStrike"],
+        } if ioc in ("192.168.1.50", "evil-sender.com") else {}
 
         mock_cve = MagicMock()
-        mock_cve.lookup_cve.return_value = {"cve_id": "CVE-2026-1234", "cvss": 9.8, "description": "RCE vulnerability"}
+        mock_cve.last_updated = datetime.now(timezone.utc)
+        mock_cve.max_age_seconds = 86400
+        mock_cve.lookup_cve.return_value = {"id": "CVE-2026-1234", "cvss": 9.8, "description": "RCE vulnerability"}
+        mock_cve.get_cisa_kev.return_value = []
 
         mock_mitre = MagicMock()
-        mock_mitre.get_technique.return_value = {"technique_id": "T1059.001", "name": "PowerShell", "description": "Command execution"}
+        mock_mitre.last_updated = datetime.now(timezone.utc)
+        mock_mitre.max_age_seconds = 86400
+        mock_mitre.get_technique.return_value = {"id": "T1059.001", "name": "PowerShell", "description": "Command execution"}
 
         mock_vec = MagicMock()
         mock_vec.search.return_value = [{"case_id": "HIST-APT29-001", "similarity": 0.89, "campaign": "APT29 Cozy Bear"}]
@@ -388,7 +468,9 @@ class TestMultiAgentPipelineIntegration:
         ag1 = results["agent1"]
         assert ag1 is not None
         Agent1Output.model_validate(ag1)
-        assert ag1.get("investigation_readiness") in ("READY", "PARTIAL")
+        readiness = ag1.get("investigation_readiness")
+        readiness_status = readiness.get("status") if isinstance(readiness, dict) else str(readiness)
+        assert readiness_status in ("READY", "PARTIAL")
         assert len(ag1.get("claims", [])) >= 1
         claim1 = ag1["claims"][0]
         assert set(claim1.get("cited_evidence_ids", [])).issubset({f.finding_id for f in self.test_findings})

@@ -134,7 +134,7 @@ Instructions:
 class GlobalSynthesizer:
     """
     Stage 3 Global Agent 1 Synthesizer.
-    Consolidated Worker Outputs -> Primary Reasoning Model (Qwen3-14B) -> Agent1Validator -> Agent1Output.
+    Consolidated Worker Outputs -> Primary Reasoning Model (Qwen3-8B) -> Agent1Validator -> Agent1Output.
     """
 
     def __init__(self, model: Optional[Any] = None, validator: Optional[Agent1Validator] = None):
@@ -143,7 +143,7 @@ class GlobalSynthesizer:
         else:
             self.model = LLMLoader().load_primary()
         self.validator = validator or Agent1Validator()
-        self.model_name = getattr(self.model, "model_name", "Qwen3-14B")
+        self.model_name = getattr(self.model, "model_name", "Qwen3-8B")
 
     def synthesize(
         self,

@@ -466,3 +466,37 @@ def test_single_pass_sanitization_result_propagation():
     assert "pii_secret_redacted" in ctx.sanitization_actions
     assert "CREDENTIALS" in ctx.redaction_metadata
 
+
+def test_pure_cypher_fallback_provenance_and_degraded_status():
+    """
+    Verify pure-Cypher fallback provenance and capability degradation tracking:
+    - Never claim GDS executed when it did not.
+    - Explicit algorithm and degraded metadata recorded.
+    """
+    mock_neo4j = MagicMock()
+    # Mock procedure check returning cnt: 0 (GDS missing)
+    def fake_query(cypher, params=None):
+        if "SHOW PROCEDURES" in cypher or "dbms.procedures" in cypher:
+            return [{"cnt": 0}]
+        if "cluster_ids" in cypher:
+            return [{"node_id": "F-FB-1", "communityId": "1"}]
+        return []
+    mock_neo4j.query.side_effect = fake_query
+    mock_neo4j.session.return_value.__enter__.return_value.run.side_effect = fake_query
+    mock_neo4j.session.return_value.run.side_effect = fake_query
+
+    gb = GraphBuilder(neo4j_client=mock_neo4j, allow_pure_cypher_fallback=True)
+    f = make_finding_a2("F-FB-1", fact="Host host01 logged connection to 192.168.1.5")
+    communities, metrics, rels = gb.build_graph_and_communities("CASE-FB", [f], tenant_id="T-FB")
+
+    # Assert GDS was NOT claimed to run
+    assert metrics["gds_executed"] is False
+    assert metrics["gds_installed"] is False
+    # Assert explicit fallback algorithm recorded
+    assert metrics["algorithm_executed"] == "pure_cypher_traversal_fallback"
+    # Assert capability explicitly marked degraded
+    assert metrics["is_degraded"] is True
+    assert "pure-Cypher" in metrics["degraded_reason"]
+    assert len(communities) >= 1
+    assert communities[0].relationship_types == ["PURE_CYPHER_TRAVERSAL_FALLBACK"]
+

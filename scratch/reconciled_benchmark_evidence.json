@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-10-18T15:21:51.321575+00:00",
+  "hardware": {
+    "os": "Windows 11 (win32)",
+    "cpu_architecture": "AMD64 / x86_64",
+    "inference_mode": "CPU (No CUDA GPU allocated)",
+    "ollama_model": "qwen3:8b",
+    "deberta_model": "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli"
+  },
+  "benchmarks": {
+    "ollama_qwen3_8b": {
+      "cold_duration_sec": 53.87,
+      "warm_duration_sec": 64.74,
+      "cold_tokens_per_sec": 3.56,
+      "warm_tokens_per_sec": 3.7,
+      "tokens_generated": 239.4
+    },
+    "deberta_v3_mnli": {
+      "single_pair_latency_sec": 9.801,
+      "batch_5_latency_sec": 1.509,
+      "avg_latency_per_pair_sec": 0.302
+    },
+    "neo4j_graph": {
+      "bolt_roundtrip_ms": 2656.59
+    }
+  }
+}

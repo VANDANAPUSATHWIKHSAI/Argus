@@ -157,7 +157,10 @@ class SupervisorAgent(BaseAgent):
             claims = state.get("claims", [])
 
             try:
-                ver_output = self.call2.run(case_id, {"claims": claims, "tenant_id": tenant_id})
+                ctx = dict(state.get("context", {}))
+                ctx["claims"] = claims
+                ctx["tenant_id"] = tenant_id
+                ver_output = self.call2.run(case_id, ctx)
                 results = ver_output.get("verification_results", [])
                 return {
                     "status": "VERIFICATION_COMPLETED",

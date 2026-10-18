@@ -139,14 +139,27 @@ class EvtxParser:
         if path_bin:
             return path_bin
 
-        # 2. Check ARGUS-relative tools directory
+        # 2. Check ARGUS-relative and argus components tools directory
         try:
             repo_root = Path(__file__).resolve().parent.parent.parent
-            ext_hayabusa = repo_root / "tools" / "hayabusa"
-            if ext_hayabusa.exists():
-                for p in ext_hayabusa.rglob("hayabusa*.exe"):
-                    if p.is_file():
-                        return str(p)
+            candidate_dirs = [
+                Path(os.environ.get("ARGUS_EXTERNAL_TOOLS_DIR", "")) / "hayabusa" if os.environ.get("ARGUS_EXTERNAL_TOOLS_DIR") else None,
+                Path(os.environ.get("ARGUS_FORENSICS_TOOLS", "")) / "hayabusa" if os.environ.get("ARGUS_FORENSICS_TOOLS") else None,
+                repo_root / "tools" / "hayabusa",
+                repo_root / "external_tools" / "hayabusa",
+                repo_root.parent / "external_tools" / "hayabusa",
+                repo_root.parent / "argus components" / "external_tools" / "hayabusa",
+                repo_root.parent.parent / "argus components" / "external_tools" / "hayabusa",
+                Path("c:/Users/Sudeep/Downloads/argus components/external_tools/hayabusa")
+            ]
+            for ext_hayabusa in candidate_dirs:
+                if ext_hayabusa and ext_hayabusa.exists():
+                    for p in ext_hayabusa.rglob("hayabusa*.exe"):
+                        if p.is_file():
+                            return str(p)
+                    for p in ext_hayabusa.rglob("hayabusa"):
+                        if p.is_file() and os.access(p, os.X_OK):
+                            return str(p)
         except Exception:
             pass
 

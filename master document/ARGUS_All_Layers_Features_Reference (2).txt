@@ -1,0 +1,1511 @@
+ARGUS / FORENSICGPT
+COMPLETE PROJECT LAYERS AND FEATURES REFERENCE
+Architecture basis: ARGUS V4 details and project decisions
+Prepared: 13 October 2026
+======================================================================
+
+IMPORTANT STATUS NOTE
+---------------------
+This document describes the documented architecture and feature ownership.
+It is not a fresh code audit. A listed feature is not automatically proof
+that the feature is fully implemented or production-ready. Recent repair
+reports for FIR, FCR, Agent 1 and Agent 7 are reported results, not
+independently rerun by this document. Live PostgreSQL, Neo4j/GDS, Qdrant,
+object-storage and model deployment must be verified separately.
+
+1. PROJECT PURPOSE AND SCOPE
+======================================================================
+
+ARGUS / ForensicGPT is a digital-forensics investigation platform. It
+processes digital evidence, creates deterministic findings, uses AI agents
+to interpret/correlate those findings, independently verifies claims, and
+produces evidence-backed reports for analyst review.
+
+It is designed to answer:
+- How did malware enter the system?
+- What did the malware do?
+- Which assets or data were affected?
+- How severe was the impact?
+- Which evidence supports each conclusion?
+- What recovery recommendations are appropriate?
+
+ARGUS is an investigation and forensic reasoning system. It does not remove
+malware or automatically execute remediation.
+
+Current implementation focus:
+- Windows/PC evidence
+- Disk images and file systems
+- Windows Event Logs and Sysmon
+- Windows Registry
+- Memory dumps
+- Network traffic and PCAP
+- Browser and email artifacts
+- Endpoint artifacts
+
+Future scope: Android/iOS mobile forensics and additional evidence sources
+after separate implementation and validation.
+
+Core principle:
+Evidence First -> Deterministic Analysis -> AI Reasoning
+-> Independent Verification -> Human Review -> Validated Knowledge
+
+Explicitly out of scope:
+- SIEM integrations
+- SOAR integrations
+- Ticketing integrations
+- Automatic remediation
+
+2. HIGH-LEVEL ARCHITECTURE
+======================================================================
+
+1. Layer 1 — Infrastructure / Evidence Intake
+2. Cross-cutting investigation state-management functions
+3. Layer 2 — Evidence Preprocessing
+4. Layer 3 — Deterministic Forensic Analysis
+5. FIR — Forensic Intelligence Repository
+6. Shared Evidence Sanitization Gateway
+7. AI Investigation Layer: Agents 1, 2, 3, 4, 5a, 5b, 6 and 7
+8. Confidence Gate and Human Review / Maker-Checker
+9. Validated Case Repository and Feedback Knowledge Store
+10. Reporting, audit, progress monitoring and evaluation capabilities
+
+ISM is NOT a separate architecture layer or AI agent. Its functions span
+the workflow. Do not implement a second state manager as part of unrelated
+fixes; preserve the established contract/function boundary.
+
+Trust principles:
+- Original evidence remains immutable.
+- Deterministic engines create findings; AI does not overwrite them.
+- AI claims cite real evidence identifiers.
+- Tenant and case scope is enforced throughout the pipeline.
+- Model prompts receive sanitized evidence.
+- Unverified claims are not presented as established facts.
+- Reusable validated knowledge requires human approval and Maker-Checker.
+
+3. LAYER 1 — INFRASTRUCTURE / EVIDENCE INTAKE
+======================================================================
+
+WHAT THIS LAYER DOES
+--------------------
+This is ARGUS's controlled entry point for digital evidence. It receives
+evidence, checks and protects it, records where it came from, and preserves
+an auditable chain of custody before any parser or investigation component
+processes it. Its job is to make the original evidence trustworthy and
+traceable, not to interpret whether the evidence is malicious.
+
+Purpose: accept evidence and establish integrity, traceability and custody
+before downstream processing.
+
+Features:
+- Controlled analyst evidence upload.
+- Approved external evidence files through ARGUS-controlled intake.
+- Sandboxed intake validation.
+- SHA-256 hashing.
+- Encryption at rest.
+- RFC 3161 timestamping where configured.
+- Evidence metadata and unique Evidence ID.
+- Case ID generation.
+- Original Evidence Repository.
+- Immutable, append-only chain-of-custody records.
+- Tenant-aware audit logging.
+- Traceable evidence actions and transformations.
+- Original evidence stored exactly as received.
+
+Sandbox controls described by the architecture:
+- No network egress.
+- CPU, memory and disk limits.
+- Hard execution timeout.
+- Read-only evidence mounts.
+- Ephemeral execution environment.
+- Destroy the container/microVM after completion.
+- Isolation technologies may include gVisor or Firecracker.
+
+Metadata may include source, collection timestamp, collector, device/file
+information, hash, object-storage reference, custody events, case ID,
+tenant ID and transformation history.
+
+Output: integrity-protected evidence with traceable metadata.
+
+Original evidence must not be modified by parsers, normalization, AI,
+correlation or report generation.
+
+4. CROSS-CUTTING INVESTIGATION STATE MANAGEMENT (ISM FUNCTIONS)
+======================================================================
+
+WHAT THESE FUNCTIONS DO
+----------------------
+They coordinate the progress of an investigation. They track which stages
+are waiting, running, complete or failed; manage dependencies and retries;
+and help a case resume after interruption. They manage workflow state, not
+the forensic truth or the chain of custody. In the current project, ISM
+remains a contract/function boundary rather than a standalone implemented
+state manager.
+
+ISM is a cross-cutting backend responsibility, not a separate layer and
+not an AI agent. Its documented functions include:
+- Create and track an investigation session.
+- Bind session to authorized tenant and case.
+- Schedule agents/engines and manage dependencies.
+- Investigation queue and case priority.
+- Track per-stage, per-artifact and per-agent progress.
+- Status values such as pending, running, complete and failed.
+- Retry failed steps with backoff.
+- Failure classification.
+- Checkpointing and crash recovery.
+- Pause/resume and resume from the last completed stage where safe.
+- Continue independent stages after failure when safe.
+- Explicitly report failed or skipped analyses.
+- Record operational state transitions in audit logs.
+
+Memory boundary:
+- State management remembers workflow progress.
+- Agents reason over evidence and investigation outputs.
+- Workflow state is not forensic chain of custody.
+
+Storage alignment:
+- Redis: live state, queues and checkpoints.
+- PostgreSQL: durable structured state and metadata.
+
+ISM is currently a contract/function boundary and should not be represented
+as an implemented standalone manager unless the code is separately verified.
+
+5. LAYER 2 — EVIDENCE PREPROCESSING
+======================================================================
+
+WHAT THIS LAYER DOES
+--------------------
+This layer converts different evidence formats into a consistent structure
+that later analysis can use. It runs the appropriate parsers, normalizes
+their output, extracts individual artifacts, links related artifacts with
+FCRs, and creates a consolidated working set while preserving provenance.
+It organizes evidence; it does not decide the final attack story or alter
+the original evidence.
+
+Purpose: transform heterogeneous evidence into normalized, structured,
+artifact-level records while preserving provenance.
+
+5.1 Sandboxed parsers
+---------------------
+Dedicated parsers handle individual evidence formats instead of relying on
+one monolithic parser. Parser families include:
+- File-system and disk-image parsers.
+- Windows Event Log / EVTX and Sysmon parsers.
+- Registry parsers.
+- Browser artifact parsers.
+- Memory parsers, including Volatility-based workflows.
+- Network/PCAP parsers and tools such as Zeek or Suricata.
+- Email parsers.
+- USB and endpoint artifact parsers.
+- Other registered evidence-source parsers.
+
+Isolation limits parser cross-contamination, malformed-input risk and
+resource consumption.
+
+5.2 JSON normalization
+----------------------
+- Convert parser output into a common normalized schema.
+- Preserve source identifiers, parser metadata and provenance.
+- Preserve timestamp semantics.
+- Treat untrusted free text as data, not instructions.
+- Do not invent missing values.
+
+5.3 Artifact Extraction
+-----------------------
+Extract atomic, addressable objects such as:
+- File hashes and other IOCs.
+- IP addresses.
+- Registry keys and values.
+- Email headers.
+- URLs and command-line strings.
+- Process and process-tree records.
+- Other discrete forensic entities.
+
+This improves correlation, citation precision and downstream reasoning.
+
+5.4 Normalized Repository
+-------------------------
+Stores normalized evidence and extracted artifacts with case/tenant scope,
+source IDs and provenance.
+
+5.5 FCR Engine — Forensic Correlation Records
+---------------------------------------------
+Links artifact-level records that may belong to the same event/activity.
+Documented strategy families include:
+- Temporal correlation.
+- Shared IOC/entity correlation.
+- Process-tree correlation.
+- Network/process correlation.
+- Kill-chain and cross-source correlation.
+- Single-artifact/context records where appropriate.
+
+FCR responsibilities:
+- Relate artifacts using deterministic rules.
+- Preserve references to contributing artifacts.
+- Carry case and tenant identity.
+- Generate auditable correlation identifiers.
+- Prevent cross-tenant and cross-case correlations.
+- Avoid treating correlation alone as proof of malicious intent.
+
+5.6 FCR Repository
+------------------
+Stores FCR records, artifact relationships, event groupings and metadata.
+Lookups and persistence must be tenant-scoped.
+
+5.7 Evidence Consolidation
+--------------------------
+Creates a deterministic, unified evidence working set after FCR.
+
+Responsibilities:
+- Handle eligible duplicates under deterministic rules.
+- Assign Unified Artifact IDs.
+- Merge equivalent references without deleting provenance.
+- Combine related FCRs only where deterministic rules permit.
+- Preserve contradictions instead of silently resolving them.
+- Preserve timestamps, source tools and parser versions.
+- Track missingness, completeness and coverage.
+- Enforce tenant/case isolation.
+- Record algorithm/version metadata for reproducibility.
+
+This is not an LLM stage. It must not modify original evidence or let an
+LLM decide which evidence to delete.
+
+5.8 Provenance Graph / Lineage
+------------------------------
+Tracks how outputs derive from source evidence.
+
+Expected lineage:
+Original Evidence -> Normalized Evidence -> Artifact -> Unified Artifact
+-> FCR -> Consolidated Evidence -> Deterministic Finding/FIR
+-> Agent Observation -> Agent 7 Claim -> Final Report
+
+Supports auditability, investigator drill-down, explainability and
+reproducibility. It does not modify evidence.
+
+Neo4j + GDS is the required graph platform. PostgreSQL remains the
+structured system of record.
+
+6. LAYER 3 — DETERMINISTIC FORENSIC ANALYSIS
+======================================================================
+
+WHAT THIS LAYER DOES
+--------------------
+This layer examines normalized evidence using deterministic tools and
+rules to produce repeatable forensic findings—for example, logon events,
+network connections, suspicious memory behavior, endpoint persistence, email
+indicators, or YARA matches. These findings become the factual inputs for
+FIR and the AI agents. This layer does not use an LLM to invent or decide
+the underlying facts.
+
+Purpose: generate reproducible findings. This layer is deterministic and
+does not use an LLM to decide the underlying facts. Findings are written
+to FIR.
+
+6.1 Log Analysis Engine
+- Authentication/logon events.
+- Windows Event Log analysis.
+- Sysmon analysis.
+- PowerShell execution.
+- Process creation and relevant activity reconstruction.
+
+6.2 Network Analysis Engine
+- PCAP analysis.
+- DNS activity.
+- HTTP/HTTPS communication.
+- Network flows and communication endpoints.
+- Session reconstruction.
+
+6.3 Memory Analysis Engine
+- Running processes.
+- DLL-injection indicators.
+- Handles.
+- Network sockets.
+- Code-injection indicators.
+- Memory-derived process/behavior findings.
+
+6.4 Endpoint Analysis Engine
+- Registry and file-system analysis.
+- Browser artifacts.
+- USB artifacts.
+- Persistence mechanisms.
+- Endpoint activity/configuration changes.
+
+6.5 Email Analysis Engine
+- Email headers and attachments.
+- Embedded URLs.
+- SPF/DKIM-related checks.
+- Phishing indicators.
+- Sender/message metadata.
+
+6.6 YARA deterministic file analysis
+- YARA rule matching is required before Agent 4 malware-behavior reasoning.
+- YARA produces findings with evidence references.
+- Flow: raw evidence -> sandboxed deterministic analysis -> YARA match
+  -> evidence-backed finding -> FIR -> Sanitization Gateway -> Agent 4.
+- A YARA match is evidence to interpret, not proof of every behavior.
+- Agent 4 does not replace or execute the deterministic YARA stage.
+
+7. FIR — FORENSIC INTELLIGENCE REPOSITORY
+======================================================================
+
+WHAT FIR DOES
+-------------
+FIR is the structured repository of deterministic forensic findings. It
+gives downstream agents a controlled place to retrieve facts and evidence
+references, with confidence/severity metadata and case/tenant boundaries.
+It lets a reviewer trace a conclusion back to source evidence. FIR stores
+findings; it does not independently prove that an AI claim is semantically
+supported.
+
+Purpose: tenant-isolated source of truth for deterministic findings.
+
+Stores:
+- Finding identifiers and facts.
+- Evidence IDs and source pointers.
+- Unified Artifact IDs.
+- Source engine.
+- Confidence and severity.
+- MITRE mappings.
+- Timestamps and related findings.
+- Case ID and tenant ID.
+- Supporting metadata.
+
+Rules:
+- Every AI claim must cite underlying evidence IDs.
+- AI must not overwrite FIR facts.
+- Findings preserve provenance and tenant/case boundaries.
+- Missing tenant scope must not become a global lookup.
+- Database and in-memory fallback paths enforce equivalent access rules.
+- An evidence ID existing does not by itself prove semantic claim support.
+
+8. SHARED EVIDENCE SANITIZATION GATEWAY
+======================================================================
+
+WHAT THIS GATEWAY DOES
+----------------------
+It is the security checkpoint immediately before evidence is exposed to AI
+reasoning. Evidence may contain attacker-written instructions in emails,
+filenames, URLs, or commands. The gateway treats that content as untrusted
+data, applies configured sanitization/detection, and records relevant flags
+so evidence text is less likely to manipulate the model. It does not replace
+evidence verification or authorize an AI claim.
+
+Purpose: enforce the trust boundary between attacker-controlled evidence
+text and AI reasoning.
+
+Threat sources include email bodies/subjects, filenames, URLs, commands and
+other free text that may contain prompt-injection instructions.
+
+Controls:
+- Treat evidence text as data, never model instructions.
+- Structurally separate evidence from system instructions.
+- Use delimiters and explicit untrusted-data framing.
+- Detect/flag/sanitize injection-like language.
+- Detect suspicious role-play markers and suspicious/invisible Unicode.
+- Centralize sanitization for all applicable agents.
+- Preserve forensic content and record sanitization metadata.
+- Fail safely if sanitization cannot be completed.
+
+This is defense in depth. Agent 7 independent verification is another
+backstop. Sanitization failure must not expose raw evidence to an LLM or
+be recorded as successful sanitization.
+
+9. AI INVESTIGATION LAYER — ALL AGENTS
+======================================================================
+
+WHAT THE AI INVESTIGATION LAYER DOES
+------------------------------------
+This layer interprets the verified, sanitized findings to answer
+investigation questions that deterministic tools alone cannot fully answer.
+The agents have different responsibilities—quality assessment, correlation,
+attack reconstruction, behavior interpretation, threat enrichment, similarity,
+impact assessment, and final verification/reporting. Their conclusions must
+remain tied to evidence IDs and must not overwrite deterministic facts.
+
+General contract:
+- Emit structured claims, not only free-form prose.
+- Cite evidence IDs.
+- Use authorized, sanitized evidence.
+- Never modify raw evidence, FIR facts, hashes, timestamps, provenance or
+  chain-of-custody records.
+- Distinguish verified facts from hypotheses and uncertainty.
+
+AGENT 1 — EVIDENCE INTELLIGENCE
+-------------------------------
+WHAT AGENT 1 DOES
+-----------------
+Agent 1 tells the investigation team how useful and complete the available
+evidence is, what can reasonably be investigated, and which evidence should
+be prioritized. It produces evidence-quality/readiness assessments and
+structured claims with citations; it should not invent confidence or treat
+uncited claims as verified.
+
+Purpose: evaluate evidence quality, usefulness and investigation readiness.
+
+Features:
+- Evidence quality assessment.
+- Evidence Trust Score (ETS).
+- Evidence Priority Score.
+- Evidence Coverage Score.
+- Investigation readiness.
+- Identify analyses possible from available evidence.
+- Structured evidence-backed claims and triage priorities.
+- Identify missing evidence and analysis gaps.
+
+Inputs: authorized FIR findings through the Sanitization Gateway.
+
+Outputs:
+- Structured claims with evidence IDs.
+- Evidence Quality Report.
+- ETS, coverage and readiness.
+- Priority evidence and investigation focus.
+
+Safeguards:
+- Empty citations cannot be verified.
+- Evidence IDs must belong to the authorized tenant and case.
+- Missing confidence remains unknown; do not fabricate a high default.
+- Invalid scores and malformed model output are recorded and handled safely.
+
+AGENT 2 — EVIDENCE CORRELATION
+------------------------------
+WHAT AGENT 2 DOES
+-----------------
+Agent 2 explains how findings from different sources may relate to one
+another. It helps investigators see connected users, files, processes,
+addresses and events as a graph and timeline, while highlighting conflicts.
+A correlation is a relationship to investigate, not automatic proof of
+malicious activity.
+
+Purpose: connect evidence from multiple sources into a unified view.
+
+Features:
+- Cross-source correlation.
+- Link users, files, Registry entries, IPs, processes, applications and
+  malware-related evidence.
+- Build/interpret the Knowledge Graph.
+- Master investigation timeline.
+- Related-event linking.
+- Conflict and contradiction detection.
+- Explain relationships between findings.
+
+Outputs: correlated investigation graph, Knowledge Graph relationships,
+correlated findings, timeline and contradiction alerts.
+
+Neo4j + GDS supports graph relationships and multi-hop analysis. Correlation
+does not automatically prove malicious intent.
+
+AGENT 3 — ATTACK RECONSTRUCTION
+-------------------------------
+WHAT AGENT 3 DOES
+-----------------
+Agent 3 uses evidence and correlations to build a chronological explanation
+of how an attack may have progressed, from the supported entry path through
+later stages. It connects each proposed stage to evidence and makes gaps or
+uncertainty visible rather than filling missing steps with guesses.
+
+Purpose: reconstruct attack progression from available findings.
+
+Features:
+- Supported infection-source/path analysis.
+- Chronological attack timeline.
+- Kill-chain and multi-stage attack reconstruction.
+- Lateral-movement evidence where supported.
+- Link attack stages to evidence.
+- Identify missing/expected events only when justified by the data.
+
+Outputs: infection path, attack timeline and evidence-linked reconstruction
+report. Agent 3 does not replace deterministic parsers.
+
+AGENT 4 — MALWARE BEHAVIOR ANALYSIS
+-----------------------------------
+WHAT AGENT 4 DOES
+-----------------
+Agent 4 interprets deterministic findings to describe what the malware may
+have done, such as persistence, credential theft, evasion, remote access or
+exfiltration. It uses findings such as YARA matches as evidence, but a rule
+match alone is not proof of every behavior. Agent 4 reasons over sanitized
+FIR evidence rather than unrestricted raw evidence.
+
+Purpose: determine malware behavior from verified deterministic findings
+and sanitized context.
+
+Features:
+- Persistence behavior.
+- Registry modification and scheduled-task behavior.
+- Credential-theft indicators.
+- Browser credential/cookie theft indicators.
+- Privilege escalation and defense evasion.
+- Keylogging and remote-access behavior.
+- Data-exfiltration and ransomware behavior.
+- Process and file-system behavior.
+- Malware behavior profiling.
+
+Inputs: YARA match findings, memory/endpoint/network findings, correlated
+graph/timeline context where available, and sanitized FIR findings.
+
+Output: Malware Behavior Profile with evidence citations.
+
+Boundary: YARA runs before Agent 4 in deterministic analysis. Agent 4 reasons
+over FIR findings; it does not receive unrestricted raw evidence.
+
+AGENT 5a — THREAT INTELLIGENCE
+------------------------------
+WHAT AGENT 5a DOES
+------------------
+Agent 5a checks current indicators and findings against threat-intelligence
+context, such as IOC sources, MITRE ATT&CK references, CVEs and threat
+reports. It adds context and reports source freshness so analysts can judge
+how much weight to give the enrichment. External intelligence does not
+replace or override the current case's evidence.
+
+Purpose: enrich current evidence with external threat intelligence.
+
+Features:
+- IOC matching.
+- MITRE ATT&CK mapping.
+- CVE lookup.
+- Threat-report retrieval.
+- Threat-feed comparison.
+- Feed freshness checking.
+- Flag matches from stale feeds according to configured thresholds.
+
+Outputs: IOC matches, MITRE references, CVE references, threat context and
+feed freshness/status. External intelligence must not override current
+case evidence.
+
+AGENT 5b — CAMPAIGN/BEHAVIOR SIMILARITY + VALIDATED-CASE RAG
+-----------------------------------------------------------
+WHAT AGENT 5b DOES
+------------------
+Agent 5b searches approved historical cases and compares their behavior
+with the current investigation. It can suggest similar campaigns, malware
+families or patterns and explain the similarity. Retrieved cases are
+contextual references only; they do not prove what happened in the current
+case. Qdrant retrieval must respect tenant isolation.
+
+Purpose: compare current behavior against validated historical knowledge.
+
+Features:
+- Behavioral and campaign similarity.
+- Malware-family similarity.
+- Threat-actor profiling where supported.
+- Similarity scoring and explanation.
+- Retrieve validated cases through RAG.
+- Identify potentially novel behavior.
+- Use historical cases as context, not proof.
+
+Outputs: similar behavior/family/campaign references, similarity score and
+explanation, context/confidence, and validated-case references.
+
+Qdrant is required. Validated-case collections/namespaces must be tenant
+isolated. Historical cases never override current evidence.
+
+AGENT 6 — IMPACT ASSESSMENT
+---------------------------
+WHAT AGENT 6 DOES
+-----------------
+Agent 6 translates supported technical findings into an assessment of
+consequences: which assets or data may be affected, how serious the impact
+is, and which recovery checks are recommended. It should distinguish
+confirmed impact from possible impact and tie material conclusions to
+evidence.
+
+Purpose: assess consequences, severity and recovery needs.
+
+Features:
+- Affected asset identification.
+- Affected data assessment.
+- User/business impact.
+- Device risk and threat severity.
+- Impact Severity Score (ISS).
+- Recovery recommendations and checklist.
+
+Data categories may include passwords, browser credentials, cookies,
+contacts, documents, photos and banking information when evidence supports
+such conclusions.
+
+Outputs: Impact Assessment Report, ISS and recovery checklist.
+
+AGENT 7 — SUPERVISOR, VERIFICATION AND REPORT GENERATION
+--------------------------------------------------------
+WHAT AGENT 7 DOES
+-----------------
+Agent 7 assembles the investigation results into a coherent final account,
+then independently checks whether each important claim is supported by the
+actual cited FIR evidence. It determines whether claims need routine or
+senior review and produces the final report. It must preserve uncertainty,
+surface contradictions and failures, and never convert missing verification
+into a successful result.
+
+Purpose: own final synthesis, independent verification, review routing and
+final report generation. Report generation is part of Agent 7, not a
+separate AI agent.
+
+Inputs: Agents 3, 4, 5b and 6, plus relevant FIR records, Agent 1
+quality/readiness, Agent 2 correlation, Agent 5a intelligence and citations.
+
+Call 1 — Synthesis:
+- Combine upstream investigation results.
+- Produce structured claims and attach evidence IDs.
+- Identify conflicts and uncertainty.
+- Calculate/report Investigation Confidence Score (ICS).
+- Generate evidence-backed conclusions.
+
+Call 2 — Independent verification:
+- Verify each evidence ID exists and is authorized.
+- Compare actual FIR evidence as the premise with the claim as hypothesis.
+- Check semantic support and contradiction.
+- Check severity/confidence inflation.
+- Check divergence from deterministic findings.
+- Fail closed on missing evidence, tenant/case mismatch or model failure.
+- Do not let synthesis verify itself.
+
+Compound-claim safeguards:
+- Every material assertion must be supported.
+- One finding supporting one clause cannot verify the whole claim.
+- If reliable decomposition/verification is impossible, mark unverified
+  and require human review.
+- Empty evidence collections never count as successful verification.
+
+Other features:
+- Confidence Gate routing.
+- Analyst explanations on demand.
+- Final recommendations and executive summary.
+- Report version metadata.
+- Truthful failure status.
+- Chain-of-custody status based on actual records.
+- Deterministic rendering to PDF, HTML and JSON.
+
+Report types:
+- Analyst report: evidence, timeline, graph summary, malware behavior,
+  MITRE mapping, IOC matches, confidence and technical recommendations.
+- Customer report: entry path, malware behavior, affected data, risk and
+  recovery checklist in accessible language.
+- Executive summary: incident, key findings, risk, impact and actions.
+
+Reports must separate verified facts, unverified claims, contradictions,
+missing evidence and execution failures.
+
+10. CONFIDENCE GATE, HUMAN REVIEW AND MAKER-CHECKER
+======================================================================
+
+WHAT THIS CONTROL STAGE DOES
+----------------------------
+This stage prevents uncertain or high-risk AI conclusions from being
+accepted automatically. It routes claims to the appropriate analyst or
+senior/dual review, displays evidence and verification status, captures
+corrections, and requires separate approval before a case becomes reusable
+validated knowledge.
+
+Confidence Gate:
+- Routine analyst review only when claims are sufficiently confident,
+  independently verified and free of unresolved divergence.
+- Senior/dual review for low confidence, any unverified claim, divergence
+  flags or high-severity attribution claims.
+
+Review UI should show evidence citations, verified/unverified indicators,
+and claims needing attention.
+
+Analyst outcomes:
+- Correct.
+- Partially Correct.
+- Incorrect.
+- Revision Required.
+- Approved.
+
+Feedback can contain corrected findings/labels/timeline, missing evidence,
+updated conclusions, reasoning, malware family/attack pattern and rationale.
+
+Maker-Checker:
+- Routine analyst approval may close a case.
+- Reusable validated knowledge requires separate senior/Maker-Checker signoff.
+- One mistaken approval must not become permanent reusable knowledge.
+
+11. VALIDATED CASE REPOSITORY
+======================================================================
+
+WHAT THIS REPOSITORY DOES
+-------------------------
+It stores investigations and findings that have passed the required human
+approval so future cases can retrieve them as historical context. It is a
+curated knowledge source, not a source of truth for a new case. Tenant
+isolation and Maker-Checker approval help prevent one tenant's knowledge or
+an incorrectly approved case from contaminating another investigation.
+
+Purpose: store fully approved investigations for future retrieval.
+
+Contents:
+- Approved investigations and findings.
+- Attack patterns and malware-family information.
+- Investigation notes.
+- Retrieval embeddings and metadata.
+
+Controls:
+- Senior/Maker-Checker approval.
+- Tenant-isolated Qdrant collection/namespace.
+- Tenant-scoped retrieval before data reaches an agent.
+- Periodic review for outdated mappings or context.
+- Prior cases are references, never proof, and cannot override current
+  evidence.
+
+12. FEEDBACK KNOWLEDGE STORE
+======================================================================
+
+WHAT THIS STORE DOES
+--------------------
+It records what analysts corrected, why they corrected it, and which
+reasoning or evidence was missing. That feedback can be used to evaluate
+and improve future workflows and Agent 1 behavior. It is an improvement
+signal, not automatic proof and not a requirement to retrain the base model
+after every case.
+
+Stores analyst corrections and rationale as an improvement/evaluation signal.
+
+Possible fields:
+- Case ID, correction, diff, rationale.
+- Analyst ID and timestamp.
+- Correct reasoning.
+- Correct malware family/attack pattern.
+- Investigation notes.
+
+Feedback can be routed toward Agent 1 and agent-improvement workflows.
+Retraining the base LLM after every case is not required.
+
+13. DATABASE AND STORAGE ARCHITECTURE
+======================================================================
+
+WHAT THE STORAGE ARCHITECTURE DOES
+----------------------------------
+Each store has a defined responsibility: PostgreSQL keeps structured
+records, Neo4j represents relationships, Qdrant retrieves semantically
+similar validated knowledge, S3/MinIO stores evidence bytes, and Redis
+supports live workflow state. The stores complement one another; graph and
+vector results must remain traceable to authoritative evidence/FIR records.
+
+POSTGRESQL
+Primary structured system of record:
+- Case/investigation metadata.
+- Evidence metadata and references.
+- Normalized JSONB.
+- Atomic artifacts and Unified Artifact IDs.
+- FCR and FIR records.
+- Tenant/case identifiers.
+- Audit/custody metadata.
+- Feedback and validated-case metadata.
+- Report metadata and versions.
+- Durable workflow metadata.
+
+NEO4J + GRAPH DATA SCIENCE (GDS)
+Required graph platform:
+- Knowledge Graph and cross-source relationships.
+- ATT&CK technique/tactic/group relationships.
+- Attack-path and technique-sequence traversal.
+- Provenance Graph.
+- Timeline relationships.
+- Contradiction/conflict relationships.
+- Multi-hop investigation queries.
+
+QDRANT
+Required vector database:
+- Validated-case RAG.
+- Semantic retrieval.
+- Campaign/behavior similarity.
+- Specified threat-intelligence and semantic retrieval workflows.
+- Tenant-isolated validated-case collections/namespaces.
+
+S3 / MINIO
+Immutable object storage for original PCAPs, memory dumps, logs, disk
+images, other raw forensic files, and generated report files where suitable.
+PostgreSQL stores object keys and metadata; object storage holds file bytes.
+
+REDIS
+Live workflow state, queues and checkpoints. PostgreSQL remains the durable
+structured system of record.
+
+MODEL / FORENSIC TECHNOLOGIES
+- Qwen3-8B: primary reasoning model for Agents 1–6 and Agent 7 synthesis
+  under the established implementation contract.
+- Qwen3-14B: also listed in the architecture reference for larger Agent 7
+  final synthesis; verify active deployment configuration before assuming
+  it is enabled.
+- Qwen3-Embedding: embeddings for specified semantic retrieval workflows.
+- DeBERTa-v3-large-MNLI: independent NLI verification for Agent 7 Call 2.
+- YARA: deterministic malware/file rule matching before Agent 4.
+
+Models interpret evidence; they do not modify raw evidence, FIR facts,
+hashes, provenance or chain-of-custody records.
+
+14. AUDIT, REPORT VERSIONING AND REAL-TIME OPERATION
+======================================================================
+
+WHAT THESE FEATURES DO
+----------------------
+These features let an analyst see what is happening, identify failed or
+waiting stages, resume work where safe, and reconstruct who did what and
+when. Report versioning preserves approved outputs and historical versions;
+the audit trail supports accountability. A progress indicator is not a
+substitute for a complete, validated final report.
+
+Queue and priorities:
+- Multiple investigations.
+- Critical, High, Medium and Low priorities.
+- Concurrent execution where resources permit.
+
+Progress monitor:
+- Module status and current step.
+- Completed/waiting steps.
+- Overall progress.
+- Explicit failed/skipped stages.
+
+Resume:
+- Resume from the last completed step where safe.
+- Retry failed steps without unnecessarily restarting the case.
+
+Audit trail:
+- Evidence upload and verification.
+- Analysis start and agent execution.
+- Analyst review and approval.
+- Case closure and version changes.
+
+Case lock/versioning:
+- Approved reports become read-only.
+- Changes create a new version.
+- Previous versions remain available.
+- Store case, report type, version, model/prompt/retrieval metadata,
+  timestamp, approval status and storage reference.
+
+Only complete and appropriately validated reports should be presented as
+final. Incomplete/failed analysis must be represented explicitly.
+
+15. PRIMARY SCORES
+======================================================================
+
+WHAT THE SCORES DO
+------------------
+The scores summarize different dimensions of an investigation: evidence
+reliability, confidence in the final conclusions, and the severity of impact.
+They help communicate status but must not replace the underlying findings,
+citations, or explanations.
+
+Evidence Trust Score (ETS):
+Measures evidence integrity/reliability.
+
+Investigation Confidence Score (ICS):
+Represents confidence in conclusions based on evidence completeness,
+agent agreement, reasoning quality and verification status.
+
+Impact Severity Score (ISS):
+Represents severity of impact on users, devices, data and business.
+
+Scores do not replace underlying evidence or deterministic findings.
+
+16. CONTINUOUS EVALUATION AND DRIFT MONITORING
+======================================================================
+
+WHAT THIS SUBSYSTEM DOES
+------------------------
+It tests whether the pipeline remains reliable as models, prompts, parsers
+or threat context change. It tracks quality and security metrics over time
+and helps detect degradation, hallucination increases, weaker attribution,
+or failures in sanitization and verification. Actual scheduling, dashboards
+and alerts must be verified in the deployment.
+
+Documented evaluation capabilities:
+- Synthetic cases.
+- Historical validated cases.
+- Prompt-injection red-team suite.
+- Evaluation after model/prompt changes.
+- Hallucination rate.
+- Attribution precision.
+- Timeline completeness.
+- Prompt-injection resistance.
+- Verification success/failure.
+- Agent-specific quality metrics.
+- Detection of model, prompt, attribution, timeline, sanitization or
+  verification degradation.
+
+Actual schedules, dashboards and alerting must be verified in deployment.
+
+17. END-TO-END EXECUTION FLOW
+======================================================================
+
+1. Analyst submits evidence through ARGUS-controlled intake.
+
+2. Infrastructure validates in a sandbox, hashes/encrypts, timestamps where
+   configured, records metadata/custody, stores original evidence and logs
+   tenant-aware audit events.
+
+3. Cross-cutting workflow functions create a session, bind tenant/case and
+   track dependencies/progress.
+
+4. Preprocessing runs sandboxed parsers, normalizes output, extracts atomic
+   artifacts, stores normalized evidence, generates FCRs, consolidates
+   evidence deterministically and preserves provenance.
+
+5. Deterministic analysis runs applicable log, network, memory, endpoint,
+   email and YARA analysis, then writes findings to FIR.
+
+6. Sanitization Gateway prepares untrusted free text before LLM exposure.
+
+7. Agent 1 assesses evidence quality, coverage and readiness.
+
+8. Agents 2–4 correlate evidence, reconstruct attack progression and
+   interpret malware behavior.
+
+9. Agents 5a/5b enrich with threat intelligence and analyze similarity/RAG.
+
+10. Agent 6 assesses impact and recovery needs.
+
+11. Agent 7 synthesizes structured claims, independently verifies them
+    against authorized FIR evidence, routes review and generates the report.
+
+12. Analyst reviews the evidence and claims. Senior/Maker-Checker approval
+    is required for reusable validated knowledge.
+
+13. Approved reports are versioned/locked, approved knowledge is stored
+    only after signoff, and audit/feedback records are retained.
+
+18. FEATURE OWNERSHIP SUMMARY
+======================================================================
+
+Infrastructure:
+Evidence upload, sandbox intake, hashing, encryption, timestamping, custody,
+metadata, original evidence storage and audit trail.
+
+Cross-cutting ISM functions:
+Workflow state, tenant/session binding, scheduling, queue, retry, checkpoint,
+resume and progress. ISM is not a separate layer.
+
+Evidence Preprocessing:
+Sandboxed parsing, normalization, artifact extraction, FCR generation,
+evidence consolidation and lineage records.
+
+Deterministic Forensic Analysis:
+Log, network, memory, endpoint, email and YARA analysis.
+
+FIR:
+Tenant-isolated deterministic findings and evidence references.
+
+Sanitization Gateway:
+Prompt-injection and untrusted-evidence boundary.
+
+Agent 1:
+Evidence quality, coverage, priority and readiness.
+
+Agent 2:
+Cross-source correlation, Knowledge Graph and timeline reasoning.
+
+Agent 3:
+Attack reconstruction.
+
+Agent 4:
+Malware behavior interpretation based on sanitized deterministic findings.
+
+Agent 5a:
+Threat-intelligence enrichment and freshness.
+
+Agent 5b:
+Behavior/campaign similarity and validated-case RAG.
+
+Agent 6:
+Impact assessment, severity and recovery checklist.
+
+Agent 7:
+Final synthesis, independent verification, Confidence Gate routing,
+interactive explanations and final report generation.
+
+Human review:
+Analyst review and senior/dual review where required.
+
+Validated Case Repository:
+Approved reusable knowledge under Maker-Checker.
+
+Feedback Knowledge Store:
+Analyst corrections and rationale.
+
+Out of scope:
+SIEM/SOAR/ticketing integrations and automatic remediation.
+
+19. IMPLEMENTATION STATUS AND VERIFICATION CAUTION
+======================================================================
+
+The architecture document defines responsibilities and intended features.
+Current implementation status must be established from source code, tests,
+and live service configuration.
+
+Recent project repair reports (not independently rerun while preparing this
+document) state that:
+- Agent 1 and Agent 7 verification fixes were applied.
+- FIR tenant-scope fixes were applied.
+- FCR tenant/case isolation fixes were applied.
+- Focused regression and related tests passed.
+- PostgreSQL production concurrency/recovery still requires live validation.
+- Neo4j + GDS and Qdrant require live-service integration validation.
+- ISM remains a contract/function boundary, not a standalone implemented
+  state manager.
+- Mobile forensics is future scope and is not assumed implemented.
+
+Always distinguish:
+1. Implemented in source.
+2. Covered by automated tests.
+3. Verified against live services/models.
+4. Planned or future scope.
+
+Do not infer production readiness solely from this document or unit-test
+success.
+
+======================================================================
+END OF DOCUMENT
+======================================================================
+
+======================================================================
+HOW EACH LAYER AND SUBSYSTEM WORKS — END-TO-END FLOW
+======================================================================
+
+IMPORTANT INTERPRETATION
+------------------------
+This section describes the intended architecture and the operational
+logic of each component. A design description alone does not prove that
+every component is fully implemented, enabled, or production-tested.
+Confirm implementation status against the repository, configuration,
+integration tests, and deployment environment.
+
+END-TO-END FLOW AT A GLANCE
+---------------------------
+1. An analyst creates a case and uploads a forensic evidence item.
+2. Infrastructure validates the upload, calculates a cryptographic hash,
+   records metadata and custody events, and stores the original safely.
+3. Preprocessing reads a working copy inside a restricted environment.
+   Parsers convert supported formats into normalized records.
+4. Artifact Extraction identifies candidate entities from normalized
+   records while preserving source references and exact provenance.
+5. The FCR engine correlates candidate entities using deterministic
+   rules and produces traceable correlation records.
+6. Evidence Consolidation assembles a consistent investigation view
+   without changing original evidence or silently erasing conflicts.
+7. Deterministic forensic analysis runs specialized checks and produces
+   findings with evidence references, severity, confidence and mappings.
+8. Findings are stored in the Forensic Intelligence Repository (FIR).
+9. The Evidence Sanitization Gateway screens untrusted evidence-derived
+   text before it reaches an AI model.
+10. Agents 1–6 perform their assigned evidence interpretation tasks.
+11. Agent 7 synthesizes candidate conclusions and independently verifies
+    claims against cited findings using the configured verification model.
+12. The Confidence Gate routes the case to routine or senior/dual review.
+13. An authorized human reviews the evidence and report, and approves or
+    rejects conclusions. Only properly approved material may become
+    reusable validated knowledge.
+14. The system records the outcome and audit trail. Any future workflow
+    scheduler/checkpoint implementation must use the defined ISM
+    boundary rather than assuming ISM is already implemented.
+
+======================================================================
+LAYER 1 — INFRASTRUCTURE / EVIDENCE INTAKE: HOW IT WORKS
+======================================================================
+
+1. CASE CREATION AND TENANT CONTEXT
+- The user creates or selects a case under an authenticated tenant.
+- The case ID and tenant ID become mandatory context for later storage,
+  lookups, analysis, citations and audit events.
+- Components must fail closed if required tenant context is missing;
+  they must not silently fall back to a global or wildcard scope.
+
+2. UPLOAD VALIDATION
+- The API receives the evidence file and validates basic properties such
+  as allowed file type, size and required metadata.
+- The intake process assigns an evidence identifier and records who
+  submitted the item, when it was received, and which case owns it.
+- Large or long-running processing may be represented as a job, with a
+  status endpoint if asynchronous mode is enabled.
+
+3. HASHING AND INTEGRITY
+- ARGUS computes a SHA-256 digest over the received evidence bytes.
+- The digest is stored with the evidence metadata and later used to
+  detect unexpected changes.
+- Re-hashing a copy can check whether its bytes still match the recorded
+  digest. A hash proves byte-level identity relative to the recorded
+  digest; it does not by itself prove who created the evidence or that
+  the original acquisition was lawful.
+
+4. TIMESTAMP AND CUSTODY
+- Where configured, a trusted timestamp service can attest that a digest
+  existed by a particular time.
+- Each custody event records an action, actor/service, timestamp,
+  evidence/case reference and relevant result.
+- Custody records should be append-only or otherwise tamper-evident.
+  Missing custody information must be shown as unavailable, not invented.
+
+5. ORIGINAL-EVIDENCE STORAGE
+- Original evidence is placed in the configured object store, such as
+  S3 or MinIO, with access controls and immutability protections where
+  supported.
+- Parsers and AI agents work on controlled copies or read-only views.
+- The original is not rewritten by normalization, analysis or AI output.
+
+6. AUDIT LOGGING
+- Security-relevant actions are logged with case and tenant context.
+- Logs should record failures as well as successful actions, including
+  denied cross-tenant access and validation errors.
+- Secrets and unnecessary sensitive evidence content should not be
+  copied into general application logs.
+
+======================================================================
+LAYER 2 — PREPROCESSING AND PARSING: HOW IT WORKS
+======================================================================
+
+1. SANDBOXED PARSER EXECUTION
+- A dispatcher identifies the evidence format/source and routes it to a
+  compatible parser.
+- The parser runs with restricted permissions, resource limits and no
+  unnecessary network access.
+- Unsupported, malformed or oversized inputs should produce explicit
+  parser errors or partial-processing status, not fabricated records.
+
+2. NORMALIZATION
+- Parser-specific output is converted into a common normalized schema.
+- Common fields can include source artifact ID, timestamp, host/user,
+  event type, file/process/network attributes and raw-source reference.
+- The normalized representation makes unlike sources easier to compare.
+- Normalization must retain the original raw value or a reliable pointer
+  to it and must not silently turn missing values into factual defaults.
+
+3. ARTIFACT EXTRACTION
+- The extractor scans normalized records for candidate entities such as
+  file paths, hashes, IP addresses, domains, processes, users, registry
+  keys and other supported indicators.
+- Deterministic patterns such as regular expressions can identify exact
+  spans; semantic extraction may help identify entities that do not fit
+  simple patterns.
+- Each candidate should retain its source record, exact span/value,
+  extractor method and relevant confidence or quality metadata.
+- Candidate extraction is not a verdict that an entity is malicious.
+
+4. NORMALIZED REPOSITORY
+- Normalized records are stored separately from the immutable original.
+- Each record is linked to its source evidence and artifact identifiers.
+- Reprocessing should be traceable to parser/version/configuration where
+  those metadata are available.
+
+======================================================================
+FCR — FORENSIC CORRELATION RECORDS: HOW IT WORKS
+======================================================================
+
+- The FCR engine receives candidate entities and normalized artifact
+  references from preprocessing.
+- It applies explicit correlation strategies, for example matching a
+  file hash across sources, linking a process to a file path, or joining
+  events that share a well-defined identifier.
+- Correlation rules must respect both case ID and tenant ID. A matching
+  IP, hash or filename from another tenant must not enter the current
+  case's correlation result.
+- A correlation record stores the linked entities, source artifact IDs,
+  strategy/rule, supporting details and traceable record identifiers.
+- Correlation means that records are related according to a rule; it
+  does not automatically mean that the activity is malicious or causal.
+- Conflicting timestamps, duplicate records and uncertain associations
+  should remain visible rather than being silently resolved.
+- Neo4j/GDS can represent and analyze relationships when that integration
+  is enabled; PostgreSQL remains the structured system of record.
+- FCR outputs are persisted in the FCR repository with tenant/case scope.
+
+======================================================================
+EVIDENCE CONSOLIDATION AND PROVENANCE: HOW THEY WORK
+======================================================================
+
+- Consolidation assembles normalized artifacts, extracted entities, FCR
+  links and relevant metadata into a coherent working set for analysis.
+- It deduplicates only when the configured identity rule supports doing
+  so, and it preserves links to every contributing source.
+- Provenance records the lineage: which original evidence produced a
+  parsed artifact, which artifact produced an entity, and which sources
+  support a correlation or finding.
+- Neo4j can represent multi-hop lineage and relationship paths where
+  configured. PostgreSQL records the authoritative structured references.
+- If two sources disagree, the consolidated view should preserve both
+  claims and their provenance for the analyst to evaluate.
+- Consolidation does not edit the original evidence or turn an uncertain
+  relationship into a proven fact.
+
+======================================================================
+LAYER 3 — DETERMINISTIC FORENSIC ANALYSIS: HOW IT WORKS
+======================================================================
+
+- Specialized analyzers inspect normalized evidence using explicit,
+  reproducible rules and domain-specific logic.
+- Log analysis examines event sequences, timestamps, logon activity,
+  process execution and other supported event patterns.
+- Network analysis examines supported flow, connection, DNS, IP and
+  protocol records for relevant relationships and indicators.
+- Memory analysis examines extracted memory artifacts and supported
+  process/module/network structures when memory evidence is available.
+- Endpoint analysis examines file, process, persistence, registry and
+  other host artifacts supported by the installed parsers.
+- Email analysis examines supported message metadata, headers, links,
+  attachments and related artifacts.
+- YARA rules are applied before Agent 4's malware-behavior reasoning.
+  A YARA match is a rule match with rule/source details; it is not by
+  itself proof that a file executed or caused a specific impact.
+- Deterministic analyzers create findings only when their rules and
+  input evidence support them. Their outputs include evidence references
+  and rule/analysis metadata wherever available.
+- AI agents may interpret these findings later, but they must not rewrite
+  the deterministic evidence or silently override its labels.
+
+======================================================================
+FIR — FORENSIC INTELLIGENCE REPOSITORY: HOW IT WORKS
+======================================================================
+
+- FIR stores structured deterministic findings for a case and tenant.
+- A finding can include a factual statement, evidence references,
+  source artifact ID, confidence, severity, MITRE mapping, fingerprint,
+  review state and associated metadata.
+- The repository validates scope and required fields before returning
+  records. Lookups must be tenant-scoped; missing or wildcard tenant
+  identifiers must not expose unscoped results.
+- Agents retrieve relevant findings from FIR rather than treating
+  arbitrary model-generated text as the authoritative evidence base.
+- Finding fingerprints and duplicate handling can help identify repeated
+  findings, but they must not merge unrelated findings merely because
+  their wording is similar.
+- FIR is the source of truth for structured deterministic findings; it is
+  not a replacement for the original evidence repository.
+
+======================================================================
+SHARED EVIDENCE SANITIZATION GATEWAY: HOW IT WORKS
+======================================================================
+
+- Before evidence-derived text is included in an AI prompt, it passes
+  through a shared screening boundary.
+- The gateway looks for suspicious instruction-like content, prompt
+  injection patterns, or content that could try to redirect the model.
+- It can flag, escape, label, redact or otherwise safely represent risky
+  text according to the implementation policy.
+- The gateway must preserve the underlying forensic meaning and retain
+  provenance; it should not silently rewrite raw evidence.
+- Evidence text remains untrusted data even after screening. The model
+  must be instructed to analyze it as evidence, not follow instructions
+  embedded inside it.
+- A sanitization failure should stop or safely degrade the affected AI
+  step. It must not silently bypass the trust boundary.
+
+======================================================================
+AI AGENTS 1–7: HOW THEY WORK
+======================================================================
+
+AGENT 1 — EVIDENCE INTELLIGENCE / QUALITY AND READINESS
+- Receives scoped evidence metadata, normalized artifacts, extraction
+  outputs and relevant FIR findings.
+- Checks evidence coverage, quality, consistency, missing fields,
+  parsing gaps and whether the case has enough usable material for later
+  reasoning.
+- Produces structured claims/observations with source references and
+  explicit uncertainty.
+- It should not invent missing artifacts, infer that an absent record
+  proves an event did not occur, or modify FIR facts.
+- Its output helps downstream agents and analysts understand what the
+  available evidence can and cannot support.
+
+AGENT 2 — EVIDENCE CORRELATION / GRAPH AND TIMELINE
+- Consumes extracted entities, FCRs and source-linked findings.
+- Uses graph relationships to explore connections among events, files,
+  users, hosts, IPs, processes and other entities.
+- Neo4j represents nodes/relationships; GDS algorithms can support
+  selected graph analysis when configured.
+- Builds candidate sequences and timelines from timestamps and links.
+- It must preserve case/tenant boundaries and distinguish a graph path
+  or temporal proximity from proven causation.
+- Its output is a traceable set of relationships and timeline hypotheses
+  for further analysis.
+
+AGENT 3 — ATTACK RECONSTRUCTION
+- Reviews relevant findings, relationships and timeline candidates.
+- Assembles a possible attack sequence, such as initial access,
+  execution, persistence, discovery and later activity, only where
+  supported by evidence.
+- Maps supported behaviors to ATT&CK techniques where appropriate.
+- Identifies which stages are evidenced, inferred, contradictory or
+  unknown, and attaches citations to each material claim.
+- It must not fill missing attack stages just to create a complete story.
+
+AGENT 4 — MALWARE BEHAVIOR
+- Receives relevant file/process evidence and deterministic results,
+  including YARA matches produced before this agent.
+- Interprets observed indicators and behavior to describe what the
+  malware may do, how it may execute, and which behaviors are supported.
+- Separates static rule matches, observed execution behavior and
+  hypotheses. A YARA match alone does not prove execution or impact.
+- Links each conclusion to specific source artifacts/findings and records
+  uncertainty where telemetry is absent.
+- Does not execute suspicious evidence as part of ordinary reasoning,
+  change evidence bytes, or create unsupported behavior claims.
+
+AGENT 5a — THREAT INTELLIGENCE
+- Retrieves relevant external or configured threat-intelligence records
+  and indicators for comparison with the case.
+- Uses the configured retrieval/embedding path where enabled and checks
+  source, timestamp/freshness and context before interpreting a match.
+- Compares hashes, domains, IPs, signatures or behavior indicators only
+  when the source data supports that comparison.
+- A match is a lead, not automatic proof that the case belongs to a
+  particular campaign or that an indicator is malicious in this context.
+- Records source attribution and uncertainty, and respects tenant scope.
+
+AGENT 5b — BEHAVIOR / CAMPAIGN SIMILARITY AND VALIDATED-CASE RAG
+- Retrieves approved, validated prior-case knowledge from the configured
+  Qdrant collections and compares behavior patterns with the current case.
+- Uses tenant-isolated retrieval and only approved knowledge for reuse.
+- Returns similar cases/patterns with source references and similarity
+  information so the investigator can assess relevance.
+- Similarity is not identity: a close vector match cannot prove the same
+  malware family, actor or campaign.
+- Unreviewed current-case hypotheses must not automatically become
+  trusted reusable knowledge.
+
+AGENT 6 — IMPACT ASSESSMENT
+- Reviews verified or appropriately qualified findings about affected
+  files, accounts, systems, data and business/technical consequences.
+- Separates confirmed impact from possible impact and from areas where
+  evidence is insufficient.
+- Derives severity/risk from supported facts and the configured rubric.
+- Does not claim exfiltration, data loss, compromise or recovery success
+  without evidence supporting that statement.
+- Produces an evidence-linked impact assessment for Agent 7 and the
+  analyst to review.
+
+AGENT 7 — SUPERVISOR, INDEPENDENT VERIFICATION AND REPORTING
+- Collects structured outputs from upstream agents and relevant FIR
+  findings, then performs a synthesis step to propose concise claims.
+- A separate verification call checks each claim against its cited
+  evidence. The configured DeBERTa MNLI verifier evaluates the actual
+  evidence premise against the claim hypothesis; it is not merely asked
+  to approve the synthesis model's answer.
+- Missing, contradictory, out-of-scope or cross-tenant evidence must
+  not be treated as support. Empty or failed verification must not count
+  as successful verification.
+- Verified claims and their evidence references are passed to confidence
+  and review routing. Agent 7 cannot overrule a failed independent check
+  simply because the synthesis model is confident.
+- Deterministic report code renders approved output into supported
+  formats such as JSON/HTML and PDF where the rendering dependency is
+  available. Missing facts or metadata must be labelled unavailable,
+  not filled with plausible-sounding defaults.
+- Agent 7 can support analyst questions using scoped evidence and
+  citations, but should remain read-only and explicitly disclose unknowns.
+
+======================================================================
+CONFIDENCE GATE AND HUMAN REVIEW: HOW THEY WORK
+======================================================================
+
+- The Confidence Gate evaluates the verification outcomes, confidence,
+  contradictions, severity and other configured routing conditions.
+- Cases with unverified claims, contradictions, low confidence or
+  high-severity attribution are escalated according to policy, including
+  senior/dual review where required.
+- A high model score alone does not make a claim verified; verification
+  and evidence quality remain separate checks.
+- Analysts inspect claim-level citations, source artifacts, timelines,
+  uncertainty and conflicting evidence before accepting conclusions.
+- Maker-Checker controls require a separate authorized reviewer for
+  approving reusable validated knowledge where configured.
+- Rejected or unverified claims must not be silently promoted into the
+  validated-case corpus.
+
+======================================================================
+DATA STORES AND THEIR INTERACTIONS: HOW THEY WORK
+======================================================================
+
+POSTGRESQL
+- Stores structured case metadata, tenant-scoped findings, normalized
+  records/references, review state and other relational records.
+- Enforces schema constraints and scoped queries; it is the structured
+  system of record.
+
+S3 / MINIO
+- Stores original evidence objects and other large immutable artifacts.
+- Application metadata points to stored objects; analysis uses controlled
+  copies or read-only access rather than rewriting originals.
+
+REDIS
+- Can hold short-lived workflow state, queues, job status and checkpoints.
+- It is not the authoritative long-term forensic evidence store.
+- Persistence and recovery guarantees depend on deployment configuration.
+
+NEO4J + GRAPH DATA SCIENCE
+- Represents entities as nodes and their relationships as edges.
+- Supports traversals, multi-hop queries, provenance paths, timeline
+  exploration and selected graph algorithms when configured.
+- Graph relationships must retain case/tenant scope and source lineage.
+
+QDRANT
+- Stores embeddings and payload metadata for semantic retrieval and
+  validated-case RAG where enabled.
+- Retrieval filters must enforce tenant/collection policy and approval
+  status; a nearest-neighbor result is a candidate for review, not proof.
+
+MODEL SERVING
+- Qwen models perform assigned interpretation/synthesis tasks under
+  structured input/output contracts.
+- Qwen embedding models create vectors for supported retrieval workflows.
+- DeBERTa MNLI provides a separate evidence-versus-claim verification
+  signal for Agent 7.
+- Actual model availability, model versions, device placement and enabled
+  paths must be confirmed from deployment configuration.
+
+======================================================================
+AUDIT, WORKFLOW STATE, ERROR HANDLING AND ISM BOUNDARY
+======================================================================
+
+- Each meaningful processing step should have a case/tenant context,
+  input/output references, status, timing and error details.
+- Failed parser/model/database steps should be marked failed, partial or
+  retryable as appropriate; they must not produce a false success result.
+- Idempotency keys can prevent a retry from duplicating the same logical
+  operation, provided the operation uses the key consistently.
+- Checkpoints and job status support recovery only when implemented and
+  persisted by the deployed workflow components.
+- ISM is a defined integration boundary/contract in the documented
+  architecture, not a standalone implemented layer. Do not describe a
+  global scheduler, persistent checkpoint manager or universal retry
+  engine as implemented unless code and runtime tests prove it.
+- SIEM, SOAR and automatic remediation are outside the agreed scope.
+
+======================================================================
+EVALUATION AND RELEASE VALIDATION: HOW THEY WORK
+======================================================================
+
+- Unit tests check individual parsers, schemas, repositories, agents and
+  utility functions.
+- Integration tests check boundaries between storage, preprocessing,
+  correlation, FIR, sanitization, agents, verification and reporting.
+- Tenant-isolation tests attempt cross-tenant reads/citations and require
+  denial or empty scoped results.
+- Adversarial tests include malformed evidence, prompt injection,
+  conflicting artifacts, empty citations, missing model outputs and
+  database/model failures.
+- For extraction, compare predicted entity spans and types with labelled
+  examples; measure precision/recall and review false positives.
+- For verification, test supported, neutral and contradictory claims
+  against known evidence, including compound claims and multiple sources.
+- Regression tests should preserve previously passing behavior after
+  code changes. A passing test suite is evidence for the tested paths,
+  not proof that every production scenario is safe.
+- Record model/config versions, datasets, thresholds and evaluation
+  results so that behavior can be compared across releases.
+
+======================================================================
+BOUNDARIES THAT MUST REMAIN CLEAR
+======================================================================
+
+- Original evidence is immutable; derived artifacts are traceable copies.
+- Extracted entities and FCRs are candidates/relationships, not verdicts.
+- Deterministic findings remain separate from AI interpretations.
+- AI-generated claims require evidence references and independent checks.
+- Similarity does not prove identity; temporal proximity does not prove
+  causation; a YARA match does not prove execution or impact.
+- Missing evidence means unknown unless a valid method establishes absence.
+- Tenant and case scope must be enforced in every repository, graph,
+  vector retrieval, agent input, verification step and report query.
+- Human approval is required where policy says so; model confidence is
+  not a substitute for review.
+- The architecture reference describes intended behavior. Mark a feature
+  as implemented only after checking the current source code, configuration
+  and relevant tests.

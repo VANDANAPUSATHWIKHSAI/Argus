@@ -56,7 +56,8 @@ class EvidenceCorrelationAgent(BaseAgent):
         sanitization_gateway: Optional[Any] = None,
         neo4j_client: Optional[Any] = None,
         tenant_id: str = "default",
-        time_window_seconds: float = 3600.0
+        time_window_seconds: float = 3600.0,
+        allow_pure_cypher_fallback: bool = False
     ):
         model_instance = model if model is not None else LLMLoader().load_qwen3_8b()
         fir_instance = fir_repo if fir_repo is not None else FIRRepository()
@@ -71,7 +72,7 @@ class EvidenceCorrelationAgent(BaseAgent):
 
         self.neo4j_client = neo4j_client
         self.timeline_builder = TimelineBuilder(time_window_seconds=time_window_seconds)
-        self.graph_builder = GraphBuilder(neo4j_client=neo4j_client)
+        self.graph_builder = GraphBuilder(neo4j_client=neo4j_client, allow_pure_cypher_fallback=allow_pure_cypher_fallback)
         self.conflict_detector = ConflictDetector()
         self.validator = Agent2Validator()
         self.model_name = "Qwen3-8B"
@@ -241,7 +242,12 @@ class EvidenceCorrelationAgent(BaseAgent):
         valid_universe = valid_finding_ids.union(valid_lineage_ids)
         if not validated_claims:
             logger.info("Agent 2: Generating deterministic fallback claims from graph communities & timeline clusters.")
-            validated_claims = self._generate_deterministic_fallback_claims(fir_findings, signals, valid_universe)
+            fallback_claims = self._generate_deterministic_fallback_claims(fir_findings, signals, valid_universe)
+            validated_claims = self.validator.validate_claims(
+                claims=fallback_claims,
+                valid_finding_ids=valid_finding_ids,
+                valid_lineage_ids=valid_lineage_ids
+            )
 
         status = "SUCCESS" if validated_claims else "PARTIAL_SUCCESS"
 
@@ -253,6 +259,9 @@ class EvidenceCorrelationAgent(BaseAgent):
             model_used=self.model_name,
             timestamp=datetime.now(timezone.utc),
             execution_status=status,
+            is_degraded=graph_metrics.get("is_degraded", False),
+            degraded_reason=graph_metrics.get("degraded_reason"),
+            algorithm_executed=graph_metrics.get("algorithm_executed", "gds.wcc.stream"),
             graph=GraphStatus(
                 status="AVAILABLE",
                 node_count=graph_metrics.get("total_nodes", 0),

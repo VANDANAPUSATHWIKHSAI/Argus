@@ -85,11 +85,16 @@ def check_binary(name: str) -> tuple[bool, str]:
     names_to_check = [name, f"{stem}.exe", f"{stem}.pl", f"{stem}.bat"]
     
     search_dirs = [
+        Path(os.environ.get("ARGUS_EXTERNAL_TOOLS_DIR", "")) if os.environ.get("ARGUS_EXTERNAL_TOOLS_DIR") else None,
         Path("external_tools"),
         Path("../external_tools"),
+        Path("../argus components/external_tools"),
+        Path("../../argus components/external_tools"),
+        Path("c:/Users/Sudeep/Downloads/argus components/external_tools"),
         Path("tsk/sleuthkit-4.15.0-win32/bin"),
         Path("../Argus/tsk/sleuthkit-4.15.0-win32/bin")
     ]
+    search_dirs = [d for d in search_dirs if d and d.exists()]
     
     for sdir in search_dirs:
         if sdir.exists():

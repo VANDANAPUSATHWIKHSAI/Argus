@@ -68,18 +68,38 @@ class MinioClient:
         filename: str,
         data: bytes,
         content_type: str = "application/octet-stream",
+        metadata: Optional[dict] = None,
     ) -> str:
         """
         Upload original evidence to MinIO (immutable raw evidence bucket).
         Returns the object key for storage in PostgreSQL evidence table.
+        Enforces immutability: fails closed if object already exists.
+        Attaches tenant/case/evidence/SHA-256 metadata.
         """
         key = self._object_key(tenant_id, case_id, evidence_id, f"original/{filename}")
+        if self.object_exists(self.RAW_BUCKET, key):
+            raise RuntimeError(
+                f"Immutability violation: Evidence object '{key}' already exists in '{self.RAW_BUCKET}' and cannot be overwritten."
+            )
+
+        import hashlib
+        meta = {
+            "tenant_id": tenant_id,
+            "case_id": case_id,
+            "evidence_id": evidence_id,
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "filename": filename,
+        }
+        if metadata:
+            meta.update(metadata)
+
         self.client.put_object(
             bucket_name=self.RAW_BUCKET,
             object_name=key,
             data=io.BytesIO(data),
             length=len(data),
             content_type=content_type,
+            metadata=meta,
         )
         return key
 
@@ -90,30 +110,58 @@ class MinioClient:
         evidence_id: str,
         filename: str,
         encrypted_data: bytes,
+        metadata: Optional[dict] = None,
     ) -> str:
         """Upload encrypted evidence blob to the encrypted bucket."""
         key = self._object_key(
             tenant_id, case_id, evidence_id, f"encrypted/{filename}.enc"
         )
+        if self.object_exists(self.ENCRYPTED_BUCKET, key):
+            raise RuntimeError(
+                f"Immutability violation: Encrypted evidence object '{key}' already exists in '{self.ENCRYPTED_BUCKET}' and cannot be overwritten."
+            )
+
+        import hashlib
+        meta = {
+            "tenant_id": tenant_id,
+            "case_id": case_id,
+            "evidence_id": evidence_id,
+            "sha256": hashlib.sha256(encrypted_data).hexdigest(),
+            "filename": filename,
+        }
+        if metadata:
+            meta.update(metadata)
+
         self.client.put_object(
             bucket_name=self.ENCRYPTED_BUCKET,
             object_name=key,
             data=io.BytesIO(encrypted_data),
             length=len(encrypted_data),
             content_type="application/octet-stream",
+            metadata=meta,
         )
         return key
 
     # ── Download ────────────────────────────────────────────────
 
-    def download_raw_evidence(self, object_key: str) -> bytes:
-        """Download raw evidence by its object key."""
+    def download_raw_evidence(self, object_key: str, expected_sha256: Optional[str] = None) -> bytes:
+        """Download raw evidence by its object key, with optional SHA-256 integrity assertion."""
+        import hashlib
         response = self.client.get_object(self.RAW_BUCKET, object_key)
         try:
-            return response.read()
+            data = response.read()
         finally:
             response.close()
             response.release_conn()
+
+        if expected_sha256:
+            actual_sha256 = hashlib.sha256(data).hexdigest()
+            if actual_sha256.lower() != expected_sha256.lower():
+                raise RuntimeError(
+                    f"Evidence integrity violation: SHA-256 mismatch for object '{object_key}'. "
+                    f"Expected {expected_sha256}, calculated {actual_sha256}"
+                )
+        return data
 
     def download_encrypted_evidence(self, object_key: str) -> bytes:
         """Download encrypted evidence blob."""
@@ -127,13 +175,14 @@ class MinioClient:
     # ── Metadata ────────────────────────────────────────────────
 
     def get_object_stat(self, bucket: str, object_key: str) -> dict:
-        """Get metadata (size, etag, last modified) for an object."""
+        """Get metadata (size, etag, last modified, user metadata) for an object."""
         stat = self.client.stat_object(bucket, object_key)
         return {
             "size": stat.size,
             "etag": stat.etag,
             "last_modified": stat.last_modified,
             "content_type": stat.content_type,
+            "metadata": stat.metadata,
         }
 
     def object_exists(self, bucket: str, object_key: str) -> bool:
@@ -142,9 +191,11 @@ class MinioClient:
             self.client.stat_object(bucket, object_key)
             return True
         except S3Error as e:
-            if e.code == "NoSuchKey":
+            if e.code in ("NoSuchKey", "NotFound"):
                 return False
             raise
+        except Exception:
+            return False
 
     # ── Presigned URLs (for analyst download in review UI) ──────
 

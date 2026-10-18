@@ -301,3 +301,31 @@ def test_agent1_critical_regression_test(tmp_path):
     result2 = agent.run(case_id="CASE-REG-01", context={"fir_findings": fir_findings})
     assert result2["execution_status"] == "SUCCESS"
     assert result2["case_id"] == result["case_id"]
+
+
+def test_agent1_invalid_readiness_fails_closed_to_not_ready():
+    """
+    CRITICAL REGRESSION TEST:
+    Verifies that invalid readiness strings or dictionaries do NOT fail open to 'READY'.
+    They must be rejected or converted to a documented conservative state ('NOT_READY').
+    """
+    from agents.agent1_evidence_intelligence.schemas import Agent1Output, Agent1InvestigationReadiness
+
+    # 1. String inputs
+    for invalid_status in ["INVALID_STATUS", "FOOBAR", "ALL_GOOD_BRO", "", "UNKNOWN"]:
+        out = Agent1Output.model_validate({"case_id": "CASE-INV-01", "investigation_readiness": invalid_status})
+        assert out.investigation_readiness.status == "NOT_READY", f"Expected NOT_READY for '{invalid_status}', got '{out.investigation_readiness.status}'"
+        assert "fail-closed" in out.investigation_readiness.reason.lower() or "defaulted" in out.investigation_readiness.reason.lower()
+
+    # 2. Dict inputs
+    out_dict = Agent1Output.model_validate({
+        "case_id": "CASE-INV-02",
+        "investigation_readiness": {"status": "TOTALLY_FABRICATED", "reason": "Testing"}
+    })
+    assert out_dict.investigation_readiness.status == "NOT_READY"
+    assert "fail-closed" in out_dict.investigation_readiness.reason.lower() or "defaulted" in out_dict.investigation_readiness.reason.lower()
+
+    # 3. Documented valid statuses must be accepted as-is
+    for valid_status in ["READY", "READY_WITH_LIMITATIONS", "LIMITED", "NOT_READY", "UNREADY"]:
+        out_valid = Agent1Output.model_validate({"case_id": "CASE-VAL-01", "investigation_readiness": valid_status})
+        assert out_valid.investigation_readiness.status == valid_status

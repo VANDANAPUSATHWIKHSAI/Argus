@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import os
 import re
+import hashlib
 import logging
 from glob import glob
 from datetime import datetime, timezone
@@ -31,8 +32,10 @@ import yaml
 
 from forensic_analysis.schemas import Finding
 from preprocessing.schemas import Artifact
+from forensic_analysis.rules.scan_outcome import ScanStatus, ScanExecutionRecord
 
 logger = logging.getLogger(__name__)
+
 
 # ── Confidence mapping from Sigma level → Finding confidence ─────────────────
 # NOT hardcoded to 0.90. Each level maps to a calibrated confidence reflecting
@@ -319,45 +322,74 @@ class SigmaRuleEngine:
         findings = engine.evaluate(case_id, artifacts, fcr_ref)
     """
 
-    def __init__(self, rules_dir: Optional[str] = None):
+    def __init__(
+        self,
+        rules_dir: Optional[str] = None,
+        max_artifacts: int = 50000,
+        engine_available: bool = True
+    ):
         self.rules_dir = rules_dir or os.path.join(os.path.dirname(__file__), "sigma")
+        self.max_artifacts = max_artifacts
+        self.engine_available = engine_available
+        self.engine_version: str = "1.0.0-pure-python"
         self.rules: List[SigmaRule] = []
+        self.rules_hash: Optional[str] = None
+        self.init_status: ScanStatus = ScanStatus.ZERO_MATCHES
+        self.init_error: Optional[str] = None
+        self.last_scan_record: Optional[ScanExecutionRecord] = None
         self._load_rules()
 
     def _load_rules(self) -> None:
         """Loads all .yml files from the sigma rules directory tree."""
         if not os.path.isdir(self.rules_dir):
-            logger.warning(
-                "SigmaRuleEngine: Rules directory '%s' not found. Sigma detection disabled.",
-                self.rules_dir
-            )
+            self.init_status = ScanStatus.MISSING_RULE_CONFIG
+            self.init_error = f"Sigma rules directory '{self.rules_dir}' does not exist."
+            logger.warning("SigmaRuleEngine: %s", self.init_error)
             return
 
         yml_files = glob(os.path.join(self.rules_dir, "**", "*.yml"), recursive=True)
+        if not yml_files:
+            self.init_status = ScanStatus.MISSING_RULE_CONFIG
+            self.init_error = f"No .yml rule files found in '{self.rules_dir}'."
+            logger.warning("SigmaRuleEngine: %s", self.init_error)
+            return
+
         loaded = 0
+        syntax_errors = []
+        raw_contents = []
+
         for yml_path in yml_files:
             try:
                 with open(yml_path, "r", encoding="utf-8") as f:
-                    rule_data = yaml.safe_load(f)
+                    content = f.read()
+                    raw_contents.append(content)
+                    rule_data = yaml.safe_load(content)
 
                 if not isinstance(rule_data, dict):
-                    logger.warning("SigmaRuleEngine: Skipping non-dict YAML '%s'", yml_path)
+                    syntax_errors.append(f"Non-dict YAML root in '{yml_path}'")
                     continue
 
                 if "detection" not in rule_data:
-                    logger.warning("SigmaRuleEngine: Skipping rule without 'detection' block: '%s'", yml_path)
+                    syntax_errors.append(f"Missing 'detection' block in '{yml_path}'")
                     continue
 
                 rule = SigmaRule(rule_data, source_path=yml_path)
                 self.rules.append(rule)
                 loaded += 1
             except Exception as e:
+                syntax_errors.append(f"YAML parse error in '{yml_path}': {e}")
                 logger.warning("SigmaRuleEngine: Failed to load rule '%s': %s", yml_path, e)
 
-        logger.info(
-            "SigmaRuleEngine: Loaded %d Sigma rules from '%s'",
-            loaded, self.rules_dir
-        )
+        if raw_contents:
+            self.rules_hash = hashlib.sha256("".join(raw_contents).encode("utf-8")).hexdigest()
+
+        if loaded == 0 and syntax_errors:
+            self.init_status = ScanStatus.INVALID_RULE_SYNTAX
+            self.init_error = "; ".join(syntax_errors)
+            logger.error("SigmaRuleEngine: All Sigma rules failed to load: %s", self.init_error)
+        else:
+            self.init_status = ScanStatus.ZERO_MATCHES
+            logger.info("SigmaRuleEngine: Loaded %d Sigma rules from '%s'", loaded, self.rules_dir)
 
     def evaluate(
         self,
@@ -368,72 +400,176 @@ class SigmaRuleEngine:
         """
         Evaluates all loaded Sigma rules against a list of Artifacts.
         Returns a list of Finding objects for each (rule, artifact) match.
-
-        Each matched Finding:
-        - confidence: derived from rule level (NOT hardcoded)
-        - mitre_mapping: advisory hint from rule tags (NOT authoritative)
-        - layer: 'sigma.<rule_id>' for full provenance traceability
-        - metadata: includes rule_id, rule_title, matched_fields, rule_source
+        Guarantees distinct status representation for missing rules, invalid syntax,
+        unsupported evidence types, zero matches, and execution failures.
         """
+        # 0. Engine availability check
+        if not self.engine_available:
+            rec = ScanExecutionRecord(
+                engine_name="sigma",
+                status=ScanStatus.ENGINE_UNAVAILABLE,
+                rule_count=len(self.rules),
+                rule_identifiers=[r.rule_id for r in self.rules],
+                rules_hash=self.rules_hash,
+                engine_version=self.engine_version,
+                source_evidence_ids=[fcr_ref] if fcr_ref else [],
+                error_message="Sigma execution engine is marked unavailable."
+            )
+            self.last_scan_record = rec
+            return []
+
+        # 1. Missing rule config or syntax failure check
+        if self.init_status in (ScanStatus.MISSING_RULE_CONFIG, ScanStatus.INVALID_RULE_SYNTAX):
+            rec = ScanExecutionRecord(
+                engine_name="sigma",
+                status=self.init_status,
+                rule_count=len(self.rules),
+                rule_identifiers=[r.rule_id for r in self.rules],
+                rules_hash=self.rules_hash,
+                engine_version=self.engine_version,
+                source_evidence_ids=[fcr_ref] if fcr_ref else [],
+                error_message=self.init_error
+            )
+            self.last_scan_record = rec
+            return []
+
+        # 2. Resource safety limit check
+        if len(artifacts) > self.max_artifacts:
+            rec = ScanExecutionRecord(
+                engine_name="sigma",
+                status=ScanStatus.RESOURCE_LIMIT_EXCEEDED,
+                rule_count=len(self.rules),
+                rule_identifiers=[r.rule_id for r in self.rules],
+                rules_hash=self.rules_hash,
+                engine_version=self.engine_version,
+                source_evidence_ids=[fcr_ref] if fcr_ref else [],
+                error_message=f"Artifact count ({len(artifacts)}) exceeds maximum safety threshold ({self.max_artifacts})."
+            )
+            self.last_scan_record = rec
+            return []
+
+        # 3. Unsupported evidence type check: Sigma expects log/event artifacts
+        unsupported_types = {"pcap", "memory_dump", "raw_disk", "binary_blob"}
+        if artifacts and all(a.artifact_type in unsupported_types for a in artifacts):
+            rec = ScanExecutionRecord(
+                engine_name="sigma",
+                status=ScanStatus.UNSUPPORTED_EVIDENCE_TYPE,
+                rule_count=len(self.rules),
+                rule_identifiers=[r.rule_id for r in self.rules],
+                rules_hash=self.rules_hash,
+                engine_version=self.engine_version,
+                source_evidence_ids=[fcr_ref] if fcr_ref else [],
+                error_message=f"Unsupported evidence types for Sigma log evaluation: {[a.artifact_type for a in artifacts]}"
+            )
+            self.last_scan_record = rec
+            return []
+
         if not self.rules:
+            rec = ScanExecutionRecord(
+                engine_name="sigma",
+                status=ScanStatus.MISSING_RULE_CONFIG,
+                rule_count=0,
+                error_message="No active Sigma rules configured."
+            )
+            self.last_scan_record = rec
             return []
 
         findings: List[Finding] = []
 
-        for artifact in artifacts:
-            for rule in self.rules:
-                if not rule.condition or not rule.detection_blocks:
-                    continue
+        try:
+            for artifact in artifacts:
+                for rule in self.rules:
+                    if not rule.condition or not rule.detection_blocks:
+                        continue
 
-                try:
-                    matched = _evaluate_condition(
-                        rule.condition,
-                        rule.detection_blocks,
-                        artifact
-                    )
-                except Exception as e:
-                    logger.warning(
-                        "SigmaRuleEngine: Error evaluating rule '%s' on artifact '%s': %s",
-                        rule.title, artifact.artifact_id, e
-                    )
-                    continue
+                    try:
+                        matched = _evaluate_condition(
+                            rule.condition,
+                            rule.detection_blocks,
+                            artifact
+                        )
+                    except Exception as e:
+                        logger.error(
+                            "SigmaRuleEngine: Error evaluating rule '%s' on artifact '%s': %s",
+                            rule.title, artifact.artifact_id, e
+                        )
+                        raise
 
-                if matched:
-                    # Collect which fields actually matched for provenance
-                    matched_fields = _collect_matched_fields(rule, artifact)
+                    if matched:
+                        # Collect which fields actually matched for provenance
+                        matched_fields = _collect_matched_fields(rule, artifact)
 
-                    fact_msg = (
-                        f"Sigma rule '{rule.title}' matched on artifact "
-                        f"(type={artifact.artifact_type}, source={artifact.source_tool}): "
-                        f"{rule.description or 'No description'}"
-                    )
+                        fact_msg = (
+                            f"Sigma rule '{rule.title}' matched on artifact "
+                            f"(type={artifact.artifact_type}, source={artifact.source_tool}): "
+                            f"{rule.description or 'No description'}"
+                        )
 
-                    findings.append(Finding(
-                        case_id=case_id,
-                        fact=fact_msg,
-                        confidence=rule.confidence,
-                        severity=rule.level if rule.level in (
-                            "informational", "low", "medium", "high", "critical"
-                        ) else "medium",
-                        mitre_mapping=rule.mitre_hint,
-                        timestamp=artifact.timestamp,
-                        evidence_reference=fcr_ref or artifact.artifact_id,
-                        source_artifact_id=artifact.artifact_id,
-                        layer=f"sigma.{rule.rule_id}",
-                        metadata={
-                            "rule_id": rule.rule_id,
-                            "rule_title": rule.title,
-                            "rule_author": rule.author,
-                            "rule_level": rule.level,
-                            "rule_source": rule.source_path,
-                            "matched_fields": matched_fields,
-                            "mitre_tags_advisory": rule.mitre_tags,
-                            "falsepositives": rule.falsepositives,
-                            "artifact_id": artifact.artifact_id,
-                        }
-                    ))
+                        findings.append(Finding(
+                            case_id=case_id,
+                            fact=fact_msg,
+                            confidence=rule.confidence,
+                            severity=rule.level if rule.level in (
+                                "informational", "low", "medium", "high", "critical"
+                            ) else "medium",
+                            mitre_mapping=rule.mitre_hint,
+                            timestamp=artifact.timestamp,
+                            evidence_reference=fcr_ref or artifact.artifact_id,
+                            source_artifact_id=artifact.artifact_id,
+                            layer=f"sigma.{rule.rule_id}",
+                            metadata={
+                                "rule_id": rule.rule_id,
+                                "rule_title": rule.title,
+                                "rule_author": rule.author,
+                                "rule_level": rule.level,
+                                "rule_source": rule.source_path,
+                                "matched_fields": matched_fields,
+                                "mitre_tags_advisory": rule.mitre_tags,
+                                "falsepositives": rule.falsepositives,
+                                "artifact_id": artifact.artifact_id,
+                                "engine_version": self.engine_version,
+                                "rules_hash": self.rules_hash,
+                                "scan_status": ScanStatus.MATCHES_FOUND.value,
+                            }
+                        ))
+        except Exception as exc:
+            rec = ScanExecutionRecord(
+                engine_name="sigma",
+                status=ScanStatus.EXECUTION_FAILURE,
+                rule_count=len(self.rules),
+                rule_identifiers=[r.rule_id for r in self.rules],
+                rules_hash=self.rules_hash,
+                engine_version=self.engine_version,
+                source_evidence_ids=[fcr_ref] if fcr_ref else [],
+                error_message=f"Sigma execution failure: {exc}"
+            )
+            self.last_scan_record = rec
+            logger.error("SigmaRuleEngine execution failure: %s", exc)
+            return []
 
+        final_status = ScanStatus.MATCHES_FOUND if findings else ScanStatus.ZERO_MATCHES
+        self.last_scan_record = ScanExecutionRecord(
+            engine_name="sigma",
+            status=final_status,
+            rule_count=len(self.rules),
+            rule_identifiers=[r.rule_id for r in self.rules],
+            rules_hash=self.rules_hash,
+            engine_version=self.engine_version,
+            source_evidence_ids=[fcr_ref] if fcr_ref else [],
+            matches_count=len(findings)
+        )
         return findings
+
+    def evaluate_with_report(
+        self,
+        case_id: str,
+        artifacts: List[Artifact],
+        fcr_ref: str
+    ) -> Tuple[List[Finding], ScanExecutionRecord]:
+        """Evaluates rules and returns both findings and the full ScanExecutionRecord."""
+        findings = self.evaluate(case_id=case_id, artifacts=artifacts, fcr_ref=fcr_ref)
+        return findings, self.last_scan_record
+
 
 
 def _collect_matched_fields(rule: SigmaRule, artifact: Artifact) -> Dict[str, str]:

@@ -1055,3 +1055,66 @@ def test_prompt_injection_in_evidence_treated_as_untrusted_data():
         assert ver_result["checks"]["support"] is False
         assert ver_result["verification_status"] == "insufficient_evidence"
 
+
+def test_agent7_adversarial_regression_missing_citations_and_isolation():
+    """
+    CRITICAL REGRESSION TEST:
+    1. A claim with NO evidence IDs must NEVER have FIR findings auto-attached.
+       It must fail existence, set verified=False, and record zero evidence IDs.
+    2. An evidence ID belonging to another tenant must fail closed without
+       disclosing the other tenant's identifier in the error flag.
+    """
+    mock_model = MagicMock()
+    mock_fir = FIRRepository()
+    mock_fir.clear()
+    mock_gateway = MagicMock()
+
+    # Insert findings for tenant_alpha and tenant_victim
+    finding_alpha = make_test_finding(
+        finding_id="FIR-ALPHA-101",
+        case_id="CASE-ALPHA",
+        tenant_id="tenant_alpha",
+        fact="Authorized finding in tenant alpha",
+    )
+    finding_victim = make_test_finding(
+        finding_id="FIR-VICTIM-999",
+        case_id="CASE-VICTIM",
+        tenant_id="tenant_victim_secret",
+        fact="Secret finding in victim tenant",
+    )
+    mock_fir.insert(finding_alpha)
+    mock_fir.insert(finding_victim)
+
+    verifier = SupervisorVerification(mock_model, mock_fir, mock_gateway, tenant_id="tenant_alpha")
+
+    # TEST 1: Claim with empty evidence_ids: MUST NOT be auto-filled with all FIR findings!
+    claim_uncited = {
+        "claim_id": "CLM-UNCITED-01",
+        "claim": "Attacker exfiltrated 500GB of sensitive documents.",
+        "evidence_ids": [],
+        "severity": "critical",
+        "confidence": 0.95,
+    }
+    fir_list = [finding_alpha, finding_victim]
+    res_uncited = verifier.verify(claim_uncited, fir_records=fir_list, tenant_id="tenant_alpha", case_id="CASE-ALPHA")
+
+    assert res_uncited["verified"] is False
+    assert res_uncited["checks"]["existence"] is False
+    assert res_uncited["evidence_ids"] == [], "Evidence IDs must NOT be auto-filled with FIR findings!"
+    assert any("cites zero evidence IDs" in flag for flag in res_uncited["flags"])
+
+    # TEST 2: Cross-tenant ID citation must fail closed and NOT leak tenant_victim_secret
+    claim_cross = {
+        "claim_id": "CLM-CROSS-01",
+        "claim": "Attacker compromised victim server.",
+        "evidence_ids": ["FIR-VICTIM-999"],
+        "severity": "high",
+        "confidence": 0.90,
+    }
+    res_cross = verifier.verify(claim_cross, fir_records=fir_list, tenant_id="tenant_alpha", case_id="CASE-ALPHA")
+
+    assert res_cross["verified"] is False
+    assert res_cross["checks"]["existence"] is False
+    # Ensure secret tenant name is NEVER disclosed
+    for flag in res_cross["flags"]:
+        assert "tenant_victim_secret" not in flag, f"Cross-tenant ID leaked in flag: {flag}"

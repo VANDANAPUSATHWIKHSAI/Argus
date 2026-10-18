@@ -140,11 +140,23 @@ class Agent1Output(BaseModel):
     @field_validator("investigation_readiness", mode="before")
     @classmethod
     def parse_readiness(cls, v):
+        valid_statuses = ("READY", "READY_WITH_LIMITATIONS", "LIMITED", "NOT_READY", "UNREADY")
         if isinstance(v, str):
             status = v.upper()
-            if status not in ("READY", "READY_WITH_LIMITATIONS", "LIMITED", "NOT_READY", "UNREADY"):
-                status = "READY"
+            if status not in valid_statuses:
+                return Agent1InvestigationReadiness(
+                    status="NOT_READY",
+                    reason=f"Unrecognized readiness status '{v}' received; defaulted conservatively to NOT_READY (fail-closed)."
+                )
             return Agent1InvestigationReadiness(status=status, reason="Parsed from string input.")
+        elif isinstance(v, dict):
+            status = str(v.get("status", "")).upper()
+            if status not in valid_statuses:
+                return Agent1InvestigationReadiness(
+                    status="NOT_READY",
+                    reason=f"Unrecognized readiness status '{v.get('status')}' received; defaulted conservatively to NOT_READY (fail-closed)."
+                )
+            return Agent1InvestigationReadiness(status=status, reason=str(v.get("reason", "Parsed from dict input.")))
         return v
     evidence_summary: Agent1EvidenceSummary = Field(
         default_factory=Agent1EvidenceSummary

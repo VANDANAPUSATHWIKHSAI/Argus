@@ -26,7 +26,7 @@ class LLMLoader:
 
     def load_primary(self) -> Any:
         """
-        Loads the primary agent model (Qwen3-14B).
+        Loads the primary agent model (Qwen3-8B).
         In dev: returns either an Ollama client wrapper or a Hugging Face pipeline.
         """
         if self.use_ollama:

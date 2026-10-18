@@ -193,33 +193,59 @@ def store_evidence(evidence: Evidence, case: CaseSession) -> Evidence:
         try:
             from minio import Minio
             from config.settings import settings
-            
+
+            raw_bucket = getattr(settings, "minio_bucket_raw_evidence", "argus-raw-evidence")
+            enc_bucket = getattr(settings, "minio_bucket_encrypted", "argus-encrypted-evidence")
             client = Minio(
                 settings.minio_endpoint,
                 access_key=settings.minio_access_key,
                 secret_key=settings.minio_secret_key,
                 secure=settings.minio_secure
             )
+
+            # Immutability pre-check: verify raw evidence object does not already exist
+            try:
+                client.stat_object(raw_bucket, orig_minio_key)
+                raise RuntimeError(
+                    f"Immutability violation: Evidence object '{orig_minio_key}' already exists in '{raw_bucket}' and cannot be overwritten."
+                )
+            except Exception as se:
+                if "Immutability violation" in str(se):
+                    raise
+                # NoSuchKey means clean to write
+
+            metadata = {
+                "tenant_id": str(case.tenant_id),
+                "case_id": str(case.case_id),
+                "evidence_id": str(evidence.evidence_id),
+                "sha256": str(evidence.sha256_hash or ""),
+                "filename": str(evidence.filename),
+            }
+
             client.fput_object(
-                bucket_name=getattr(settings, "minio_bucket_raw_evidence", "argus-raw-evidence"),
+                bucket_name=raw_bucket,
                 object_name=orig_minio_key,
                 file_path=raw_path,
-                content_type="application/octet-stream"
+                content_type="application/octet-stream",
+                metadata=metadata
             )
             evidence.original_repository_path = orig_minio_key
             evidence.repository_path = orig_minio_key
 
             if evidence.encrypted and evidence.encrypted_file_path and os.path.exists(evidence.encrypted_file_path):
                 client.fput_object(
-                    bucket_name=settings.minio_bucket_encrypted,
+                    bucket_name=enc_bucket,
                     object_name=enc_minio_key,
                     file_path=evidence.encrypted_file_path,
-                    content_type="application/octet-stream"
+                    content_type="application/octet-stream",
+                    metadata=metadata
                 )
                 evidence.encrypted_repository_path = enc_minio_key
 
             print(f"  [5/5] MINIO UPLOADED original={orig_minio_key}")
         except Exception as e:
+            if "Immutability violation" in str(e):
+                raise
             print(f"  [MINIO NOTICE] MinIO upload skipped or unconfigured (using local repo paths): {e}")
     else:
         from config.settings import settings

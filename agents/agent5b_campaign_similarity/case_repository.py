@@ -64,19 +64,35 @@ class ValidatedCaseRepository:
     ):
         self.vector_engine = vector_engine or MultiVectorEngine()
 
+        self.is_degraded = False
+        self.is_in_memory_fallback = False
+
         if qdrant_client is not None:
             self.client = qdrant_client
         elif QDRANT_AVAILABLE:
-            if url:
+            from config.settings import settings
+            is_prod = getattr(settings, "app_env", "development") == "production"
+            target_url = url or getattr(settings, "qdrant_url", None)
+            target_key = api_key or getattr(settings, "qdrant_api_key", None)
+            if target_url:
                 try:
-                    self.client = QdrantClient(url=url, api_key=api_key)
+                    self.client = QdrantClient(url=target_url, api_key=target_key)
                 except Exception as e:
-                    logger.warning(f"Failed to connect to Qdrant at {url}: {e}. Falling back to in-memory.")
+                    if is_prod:
+                        logger.error("Failed to connect to Qdrant at %s in production mode: %s", target_url, e)
+                        raise RuntimeError(f"Qdrant service connection failed in production mode: {e}") from e
+                    logger.warning("Failed to connect to Qdrant at %s: %s. Using isolated in-memory development fallback.", target_url, e)
                     self.client = QdrantClient(":memory:")
+                    self.is_in_memory_fallback = True
+                    self.is_degraded = True
             else:
+                if is_prod:
+                    raise RuntimeError("Qdrant URL not configured in production mode.")
                 self.client = QdrantClient(":memory:")
+                self.is_in_memory_fallback = True
         else:
             self.client = None
+            self.is_degraded = True
 
         self._in_memory_cases: Dict[str, Dict[str, Tuple[ValidatedCase, MultiVector]]] = {}
 
@@ -84,11 +100,20 @@ class ValidatedCaseRepository:
         clean_tenant = tenant_id.strip().lower().replace("-", "_").replace(" ", "_")
         return f"validated_cases_{clean_tenant}"
 
-    def ensure_collection(self, tenant_id: str) -> bool:
+    def is_tenant_ready(self, tenant_id: str) -> bool:
+        """
+        Verifies if a tenant's Qdrant collection is fully initialized, operational,
+        and conforms to the multi-vector schema. Prevents partially initialized
+        or degraded tenants from appearing ready.
+        """
+        clean_tenant = (tenant_id or "").strip()
+        if not clean_tenant or clean_tenant in ("*", "none", "null"):
+            return False
+
         if not self.client or not QDRANT_AVAILABLE:
             return False
 
-        col_name = self._get_collection_name(tenant_id)
+        col_name = self._get_collection_name(clean_tenant)
         try:
             exists = False
             if hasattr(self.client, "collection_exists"):
@@ -98,21 +123,137 @@ class ValidatedCaseRepository:
                 exists = any(c.name == col_name for c in cols)
 
             if not exists:
-                dim = self.vector_engine.VECTOR_DIM
-                vec_config = {
-                    "behavior": models.VectorParams(size=dim, distance=models.Distance.COSINE),
-                    "attack": models.VectorParams(size=dim, distance=models.Distance.COSINE),
-                    "threat_intel": models.VectorParams(size=dim, distance=models.Distance.COSINE),
-                    "composite": models.VectorParams(size=dim, distance=models.Distance.COSINE)
-                }
-                self.client.create_collection(
-                    collection_name=col_name,
-                    vectors_config=vec_config
-                )
+                return False
+
+            # Retrieve collection info to verify vector config and status
+            col_info = self.client.get_collection(col_name)
+
+            # 1. Verify status is healthy
+            status_val = str(getattr(col_info, "status", "")).lower()
+            if status_val and ("red" in status_val or "grey" in status_val or "error" in status_val):
+                return False
+
+            # 2. Verify all 4 required named vectors exist with matching dimension
+            params = getattr(col_info.config, "params", None)
+            vectors_map = getattr(params, "vectors", None)
+            required_vectors = {"behavior", "attack", "threat_intel", "composite"}
+            expected_dim = self.vector_engine.VECTOR_DIM
+
+            if not isinstance(vectors_map, dict):
+                return False
+
+            for req_vec in required_vectors:
+                if req_vec not in vectors_map:
+                    return False
+                vec_param = vectors_map[req_vec]
+                vec_size = getattr(vec_param, "size", None)
+                if vec_size != expected_dim:
+                    return False
+
             return True
         except Exception as e:
-            logger.error(f"Error ensuring Qdrant collection for tenant {tenant_id}: {e}")
+            logger.debug(f"is_tenant_ready check returned False for {clean_tenant}: {e}")
             return False
+
+    def provision_tenant(self, tenant_id: str, force_recreate: bool = False) -> Dict[str, Any]:
+        """
+        Provisions a fresh tenant collection in Qdrant with deterministic multi-vector schema.
+        Safe to retry: if collection already exists and is ready, it is validated and preserved.
+        If partially initialized or force_recreate is True, it is cleanly re-created.
+        Returns detailed status metadata.
+        """
+        clean_tenant = (tenant_id or "").strip()
+        if not clean_tenant or clean_tenant in ("*", "none", "null"):
+            raise ValueError(f"Invalid tenant_id for Qdrant provisioning: '{tenant_id}'")
+
+        if not self.client or not QDRANT_AVAILABLE:
+            raise RuntimeError("Qdrant client unavailable for tenant provisioning.")
+
+        col_name = self._get_collection_name(clean_tenant)
+        dim = self.vector_engine.VECTOR_DIM
+        required_vectors = ["behavior", "attack", "threat_intel", "composite"]
+
+        # Check existing readiness
+        if not force_recreate and self.is_tenant_ready(clean_tenant):
+            info = self.client.get_collection(col_name)
+            return {
+                "tenant_id": clean_tenant,
+                "collection_name": col_name,
+                "status": "READY",
+                "is_ready": True,
+                "vector_dim": dim,
+                "vectors": required_vectors,
+                "points_count": getattr(info, "points_count", 0),
+                "recreated": False,
+            }
+
+        # If collection exists partially initialized or corrupted, delete before recreating
+        exists = False
+        try:
+            if hasattr(self.client, "collection_exists"):
+                exists = self.client.collection_exists(col_name)
+            elif hasattr(self.client, "get_collections"):
+                cols = self.client.get_collections().collections
+                exists = any(c.name == col_name for c in cols)
+        except Exception:
+            pass
+
+        if exists:
+            logger.warning(f"Removing partially initialized or recreating collection '{col_name}' for tenant '{clean_tenant}'")
+            try:
+                self.client.delete_collection(col_name)
+            except Exception as de:
+                logger.warning(f"Error during delete_collection for {col_name}: {de}")
+
+        # Create fresh collection with full multi-vector config
+        vec_config = {
+            "behavior": models.VectorParams(size=dim, distance=models.Distance.COSINE),
+            "attack": models.VectorParams(size=dim, distance=models.Distance.COSINE),
+            "threat_intel": models.VectorParams(size=dim, distance=models.Distance.COSINE),
+            "composite": models.VectorParams(size=dim, distance=models.Distance.COSINE)
+        }
+
+        self.client.create_collection(
+            collection_name=col_name,
+            vectors_config=vec_config
+        )
+
+        # Immediate post-creation verification
+        if not self.is_tenant_ready(clean_tenant):
+            raise RuntimeError(
+                f"Fresh tenant provisioning post-check failed for tenant '{clean_tenant}'. Collection '{col_name}' is not ready."
+            )
+
+        info = self.client.get_collection(col_name)
+        return {
+            "tenant_id": clean_tenant,
+            "collection_name": col_name,
+            "status": "READY",
+            "is_ready": True,
+            "vector_dim": dim,
+            "vectors": required_vectors,
+            "points_count": getattr(info, "points_count", 0),
+            "recreated": True,
+        }
+
+    def ensure_collection(self, tenant_id: str) -> bool:
+        if not self.client or not QDRANT_AVAILABLE:
+            return False
+
+        try:
+            if self.is_tenant_ready(tenant_id):
+                return True
+            res = self.provision_tenant(tenant_id)
+            return res.get("is_ready", False)
+        except Exception as e:
+            from config.settings import settings
+            is_prod = getattr(settings, "app_env", "development") == "production"
+            if is_prod:
+                raise RuntimeError(f"Qdrant collection creation failed in production mode: {e}") from e
+            logger.error(f"Error ensuring Qdrant collection for tenant {tenant_id}: {e}")
+            self.is_degraded = True
+            return False
+
 
     def add_case(self, case: ValidatedCase, vectors: Optional[MultiVector] = None) -> bool:
         """
@@ -164,10 +305,16 @@ class ValidatedCaseRepository:
                 self.client.upsert(collection_name=col_name, points=[point])
                 return True
             except Exception as e:
+                from config.settings import settings
+                is_prod = getattr(settings, "app_env", "development") == "production"
+                if is_prod:
+                    raise RuntimeError(f"Qdrant case insertion failed in production mode: {e}") from e
                 logger.error(f"Error inserting case {case.case_id} into Qdrant: {e}")
+                self.is_degraded = True
                 return False
 
         return True
+
 
     def search_similar(
         self,
@@ -220,7 +367,9 @@ class ValidatedCaseRepository:
                         continue
 
                     # Strict tenant check
-                    if val_case.tenant_id != tenant_id:
+                    clean_target = tenant_id.strip().lower().replace("-", "_").replace(" ", "_")
+                    clean_case_tenant = val_case.tenant_id.strip().lower().replace("-", "_").replace(" ", "_")
+                    if clean_case_tenant != clean_target:
                         logger.warning(f"Cross-tenant payload leak prevented! Target: {tenant_id}, Case: {val_case.tenant_id}")
                         continue
 
@@ -254,9 +403,15 @@ class ValidatedCaseRepository:
                 return retrieved[:top_k]
 
             except Exception as e:
+                from config.settings import settings
+                is_prod = getattr(settings, "app_env", "development") == "production"
+                if is_prod:
+                    raise RuntimeError(f"Qdrant search query failed in production mode: {e}") from e
                 logger.warning(f"Qdrant query failed: {e}. Falling back to memory index.")
+                self.is_degraded = True
 
         return self._search_in_memory(tenant_id, query_vectors, top_k)
+
 
     def _search_in_memory(
         self,
@@ -269,7 +424,9 @@ class ValidatedCaseRepository:
         seen_case_ids = set()
 
         for case_id, (val_case, case_vecs) in tenant_cases.items():
-            if val_case.tenant_id != tenant_id:
+            clean_target = tenant_id.strip().lower().replace("-", "_").replace(" ", "_")
+            clean_case_tenant = val_case.tenant_id.strip().lower().replace("-", "_").replace(" ", "_")
+            if clean_case_tenant != clean_target:
                 continue
             if val_case.validation.status not in ["approved", "validated"] or not val_case.validation.approved_by:
                 continue

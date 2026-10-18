@@ -41,8 +41,8 @@ def build_search_directories() -> List[Tuple[Path, str]]:
         except Exception:
             pass
 
-    # Priority 1: Environment variable ARGUS_FORENSICS_TOOLS
-    env_custom = os.environ.get("ARGUS_FORENSICS_TOOLS")
+    # Priority 1: Environment variable ARGUS_FORENSICS_TOOLS / ARGUS_EXTERNAL_TOOLS_DIR
+    env_custom = os.environ.get("ARGUS_FORENSICS_TOOLS") or os.environ.get("ARGUS_EXTERNAL_TOOLS_DIR")
     if env_custom:
         custom_p = Path(env_custom)
         add_dir(custom_p, "ARGUS_FORENSICS_TOOLS (Env)")
@@ -51,7 +51,7 @@ def build_search_directories() -> List[Tuple[Path, str]]:
                 if child.is_dir():
                     add_dir(child, f"ARGUS_FORENSICS_TOOLS/{child.name}")
 
-    # Priority 2: ARGUS project-local directories
+    # Priority 2: ARGUS project-local & argus components directories
     root = get_repo_root()
     local_subdirs = [
         ("argus", "Project-Local (argus/)"),
@@ -60,6 +60,9 @@ def build_search_directories() -> List[Tuple[Path, str]]:
         ("bin", "Project-Local (bin/)"),
         ("argus/bin", "Project-Local (argus/bin/)"),
         ("external_tools", "Project-Local (external_tools/)"),
+        ("../external_tools", "Parent (external_tools/)"),
+        ("../../argus components/external_tools", "Components (argus components/external_tools/)"),
+        ("../argus components/external_tools", "Components (argus components/external_tools/)"),
         ("third_party", "Project-Local (third_party/)"),
         ("vendor", "Project-Local (vendor/)"),
         ("forensic_tools", "Project-Local (forensic_tools/)"),

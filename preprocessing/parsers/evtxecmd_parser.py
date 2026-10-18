@@ -204,11 +204,19 @@ class EvtxECmdParser:
 
         try:
             repo_root = Path(__file__).resolve().parents[3]
-            ext_tools = repo_root / "external_tools" / "Zimmerman"
-            if ext_tools.exists():
-                for p in ext_tools.rglob("EvtxECmd.exe"):
-                    if p.is_file():
-                        return str(p)
+            candidate_dirs = [
+                Path(os.environ.get("ARGUS_EXTERNAL_TOOLS_DIR", "")) / "Zimmerman" if os.environ.get("ARGUS_EXTERNAL_TOOLS_DIR") else None,
+                repo_root / "external_tools" / "Zimmerman",
+                repo_root.parent / "external_tools" / "Zimmerman",
+                repo_root.parent / "argus components" / "external_tools" / "Zimmerman",
+                repo_root.parent.parent / "argus components" / "external_tools" / "Zimmerman",
+                Path("c:/Users/Sudeep/Downloads/argus components/external_tools/Zimmerman")
+            ]
+            for ext_tools in candidate_dirs:
+                if ext_tools and ext_tools.exists():
+                    for p in ext_tools.rglob("EvtxECmd.exe"):
+                        if p.is_file():
+                            return str(p)
         except Exception:
             pass
 

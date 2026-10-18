@@ -98,13 +98,22 @@ class TestAgent5bTwentyCases(unittest.TestCase):
     def setUp(self):
         self.model = DummyModel()
         self.vector_engine = MultiVectorEngine()
-        self.repo = ValidatedCaseRepository(vector_engine=self.vector_engine)
+        from qdrant_client import QdrantClient
+        # Hermetic test isolation: each test uses an isolated in-memory Qdrant instance.
+        # This guarantees persistent live Qdrant collections and historical data are never deleted or polluted.
+        self.repo = ValidatedCaseRepository(
+            qdrant_client=QdrantClient(":memory:"),
+            vector_engine=self.vector_engine
+        )
         self.agent = CampaignSimilarityAgent(
             model=self.model,
             tenant_id="tenant_alpha",
             vector_repo=self.repo,
             vector_engine=self.vector_engine
         )
+
+    def tearDown(self):
+        pass
 
     # -------------------------------------------------------------
     # 1. Strong behavioral similarity

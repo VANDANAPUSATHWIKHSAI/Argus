@@ -10,7 +10,7 @@ Heuristic checks are applied to all text fields.
 
 import re
 import logging
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 
 class ModelUnavailableError(Exception):
     """Raised when an ML model is required but unavailable in production fail-closed mode."""
@@ -80,12 +80,13 @@ class InjectionDetector:
         r"###\s*instruction",
     ]
 
-    def __init__(self):
+    def __init__(self, safety_classifier: Optional[Any] = None):
         # Compile all regex patterns for high-performance heuristic checks
         self.heuristics = [
             re.compile(pattern, re.IGNORECASE) 
             for pattern in self.FORENSIC_INJECTION_KEYWORDS
         ]
+        self.safety_classifier = safety_classifier
 
     def check_heuristics(self, text: str) -> Tuple[bool, List[str]]:
         """
@@ -100,26 +101,51 @@ class InjectionDetector:
 
     def check_model(self, text: str) -> Tuple[bool, float]:
         """
-        No-op stub: Prompt injection model removed in favor of fast forensic regex heuristics.
-        Returns (False, 0.0) for backwards compatibility.
+        Evaluates secondary safety classifier if configured, returning (is_flagged, score).
         """
+        if self.safety_classifier is not None:
+            res = self.safety_classifier.evaluate_with_guardrails(text)
+            return res.is_flagged, res.score
         return False, 0.0
 
-    def is_injection(self, text: str, is_unstructured: bool = False) -> Tuple[bool, Dict[str, Any]]:
+    def is_injection(
+        self,
+        text: str,
+        is_unstructured: bool = False,
+        tenant_id: str = "default"
+    ) -> Tuple[bool, Dict[str, Any]]:
         """
-        Runs fast regex heuristic prompt injection detection on text.
+        Runs layered prompt injection detection:
+        1. Fast regex heuristics (MANDATORY, primary deterministic defense).
+        2. Optional secondary ML safety classifier (additive secondary defense).
         """
         if not text:
             return False, {"reason": "empty"}
 
-        # ── Heuristics (Instant - Run on ALL fields) ──────────────
+        # ── 1. Deterministic Heuristics (Instant - Run on ALL fields) ──
         heuristic_hit, matched_rules = self.check_heuristics(text)
         if heuristic_hit:
             return True, {
                 "layer": "heuristic",
                 "reason": "matched_forensic_override_patterns",
                 "matched_patterns": matched_rules,
-                "confidence": 1.0
+                "confidence": 1.0,
             }
+
+        # ── 2. Secondary ML Safety Classifier (Additive) ──────────────
+        if self.safety_classifier is not None:
+            res = self.safety_classifier.evaluate_with_guardrails(text, tenant_id=tenant_id)
+            if res.is_flagged:
+                return True, {
+                    "layer": "ml_secondary_classifier",
+                    "reason": f"ml_classifier_flagged_{res.risk_category.lower()}",
+                    "confidence": res.score,
+                    "ml_score": res.score,
+                    "classifier_name": res.classifier_name,
+                    "classifier_version": res.classifier_version,
+                    "threshold_used": res.threshold_used,
+                    "risk_category": res.risk_category,
+                    "latency_ms": res.latency_ms,
+                }
 
         return False, {"status": "clean"}

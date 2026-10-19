@@ -73,13 +73,30 @@ class EvidenceUploadResponse(BaseModel):
     engine: str = "thread_pool"
 
 
+import urllib.parse
 import uuid
 
 def sanitize_uuid(val: Optional[str]) -> str:
-    """Ensure case_id is present."""
+    """Ensure case_id is present and clean of URL encoding or surrounding quotes."""
     if not val:
         return str(uuid.uuid4())
-    cleaned = val.strip().strip('"').strip("'").strip("%22").strip()
+    cleaned = str(val).strip()
+    # Decode URL-encoded quotes or parameters (e.g. %22CASE-02%22 -> "CASE-02")
+    if "%" in cleaned:
+        try:
+            cleaned = urllib.parse.unquote(cleaned).strip()
+        except Exception:
+            pass
+    # Strip literal %22 prefixes/suffixes if unquote didn't catch them
+    while cleaned.startswith("%22"):
+        cleaned = cleaned[3:].strip()
+    while cleaned.endswith("%22"):
+        cleaned = cleaned[:-3].strip()
+    # Strip surrounding quotes
+    while (cleaned.startswith('"') and cleaned.endswith('"')) or (cleaned.startswith("'") and cleaned.endswith("'")):
+        if len(cleaned) < 2:
+            break
+        cleaned = cleaned[1:-1].strip()
     if cleaned.lower() in ("", "string", "none", "null"):
         return str(uuid.uuid4())
     return cleaned

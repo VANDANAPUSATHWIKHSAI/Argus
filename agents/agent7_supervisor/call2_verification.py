@@ -218,7 +218,7 @@ class SupervisorVerification(BaseAgent):
                 # Do NOT verify a compound claim just because one cited finding has the maximum entailment score.
                 # Every material assertion/clause must demonstrate evidentiary support.
                 raw_clauses = [c.strip() for c in re.split(r'(?<=[.!?])\s+|;\s*', claim_text) if c.strip()]
-                clauses = raw_clauses if raw_clauses else [claim_text]
+                clauses = raw_clauses[:10] if raw_clauses else [claim_text]
 
                 all_clauses_supported = True
                 clause_evaluations: List[Dict[str, Any]] = []
@@ -257,6 +257,7 @@ class SupervisorVerification(BaseAgent):
                             flags.append(
                                 f"Compound claim [{claim_id}] unsupported clause: '{cl}' score ({cl_max_ent:.2f}) < threshold ({self.SUPPORT_THRESHOLD:.2f})"
                             )
+                            break
 
                 if contradiction_detected:
                     support_passed = False

@@ -200,10 +200,17 @@ def run_pipeline(
             neo4j_driver = None
             logger.warning(f"Neo4j offline/unreachable fallback: {exc}")
 
-    active_llm = llm or OllamaWrapper(model_name, "http://localhost:11434")
+    if llm is not None:
+        active_llm = llm
+    else:
+        try:
+            active_llm = LLMLoader().load_qwen3_8b()
+        except Exception as exc:
+            logger.warning(f"LLMLoader failed to load Qwen3-8B: {exc}. Falling back to OllamaWrapper.")
+            active_llm = OllamaWrapper(model_name, "http://localhost:11434")
 
     model_metadata = {
-        "llm_model": model_name,
+        "llm_model": getattr(active_llm, "model_name", model_name),
         "embedding_model": settings.embedding_model,
         "is_mock_llm": (hasattr(active_llm, "allow_mock") and getattr(active_llm, "allow_mock", False)) or "Mock" in type(active_llm).__name__
     }
@@ -294,7 +301,7 @@ def run_pipeline(
             )
             pipeline_results["agent1"] = agent1_output
             stage_statuses["agent1"] = agent1_output.get("execution_status", "COMPLETED") if isinstance(agent1_output, dict) else "COMPLETED"
-            _save_stage("agent1", state=agent1_output, status="COMPLETED")
+            _save_stage("agent1", state=agent1_output, status=stage_statuses["agent1"])
             logger.info(f"[+] Agent 1 Complete: {len(agent1_output.get('claims', []))} claims generated.")
         except Exception as exc:
             logger.error(f"[-] Agent 1 Execution failed: {exc}", exc_info=True)
@@ -326,7 +333,7 @@ def run_pipeline(
             )
             pipeline_results["agent2"] = agent2_output
             stage_statuses["agent2"] = agent2_output.get("execution_status", "COMPLETED") if isinstance(agent2_output, dict) else "COMPLETED"
-            _save_stage("agent2", state=agent2_output, status="COMPLETED")
+            _save_stage("agent2", state=agent2_output, status=stage_statuses["agent2"])
             logger.info(f"[+] Agent 2 Complete: {len(agent2_output.get('claims', []))} correlated claims generated.")
         except Exception as exc:
             logger.error(f"[-] Agent 2 Execution failed: {exc}", exc_info=True)
@@ -359,7 +366,7 @@ def run_pipeline(
             )
             pipeline_results["agent3"] = agent3_output
             stage_statuses["agent3"] = agent3_output.get("execution_status", "COMPLETED") if isinstance(agent3_output, dict) else "COMPLETED"
-            _save_stage("agent3", state=agent3_output, status="COMPLETED")
+            _save_stage("agent3", state=agent3_output, status=stage_statuses["agent3"])
             logger.info(f"[+] Agent 3 Complete: Attack steps: {len(agent3_output.get('attack_path', []))}.")
         except Exception as exc:
             logger.error(f"[-] Agent 3 Execution failed: {exc}", exc_info=True)
@@ -385,7 +392,7 @@ def run_pipeline(
             agent4_output = agent4_out_obj.model_dump() if hasattr(agent4_out_obj, "model_dump") else agent4_out_obj
             pipeline_results["agent4"] = agent4_output
             stage_statuses["agent4"] = agent4_output.get("execution_status", "COMPLETED") if isinstance(agent4_output, dict) else "COMPLETED"
-            _save_stage("agent4", state=agent4_output, status="COMPLETED")
+            _save_stage("agent4", state=agent4_output, status=stage_statuses["agent4"])
             logger.info(f"[+] Agent 4 Complete: Scan status: {agent4_output.get('execution_status')}, claims: {len(agent4_output.get('claims', []))}.")
         except Exception as exc:
             logger.error(f"[-] Agent 4 Execution failed: {exc}", exc_info=True)
@@ -423,7 +430,7 @@ def run_pipeline(
             )
             pipeline_results["agent5a"] = agent5a_output
             stage_statuses["agent5a"] = agent5a_output.get("execution_status", "COMPLETED") if isinstance(agent5a_output, dict) else "COMPLETED"
-            _save_stage("agent5a", state=agent5a_output, status="COMPLETED")
+            _save_stage("agent5a", state=agent5a_output, status=stage_statuses["agent5a"])
             logger.info(f"[+] Agent 5a Complete: Threat intel claim generated.")
         except Exception as exc:
             logger.error(f"[-] Agent 5a Execution failed: {exc}", exc_info=True)
@@ -460,7 +467,7 @@ def run_pipeline(
             )
             pipeline_results["agent5b"] = agent5b_output
             stage_statuses["agent5b"] = agent5b_output.get("execution_status", "COMPLETED") if isinstance(agent5b_output, dict) else "COMPLETED"
-            _save_stage("agent5b", state=agent5b_output, status="COMPLETED")
+            _save_stage("agent5b", state=agent5b_output, status=stage_statuses["agent5b"])
             logger.info(f"[+] Agent 5b Complete: Campaign similarity claim generated.")
         except Exception as exc:
             logger.error(f"[-] Agent 5b Execution failed: {exc}", exc_info=True)
@@ -501,7 +508,7 @@ def run_pipeline(
             stage_statuses["agent6"] = agent6_output.get("execution_status", "COMPLETED") if isinstance(agent6_output, dict) else "COMPLETED"
             cvss_score = agent6_output.get("cvss_assessment", {}).get("base_score")
             iss_score = agent6_output.get("iss_assessment", {}).get("iss_score")
-            _save_stage("agent6", state=agent6_output, status="COMPLETED")
+            _save_stage("agent6", state=agent6_output, status=stage_statuses["agent6"])
             logger.info(f"[+] Agent 6 Complete: CVSS={cvss_score}, ISS={iss_score}, Assets={len(agent6_output.get('affected_assets', []))}.")
         except Exception as exc:
             logger.error(f"[-] Agent 6 Execution failed: {exc}", exc_info=True)
@@ -568,7 +575,7 @@ def run_pipeline(
             }
             pipeline_results["agent7"] = a7_res
             stage_statuses["agent7"] = agent7_output.get("status", "COMPLETED")
-            _save_stage("agent7", state=a7_res, status="COMPLETED")
+            _save_stage("agent7", state=a7_res, status=stage_statuses["agent7"])
             logger.info(f"[+] Agent 7 Complete: Status={agent7_output.get('status')}, Review Level={agent7_output.get('review_level')}")
         except Exception as exc:
             logger.error(f"[-] Agent 7 Execution failed: {exc}", exc_info=True)

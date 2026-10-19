@@ -54,9 +54,16 @@ class ClassifierLoader:
         Used by Agent 7 Call 2 to check if evidence supports the claim.
         """
         if not self._mnli:
+            from transformers import pipeline
+            import torch
             model_id = "MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli"
-            print(f"[Classifier] Loading zero-shot entailment model: {model_id}...")
-            self._mnli = pipeline("zero-shot-classification", model=model_id)
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            self._mnli = pipeline(
+                "zero-shot-classification",
+                model=model_id,
+                device=device,
+                model_kwargs={"low_cpu_mem_usage": False}
+            )
             _CLASSIFIER_CACHE["mnli"] = self._mnli
         return self._mnli
 

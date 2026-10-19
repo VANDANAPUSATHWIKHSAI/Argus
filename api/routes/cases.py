@@ -150,7 +150,9 @@ async def create_case(
         created_by=current_user.get("name", req.analyst), 
         case_id=case_id,
         analyst_id=req.analyst_id,
-        senior_analyst_id=req.senior_analyst_id
+        senior_analyst_id=req.senior_analyst_id,
+        name=req.name,
+        description=req.description
     )
     
     # Store the case name in DB
@@ -205,9 +207,9 @@ async def get_all_cases(
         from api.routes.auth import get_db_connection
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT case_id, name, analyst_id, senior_analyst_id FROM cases WHERE tenant_id = %s", (x_tenant_id,))
+                cur.execute("SELECT case_id, name, analyst_id, senior_analyst_id, description FROM cases WHERE tenant_id = %s", (x_tenant_id,))
                 for row in cur.fetchall():
-                    case_names[row[0]] = {"name": row[1], "analyst_id": row[2], "senior_analyst_id": row[3]}
+                    case_names[row[0]] = {"name": row[1], "analyst_id": row[2], "senior_analyst_id": row[3], "description": row[4] if len(row) > 4 else None}
                     
                 cur.execute("SELECT id, name FROM users")
                 for row in cur.fetchall():
@@ -215,27 +217,41 @@ async def get_all_cases(
     except Exception as e:
         print(f"[DB WARNING] Could not fetch case names: {e}")
 
+    # Fallback user_map when Postgres is offline
+    if not user_map:
+        from api.routes.auth import _BASE_FALLBACK_USERS
+        for u in _BASE_FALLBACK_USERS:
+            user_map[str(u["id"])] = u["name"]
+
     user_id = str(current_user.get("id", ""))
     is_admin = current_user.get("role") == "admin"
 
     result = []
     for c in cases:
         info = case_names.get(c.case_id, {})
-        analyst_id = str(info.get("analyst_id") or "")
-        senior_id  = str(info.get("senior_analyst_id") or "")
-        assigned = is_admin or analyst_id == user_id or senior_id == user_id
+        c_name = info.get("name") or getattr(c, "name", None) or c.case_id
+        c_desc = info.get("description") or getattr(c, "description", None)
+        c_analyst_id = info.get("analyst_id") or getattr(c, "analyst_id", None)
+        c_senior_id = info.get("senior_analyst_id") or getattr(c, "senior_analyst_id", None)
         
-        analyst_name = user_map.get(analyst_id, analyst_id)
+        analyst_id_str = str(c_analyst_id or "")
+        senior_id_str = str(c_senior_id or "")
+        assigned = is_admin or analyst_id_str == user_id or senior_id_str == user_id
+        
+        analyst_name = user_map.get(analyst_id_str, analyst_id_str)
+        senior_name = user_map.get(senior_id_str, senior_id_str)
         
         result.append({
             "case_id": c.case_id,
             "created_by": c.created_by,
             "created_at": c.created_at.isoformat() if hasattr(c.created_at, "isoformat") else (str(c.created_at) if c.created_at else None),
             "status": c.status,
-            "name": info.get("name", ""),
-            "analyst_id": info.get("analyst_id"),
+            "name": c_name,
+            "description": c_desc,
+            "analyst_id": c_analyst_id,
             "analyst_name": analyst_name,
-            "senior_analyst_id": info.get("senior_analyst_id"),
+            "senior_analyst_id": c_senior_id,
+            "senior_analyst_name": senior_name,
             "assigned_to_you": assigned,
         })
 
@@ -301,11 +317,9 @@ async def get_recent_activity(
                         "created_at": row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4]),
                         "details": row[2]
                     })
-    except Exception as e:
-        print(f"[DB WARNING] Could not fetch comprehensive activity: {e}")
 
-        # 3. Analyst Findings
-        cur.execute(
+                # 3. Analyst Findings
+                cur.execute(
             """
             SELECT f.case_id, f.created_at, f.fact, f.source_engine, f.reviewed_by, f.review_status, f.timestamp
             FROM fir_findings f
@@ -726,9 +740,9 @@ async def get_case(
         report=rep_status
     )
 
-    # Fetch name and description from DB
-    case_name = "Unnamed Case"
-    case_desc = "No description provided."
+    # Fetch name and description from session or DB
+    case_name = getattr(session, "name", None) or "Unnamed Case"
+    case_desc = getattr(session, "description", None) or "No description provided."
     try:
         from config.settings import settings
         import psycopg2
@@ -741,10 +755,13 @@ async def get_case(
             connect_timeout=2
         )
         cur = conn.cursor()
-        cur.execute("SELECT name FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
+        cur.execute("SELECT name, description FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
         row = cur.fetchone()
-        if row and row[0]:
-            case_name = row[0]
+        if row:
+            if row[0]:
+                case_name = row[0]
+            if len(row) > 1 and row[1]:
+                case_desc = row[1]
         conn.close()
     except Exception as e:
         logger.warning(f"Could not fetch case name for summary: {e}")
@@ -1146,20 +1163,18 @@ async def get_case_agent_results(
     """
     Retrieve comprehensive multi-agent forensic intelligence (Agents 1-7),
     persisted claims, attack graph reconstruction, threat intelligence, and supervisor verdict.
+    Strictly enforces case ownership and tenant isolation.
     """
     from api.routes.evidence import sanitize_uuid
-    from infrastructure.repository.evidence_store import list_evidence_by_case
+    from infrastructure.repository.evidence_store import list_evidence_by_case, get_case_session
+    from ism.checkpointer import Checkpointer
     from config.settings import settings
     import psycopg2
     from pathlib import Path
 
     clean_case_id = sanitize_uuid(case_id)
 
-    # 1. Check in-memory live job
-    with _agent_jobs_lock:
-        live_job = _agent_jobs.get(clean_case_id) or _agent_jobs.get(case_id)
-
-    # 2. Query evidence metadata for agent_results
+    # 1. Enforce Case Existence and Tenant Isolation
     evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
     if not evidence_list and case_id != clean_case_id:
         evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id)
@@ -1168,7 +1183,55 @@ async def get_case_agent_results(
     if not findings and case_id != clean_case_id:
         findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
 
-    # Look for stored agent_results in evidence metadata
+    case_exists = bool(evidence_list or findings)
+    if not case_exists:
+        try:
+            session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+            if session:
+                case_exists = True
+        except Exception:
+            pass
+
+    if not case_exists:
+        try:
+            conn = psycopg2.connect(
+                host=settings.postgres_host, port=settings.postgres_port,
+                database=settings.postgres_db, user=settings.postgres_user,
+                password=settings.postgres_password, connect_timeout=2
+            )
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT case_id FROM cases WHERE (case_id = %s OR case_id = %s) AND tenant_id = %s;",
+                (clean_case_id, case_id, x_tenant_id)
+            )
+            if cur.fetchone():
+                case_exists = True
+            conn.close()
+        except Exception as ce:
+            logger.debug(f"Cases table query note: {ce}")
+
+    if not case_exists:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
+        )
+
+    # 2. Check in-memory live job (tenant-checked)
+    with _agent_jobs_lock:
+        mem_job = _agent_jobs.get(clean_case_id) or _agent_jobs.get(case_id)
+        live_job = mem_job if (mem_job and mem_job.get("tenant_id") == x_tenant_id) else None
+
+    # 3. Durable Checkpoint Recovery (survives server restarts)
+    checkpointer = Checkpointer()
+    persisted_job = None
+    if not live_job:
+        cp = checkpointer.get_stage_checkpoint(case_id=clean_case_id, stage="pipeline_job", tenant_id=x_tenant_id)
+        if not cp and case_id != clean_case_id:
+            cp = checkpointer.get_stage_checkpoint(case_id=case_id, stage="pipeline_job", tenant_id=x_tenant_id)
+        if cp:
+            persisted_job = cp.get("checkpoint") if isinstance(cp.get("checkpoint"), dict) else cp
+
+    # 4. Query evidence metadata for agent_results
     stored_pipeline_results = None
     for ev in (evidence_list or []):
         meta = ev.metadata or {}
@@ -1176,7 +1239,7 @@ async def get_case_agent_results(
             stored_pipeline_results = meta.get("agent_results")
             break
 
-    # 3. Query PostgreSQL agent_outputs table
+    # 5. Query PostgreSQL agent_outputs table with strict tenant filter
     db_claims = []
     try:
         from agents.agent1_evidence_intelligence.agent import _ensure_agent_outputs_table_initialized
@@ -1194,10 +1257,10 @@ async def get_case_agent_results(
             """
             SELECT id, agent_id, claim, evidence_ids, confidence, verified, execution_status, flags, created_at, model_used
             FROM agent_outputs
-            WHERE case_id IN (%s, %s)
+            WHERE case_id IN (%s, %s) AND tenant_id = %s
             ORDER BY id ASC;
             """,
-            (clean_case_id, case_id)
+            (clean_case_id, case_id, x_tenant_id)
         )
         rows = cur.fetchall()
         for r in rows:
@@ -1218,14 +1281,15 @@ async def get_case_agent_results(
         logger.warning(f"Could not query agent_outputs table: {dbe}")
 
     # Determine overall status and assemble payload
-    if live_job and live_job.get("status") == "RUNNING":
+    job_source = live_job or persisted_job
+    if job_source and job_source.get("status") == "RUNNING":
         status_val = "RUNNING"
-        stage_statuses = live_job.get("stage_statuses", {})
-        results_data = live_job.get("results") or stored_pipeline_results or {}
-    elif live_job and live_job.get("status") in ("COMPLETED", "SUCCESS", "PARTIAL_SUCCESS") and live_job.get("results"):
-        status_val = live_job["status"]
-        results_data = live_job["results"]
-        stage_statuses = results_data.get("stage_statuses", {})
+        stage_statuses = job_source.get("stage_statuses", {})
+        results_data = job_source.get("results") or stored_pipeline_results or {}
+    elif job_source and job_source.get("status") in ("COMPLETED", "SUCCESS", "PARTIAL_SUCCESS", "FAILED", "ERROR"):
+        status_val = job_source["status"]
+        results_data = job_source.get("results") or stored_pipeline_results or {}
+        stage_statuses = results_data.get("stage_statuses", job_source.get("stage_statuses", {}))
     elif stored_pipeline_results:
         status_val = stored_pipeline_results.get("execution_status", "COMPLETED")
         results_data = stored_pipeline_results
@@ -1247,7 +1311,7 @@ async def get_case_agent_results(
             "agent6": "PENDING", "agent7": "PENDING"
         }
 
-    # Extract or synthesize per-agent intelligence
+    # Extract per-agent intelligence from real results (never fabricated)
     a1_data = results_data.get("agent1") or {}
     a2_data = results_data.get("agent2") or {}
     a3_data = results_data.get("agent3") or {}
@@ -1257,42 +1321,16 @@ async def get_case_agent_results(
     a6_data = results_data.get("agent6") or {}
     a7_data = results_data.get("agent7") or {}
 
-    # Extract all claims (from pipeline_results or database)
+    # Extract claims (from pipeline results or persisted database records)
     all_claims = list(db_claims)
     if not all_claims and results_data:
-        for a_key in ["agent1", "agent2", "agent3", "agent4"]:
+        for a_key in ["agent1", "agent2", "agent3", "agent4", "agent5a", "agent5b", "agent6", "agent7"]:
             ag_obj = results_data.get(a_key)
-            if isinstance(ag_obj, dict) and "claims" in ag_obj:
+            if isinstance(ag_obj, dict) and "claims" in ag_obj and isinstance(ag_obj["claims"], list):
                 for c in ag_obj["claims"]:
                     c_dict = c if isinstance(c, dict) else (c.model_dump(mode='json') if hasattr(c, 'model_dump') else {})
                     c_dict["agent_id"] = a_key
                     all_claims.append(c_dict)
-
-    # If status is READY, generate grounded baseline preview telemetry from FIR findings
-    if status_val == "READY" and findings:
-        high_critical = [f for f in findings if (f.severity or "").lower() in ("high", "critical")]
-        a1_data = {
-            "status": "READY",
-            "findings_ingested": len(findings),
-            "high_value_findings": len(high_critical),
-            "readiness": "READY",
-            "summary": f"{len(findings)} findings staged for multi-agent reasoning."
-        }
-        a2_data = {
-            "status": "READY",
-            "clusters_preview": min(len(findings), 3),
-            "graph_nodes": len(findings) + len(evidence_list or [])
-        }
-        a3_data = {
-            "status": "READY",
-            "mitre_tactics": list(set(f.mitre_mapping for f in findings if f.mitre_mapping)),
-            "attack_steps_projected": len(findings)
-        }
-        a6_data = {
-            "status": "READY",
-            "preliminary_severity": "HIGH" if high_critical else "MEDIUM",
-            "projected_iss_score": 7.5 if high_critical else 4.0
-        }
 
     return {
         "status": status_val,
@@ -1312,8 +1350,9 @@ async def get_case_agent_results(
         "claims": all_claims,
         "supervisor_synthesis": a7_data.get("synthesis", {}),
         "confidence_gate": a7_data.get("confidence_gate", {}),
-        "review_level": a7_data.get("review_level", "ROUTINE_ANALYST_REVIEW"),
+        "review_level": a7_data.get("review_level", None),
         "verification_results": a7_data.get("verification", []),
+        "agent_errors": results_data.get("agent_errors", job_source.get("error", None) if job_source else None)
     }
 
 
@@ -1326,52 +1365,109 @@ async def run_case_agents(
     """
     Launch asynchronous multi-agent reasoning execution (Agents 1-7)
     for an existing case and its ingested evidence/findings.
+    Enforces case authorization, tenant isolation, and durable state tracking.
     """
     from api.routes.evidence import sanitize_uuid
-    from infrastructure.repository.evidence_store import list_evidence_by_case
+    from infrastructure.repository.evidence_store import list_evidence_by_case, get_case_session
+    from ism.checkpointer import Checkpointer
     from config.settings import settings
     import psycopg2
     from pathlib import Path
 
     clean_case_id = sanitize_uuid(case_id)
 
+    # 1. Enforce Case Existence for this Tenant
+    evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
+    if not evidence_list and case_id != clean_case_id:
+        evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id)
+
+    findings = _analyst_service.list_findings(case_id=clean_case_id, tenant_id=x_tenant_id)
+    if not findings and case_id != clean_case_id:
+        findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
+
+    case_exists = bool(evidence_list or findings)
+    if not case_exists:
+        try:
+            session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+            if session:
+                case_exists = True
+        except Exception:
+            pass
+
+    if not case_exists:
+        try:
+            conn = psycopg2.connect(
+                host=settings.postgres_host, port=settings.postgres_port,
+                database=settings.postgres_db, user=settings.postgres_user,
+                password=settings.postgres_password, connect_timeout=2
+            )
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT case_id FROM cases WHERE (case_id = %s OR case_id = %s) AND tenant_id = %s;",
+                (clean_case_id, case_id, x_tenant_id)
+            )
+            if cur.fetchone():
+                case_exists = True
+            conn.close()
+        except Exception as ce:
+            logger.debug(f"Cases table query note: {ce}")
+
+    if not case_exists:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
+        )
+
+    # 2. Check for actively running job
     with _agent_jobs_lock:
         current_job = _agent_jobs.get(clean_case_id)
-        if current_job and current_job.get("status") == "RUNNING":
+        if current_job and current_job.get("status") == "RUNNING" and current_job.get("tenant_id") == x_tenant_id:
             return {
                 "status": "RUNNING",
                 "case_id": clean_case_id,
                 "message": "Multi-agent analysis is already running for this case."
             }
 
-    findings = _analyst_service.list_findings(case_id=clean_case_id, tenant_id=x_tenant_id)
-    if not findings and case_id != clean_case_id:
-        findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
-
-    evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
-    if not evidence_list and case_id != clean_case_id:
-        evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id)
-
+    # 3. Check for evidence/findings requirement
     if not findings and not evidence_list:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot run agents: Case '{case_id}' has no ingested evidence or findings."
         )
 
-    # Initialize job in registry
+    initial_stage_statuses = {
+        "agent1": "RUNNING", "agent2": "PENDING", "agent3": "PENDING",
+        "agent4": "PENDING", "agent5a": "PENDING", "agent5b": "PENDING",
+        "agent6": "PENDING", "agent7": "PENDING"
+    }
+
+    # 4. Initialize job in memory and durable ISM checkpoint
     with _agent_jobs_lock:
         _agent_jobs[clean_case_id] = {
             "status": "RUNNING",
             "case_id": clean_case_id,
             "tenant_id": x_tenant_id,
-            "stage_statuses": {
-                "agent1": "RUNNING", "agent2": "PENDING", "agent3": "PENDING",
-                "agent4": "PENDING", "agent5a": "PENDING", "agent5b": "PENDING",
-                "agent6": "PENDING", "agent7": "PENDING"
-            }
+            "stage_statuses": initial_stage_statuses
         }
 
-    # Log to audit log
+    checkpointer = Checkpointer()
+    try:
+        checkpointer.save_stage_checkpoint(
+            case_id=clean_case_id,
+            stage="pipeline_job",
+            state={
+                "status": "RUNNING",
+                "case_id": clean_case_id,
+                "tenant_id": x_tenant_id,
+                "stage_statuses": initial_stage_statuses
+            },
+            status="RUNNING",
+            tenant_id=x_tenant_id
+        )
+    except Exception as cp_err:
+        logger.warning(f"Could not write initial pipeline_job checkpoint: {cp_err}")
+
+    # 5. Log to audit log
     try:
         conn = psycopg2.connect(
             host=settings.postgres_host, port=settings.postgres_port,
@@ -1384,7 +1480,7 @@ async def run_case_agents(
             INSERT INTO audit_log (tenant_id, case_id, user_id, action, target_type, target_id, details)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             """,
-            (x_tenant_id, clean_case_id, current_user.get("user_id", "analyst"), "Triggered Multi-Agent Analysis", "case", clean_case_id, "Launched Agents 1-7 reasoning swarm")
+            (x_tenant_id, clean_case_id, current_user.get("id") or current_user.get("user_id", "analyst"), "Triggered Multi-Agent Analysis", "case", clean_case_id, "Launched Agents 1-7 reasoning swarm")
         )
         conn.commit()
         conn.close()
@@ -1394,7 +1490,6 @@ async def run_case_agents(
     def _execute_agent_pipeline():
         try:
             from argus_pipeline import run_pipeline
-            # Pass evidence path if single evidence file exists, otherwise fir_findings
             ev_path = None
             if evidence_list and len(evidence_list) > 0 and getattr(evidence_list[0], "file_path", None):
                 candidate_path = Path(evidence_list[0].file_path)
@@ -1410,13 +1505,34 @@ async def run_case_agents(
                 resume=True
             )
 
+            final_status = results.get("execution_status", "COMPLETED")
+
             with _agent_jobs_lock:
                 _agent_jobs[clean_case_id] = {
-                    "status": results.get("execution_status", "COMPLETED"),
+                    "status": final_status,
                     "case_id": clean_case_id,
                     "tenant_id": x_tenant_id,
-                    "results": results
+                    "results": results,
+                    "stage_statuses": results.get("stage_statuses", {})
                 }
+
+            # Save durable final checkpoint to ISM
+            try:
+                checkpointer.save_stage_checkpoint(
+                    case_id=clean_case_id,
+                    stage="pipeline_job",
+                    state={
+                        "status": final_status,
+                        "case_id": clean_case_id,
+                        "tenant_id": x_tenant_id,
+                        "results": results,
+                        "stage_statuses": results.get("stage_statuses", {})
+                    },
+                    status=final_status,
+                    tenant_id=x_tenant_id
+                )
+            except Exception as cp_err:
+                logger.warning(f"Could not persist final pipeline_job checkpoint: {cp_err}")
 
             # Update evidence metadata
             if evidence_list and len(evidence_list) > 0:
@@ -1432,15 +1548,15 @@ async def run_case_agents(
                     cur = conn.cursor()
                     import json
                     cur.execute(
-                        "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
-                        (json.dumps(first_ev.metadata, default=str), first_ev.evidence_id)
+                        "UPDATE evidence SET metadata = %s WHERE evidence_id = %s AND case_id = %s;",
+                        (json.dumps(first_ev.metadata, default=str), first_ev.evidence_id, clean_case_id)
                     )
                     conn.commit()
                     conn.close()
                 except Exception as meta_e:
                     logger.warning(f"Could not persist agent_results to evidence table: {meta_e}")
 
-            logger.info(f"[+] Multi-agent analysis finished successfully for Case {clean_case_id}")
+            logger.info(f"[+] Multi-agent analysis finished ({final_status}) for Case {clean_case_id}")
         except Exception as exc:
             logger.error(f"[-] Multi-agent execution error for Case {clean_case_id}: {exc}", exc_info=True)
             with _agent_jobs_lock:
@@ -1448,8 +1564,24 @@ async def run_case_agents(
                     "status": "FAILED",
                     "case_id": clean_case_id,
                     "tenant_id": x_tenant_id,
-                    "error": str(exc)
+                    "error": str(exc),
+                    "stage_statuses": {}
                 }
+            try:
+                checkpointer.save_stage_checkpoint(
+                    case_id=clean_case_id,
+                    stage="pipeline_job",
+                    state={
+                        "status": "FAILED",
+                        "case_id": clean_case_id,
+                        "tenant_id": x_tenant_id,
+                        "error": str(exc)
+                    },
+                    status="FAILED",
+                    tenant_id=x_tenant_id
+                )
+            except Exception as cp_err:
+                logger.warning(f"Could not persist failed pipeline_job checkpoint: {cp_err}")
 
     _agent_executor.submit(_execute_agent_pipeline)
 

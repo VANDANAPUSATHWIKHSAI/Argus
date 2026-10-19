@@ -217,12 +217,28 @@ const Agents = () => {
           setAgentData(data);
           if (data.status !== 'RUNNING') {
             setRunningAgents(false);
-            setCustomAlert({
-              isOpen: true,
-              title: '✅ Multi-Agent Analysis Complete',
-              message: `Agents 1 through 7 finished processing Case ${activeCaseId}. Full findings, attack paths, and supervisor synthesis are now ready.`,
-              type: 'success'
-            });
+            if (data.status === 'FAILED' || data.status === 'ERROR') {
+              setCustomAlert({
+                isOpen: true,
+                title: '❌ Multi-Agent Analysis Failed',
+                message: (typeof data.agent_errors === 'string' ? data.agent_errors : data.error_message) || `Multi-agent reasoning execution failed for Case ${activeCaseId}. Inspect error telemetry for details.`,
+                type: 'error'
+              });
+            } else if (data.status === 'PARTIAL_SUCCESS') {
+              setCustomAlert({
+                isOpen: true,
+                title: '⚠️ Multi-Agent Analysis Partial Success',
+                message: `Analysis completed with warnings or degraded stages for Case ${activeCaseId}. Some agent outputs may be partial or require review.`,
+                type: 'warning'
+              });
+            } else if (data.status === 'COMPLETED' || data.status === 'SUCCESS') {
+              setCustomAlert({
+                isOpen: true,
+                title: '✅ Multi-Agent Analysis Complete',
+                message: `Agents 1 through 7 finished processing Case ${activeCaseId}. Full findings, attack paths, and supervisor synthesis are now ready.`,
+                type: 'success'
+              });
+            }
           }
         } catch (e) {
           console.error('Polling error:', e);
@@ -413,9 +429,18 @@ const Agents = () => {
                   Autonomous Forensic Reasoning Swarm
                 </h1>
                 <span style={{
-                  background: agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  color: agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS' ? '#10b981' : 'var(--blue)',
-                  border: `1px solid ${agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS' ? '#10b981' : 'var(--blue)'}`,
+                  background: (agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS') ? 'rgba(16, 185, 129, 0.15)' :
+                              agentData?.status === 'PARTIAL_SUCCESS' ? 'rgba(245, 158, 11, 0.15)' :
+                              (agentData?.status === 'FAILED' || agentData?.status === 'ERROR') ? 'rgba(239, 68, 68, 0.15)' :
+                              'rgba(59, 130, 246, 0.15)',
+                  color: (agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS') ? '#10b981' :
+                         agentData?.status === 'PARTIAL_SUCCESS' ? '#f59e0b' :
+                         (agentData?.status === 'FAILED' || agentData?.status === 'ERROR') ? '#ef4444' :
+                         'var(--blue)',
+                  border: `1px solid ${(agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS') ? '#10b981' :
+                                      agentData?.status === 'PARTIAL_SUCCESS' ? '#f59e0b' :
+                                      (agentData?.status === 'FAILED' || agentData?.status === 'ERROR') ? '#ef4444' :
+                                      'var(--blue)'}`,
                   padding: '2px 10px',
                   borderRadius: 20,
                   fontSize: 11,
@@ -430,6 +455,23 @@ const Agents = () => {
               <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 780 }}>
                 Seven specialized AI agents continuously correlate artifact lineage, reconstruct MITRE ATT&CK kill-chains, profile novel malware behaviors, query vector threat intelligence, and gate forensic claims through DeBERTa-v3 NLI verification.
               </p>
+              {agentData?.agent_errors && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.3)',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  marginTop: 10,
+                  fontSize: 12,
+                  color: '#ef4444',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}>
+                  <span style={{ fontWeight: 800 }}>ANALYSIS NOTICE:</span>
+                  <span>{typeof agentData.agent_errors === 'string' ? agentData.agent_errors : JSON.stringify(agentData.agent_errors)}</span>
+                </div>
+              )}
             </div>
 
             {/* Quick Metrics */}
@@ -615,6 +657,38 @@ const Agents = () => {
                   <div>{getAgentStatusBadge(currentAgent.id)}</div>
                 </div>
 
+                {/* Agent Error / Diagnostic Banner */}
+                {(currentAgentData?.execution_status === 'FAILED' ||
+                  stageStatuses[currentAgent.id] === 'FAILED' ||
+                  currentAgentData?.error_message ||
+                  currentAgentData?.error ||
+                  (typeof agentData?.agent_errors === 'object' && agentData?.agent_errors?.[currentAgent.id])) && (
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
+                    borderRadius: 8,
+                    padding: '14px 18px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 6
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#ef4444', fontWeight: 800, fontSize: 13 }}>
+                      <span>⚠️ AGENT EXECUTION FAILURE</span>
+                      {currentAgentData?.failure_type && (
+                        <span style={{ background: 'rgba(239, 68, 68, 0.25)', padding: '2px 6px', borderRadius: 4, fontSize: 11 }}>
+                          {currentAgentData.failure_type}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-main)', lineHeight: 1.5 }}>
+                      {currentAgentData?.error_message ||
+                       currentAgentData?.error ||
+                       (typeof agentData?.agent_errors === 'object' ? agentData?.agent_errors?.[currentAgent.id] : agentData?.agent_errors) ||
+                       `Agent ${currentAgent.number} experienced an execution failure during processing.`}
+                    </div>
+                  </div>
+                )}
+
                 {/* AGENT 7: SUPERVISOR & NLI VERIFICATION DEEP DIVE */}
                 {selectedAgentTab === 'agent7' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -636,7 +710,12 @@ const Agents = () => {
                       <div style={{ background: 'var(--bg-app)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 14 }}>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Confidence Gate Rating</div>
                         <div style={{ fontSize: 22, fontWeight: 800, color: '#10b981', marginTop: 4 }}>
-                          {Math.round(((currentAgentData.confidence_gate?.overall_confidence || agentData?.confidence_gate?.overall_confidence || 0.88) * 100))}%
+                          {(() => {
+                            const score = currentAgentData.confidence_gate?.investigation_confidence_score ??
+                                          agentData?.confidence_gate?.investigation_confidence_score ??
+                                          currentAgentData.synthesis?.confidence_score;
+                            return score !== undefined && score !== null ? `${Math.round(score * 100)}%` : 'N/A';
+                          })()}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Calculated across verified premise pairs</div>
                       </div>
@@ -669,30 +748,40 @@ const Agents = () => {
                             <tr style={{ background: 'var(--bg-app)', borderBottom: '1px solid var(--border-strong)', color: 'var(--text-muted)' }}>
                               <th style={{ padding: '10px 14px' }}>Claim / Hypothesis</th>
                               <th style={{ padding: '10px 14px' }}>Source Agent</th>
-                              <th style={{ padding: '10px 14px' }}>NLI Status</th>
+                              <th style={{ padding: '10px 14px' }}>NLI Verification Status</th>
                               <th style={{ padding: '10px 14px' }}>Score</th>
                             </tr>
                           </thead>
                           <tbody>
                             {(currentAgentData.verification || agentData?.verification_results || []).length > 0 ? (
-                              (currentAgentData.verification || agentData?.verification_results).map((v, idx) => (
-                                <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                                  <td style={{ padding: '10px 14px', color: 'var(--text-main)', maxWidth: 380 }}>{v.hypothesis || v.claim || JSON.stringify(v)}</td>
-                                  <td style={{ padding: '10px 14px', color: 'var(--blue)', fontWeight: 700 }}>{v.agent_id || 'Agent 1'}</td>
-                                  <td style={{ padding: '10px 14px' }}>
-                                    <span style={{
-                                      background: (v.verdict || v.status || '').toLowerCase().includes('entail') ? 'rgba(16,185,129,0.15)' : 'rgba(59,130,246,0.15)',
-                                      color: (v.verdict || v.status || '').toLowerCase().includes('entail') ? '#10b981' : 'var(--blue)',
-                                      padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 11
-                                    }}>
-                                      {v.verdict || v.status || 'VERIFIED'}
-                                    </span>
-                                  </td>
-                                  <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-main)' }}>
-                                    {v.confidence ? `${Math.round(v.confidence * 100)}%` : '95%'}
-                                  </td>
-                                </tr>
-                              ))
+                              (currentAgentData.verification || agentData?.verification_results).map((v, idx) => {
+                                const isEntailed = (v.verdict || v.status || '').toLowerCase().includes('entail') || v.verified === true;
+                                const isContradicted = (v.verdict || v.status || '').toLowerCase().includes('contradict');
+                                const badgeBg = isEntailed ? 'rgba(16,185,129,0.15)' : (isContradicted ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)');
+                                const badgeColor = isEntailed ? '#10b981' : (isContradicted ? '#ef4444' : '#f59e0b');
+                                const badgeText = isEntailed ? (v.verdict || 'VERIFIED') : (isContradicted ? 'CONTRADICTED' : (v.verdict || v.verification_status || 'UNVERIFIED'));
+                                return (
+                                  <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                    <td style={{ padding: '10px 14px', color: 'var(--text-main)', maxWidth: 380 }}>{v.hypothesis || v.claim_text || v.claim || JSON.stringify(v)}</td>
+                                    <td style={{ padding: '10px 14px', color: 'var(--blue)', fontWeight: 700 }}>{v.agent_id || v.claim_id || 'N/A'}</td>
+                                    <td style={{ padding: '10px 14px' }}>
+                                      <span style={{
+                                        background: badgeBg,
+                                        color: badgeColor,
+                                        padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 11
+                                      }}>
+                                        {badgeText}
+                                      </span>
+                                    </td>
+                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-main)' }}>
+                                      {(() => {
+                                        const sc = v.support_score ?? v.confidence;
+                                        return sc !== undefined && sc !== null ? `${Math.round(sc * 100)}%` : 'N/A';
+                                      })()}
+                                    </td>
+                                  </tr>
+                                );
+                              })
                             ) : (
                               <tr>
                                 <td colSpan="4" style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -711,11 +800,22 @@ const Agents = () => {
                 {selectedAgentTab === 'agent1' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                     <div style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 18 }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--blue)', textTransform: 'uppercase', marginBottom: 6 }}>
-                        Investigation Readiness &amp; Triage Assessment
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--blue)', textTransform: 'uppercase' }}>
+                          Investigation Readiness &amp; Triage Assessment
+                        </div>
+                        {currentAgentData.investigation_readiness?.status && (
+                          <span style={{
+                            background: currentAgentData.investigation_readiness.status === 'READY' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
+                            color: currentAgentData.investigation_readiness.status === 'READY' ? '#10b981' : '#f59e0b',
+                            padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800
+                          }}>
+                            {currentAgentData.investigation_readiness.status}
+                          </span>
+                        )}
                       </div>
                       <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-main)', lineHeight: 1.6 }}>
-                        {currentAgentData.summary || 'Agent 1 analyzes evidence integrity, normalizes timeline timestamps, filters low-fidelity noise, and computes initial confidence weights across all ingested artifacts.'}
+                        {currentAgentData.investigation_readiness?.reason || currentAgentData.summary || 'Agent 1 analyzes evidence integrity, normalizes timeline timestamps, filters low-fidelity noise, and computes initial confidence weights across all ingested artifacts.'}
                       </p>
                     </div>
 
@@ -723,19 +823,19 @@ const Agents = () => {
                       <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>TRIAGED FINDINGS</div>
                         <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)', marginTop: 4 }}>
-                          {currentAgentData.findings_ingested || agentData?.findings_count || 0}
+                          {currentAgentData.evidence_summary?.total_findings ?? currentAgentData.findings_ingested ?? currentAgentData.total_findings_processed ?? agentData?.findings_count ?? 0}
                         </div>
                       </div>
                       <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>HIGH VALUE FINDINGS</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: '#f59e0b', marginTop: 4 }}>
-                          {currentAgentData.high_value_findings || Math.round((agentData?.findings_count || 0) * 0.4)}
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>EVIDENCE TRUST SCORE</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981', marginTop: 4 }}>
+                          {currentAgentData.evidence_trust_score !== undefined && currentAgentData.evidence_trust_score !== null ? `${Math.round(currentAgentData.evidence_trust_score * 100)}%` : 'N/A'}
                         </div>
                       </div>
                       <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>REASONING ENGINE</div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-main)', marginTop: 4 }}>
-                          Qwen3-8B Instruct
+                          {currentAgentData.model_used || 'Qwen3-8B Instruct'}
                         </div>
                       </div>
                     </div>
@@ -758,16 +858,41 @@ const Agents = () => {
                       <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>CORRELATION CLUSTERS</div>
                         <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--purple)', marginTop: 4 }}>
-                          {currentAgentData.clusters_preview || 3} Detected
+                          {currentAgentData.graph?.components?.length ?? currentAgentData.correlation_signals?.temporal_clusters?.length ?? currentAgentData.clusters_preview ?? 0} Detected
                         </div>
                       </div>
                       <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>CONNECTED ENTITIES</div>
                         <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)', marginTop: 4 }}>
-                          {currentAgentData.graph_nodes || (agentData?.findings_count || 0) + 4} Nodes
+                          {currentAgentData.graph?.node_count ?? currentAgentData.graph_nodes ?? 0} Nodes
+                        </div>
+                      </div>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>RELATIONSHIPS</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-main)', marginTop: 4 }}>
+                          {currentAgentData.graph?.relationship_count ?? currentAgentData.relationships?.length ?? 0} Edges
                         </div>
                       </div>
                     </div>
+
+                    {(currentAgentData.conflicts || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#ef4444', marginBottom: 8 }}>
+                          Forensic Contradictions &amp; Timestamp Conflicts ({currentAgentData.conflicts.length})
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {currentAgentData.conflicts.map((conf, i) => (
+                            <div key={i} style={{ background: 'var(--bg-app)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 6, padding: '10px 14px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 700, color: '#ef4444', fontSize: 13 }}>{conf.conflict_type}</span>
+                                <span style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 800 }}>{conf.severity?.toUpperCase()}</span>
+                              </div>
+                              <p style={{ margin: '4px 0 0 0', fontSize: 12, color: 'var(--text-main)' }}>{conf.description}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -779,7 +904,7 @@ const Agents = () => {
                         MITRE ATT&CK Kill-Chain Reconstruction
                       </div>
                       <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-main)', lineHeight: 1.6 }}>
-                        {currentAgentData.summary || 'Rebuilds chronological attacker tradecraft progression from Initial Access to Defense Evasion and Impact. Automatically flags missing intermediate events for targeted investigator hunting.'}
+                        {currentAgentData.reconstruction_summary || currentAgentData.summary || currentAgentData.investigator_report || 'Rebuilds chronological attacker tradecraft progression from Initial Access to Defense Evasion and Impact.'}
                       </p>
                     </div>
 
@@ -787,44 +912,540 @@ const Agents = () => {
                       <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>TACTIC PHASES DETECTED</div>
                         <div style={{ fontSize: 20, fontWeight: 800, color: '#06b6d4', marginTop: 4 }}>
-                          {(currentAgentData.mitre_tactics || []).length || 4} Tactics
+                          {currentAgentData.attack_chain?.length ?? (currentAgentData.mitre_tactics || []).length ?? 0} Tactics
                         </div>
                       </div>
                       <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>ATTACK STEPS</div>
                         <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-main)', marginTop: 4 }}>
-                          {currentAgentData.attack_steps_projected || (agentData?.findings_count || 0)} Projected
+                          {currentAgentData.attack_path?.length ?? currentAgentData.attack_steps_projected ?? 0} Steps
                         </div>
+                      </div>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>RECONSTRUCTION CONFIDENCE</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981', marginTop: 4 }}>
+                          {currentAgentData.overall_confidence !== undefined && currentAgentData.overall_confidence !== null ? `${Math.round(currentAgentData.overall_confidence * 100)}%` : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {currentAgentData.infection_path?.entry_point && (
+                      <div style={{ background: 'rgba(6, 182, 212, 0.08)', border: '1px solid rgba(6, 182, 212, 0.25)', borderRadius: 6, padding: '10px 14px' }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#06b6d4', textTransform: 'uppercase' }}>Infection Entry Point</div>
+                        <div style={{ fontSize: 13, color: 'var(--text-main)', marginTop: 2 }}>{currentAgentData.infection_path.entry_point}</div>
+                      </div>
+                    )}
+
+                    {(currentAgentData.attack_path || []).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', marginBottom: 8 }}>
+                          Step-by-Step Attack Path
+                        </div>
+                        <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
+                            <thead>
+                              <tr style={{ background: 'var(--bg-app)', borderBottom: '1px solid var(--border-strong)', color: 'var(--text-muted)' }}>
+                                <th style={{ padding: '8px 12px' }}>Step</th>
+                                <th style={{ padding: '8px 12px' }}>Kill-Chain Stage</th>
+                                <th style={{ padding: '8px 12px' }}>Description</th>
+                                <th style={{ padding: '8px 12px' }}>Evidence IDs</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {currentAgentData.attack_path.map((step, idx) => (
+                                <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                  <td style={{ padding: '8px 12px', fontWeight: 800, color: '#06b6d4' }}>{step.step_number || idx + 1}</td>
+                                  <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--text-main)' }}>{step.stage}</td>
+                                  <td style={{ padding: '8px 12px', color: 'var(--text-main)' }}>{step.description}</td>
+                                  <td style={{ padding: '8px 12px', color: 'var(--blue)', fontFamily: 'monospace', fontSize: 11 }}>
+                                    {(step.evidence_ids && step.evidence_ids.length > 0) ? step.evidence_ids.join(', ') : 'None'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* AGENT 4: MALWARE BEHAVIOUR */}
+                {selectedAgentTab === 'agent4' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    <div style={{
+                      background: 'var(--bg-app)',
+                      border: '1px solid var(--border-strong)',
+                      borderRadius: 8,
+                      padding: 18,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#f59e0b', textTransform: 'uppercase' }}>
+                          Malware Behavioral Profile &amp; Classification
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          {currentAgentData.novel_threat_detected && (
+                            <span style={{ background: 'rgba(239, 68, 68, 0.2)', color: '#ef4444', border: '1px solid #ef4444', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800 }}>
+                              NOVEL THREAT DETECTED (Score: {currentAgentData.novelty_score || 'N/A'})
+                            </span>
+                          )}
+                          <span style={{
+                            background: (currentAgentData.threat_classification?.classification || '').toLowerCase() === 'malicious' ? 'rgba(239, 68, 68, 0.2)' :
+                                        (currentAgentData.threat_classification?.classification || '').toLowerCase() === 'suspicious' ? 'rgba(245, 158, 11, 0.2)' :
+                                        (currentAgentData.threat_classification?.classification || '').toLowerCase() === 'benign' ? 'rgba(16, 185, 129, 0.2)' :
+                                        'rgba(59, 130, 246, 0.2)',
+                            color: (currentAgentData.threat_classification?.classification || '').toLowerCase() === 'malicious' ? '#ef4444' :
+                                   (currentAgentData.threat_classification?.classification || '').toLowerCase() === 'suspicious' ? '#f59e0b' :
+                                   (currentAgentData.threat_classification?.classification || '').toLowerCase() === 'benign' ? '#10b981' :
+                                   'var(--blue)',
+                            padding: '3px 10px',
+                            borderRadius: 4,
+                            fontSize: 11.5,
+                            fontWeight: 800,
+                            textTransform: 'uppercase'
+                          }}>
+                            {currentAgentData.threat_classification?.classification || 'UNCLASSIFIED'}
+                          </span>
+                        </div>
+                      </div>
+                      <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-main)', lineHeight: 1.6 }}>
+                        {currentAgentData.threat_classification?.reason ||
+                         currentAgentData.threat_classification?.classification_reason ||
+                         currentAgentData.summary ||
+                         'Analyzes observed process execution, memory injections, registry modifications, and YARA signatures to construct behavioral capability profiles.'}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>BEHAVIOR OBSERVATIONS</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#f59e0b', marginTop: 4 }}>
+                          {currentAgentData.behavior_observations?.length ?? 0}
+                        </div>
+                      </div>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>YARA MATCHES</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)', marginTop: 4 }}>
+                          {currentAgentData.yara_matches?.length ?? currentAgentData.deterministic_findings?.length ?? 0}
+                        </div>
+                      </div>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>PERSISTENCE STATUS</div>
+                        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-main)', marginTop: 4 }}>
+                          {currentAgentData.persistence_status || 'NOT_PERSISTED'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', marginBottom: 8 }}>
+                        Observed Forensic Behaviors
+                      </div>
+                      <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-app)', borderBottom: '1px solid var(--border-strong)', color: 'var(--text-muted)' }}>
+                              <th style={{ padding: '10px 14px' }}>Category</th>
+                              <th style={{ padding: '10px 14px' }}>Action</th>
+                              <th style={{ padding: '10px 14px' }}>Target / Subject</th>
+                              <th style={{ padding: '10px 14px' }}>Cited Evidence</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(currentAgentData.behavior_observations || []).length > 0 ? (
+                              currentAgentData.behavior_observations.map((obs, idx) => (
+                                <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                  <td style={{ padding: '10px 14px', fontWeight: 700, color: '#f59e0b' }}>{obs.category || 'Behavior'}</td>
+                                  <td style={{ padding: '10px 14px', color: 'var(--text-main)' }}>{obs.action || 'Observed action'}</td>
+                                  <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{obs.subject || obs.target || 'N/A'}</td>
+                                  <td style={{ padding: '10px 14px', color: 'var(--blue)', fontFamily: 'monospace', fontSize: 11 }}>
+                                    {(obs.evidence_ids && obs.evidence_ids.length > 0) ? obs.evidence_ids.join(', ') : 'None'}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan="4" style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                  No behavioral observations recorded for this case.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {(currentAgentData.yara_matches?.length > 0 || currentAgentData.deterministic_findings?.length > 0) && (
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', marginBottom: 8 }}>
+                          YARA &amp; Deterministic Signatures
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {(currentAgentData.yara_matches || currentAgentData.deterministic_findings || []).map((ym, i) => (
+                            <div key={i} style={{ background: 'var(--bg-app)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: 13 }}>{ym.rule_name || ym.rule || ym.finding_id || `Signature #${i+1}`}</span>
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{ym.description || ym.namespace || ''}</span>
+                              </div>
+                              <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700 }}>
+                                MATCHED
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* AGENT 5A: THREAT INTELLIGENCE */}
+                {selectedAgentTab === 'agent5a' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    <div style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 18 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#ec4899', textTransform: 'uppercase', marginBottom: 6 }}>
+                        STIX / TAXII Global Threat Intelligence Enrichment
+                      </div>
+                      <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-main)', lineHeight: 1.6 }}>
+                        {currentAgentData.reasoning_summary || currentAgentData.claim || 'Correlates observed IOCs, CVEs, and MITRE techniques against TAXII feeds, CISA Known Exploited Vulnerabilities (KEV), and global threat feeds.'}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>IOC MATCHES</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#ec4899', marginTop: 4 }}>
+                          {currentAgentData.ioc_matches?.length ?? 0}
+                        </div>
+                      </div>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>CVE / VULN MATCHES</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--blue)', marginTop: 4 }}>
+                          {(currentAgentData.cve_references?.length ?? 0) + (currentAgentData.vulnerability_matches?.length ?? 0)}
+                        </div>
+                      </div>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>INTELLIGENCE CONFIDENCE</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981', marginTop: 4 }}>
+                          {currentAgentData.confidence !== undefined && currentAgentData.confidence !== null ? `${Math.round(currentAgentData.confidence * 100)}%` : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+
+                    {(currentAgentData.candidate_malware_families?.length > 0) && (
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>
+                          Candidate Malware Families Identified
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          {currentAgentData.candidate_malware_families.map((fam, i) => (
+                            <span key={i} style={{ background: 'rgba(236, 72, 153, 0.15)', color: '#ec4899', border: '1px solid rgba(236, 72, 153, 0.3)', padding: '4px 10px', borderRadius: 4, fontSize: 12, fontWeight: 700 }}>
+                              {fam}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', marginBottom: 8 }}>
+                        Threat Intel Enriched Matches (IOC / MITRE / CVE)
+                      </div>
+                      <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-app)', borderBottom: '1px solid var(--border-strong)', color: 'var(--text-muted)' }}>
+                              <th style={{ padding: '10px 14px' }}>Indicator / Reference</th>
+                              <th style={{ padding: '10px 14px' }}>Threat Actor / Family</th>
+                              <th style={{ padding: '10px 14px' }}>Severity</th>
+                              <th style={{ padding: '10px 14px' }}>Cited Evidence</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {((currentAgentData.ioc_matches || []).concat(currentAgentData.mitre_mappings || []).concat(currentAgentData.cve_references || [])).length > 0 ? (
+                              (currentAgentData.ioc_matches || []).concat(currentAgentData.mitre_mappings || []).concat(currentAgentData.cve_references || []).map((m, idx) => (
+                                <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                  <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-main)', fontFamily: 'monospace' }}>
+                                    {m.indicator_value || m.technique_id || m.cve_id || m.name || m.value || 'N/A'}
+                                  </td>
+                                  <td style={{ padding: '10px 14px', color: '#ec4899' }}>{m.threat_actor || m.malware_family || 'N/A'}</td>
+                                  <td style={{ padding: '10px 14px' }}>
+                                    <span style={{
+                                      background: (m.severity || '').toLowerCase() === 'high' || (m.severity || '').toLowerCase() === 'critical' ? 'rgba(239,68,68,0.15)' : 'rgba(59,130,246,0.15)',
+                                      color: (m.severity || '').toLowerCase() === 'high' || (m.severity || '').toLowerCase() === 'critical' ? '#ef4444' : 'var(--blue)',
+                                      padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 11
+                                    }}>
+                                      {m.severity || 'INFORMATIONAL'}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 11 }}>
+                                    {(m.evidence_ids && m.evidence_ids.length > 0) ? m.evidence_ids.join(', ') : 'None Cited'}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan="4" style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                  No enriched threat intelligence matches found for current indicators.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* AGENT 4, 5A, 5B, 6: SIMILAR STRUCTURE */}
-                {(selectedAgentTab === 'agent4' || selectedAgentTab === 'agent5a' || selectedAgentTab === 'agent5b' || selectedAgentTab === 'agent6') && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* AGENT 5B: CAMPAIGN SIMILARITY */}
+                {selectedAgentTab === 'agent5b' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                     <div style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 18 }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: currentAgent.color, textTransform: 'uppercase', marginBottom: 6 }}>
-                        {currentAgent.name} Intelligence Stream
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#10b981', textTransform: 'uppercase', marginBottom: 6 }}>
+                        Historical Incident Vector RAG &amp; Campaign Attribution
                       </div>
                       <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-main)', lineHeight: 1.6 }}>
-                        {currentAgentData.summary || currentAgent.subtitle}
+                        {currentAgentData.claim || 'Retrieves nearest-neighbor historical forensic incidents using dense vector embeddings and computes multi-factor similarity across behaviors, attack paths, and threat actor TTPs.'}
                       </p>
                     </div>
 
-                    <pre style={{
-                      background: 'var(--bg-app)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: 8,
-                      padding: 16,
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>COMPOSITE SIMILARITY</div>
+                        <div style={{ fontSize: 22, fontWeight: 800, color: '#10b981', marginTop: 4 }}>
+                          {currentAgentData.historical_similarity?.composite_similarity !== undefined && currentAgentData.historical_similarity?.composite_similarity !== null ?
+                            `${Math.round(currentAgentData.historical_similarity.composite_similarity * 100)}%` : 'N/A'}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Multi-factor weighted score</div>
+                      </div>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>BEHAVIOR SIMILARITY</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--blue)', marginTop: 4 }}>
+                          {currentAgentData.historical_similarity?.behavior_similarity !== undefined && currentAgentData.historical_similarity?.behavior_similarity !== null ?
+                            `${Math.round(currentAgentData.historical_similarity.behavior_similarity * 100)}%` : 'N/A'}
+                        </div>
+                      </div>
+                      <div style={{ background: 'var(--bg-app)', padding: 14, borderRadius: 8, border: '1px solid var(--border-subtle)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>ATTACK PATH SIMILARITY</div>
+                        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--purple)', marginTop: 4 }}>
+                          {currentAgentData.historical_similarity?.attack_similarity !== undefined && currentAgentData.historical_similarity?.attack_similarity !== null ?
+                            `${Math.round(currentAgentData.historical_similarity.attack_similarity * 100)}%` : 'N/A'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: 'rgba(59, 130, 246, 0.08)',
+                      border: '1px solid rgba(59, 130, 246, 0.25)',
+                      borderRadius: 6,
+                      padding: '10px 14px',
                       fontSize: 12,
-                      fontFamily: 'var(--argus-mono, monospace)',
-                      color: 'var(--text-main)',
-                      maxHeight: 260,
-                      overflowY: 'auto'
+                      color: 'var(--text-muted)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10
                     }}>
-                      {JSON.stringify(currentAgentData, null, 2)}
-                    </pre>
+                      <span style={{ fontWeight: 800, color: 'var(--blue)' }}>ATTRIBUTION SAFEGUARD:</span>
+                      <span>
+                        {currentAgentData.historical_similarity?.possible_actor_context?.[0]?.attribution_caveat ||
+                         'Contextual profiling only. Historical similarity provides reference intelligence and does not assert definitive legal or forensic actor attribution.'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', marginBottom: 8 }}>
+                        Correlated Historical Campaigns &amp; Families
+                      </div>
+                      <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-app)', borderBottom: '1px solid var(--border-strong)', color: 'var(--text-muted)' }}>
+                              <th style={{ padding: '10px 14px' }}>Campaign / Family Name</th>
+                              <th style={{ padding: '10px 14px' }}>Historical Case ID</th>
+                              <th style={{ padding: '10px 14px' }}>Similarity Score</th>
+                              <th style={{ padding: '10px 14px' }}>Overlapping Characteristics</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {((currentAgentData.historical_similarity?.similar_campaigns || []).length > 0 || (currentAgentData.historical_similarity?.similar_malware_families || []).length > 0) ? (
+                              <>
+                                {(currentAgentData.historical_similarity?.similar_campaigns || []).map((sc, idx) => (
+                                  <tr key={`camp-${idx}`} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-main)' }}>{sc.campaign_name}</td>
+                                    <td style={{ padding: '10px 14px', color: 'var(--blue)', fontFamily: 'monospace' }}>{sc.historical_case_id}</td>
+                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#10b981' }}>{Math.round(sc.similarity_score * 100)}%</td>
+                                    <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{(sc.overlapping_techniques || []).join(', ') || 'TTP Alignment'}</td>
+                                  </tr>
+                                ))}
+                                {(currentAgentData.historical_similarity?.similar_malware_families || []).map((mf, idx) => (
+                                  <tr key={`fam-${idx}`} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-main)' }}>{mf.family_name}</td>
+                                    <td style={{ padding: '10px 14px', color: 'var(--blue)', fontFamily: 'monospace' }}>{mf.historical_case_id}</td>
+                                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#10b981' }}>{Math.round(mf.similarity_score * 100)}%</td>
+                                    <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{(mf.supporting_behaviors || []).join(', ') || 'Behavioral Match'}</td>
+                                  </tr>
+                                ))}
+                              </>
+                            ) : (
+                              <tr>
+                                <td colSpan="4" style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                  No historical campaigns matched above similarity threshold.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* AGENT 6: IMPACT ASSESSMENT */}
+                {selectedAgentTab === 'agent6' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    <div style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 18 }}>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#ef4444', textTransform: 'uppercase', marginBottom: 6 }}>
+                        Quantitative Impact &amp; Severity Assessment
+                      </div>
+                      <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-main)', lineHeight: 1.6 }}>
+                        {currentAgentData.iss_assessment?.executive_summary ||
+                         currentAgentData.explanation ||
+                         currentAgentData.claim ||
+                         'Computes deterministic CVSS v3.1 technical vulnerability scores alongside the multidimensional ARGUS Investigation Severity Score (ISS) and generates prioritized operational recovery checklists.'}
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 14 }}>
+                      <div style={{ background: 'var(--bg-app)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>CVSS v3.1 Base Score</div>
+                          <span style={{
+                            background: (currentAgentData.cvss_assessment?.severity || '').toLowerCase() === 'critical' ? 'rgba(239, 68, 68, 0.2)' :
+                                        (currentAgentData.cvss_assessment?.severity || '').toLowerCase() === 'high' ? 'rgba(245, 158, 11, 0.2)' :
+                                        'rgba(59, 130, 246, 0.2)',
+                            color: (currentAgentData.cvss_assessment?.severity || '').toLowerCase() === 'critical' ? '#ef4444' :
+                                   (currentAgentData.cvss_assessment?.severity || '').toLowerCase() === 'high' ? '#f59e0b' :
+                                   'var(--blue)',
+                            padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800
+                          }}>
+                            {currentAgentData.cvss_assessment?.severity || 'UNDETERMINED'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 26, fontWeight: 900, color: '#ef4444', marginTop: 6 }}>
+                          {currentAgentData.cvss_assessment?.base_score !== undefined && currentAgentData.cvss_assessment?.base_score !== null ? currentAgentData.cvss_assessment.base_score : 'N/A'}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace', marginTop: 4, wordBreak: 'break-all' }}>
+                          {currentAgentData.cvss_assessment?.vector_string || 'No CVSS Vector Computed'}
+                        </div>
+                      </div>
+
+                      <div style={{ background: 'var(--bg-app)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: 16 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>ARGUS ISS Severity</div>
+                          <span style={{
+                            background: (currentAgentData.iss_assessment?.severity || '').toLowerCase() === 'critical' ? 'rgba(239, 68, 68, 0.2)' :
+                                        (currentAgentData.iss_assessment?.severity || '').toLowerCase() === 'high' ? 'rgba(245, 158, 11, 0.2)' :
+                                        'rgba(16, 185, 129, 0.2)',
+                            color: (currentAgentData.iss_assessment?.severity || '').toLowerCase() === 'critical' ? '#ef4444' :
+                                   (currentAgentData.iss_assessment?.severity || '').toLowerCase() === 'high' ? '#f59e0b' :
+                                   '#10b981',
+                            padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 800
+                          }}>
+                            {currentAgentData.iss_assessment?.severity || 'MEDIUM'}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 26, fontWeight: 900, color: '#f59e0b', marginTop: 6 }}>
+                          {currentAgentData.iss_assessment?.iss_score !== undefined && currentAgentData.iss_assessment?.iss_score !== null ? currentAgentData.iss_assessment.iss_score : 'N/A'}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          Compromised Assets: {currentAgentData.total_assets_affected || currentAgentData.affected_assets?.length || 0}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', marginBottom: 8 }}>
+                        Affected Assets &amp; Compromise State Inventory
+                      </div>
+                      <div style={{ overflowX: 'auto', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5, textAlign: 'left' }}>
+                          <thead>
+                            <tr style={{ background: 'var(--bg-app)', borderBottom: '1px solid var(--border-strong)', color: 'var(--text-muted)' }}>
+                              <th style={{ padding: '10px 14px' }}>Asset ID / Name</th>
+                              <th style={{ padding: '10px 14px' }}>Type</th>
+                              <th style={{ padding: '10px 14px' }}>Criticality</th>
+                              <th style={{ padding: '10px 14px' }}>Compromise State</th>
+                              <th style={{ padding: '10px 14px' }}>Cited Evidence</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(currentAgentData.affected_assets || []).length > 0 ? (
+                              currentAgentData.affected_assets.map((asset, idx) => (
+                                <tr key={idx} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                                  <td style={{ padding: '10px 14px', fontWeight: 700, color: 'var(--text-main)', fontFamily: 'monospace' }}>
+                                    {asset.asset_id}
+                                  </td>
+                                  <td style={{ padding: '10px 14px', color: 'var(--text-muted)' }}>{asset.asset_type || 'UNKNOWN'}</td>
+                                  <td style={{ padding: '10px 14px', fontWeight: 700, color: asset.criticality === 'CRITICAL' ? '#ef4444' : 'var(--blue)' }}>
+                                    {asset.criticality || 'MEDIUM'}
+                                  </td>
+                                  <td style={{ padding: '10px 14px' }}>
+                                    <span style={{
+                                      background: (asset.compromise_state || '').includes('CONFIRMED') ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                      color: (asset.compromise_state || '').includes('CONFIRMED') ? '#ef4444' : '#f59e0b',
+                                      padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 11
+                                    }}>
+                                      {asset.compromise_state || 'SUSPECTED'}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 11 }}>
+                                    {(asset.evidence_ids && asset.evidence_ids.length > 0) ? asset.evidence_ids.join(', ') : 'None'}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan="5" style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                  No compromised or targeted assets recorded.
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {((currentAgentData.recovery_checklist?.containment_steps || []).length > 0 ||
+                      (currentAgentData.recovery_checklist?.eradication_steps || []).length > 0 ||
+                      (currentAgentData.recovery_actions || []).length > 0) && (
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', marginBottom: 8 }}>
+                          Prioritized Operational Recovery Checklist
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {((currentAgentData.recovery_checklist?.containment_steps || [])
+                            .concat(currentAgentData.recovery_checklist?.eradication_steps || [])
+                            .concat(currentAgentData.recovery_checklist?.recovery_steps || [])
+                            .concat(currentAgentData.recovery_actions || [])
+                          ).map((action, i) => (
+                            <div key={i} style={{ background: 'var(--bg-app)', border: '1px solid var(--border-subtle)', borderRadius: 6, padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <span style={{ background: action.priority === 'P1_IMMEDIATE' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)', color: action.priority === 'P1_IMMEDIATE' ? '#ef4444' : 'var(--blue)', padding: '2px 6px', borderRadius: 4, fontSize: 10, fontWeight: 800, marginRight: 8 }}>
+                                  {action.priority || 'P2_HIGH'}
+                                </span>
+                                <span style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: 13 }}>{action.title}</span>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{action.description || ''}</div>
+                              </div>
+                              <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                                Role: {action.responsible_role || 'SOC_L2'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -845,8 +1466,8 @@ const Agents = () => {
                   </p>
                 </div>
 
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {['all', 'agent1', 'agent2', 'agent3', 'agent6'].map(aKey => (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {['all', 'agent1', 'agent2', 'agent3', 'agent4', 'agent5a', 'agent5b', 'agent6', 'agent7'].map(aKey => (
                     <button
                       key={aKey}
                       onClick={() => setClaimsFilter(aKey)}
@@ -890,10 +1511,10 @@ const Agents = () => {
                             {c.claim}
                           </td>
                           <td style={{ padding: '12px 14px', color: 'var(--text-muted)', fontSize: 11, fontFamily: 'monospace' }}>
-                            {(c.evidence_ids || []).slice(0, 3).join(', ') || 'F-CORR-01'}
+                            {(c.evidence_ids && c.evidence_ids.length > 0) ? c.evidence_ids.slice(0, 3).join(', ') : 'None Cited'}
                           </td>
                           <td style={{ padding: '12px 14px', fontWeight: 700, color: 'var(--text-main)' }}>
-                            {Math.round((c.confidence || 0.9) * 100)}%
+                            {c.confidence !== undefined && c.confidence !== null ? `${Math.round(c.confidence * 100)}%` : 'N/A'}
                           </td>
                           <td style={{ padding: '12px 14px' }}>
                             <span style={{
@@ -901,7 +1522,7 @@ const Agents = () => {
                               color: c.verified ? '#10b981' : '#f59e0b',
                               padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700
                             }}>
-                              {c.verified ? 'VERIFIED' : 'GATED'}
+                              {c.verified ? 'VERIFIED' : 'UNVERIFIED'}
                             </span>
                           </td>
                         </tr>

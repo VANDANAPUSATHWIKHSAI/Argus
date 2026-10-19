@@ -561,7 +561,7 @@ const AdminDashboard = () => {
                   value={newCaseAnalyst} 
                   onChange={setNewCaseAnalyst} 
                   placeholder="Select Analyst"
-                  options={employees.filter(e => e.role === 'analyst').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
+                  options={employees.filter(e => e.role === 'analyst' || e.role === 'forensic_analyst').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
                 />
                 </div>
 
@@ -571,7 +571,7 @@ const AdminDashboard = () => {
                   value={newCaseSeniorAnalyst} 
                   onChange={setNewCaseSeniorAnalyst} 
                   placeholder="Select Senior Analyst"
-                  options={employees.filter(e => e.role === 'senior_analyst').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
+                  options={employees.filter(e => e.role === 'senior_analyst' || e.role === 'senior').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
                 />
               </div>
 
@@ -599,7 +599,7 @@ const AdminDashboard = () => {
               value={assigningSenior}
               onChange={setAssigningSenior}
               placeholder="Select Senior Analyst"
-              options={employees.filter(e => e.role === 'senior_analyst').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
+              options={employees.filter(e => e.role === 'senior_analyst' || e.role === 'senior').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
             />
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
               <button onClick={() => setShowAssignSeniorModal(false)} style={{ padding: '10px 20px', background: 'var(--bg-surface)', border: '1px solid var(--border-strong)', borderRadius: '10px', color: 'var(--text-main)', fontWeight: 600, cursor: 'pointer', fontSize: '14px' }}>Cancel</button>

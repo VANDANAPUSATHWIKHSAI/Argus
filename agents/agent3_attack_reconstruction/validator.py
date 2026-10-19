@@ -236,7 +236,9 @@ class Agent3Validator:
 
         # Grounded overall confidence score computation
         all_components = [output.infection_path] + output.attack_path + output.attack_timeline + output.attack_chain + output.lateral_movement
-        if all_components:
+        if getattr(output, "execution_status", "") == "FAILED":
+            output.overall_confidence = 0.0
+        elif all_components:
             verified_count = sum(1 for c in all_components if getattr(c, "citation_verified", False))
             total_count = len(all_components)
             citation_ratio = verified_count / total_count

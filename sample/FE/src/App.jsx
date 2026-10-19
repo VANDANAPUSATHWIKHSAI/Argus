@@ -15,6 +15,7 @@ import Findings from './pages/Findings';
 import TimelineDetail from './pages/TimelineDetail';
 import Notifications from './pages/Notifications';
 import Cases from './pages/Cases';
+import Agents from './pages/Agents';
 import ProtectedRoute from './components/ProtectedRoute';// Global styles for the app (can also just import individual ones in components)
 import './App.css';
 
@@ -44,6 +45,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/cases" element={<ProtectedRoute><Cases /></ProtectedRoute>} />
+        <Route path="/agents" element={<ProtectedRoute><Agents /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
         <Route path="/case-notes" element={<ProtectedRoute><CaseNotes /></ProtectedRoute>} />

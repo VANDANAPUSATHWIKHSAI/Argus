@@ -187,3 +187,14 @@ export async function closeCase(caseId) {
     method: 'PUT',
   });
 }
+
+export async function fetchAgentResults(caseId) {
+  return fetchWithAuth(`/cases/${caseId}/agents`);
+}
+
+export async function triggerAgentAnalysis(caseId) {
+  return fetchWithAuth(`/cases/${caseId}/run-agents`, {
+    method: 'POST',
+  });
+}
+

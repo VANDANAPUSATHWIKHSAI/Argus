@@ -188,9 +188,15 @@ const SeniorDashboard = () => {
               )}
             </div>
 
-            <button onClick={() => navigate('/findings')} style={{ width: '100%', padding: '12px', background: 'none', border: '1px solid var(--blue)', color: 'var(--blue)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
-              View All Findings
-            </button>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => navigate('/findings')} style={{ flex: 1, padding: '12px', background: 'none', border: '1px solid var(--blue)', color: 'var(--blue)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
+                View All Findings
+              </button>
+              <button onClick={() => navigate('/agents')} style={{ flex: 1, padding: '12px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', border: 'none', color: '#fff', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect></svg>
+                Agent Swarm Intel
+              </button>
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>

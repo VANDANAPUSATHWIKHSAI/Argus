@@ -30,6 +30,13 @@ router = APIRouter()
 _fir_repo = FIRRepository()
 _analyst_service = AnalystFindingService(fir_repo=_fir_repo)
 
+import concurrent.futures
+import threading
+
+_agent_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="argus_agents")
+_agent_jobs: Dict[str, Dict[str, Any]] = {}
+_agent_jobs_lock = threading.Lock()
+
 
 class InvestigationStageStatus(str, Enum):
     NOT_STARTED = "not_started"
@@ -1128,3 +1135,326 @@ async def update_review_note(
         return {"status": "SUCCESS"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{case_id}/agents")
+async def get_case_agent_results(
+    case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Retrieve comprehensive multi-agent forensic intelligence (Agents 1-7),
+    persisted claims, attack graph reconstruction, threat intelligence, and supervisor verdict.
+    """
+    from api.routes.evidence import sanitize_uuid
+    from infrastructure.repository.evidence_store import list_evidence_by_case
+    from config.settings import settings
+    import psycopg2
+    from pathlib import Path
+
+    clean_case_id = sanitize_uuid(case_id)
+
+    # 1. Check in-memory live job
+    with _agent_jobs_lock:
+        live_job = _agent_jobs.get(clean_case_id) or _agent_jobs.get(case_id)
+
+    # 2. Query evidence metadata for agent_results
+    evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
+    if not evidence_list and case_id != clean_case_id:
+        evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id)
+
+    findings = _analyst_service.list_findings(case_id=clean_case_id, tenant_id=x_tenant_id)
+    if not findings and case_id != clean_case_id:
+        findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
+
+    # Look for stored agent_results in evidence metadata
+    stored_pipeline_results = None
+    for ev in (evidence_list or []):
+        meta = ev.metadata or {}
+        if meta.get("agent_results"):
+            stored_pipeline_results = meta.get("agent_results")
+            break
+
+    # 3. Query PostgreSQL agent_outputs table
+    db_claims = []
+    try:
+        from agents.agent1_evidence_intelligence.agent import _ensure_agent_outputs_table_initialized
+        conn = psycopg2.connect(
+            host=settings.postgres_host,
+            port=settings.postgres_port,
+            database=settings.postgres_db,
+            user=settings.postgres_user,
+            password=settings.postgres_password,
+            connect_timeout=2
+        )
+        _ensure_agent_outputs_table_initialized(conn)
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, agent_id, claim, evidence_ids, confidence, verified, execution_status, flags, created_at, model_used
+            FROM agent_outputs
+            WHERE case_id IN (%s, %s)
+            ORDER BY id ASC;
+            """,
+            (clean_case_id, case_id)
+        )
+        rows = cur.fetchall()
+        for r in rows:
+            db_claims.append({
+                "id": r[0],
+                "agent_id": r[1],
+                "claim": r[2],
+                "evidence_ids": r[3] or [],
+                "confidence": r[4] or 0.0,
+                "verified": bool(r[5]),
+                "execution_status": r[6] or "COMPLETED",
+                "flags": r[7] if isinstance(r[7], list) else [],
+                "created_at": r[8].isoformat() if hasattr(r[8], "isoformat") and r[8] else str(r[8]),
+                "model_used": r[9] or "Qwen3-8B"
+            })
+        conn.close()
+    except Exception as dbe:
+        logger.warning(f"Could not query agent_outputs table: {dbe}")
+
+    # Determine overall status and assemble payload
+    if live_job and live_job.get("status") == "RUNNING":
+        status_val = "RUNNING"
+        stage_statuses = live_job.get("stage_statuses", {})
+        results_data = live_job.get("results") or stored_pipeline_results or {}
+    elif live_job and live_job.get("status") in ("COMPLETED", "SUCCESS", "PARTIAL_SUCCESS") and live_job.get("results"):
+        status_val = live_job["status"]
+        results_data = live_job["results"]
+        stage_statuses = results_data.get("stage_statuses", {})
+    elif stored_pipeline_results:
+        status_val = stored_pipeline_results.get("execution_status", "COMPLETED")
+        results_data = stored_pipeline_results
+        stage_statuses = results_data.get("stage_statuses", {})
+    elif db_claims:
+        status_val = "COMPLETED"
+        results_data = {}
+        stage_statuses = {
+            "agent1": "COMPLETED", "agent2": "COMPLETED", "agent3": "COMPLETED",
+            "agent4": "COMPLETED", "agent5a": "COMPLETED", "agent5b": "COMPLETED",
+            "agent6": "COMPLETED", "agent7": "COMPLETED"
+        }
+    else:
+        status_val = "READY"
+        results_data = {}
+        stage_statuses = {
+            "agent1": "PENDING", "agent2": "PENDING", "agent3": "PENDING",
+            "agent4": "PENDING", "agent5a": "PENDING", "agent5b": "PENDING",
+            "agent6": "PENDING", "agent7": "PENDING"
+        }
+
+    # Extract or synthesize per-agent intelligence
+    a1_data = results_data.get("agent1") or {}
+    a2_data = results_data.get("agent2") or {}
+    a3_data = results_data.get("agent3") or {}
+    a4_data = results_data.get("agent4") or {}
+    a5a_data = results_data.get("agent5a") or {}
+    a5b_data = results_data.get("agent5b") or {}
+    a6_data = results_data.get("agent6") or {}
+    a7_data = results_data.get("agent7") or {}
+
+    # Extract all claims (from pipeline_results or database)
+    all_claims = list(db_claims)
+    if not all_claims and results_data:
+        for a_key in ["agent1", "agent2", "agent3", "agent4"]:
+            ag_obj = results_data.get(a_key)
+            if isinstance(ag_obj, dict) and "claims" in ag_obj:
+                for c in ag_obj["claims"]:
+                    c_dict = c if isinstance(c, dict) else (c.model_dump(mode='json') if hasattr(c, 'model_dump') else {})
+                    c_dict["agent_id"] = a_key
+                    all_claims.append(c_dict)
+
+    # If status is READY, generate grounded baseline preview telemetry from FIR findings
+    if status_val == "READY" and findings:
+        high_critical = [f for f in findings if (f.severity or "").lower() in ("high", "critical")]
+        a1_data = {
+            "status": "READY",
+            "findings_ingested": len(findings),
+            "high_value_findings": len(high_critical),
+            "readiness": "READY",
+            "summary": f"{len(findings)} findings staged for multi-agent reasoning."
+        }
+        a2_data = {
+            "status": "READY",
+            "clusters_preview": min(len(findings), 3),
+            "graph_nodes": len(findings) + len(evidence_list or [])
+        }
+        a3_data = {
+            "status": "READY",
+            "mitre_tactics": list(set(f.mitre_mapping for f in findings if f.mitre_mapping)),
+            "attack_steps_projected": len(findings)
+        }
+        a6_data = {
+            "status": "READY",
+            "preliminary_severity": "HIGH" if high_critical else "MEDIUM",
+            "projected_iss_score": 7.5 if high_critical else 4.0
+        }
+
+    return {
+        "status": status_val,
+        "case_id": clean_case_id,
+        "tenant_id": x_tenant_id,
+        "findings_count": len(findings),
+        "evidence_count": len(evidence_list or []),
+        "stage_statuses": stage_statuses,
+        "agent1": a1_data,
+        "agent2": a2_data,
+        "agent3": a3_data,
+        "agent4": a4_data,
+        "agent5a": a5a_data,
+        "agent5b": a5b_data,
+        "agent6": a6_data,
+        "agent7": a7_data,
+        "claims": all_claims,
+        "supervisor_synthesis": a7_data.get("synthesis", {}),
+        "confidence_gate": a7_data.get("confidence_gate", {}),
+        "review_level": a7_data.get("review_level", "ROUTINE_ANALYST_REVIEW"),
+        "verification_results": a7_data.get("verification", []),
+    }
+
+
+@router.post("/{case_id}/run-agents")
+async def run_case_agents(
+    case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Launch asynchronous multi-agent reasoning execution (Agents 1-7)
+    for an existing case and its ingested evidence/findings.
+    """
+    from api.routes.evidence import sanitize_uuid
+    from infrastructure.repository.evidence_store import list_evidence_by_case
+    from config.settings import settings
+    import psycopg2
+    from pathlib import Path
+
+    clean_case_id = sanitize_uuid(case_id)
+
+    with _agent_jobs_lock:
+        current_job = _agent_jobs.get(clean_case_id)
+        if current_job and current_job.get("status") == "RUNNING":
+            return {
+                "status": "RUNNING",
+                "case_id": clean_case_id,
+                "message": "Multi-agent analysis is already running for this case."
+            }
+
+    findings = _analyst_service.list_findings(case_id=clean_case_id, tenant_id=x_tenant_id)
+    if not findings and case_id != clean_case_id:
+        findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
+
+    evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
+    if not evidence_list and case_id != clean_case_id:
+        evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id)
+
+    if not findings and not evidence_list:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Cannot run agents: Case '{case_id}' has no ingested evidence or findings."
+        )
+
+    # Initialize job in registry
+    with _agent_jobs_lock:
+        _agent_jobs[clean_case_id] = {
+            "status": "RUNNING",
+            "case_id": clean_case_id,
+            "tenant_id": x_tenant_id,
+            "stage_statuses": {
+                "agent1": "RUNNING", "agent2": "PENDING", "agent3": "PENDING",
+                "agent4": "PENDING", "agent5a": "PENDING", "agent5b": "PENDING",
+                "agent6": "PENDING", "agent7": "PENDING"
+            }
+        }
+
+    # Log to audit log
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password, connect_timeout=2
+        )
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO audit_log (tenant_id, case_id, user_id, action, target_type, target_id, details)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (x_tenant_id, clean_case_id, current_user.get("user_id", "analyst"), "Triggered Multi-Agent Analysis", "case", clean_case_id, "Launched Agents 1-7 reasoning swarm")
+        )
+        conn.commit()
+        conn.close()
+    except Exception as al_e:
+        logger.warning(f"Could not write audit log for agent execution: {al_e}")
+
+    def _execute_agent_pipeline():
+        try:
+            from argus_pipeline import run_pipeline
+            # Pass evidence path if single evidence file exists, otherwise fir_findings
+            ev_path = None
+            if evidence_list and len(evidence_list) > 0 and getattr(evidence_list[0], "file_path", None):
+                candidate_path = Path(evidence_list[0].file_path)
+                if candidate_path.exists():
+                    ev_path = str(candidate_path)
+
+            results = run_pipeline(
+                evidence_path=ev_path,
+                case_id=clean_case_id,
+                tenant_id=x_tenant_id,
+                fir_findings=findings if not ev_path else None,
+                stop_on_error=False,
+                resume=True
+            )
+
+            with _agent_jobs_lock:
+                _agent_jobs[clean_case_id] = {
+                    "status": results.get("execution_status", "COMPLETED"),
+                    "case_id": clean_case_id,
+                    "tenant_id": x_tenant_id,
+                    "results": results
+                }
+
+            # Update evidence metadata
+            if evidence_list and len(evidence_list) > 0:
+                first_ev = evidence_list[0]
+                first_ev.metadata = first_ev.metadata or {}
+                first_ev.metadata["agent_results"] = results
+                try:
+                    conn = psycopg2.connect(
+                        host=settings.postgres_host, port=settings.postgres_port,
+                        database=settings.postgres_db, user=settings.postgres_user,
+                        password=settings.postgres_password, connect_timeout=2
+                    )
+                    cur = conn.cursor()
+                    import json
+                    cur.execute(
+                        "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
+                        (json.dumps(first_ev.metadata, default=str), first_ev.evidence_id)
+                    )
+                    conn.commit()
+                    conn.close()
+                except Exception as meta_e:
+                    logger.warning(f"Could not persist agent_results to evidence table: {meta_e}")
+
+            logger.info(f"[+] Multi-agent analysis finished successfully for Case {clean_case_id}")
+        except Exception as exc:
+            logger.error(f"[-] Multi-agent execution error for Case {clean_case_id}: {exc}", exc_info=True)
+            with _agent_jobs_lock:
+                _agent_jobs[clean_case_id] = {
+                    "status": "FAILED",
+                    "case_id": clean_case_id,
+                    "tenant_id": x_tenant_id,
+                    "error": str(exc)
+                }
+
+    _agent_executor.submit(_execute_agent_pipeline)
+
+    return {
+        "status": "STARTED",
+        "case_id": clean_case_id,
+        "message": f"Multi-agent forensic pipeline (Agents 1-7) initiated for Case '{clean_case_id}'."
+    }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import '../css/style.css';
 import Sidebar from '../components/Sidebar';
 import ProfileModal from '../components/ProfileModal';
@@ -9,13 +9,14 @@ import AdminDashboard from './AdminDashboard';
 import SeniorDashboard from './SeniorDashboard';
 import AuditorDashboard from './AuditorDashboard';
 import ForensicGraph from '../components/ForensicGraph';
-import { fetchCases, fetchCaseSummary, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { fetchCases, fetchCaseSummary, fetchAgentResults, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 import { safeFormatDateTime } from '../js/dateUtils';
 
 const Dashboard = () => {
   const [cases, setCases] = useState([]);
   const navigate = useNavigate();
   const [activeSummary, setActiveSummary] = useState(null);
+  const [agentSummary, setAgentSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   
   const currentUserStr = localStorage.getItem('argus_user');
@@ -78,7 +79,10 @@ const Dashboard = () => {
 
       const activeCaseId = localStorage.getItem('active_case_id');
       if (activeCaseId) {
-        const summaryData = await fetchCaseSummary(activeCaseId).catch(() => null);
+        const [summaryData, agentData] = await Promise.all([
+          fetchCaseSummary(activeCaseId).catch(() => null),
+          fetchAgentResults(activeCaseId).catch(() => null)
+        ]);
         if (summaryData) {
           setActiveSummary(summaryData);
           if (summaryData.name) localStorage.setItem('active_case_name', summaryData.name);
@@ -86,8 +90,10 @@ const Dashboard = () => {
         } else {
           setActiveSummary(null);
         }
+        setAgentSummary(agentData);
       } else {
         setActiveSummary(null);
+        setAgentSummary(null);
       }
     } catch (e) {
       console.error(e);
@@ -448,6 +454,79 @@ const Dashboard = () => {
                         </div>
                         <div className="trend-badge trend-danger">↑ Risk</div>
                       </div>
+                    </div>
+
+                    {/* ARGUS Multi-Agent Swarm Intelligence Card */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(99, 102, 241, 0.12))',
+                      border: '1px solid rgba(99, 102, 241, 0.35)',
+                      borderRadius: 10,
+                      padding: '18px 24px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 16,
+                      flexShrink: 0
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 8,
+                          background: 'rgba(99, 102, 241, 0.2)',
+                          color: '#818cf8',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="14" x2="23" y2="14"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="14" x2="4" y2="14"></line></svg>
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <span style={{ fontSize: 11, fontWeight: 900, background: '#6366f1', color: '#fff', padding: '2px 8px', borderRadius: 4, letterSpacing: '0.05em' }}>
+                              MULTI-AGENT SWARM
+                            </span>
+                            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-main)' }}>
+                              7-Agent Forensic Reasoning Engine
+                            </span>
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 800,
+                              background: agentSummary?.status === 'COMPLETED' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                              color: agentSummary?.status === 'COMPLETED' ? '#10b981' : 'var(--blue)',
+                              padding: '2px 8px',
+                              borderRadius: 4
+                            }}>
+                              {agentSummary?.status || 'READY'}
+                            </span>
+                          </div>
+                          <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                            Qwen3-8B Evidence Intelligence, Neo4j Graph Correlation, MITRE ATT&amp;CK Kill-Chain, YARA Heuristics, Threat Intel, and DeBERTa-v3 NLI Verification.
+                          </p>
+                        </div>
+                      </div>
+
+                      <Link
+                        to="/agents"
+                        style={{
+                          background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                          color: '#fff',
+                          padding: '10px 20px',
+                          borderRadius: 6,
+                          fontSize: 12.5,
+                          fontWeight: 800,
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        OPEN AGENT SWARM →
+                      </Link>
                     </div>
 
                     {/* Interactive Investigation Map */}

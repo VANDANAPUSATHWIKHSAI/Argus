@@ -1,10 +1,15 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import ArgusLogo from './ArgusLogo';
+import { logout } from '../js/authSession';
 
 const Sidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
+  
+  const [unreadNotes, setUnreadNotes] = useState(0);
 
   let user = null;
   try {
@@ -12,25 +17,62 @@ const Sidebar = () => {
   } catch(e) {}
 
   // Load saved theme or default to dark
-  React.useEffect(() => {
+  useEffect(() => {
     const savedTheme = localStorage.getItem('argus_theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
   }, []);
 
+  useEffect(() => {
+    if (user?.role === 'senior_analyst') {
+      const activeCaseId = localStorage.getItem('active_case_id');
+      if (activeCaseId) {
+        const token = localStorage.getItem('argus_token');
+        fetch(`${API_BASE_URL}/cases/${activeCaseId}/notes`, {
+          headers: {
+            'X-Tenant-ID': DEFAULT_TENANT_ID,
+            'Authorization': `Bearer ${token}`
+          }
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.data) {
+            const notesData = data.data;
+            const totalNotes = notesData.length;
+            const seenNotes = parseInt(localStorage.getItem(`seen_notes_${activeCaseId}`) || '0', 10);
+            
+            const latestUpdate = Math.max(0, ...notesData.map(n => {
+              const val = n.updatedAt || n.createdAt;
+              const d = val ? new Date(String(val).replace(/\s+/, 'T')) : null;
+              return (d && !isNaN(d.getTime())) ? d.getTime() : 0;
+            }));
+            const lastSeenUpdate = parseInt(localStorage.getItem(`last_seen_update_${activeCaseId}`) || '0', 10);
+
+            let unread = 0;
+            if (lastSeenUpdate > 0) {
+              unread = notesData.filter(n => {
+                const val = n.updatedAt || n.createdAt;
+                const d = val ? new Date(String(val).replace(/\s+/, 'T')) : null;
+                return d && !isNaN(d.getTime()) && d.getTime() > lastSeenUpdate;
+              }).length;
+            } else if (totalNotes > seenNotes) {
+              unread = totalNotes - seenNotes;
+            }
+            setUnreadNotes(unread);
+          }
+        })
+        .catch(e => console.error(e));
+      }
+    }
+  }, [location.pathname, user?.role]);
+
   const handleLogout = () => {
-    localStorage.removeItem('argus_token');
-    localStorage.removeItem('argus_user');
-    localStorage.removeItem('active_case_id');
-    localStorage.removeItem('active_case_name');
-    navigate('/login');
+    logout();
   };
 
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-wrapper" style={{ width: '36px', height: '36px', borderRadius: '8px', overflow: 'visible', flexShrink: 0, background: 'transparent' }}>
-          <img src="/argus_logo_new.png" alt="ARGUS Logo" style={{ width: '100%', height: '100%', objectFit: 'contain', mixBlendMode: 'multiply' }} />
-        </div>
+        <ArgusLogo size={36} />
         <div className="logo-text">
           <h1>ARGUS</h1>
           <p>AI for Digital Forensics</p>
@@ -47,6 +89,10 @@ const Sidebar = () => {
         
         {user?.role === 'admin' && (
           <>
+            <Link to="/cases" className={`nav-item ${currentPath === '/cases' ? 'active' : ''}`}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              <span>Previous Cases</span>
+            </Link>
             <Link to="/employees" className={`nav-item ${currentPath === '/employees' ? 'active' : ''}`}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               <span>Employees</span>
@@ -81,9 +127,14 @@ const Sidebar = () => {
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
               <span>Chatbot</span>
             </Link>
-            <Link to="/case-notes" className={`nav-item ${currentPath === '/case-notes' ? 'active' : ''}`}>
+            <Link to="/case-notes" className={`nav-item ${currentPath === '/case-notes' ? 'active' : ''}`} style={{ position: 'relative' }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
               <span>Notes</span>
+              {unreadNotes > 0 && (
+                <div style={{ background: 'var(--red, #ef4444)', color: 'white', borderRadius: '50%', width: '20px', height: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 'bold', marginLeft: 'auto' }}>
+                  {unreadNotes}
+                </div>
+              )}
             </Link>
           </>
         )}
@@ -102,63 +153,27 @@ const Sidebar = () => {
         
         <div style={{ flexGrow: 1 }}></div>
         
-        {/* Logout Button */}
-        <button onClick={handleLogout} className="nav-item" style={{
-          background: 'none', 
-          border: '1px solid rgba(239, 68, 68, 0.2)', 
-          width: '100%', 
-          cursor: 'pointer', 
-          textAlign: 'left', 
-          outline: 'none', 
-          color: '#f87171',
-          borderRadius: '8px',
-          transition: 'all 0.2s ease',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          marginBottom: '8px'
-        }}
-          onMouseOver={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)'; }}
-          onMouseOut={(e) => { e.currentTarget.style.background = 'none'; e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)'; }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      </nav>
+      
+      <div className="sidebar-footer">
+        <div className="sidebar-user-block">
+          <div className="sidebar-avatar">
+            {user?.name ? user.name.charAt(0).toUpperCase() : 'S'}
+          </div>
+          <div className="sidebar-user-details">
+            <div className="sidebar-user-name">{user?.name || 'sathwik'}</div>
+            <div className="sidebar-user-role">{user?.role?.replace('_', ' ') || 'Analyst'}</div>
+          </div>
+        </div>
+
+        <button onClick={handleLogout} className="sidebar-logout-btn">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
             <polyline points="16 17 21 12 16 7"></polyline>
             <line x1="21" y1="12" x2="9" y2="12"></line>
           </svg>
           <span>Logout</span>
         </button>
-      </nav>
-            <div className="sidebar-footer" style={{ 
-        marginTop: 'auto', 
-        width: '100%', 
-        boxSizing: 'border-box',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        position: 'relative'
-      }}>
-        {user?.role === 'senior_analyst' ? (
-          <div style={{ position: 'relative', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            {/* Removed Mountain Silhouette */}
-            <div style={{ zIndex: 1, padding: '24px 32px 32px 32px', textAlign: 'left', width: '100%' }}>
-              <p style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)', margin: '0 0 4px 0', letterSpacing: '1px', textTransform: 'uppercase' }}>
-                Truth<br/>Through<br/>Evidence
-              </p>
-            </div>
-          </div>
-        ) : (
-          <div style={{ padding: '24px 32px', width: '100%', textAlign: 'left' }}>
-            <p style={{ fontSize: '13px', fontStyle: 'italic', color: 'var(--text-muted)', marginBottom: '8px' }}>
-              "From digital traces<br />to real answers."
-            </p>
-            <p style={{ fontSize: '14px', fontWeight: 'bold', color: 'var(--text-main)', margin: 0, letterSpacing: '1px' }}>
-              ARGUS
-            </p>
-            <div style={{ width: '20px', height: '1px', backgroundColor: 'var(--border-strong)', marginTop: '8px' }}></div>
-          </div>
-        )}
       </div>
     </aside>
   );

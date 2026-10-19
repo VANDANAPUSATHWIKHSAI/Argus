@@ -59,6 +59,9 @@ const SanitizedDetail = () => {
   const xmlBlock      = item.xmlEvidenceBlock || null;
   const severityStyle = SEVERITY_STYLES[item.severity?.toLowerCase()] || SEVERITY_STYLES.low;
 
+  const currentUserStr = localStorage.getItem('argus_user');
+  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+
   return (
     <>
       <div id="app-shell">
@@ -72,8 +75,8 @@ const SanitizedDetail = () => {
                 Back
               </button>
               <div className="user-profile" onClick={() => setShowProfileModal(true)}>
-                <div className="avatar">A</div>
-                <span style={{ fontWeight: 500 }}>Analyst</span>
+                <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+                <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
               </div>
             </div>
           </header>
@@ -88,6 +91,11 @@ const SanitizedDetail = () => {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8, flexWrap: 'wrap' }}>
                   <span style={{ fontFamily: '"Courier New", monospace', fontWeight: 700, fontSize: 18, color: 'var(--text-main)' }}>{item.ref}</span>
+                  {(item.id || item.finding_id) && (
+                    <span style={{ fontFamily: 'monospace', fontSize: 12, fontWeight: 700, color: 'var(--blue)', background: 'var(--blue-light, #eff6ff)', border: '1px solid #bfdbfe', padding: '3px 8px', borderRadius: 6 }}>
+                      {item.id || item.finding_id}
+                    </span>
+                  )}
                   <SeverityBadge severity={item.severity} />
                   {item.injectionFlagged && (
                     <span style={{ background: '#fee2e2', color: '#dc2626', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700 }}>INJECTION FLAGGED</span>

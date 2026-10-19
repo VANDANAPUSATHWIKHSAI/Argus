@@ -69,6 +69,8 @@ class EvidenceUploadResponse(BaseModel):
     stage_statuses: Dict[str, str] = Field(default_factory=dict)
     agent_results: Optional[Dict[str, Any]] = None
     errors: List[str] = Field(default_factory=list)
+    task_id: Optional[str] = None
+    engine: str = "thread_pool"
 
 
 import uuid
@@ -502,6 +504,9 @@ async def upload_evidence(
     )
 
     # Register initial job status
+    task_id = None
+    engine_used = "thread_pool"
+
     job_record = {
         "status": "PROCESSING",
         "case_id": target_case_id,
@@ -524,10 +529,43 @@ async def upload_evidence(
             "agent7_supervisor": "PENDING",
         },
         "agent_results": None,
-        "errors": []
+        "errors": [],
+        "task_id": None,
+        "engine": "thread_pool"
     }
+
+    # Background forensic pipeline execution:
+    # 1. Prefer Celery distributed task queue if Redis broker is available.
+    # 2. Fall back to local ThreadPoolExecutor if Redis/Celery is offline.
+    try:
+        from tasks.celery_app import is_celery_broker_available
+        from tasks.forensic_tasks import process_forensic_pipeline_task
+
+        if is_celery_broker_available():
+            celery_task = process_forensic_pipeline_task.delay(
+                evidence_dict=evidence.model_dump(mode="json"),
+                session_dict=session.model_dump(mode="json"),
+                file_path_str=str(file_path),
+                target_case_id=target_case_id,
+                tenant_id=tenant_id,
+                host_id=host_id,
+                uploaded_by=uploader_name,
+                filename_original=file.filename,
+            )
+            task_id = celery_task.id
+            engine_used = "celery"
+            job_record["task_id"] = task_id
+            job_record["engine"] = engine_used
+            logger.info(f"Dispatched Celery task {task_id} for evidence {evidence.evidence_id}")
+    except Exception as cel_e:
+        logger.warning(f"Celery dispatch check failed ({cel_e}), falling back to thread pool.")
+        task_id = None
+
     with _jobs_lock:
         _evidence_jobs[evidence.evidence_id] = job_record
+
+    if task_id:
+        return EvidenceUploadResponse(**job_record)
 
     loop = asyncio.get_running_loop()
     should_run_async = async_mode or bool(form_async_mode)
@@ -621,8 +659,42 @@ async def get_evidence_status(
         timeline_event_count=meta.get("timeline_event_count", 0),
         stage_statuses=meta.get("stage_statuses", {}),
         agent_results=meta.get("agent_results"),
-        errors=meta.get("errors", [])
+        errors=meta.get("errors", []),
+        task_id=meta.get("task_id"),
+        engine=meta.get("engine", "thread_pool")
     )
+
+
+@router.get("/task/{task_id}")
+async def get_task_status(
+    task_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Check real-time status of a background Celery forensic pipeline task.
+    Returns: PENDING | STARTED | PROGRESS | SUCCESS | FAILURE along with progress metadata.
+    """
+    try:
+        from tasks.celery_app import celery_app
+        from celery.result import AsyncResult
+
+        res = AsyncResult(task_id, app=celery_app)
+        task_info = {
+            "task_id": task_id,
+            "status": res.status,
+            "ready": res.ready(),
+            "successful": res.successful() if res.ready() else False,
+        }
+
+        if res.info and isinstance(res.info, dict):
+            task_info["metadata"] = res.info
+        elif res.failed():
+            task_info["error"] = str(res.result)
+
+        return task_info
+    except Exception as e:
+        logger.error(f"Error querying task {task_id}: {e}")
+        return {"task_id": task_id, "status": "UNKNOWN", "error": str(e)}
 
 @router.get("/case/{case_id}")
 async def get_evidence_by_case(

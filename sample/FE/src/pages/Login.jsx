@@ -1,297 +1,290 @@
 import React, { useEffect, useRef, useState } from 'react';
-import '../css/login.css';
-import '../css/style.css'; 
-import { useNavigate } from 'react-router-dom';
-import * as THREE from 'three';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { login as apiLogin } from '../js/api';
+import ArgusLogo from '../components/ArgusLogo';
+import '../css/style.css';
+import '../css/login.css';
+
+// 3 Verified Forensic Capability Cards
+const VERIFIED_CARDS = [
+  {
+    id: 'intake',
+    title: 'Artifact Ingestion',
+    desc: 'Automated extraction across disk images, memory dumps, EVTX logs, and registry hives.',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+        <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+        <line x1="12" y1="22.08" x2="12" y2="12" />
+      </svg>
+    )
+  },
+  {
+    id: 'correlation',
+    title: 'Cross Correlation',
+    desc: 'Unified chronological reconstruction and cross-source threat indicator correlation.',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+        <line x1="18" y1="20" x2="18" y2="10" />
+        <line x1="12" y1="20" x2="12" y2="4" />
+        <line x1="6" y1="20" x2="6" y2="14" />
+      </svg>
+    )
+  },
+  {
+    id: 'graph',
+    title: 'Forensic Graph',
+    desc: 'Interactive topological mapping of forensic entities, process trees, and IOC graphs.',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+        <circle cx="18" cy="5" r="3" />
+        <circle cx="6" cy="12" r="3" />
+        <circle cx="18" cy="19" r="3" />
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+      </svg>
+    )
+  }
+];
 
 const Login = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const canvasRef = useRef(null);
+
+  // Form State
   const [userid, setUserid] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [keepActive, setKeepActive] = useState(true);
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
   const [isOtpMode, setIsOtpMode] = useState(false);
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [isSendingReset, setIsSendingReset] = useState(false);
-  const [resetSuccess, setResetSuccess] = useState(false);
+
+  // Status & Feedback Banners
+  const [error, setError] = useState(null);
+  const [sessionNotice, setSessionNotice] = useState(null);
+  const [resetSuccess, setResetSuccess] = useState(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
+
+  // Theme Management
+  const [theme, setTheme] = useState(() => {
+    return document.documentElement.getAttribute('data-theme') || localStorage.getItem('argus_theme') || 'dark';
+  });
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    document.documentElement.setAttribute('data-theme', nextTheme);
+    localStorage.setItem('argus_theme', nextTheme);
+    if (window.toggleTheme) window.toggleTheme();
+  };
 
   useEffect(() => {
-    if (!canvasRef.current) return;
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
-    const GLOBE_RADIUS = 3.2;
-    let scene, camera, renderer, globeGroup, orbitalRingsGroup, nodeGroup, arcGroup;
-    let targetRotation = { x: 0.15, y: -0.4 };
-    let currentRotation = { x: 0.15, y: -0.4 };
+  // Session & Idle Timeout URL notices
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const reason = params.get('reason');
+    if (reason === 'session_expired') {
+      setSessionNotice('Your session has expired. Please sign in again.');
+    } else if (reason === 'idle_timeout') {
+      setSessionNotice('You were automatically signed out due to 30 minutes of inactivity.');
+    }
+  }, [location.search]);
+
+  // Approved 3D-Projected Forensic Particle Network Globe Engine (750 Points)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    const handleResize = () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    // Generate 3D sphere points (750 nodes for dense network)
+    const POINT_COUNT = 750;
+    const RADIUS = Math.min(width, height) * 0.38;
+    const points = [];
+
+    for (let i = 0; i < POINT_COUNT; i++) {
+      const phi = Math.acos(-1 + (2 * i) / POINT_COUNT);
+      const theta = Math.sqrt(POINT_COUNT * Math.PI) * phi;
+      points.push({
+        x: RADIUS * Math.cos(theta) * Math.sin(phi),
+        y: RADIUS * Math.sin(theta) * Math.sin(phi),
+        z: RADIUS * Math.cos(phi),
+        isThreat: i % 18 === 0,
+        pulse: Math.random() * Math.PI
+      });
+    }
+
+    let rotX = 0.3;
+    let rotY = -0.5;
     let isDragging = false;
-    let previousMousePosition = { x: 0, y: 0 };
-    let targetCameraZ = 9.5;
-    let lastUserInteraction = 0;
+    let lastMouseX = 0;
+    let lastMouseY = 0;
     let frameId;
 
-    scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0a0f1c, 0.015);
-
-    camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 0, targetCameraZ);
-
-    renderer = new THREE.WebGLRenderer({ canvas: canvasRef.current, alpha: true, antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
-    scene.add(ambientLight);
-    const blueLight = new THREE.DirectionalLight(0x2563EB, 1.6);
-    blueLight.position.set(5, 5, 5);
-    scene.add(blueLight);
-    const cyanLight = new THREE.DirectionalLight(0x06B6D4, 1.2);
-    cyanLight.position.set(-5, -4, 4);
-    scene.add(cyanLight);
-
-    globeGroup = new THREE.Group();
-    globeGroup.position.x = -2; // Shift to the left
-    scene.add(globeGroup);
-
-    // Sleek High-Tech Icosahedron Wireframe Sphere
-    const wireframeGeo = new THREE.IcosahedronGeometry(GLOBE_RADIUS, 3);
-    const wireframeMat = new THREE.MeshBasicMaterial({ color: 0x3B82F6, wireframe: true, transparent: true, opacity: 0.35 });
-    const wireframeMesh = new THREE.Mesh(wireframeGeo, wireframeMat);
-    globeGroup.add(wireframeMesh);
-
-    // Inner Translucent Core Sphere
-    const coreGeo = new THREE.SphereGeometry(GLOBE_RADIUS * 0.98, 48, 48);
-    const coreMat = new THREE.MeshBasicMaterial({ color: 0xE0F2FE, transparent: true, opacity: 0.28 });
-    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
-    globeGroup.add(coreMesh);
-
-    // Latitude Rings / Contours
-    const latGroup = new THREE.Group();
-    for (let i = -4; i <= 4; i++) {
-      const angle = (i * 18) * Math.PI / 180;
-      const r = Math.cos(angle) * (GLOBE_RADIUS * 1.002);
-      const y = Math.sin(angle) * (GLOBE_RADIUS * 1.002);
-      const ringGeo = new THREE.BufferGeometry();
-      const pts = [];
-      for (let j = 0; j <= 90; j++) {
-        const theta = (j / 90) * Math.PI * 2;
-        pts.push(new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r));
-      }
-      ringGeo.setFromPoints(pts);
-      const ringMat = new THREE.LineBasicMaterial({ color: 0x2563EB, transparent: true, opacity: 0.25 });
-      latGroup.add(new THREE.Line(ringGeo, ringMat));
-    }
-    globeGroup.add(latGroup);
-
-    // Longitude Meridians
-    for (let i = 0; i < 12; i++) {
-      const ringGeo = new THREE.BufferGeometry();
-      const pts = [];
-      const rotY = (i / 12) * Math.PI;
-      for (let j = 0; j <= 90; j++) {
-        const theta = (j / 90) * Math.PI * 2;
-        const x = Math.cos(theta) * (GLOBE_RADIUS * 1.002);
-        const y = Math.sin(theta) * (GLOBE_RADIUS * 1.002);
-        pts.push(new THREE.Vector3(x * Math.cos(rotY), y, x * Math.sin(rotY)));
-      }
-      ringGeo.setFromPoints(pts);
-      const ringMat = new THREE.LineBasicMaterial({ color: 0x06B6D4, transparent: true, opacity: 0.18 });
-      globeGroup.add(new THREE.Line(ringGeo, ringMat));
-    }
-
-    // Orbital Concentric Rings
-    orbitalRingsGroup = new THREE.Group();
-    for (let k = 0; k < 3; k++) {
-      const ringRadius = GLOBE_RADIUS * (1.18 + k * 0.12);
-      const orbGeo = new THREE.BufferGeometry();
-      const pts = [];
-      for (let j = 0; j <= 120; j++) {
-        const a = (j / 120) * Math.PI * 2;
-        pts.push(new THREE.Vector3(Math.cos(a) * ringRadius, 0, Math.sin(a) * ringRadius));
-      }
-      orbGeo.setFromPoints(pts);
-      const orbMat = new THREE.LineBasicMaterial({ color: 0x06B6D4, transparent: true, opacity: 0.35 });
-      const ringLine = new THREE.Line(orbGeo, orbMat);
-      ringLine.rotation.x = (k + 1) * 0.5;
-      ringLine.rotation.y = (k + 1) * 0.3;
-      orbitalRingsGroup.add(ringLine);
-    }
-    globeGroup.add(orbitalRingsGroup);
-
-    // Particles Cloud
-    const partCount = 1000;
-    const partGeo = new THREE.BufferGeometry();
-    const partPos = new Float32Array(partCount * 3);
-    const partColors = new Float32Array(partCount * 3);
-    const colorBlue = new THREE.Color(0x3B82F6);
-    const colorRed = new THREE.Color(0xef4444);
-
-    for (let i = 0; i < partCount; i++) {
-      const u = Math.random();
-      const v = Math.random();
-      const theta = u * 2.0 * Math.PI;
-      const phi = Math.acos(2.0 * v - 1.0);
-      const r = GLOBE_RADIUS * (1.05 + Math.random() * 0.3);
-      partPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      partPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      partPos[i * 3 + 2] = r * Math.cos(phi);
-
-      if (Math.random() > 0.90) {
-        partColors[i * 3] = colorRed.r;
-        partColors[i * 3 + 1] = colorRed.g;
-        partColors[i * 3 + 2] = colorRed.b;
-      } else {
-        partColors[i * 3] = colorBlue.r;
-        partColors[i * 3 + 1] = colorBlue.g;
-        partColors[i * 3 + 2] = colorBlue.b;
-      }
-    }
-    partGeo.setAttribute('position', new THREE.BufferAttribute(partPos, 3));
-    partGeo.setAttribute('color', new THREE.BufferAttribute(partColors, 3));
-    const partMat = new THREE.PointsMaterial({ size: 0.05, vertexColors: true, transparent: true, opacity: 0.75 });
-    globeGroup.add(new THREE.Points(partGeo, partMat));
-
-    // Glowing Forensic Nodes & Connection Arcs
-    const latLonToVector3 = (lat, lon, radius) => {
-      const phi = (90 - lat) * (Math.PI / 180);
-      const theta = (lon + 180) * (Math.PI / 180);
-      const x = -(radius * Math.sin(phi) * Math.cos(theta));
-      const z = (radius * Math.sin(phi) * Math.sin(theta));
-      const y = (radius * Math.cos(phi));
-      return new THREE.Vector3(x, y, z);
-    };
-
-    nodeGroup = new THREE.Group();
-    arcGroup = new THREE.Group();
-
-    const nodeCoords = [
-      { lat: 40.71, lon: -74.00 }, { lat: 51.50, lon: -0.12 }, { lat: 35.67, lon: 139.65 },
-      { lat: 1.35, lon: 103.81 }, { lat: -33.86, lon: 151.20 }, { lat: 52.52, lon: 13.40 },
-      { lat: 37.77, lon: -122.41 }, { lat: 28.61, lon: 77.20 }
-    ];
-
-    const nodePositions = [];
-    nodeCoords.forEach((coord) => {
-      const pos = latLonToVector3(coord.lat, coord.lon, GLOBE_RADIUS * 1.015);
-      nodePositions.push(pos);
-      const isRed = Math.random() > 0.6;
-      const dotColor = isRed ? 0xef4444 : 0x06B6D4;
-      const haloColor = isRed ? 0xef4444 : 0x3B82F6;
-
-      const nodeGeo = new THREE.SphereGeometry(0.08, 16, 16);
-      const nodeMat = new THREE.MeshBasicMaterial({ color: dotColor });
-      const nodeMesh = new THREE.Mesh(nodeGeo, nodeMat);
-      nodeMesh.position.copy(pos);
-      nodeGroup.add(nodeMesh);
-
-      const haloGeo = new THREE.SphereGeometry(0.16, 16, 16);
-      const haloMat = new THREE.MeshBasicMaterial({ color: haloColor, transparent: true, opacity: 0.45 });
-      const haloMesh = new THREE.Mesh(haloGeo, haloMat);
-      haloMesh.position.copy(pos);
-      nodeGroup.add(haloMesh);
-    });
-    globeGroup.add(nodeGroup);
-
-    for (let i = 0; i < nodePositions.length - 1; i += 2) {
-      const start = nodePositions[i];
-      const end = nodePositions[(i + 1) % nodePositions.length];
-      const mid = start.clone().add(end).multiplyScalar(0.5);
-      const distance = start.distanceTo(end);
-      mid.normalize().multiplyScalar(GLOBE_RADIUS * (1.15 + distance * 0.06));
-
-      const curve = new THREE.QuadraticBezierCurve3(start, mid, end);
-      const points = curve.getPoints(50);
-      const arcGeo = new THREE.BufferGeometry().setFromPoints(points);
-      const arcMat = new THREE.LineBasicMaterial({ color: 0x06B6D4, transparent: true, opacity: 0.6 });
-      arcGroup.add(new THREE.Line(arcGeo, arcMat));
-    }
-    globeGroup.add(arcGroup);
-
-    // Event Listeners
-    const onPointerDown = (e) => {
-      if (e.target.closest('.login-card-container') || e.target.closest('.argus-header')) return;
+    const handleMouseDown = (e) => {
+      if (e.target.closest('.forensic-login-card') || e.target.closest('.top-telemetry-bar')) return;
       isDragging = true;
-      previousMousePosition = { x: e.clientX, y: e.clientY };
-      lastUserInteraction = Date.now();
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
     };
 
-    const onPointerMove = (e) => {
-      lastUserInteraction = Date.now();
-      // Always rotate from mouse delta — same behaviour whether clicking or just hovering
-      const deltaX = e.clientX - previousMousePosition.x;
-      const deltaY = e.clientY - previousMousePosition.y;
-      targetRotation.y += deltaX * 0.004;
-      targetRotation.x += deltaY * 0.004;
-      targetRotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, targetRotation.x));
-      previousMousePosition = { x: e.clientX, y: e.clientY };
+    const handleMouseMove = (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - lastMouseX;
+      const dy = e.clientY - lastMouseY;
+      rotY += dx * 0.005;
+      rotX += dy * 0.005;
+      lastMouseX = e.clientX;
+      lastMouseY = e.clientY;
     };
 
-    const onPointerUp = () => { isDragging = false; };
-
-    const onWheel = (e) => {
-      if (e.target.closest('.login-card-container')) return;
-      lastUserInteraction = Date.now();
-      targetCameraZ += e.deltaY * 0.004;
-      targetCameraZ = Math.max(3.5, Math.min(25, targetCameraZ));
-    };
-    const onResize = () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
+    const handleMouseUp = () => {
+      isDragging = false;
     };
 
-    window.addEventListener('pointerdown', onPointerDown);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('wheel', onWheel, { passive: true });
-    window.addEventListener('resize', onResize);
+    window.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
 
-    // Animation Loop
-    const animate = () => {
-      frameId = requestAnimationFrame(animate);
+    function renderGlobe() {
+      ctx.clearRect(0, 0, width, height);
 
-      // Auto-spin only when user hasn't moved the mouse recently
-      if (Date.now() - lastUserInteraction > 3000) {
-        targetRotation.y += 0.003;
+      // Auto-rotation
+      if (!isDragging) {
+        rotY += 0.0025;
+        rotX += 0.0005;
       }
 
-      currentRotation.x += (targetRotation.x - currentRotation.x) * 0.08;
-      currentRotation.y += (targetRotation.y - currentRotation.y) * 0.08;
+      // Center sphere on left side for desktop, centered for mobile
+      const isMobile = width <= 1080;
+      const centerX = isMobile ? width * 0.5 : width * 0.33;
+      const centerY = height * 0.52;
 
-      globeGroup.rotation.x = currentRotation.x;
-      globeGroup.rotation.y = currentRotation.y;
+      const cosX = Math.cos(rotX);
+      const sinX = Math.sin(rotX);
+      const cosY = Math.cos(rotY);
+      const sinY = Math.sin(rotY);
 
-      if (orbitalRingsGroup) {
-        orbitalRingsGroup.rotation.z += 0.001;
+      const projected = [];
+
+      for (let i = 0; i < points.length; i++) {
+        const p = points[i];
+        p.pulse += 0.03;
+
+        // Rotation Y & X
+        let x1 = p.x * cosY - p.z * sinY;
+        let z1 = p.z * cosY + p.x * sinY;
+        let y2 = p.y * cosX - z1 * sinX;
+        let z2 = z1 * cosX + p.y * sinX;
+
+        // Perspective 3D to 2D
+        const fov = 800;
+        const scale = fov / (fov + z2 + 100);
+        const x2D = centerX + x1 * scale;
+        const y2D = centerY + y2 * scale;
+
+        projected.push({
+          x: x2D,
+          y: y2D,
+          z: z2,
+          scale,
+          isThreat: p.isThreat,
+          pulse: p.pulse
+        });
       }
 
-      camera.position.z += (targetCameraZ - camera.position.z) * 0.08;
-      renderer.render(scene, camera);
-    };
-    animate();
+      // Depth sorting
+      projected.sort((a, b) => b.z - a.z);
+
+      const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+      ctx.lineWidth = 0.65;
+
+      // Draw dynamic interconnected network lines
+      for (let i = 0; i < projected.length; i += 2) {
+        for (let j = i + 1; j < Math.min(i + 8, projected.length); j++) {
+          const p1 = projected[i];
+          const p2 = projected[j];
+          const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
+
+          if (dist < 68 && (p1.z > -120 || p2.z > -120)) {
+            const alpha = Math.max(0, (1 - dist / 68) * 0.24);
+            ctx.strokeStyle = isDark
+              ? (p1.isThreat || p2.isThreat ? `rgba(239, 68, 68, ${alpha * 1.5})` : `rgba(56, 189, 248, ${alpha})`)
+              : (p1.isThreat || p2.isThreat ? `rgba(220, 38, 38, ${alpha * 1.5})` : `rgba(37, 99, 235, ${alpha * 0.85})`);
+
+            ctx.beginPath();
+            ctx.moveTo(p1.x, p1.y);
+            ctx.lineTo(p2.x, p2.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Draw nodes (blue particles & pulsing crimson threat nodes)
+      for (let i = 0; i < projected.length; i++) {
+        const p = projected[i];
+        if (p.z < -280) continue;
+
+        const size = (p.isThreat ? 3.2 : 2.0) * p.scale;
+        const alpha = Math.min(1, Math.max(0.18, (p.z + 320) / 640));
+
+        if (p.isThreat) {
+          const pulseSize = size * (1.2 + 0.5 * Math.sin(p.pulse));
+          ctx.fillStyle = isDark ? `rgba(239, 68, 68, ${alpha * 0.3})` : `rgba(220, 38, 38, ${alpha * 0.25})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, pulseSize * 2, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = isDark ? `rgba(239, 68, 68, ${alpha})` : `rgba(220, 38, 38, ${alpha})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillStyle = isDark ? `rgba(56, 189, 248, ${alpha})` : `rgba(37, 99, 235, ${alpha * 0.9})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      frameId = requestAnimationFrame(renderGlobe);
+    }
+
+    renderGlobe();
 
     return () => {
       cancelAnimationFrame(frameId);
-      window.removeEventListener('pointerdown', onPointerDown);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('wheel', onWheel);
-      window.removeEventListener('resize', onResize);
-      renderer.dispose();
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
 
+  // Form Handlers
   const handleLogin = async (e) => {
     e.preventDefault();
     setError(null);
-    setResetSuccess(false);
+    setResetSuccess(null);
 
+    // 1. Forgot password request (OTP dispatch)
     if (isForgotPasswordMode) {
-      if (!userid) {
+      if (!userid.trim()) {
         setError('Please enter your User ID to send the OTP.');
         return;
       }
@@ -300,31 +293,32 @@ const Login = () => {
         const response = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/auth/forgot-password', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userid })
+          body: JSON.stringify({ userid: userid.trim() })
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json();
           setError(errorData.detail || 'This User ID is not registered.');
           setIsSendingReset(false);
           return;
         }
-        
+
         const successData = await response.json();
-        setResetSuccess(successData.message);
+        setResetSuccess(successData.message || 'OTP dispatched to registered security contact.');
         setIsSendingReset(false);
         setIsForgotPasswordMode(false);
         setIsOtpMode(true);
       } catch (err) {
-        setError('Network error. Failed to connect to server.');
+        setError('Network error. Failed to connect to authentication service.');
         setIsSendingReset(false);
       }
       return;
     }
 
+    // 2. OTP Verification & Password Reset
     if (isOtpMode) {
-      if (!otp || !newPassword) {
-        setError('Please enter the OTP sent to your email and your new password.');
+      if (!otp.trim() || !newPassword.trim()) {
+        setError('Please enter the OTP sent to your contact and your new password.');
         return;
       }
       setIsSendingReset(true);
@@ -332,18 +326,18 @@ const Login = () => {
         const response = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/auth/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userid, otp, new_password: newPassword })
+          body: JSON.stringify({ userid: userid.trim(), otp: otp.trim(), new_password: newPassword })
         });
-        
+
         if (!response.ok) {
           const errorData = await response.json();
           setError(errorData.detail || 'Invalid OTP. Please check and try again.');
           setIsSendingReset(false);
           return;
         }
-        
+
         const successData = await response.json();
-        setResetSuccess(successData.message);
+        setResetSuccess(successData.message || 'Password updated successfully. Please sign in with your new credentials.');
         setIsSendingReset(false);
         setIsOtpMode(false);
         setIsForgotPasswordMode(false);
@@ -351,219 +345,261 @@ const Login = () => {
         setNewPassword('');
         setPassword('');
       } catch (err) {
-        setError('Network error. Failed to connect to server.');
+        setError('Network error. Failed to connect to authentication service.');
         setIsSendingReset(false);
       }
       return;
     }
 
-    if (!userid || !password) {
+    // 3. Primary Authentication
+    if (!userid.trim() || !password) {
       setError('Please enter both your User ID and password.');
       return;
     }
+
     try {
       setIsLoggingIn(true);
-      const data = await apiLogin(userid, password);
+      const data = await apiLogin(userid.trim(), password);
       localStorage.setItem('argus_token', data.token);
       localStorage.setItem('argus_user', JSON.stringify(data.user));
       navigate('/dashboard');
     } catch (err) {
-      setError(err.message || 'Network error. Please try again later.');
+      setError(err.message || 'Authentication failed. Please verify credentials.');
       setIsLoggingIn(false);
     }
   };
 
+  const handleCancelRecovery = (e) => {
+    if (e) e.preventDefault();
+    setIsForgotPasswordMode(false);
+    setIsOtpMode(false);
+    setError(null);
+    setResetSuccess(null);
+    setOtp('');
+    setNewPassword('');
+  };
+
   return (
-    <div style={{width: '100vw', height: '100vh', overflow: 'hidden', position: 'relative'}}>
-      {/* BACKGROUND AMBIENT GRADIENT LAYER */}
-      <div className="bg-ambient-gradient"></div>
+    <div className="login-viewport-root">
+      {/* 3D-Projected Forensic Canvas & Grid Backdrop */}
+      <canvas ref={canvasRef} id="forensic-canvas" />
+      <div className="ambient-cyber-backdrop" />
 
-      {/* FULLSCREEN 3D GLOBE CANVAS */}
-      <canvas ref={canvasRef} id="webgl-canvas"></canvas>
-
-      {/* HEADER */}
-      <header className="argus-header" style={{zIndex: 10, position: 'relative'}}>
-        <div className="header-left">
-          <div className="header-logo-wrapper" style={{ padding: 0, overflow: 'visible', border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', alignItems: 'center' }}>
-            <img src="/argus_logo_new.png" alt="ARGUS Logo" style={{ width: '44px', height: '44px', objectFit: 'contain', display: 'block', mixBlendMode: 'multiply' }} />
-          </div>
-          <div className="header-brand-title">
-            <span className="brand-name">ARGUS</span>
-            <span className="brand-sub">Digital Forensic Intelligence</span>
+      {/* Top Application Header */}
+      <header className="top-telemetry-bar">
+        <div className="brand-telemetry-left">
+          <div className="brand-badge">
+            <ArgusLogo size={36} />
+            <h1>ARGUS</h1>
           </div>
         </div>
 
-        <div className="header-right">
-          {/* THEME TOGGLE BUTTON */}
+        <div className="telemetry-meta-right">
+          {/* Verified Environment Security Indicator */}
+          <div className="classification-tag">
+            <span className="status-pulse-dot" />
+            SECURE ENVIRONMENT
+          </div>
+
+          {/* Theme Toggle Button */}
           <button 
             type="button" 
             className="theme-toggle-btn" 
             aria-label="Toggle Theme" 
-            onClick={() => {
-              const root = document.documentElement;
-              const newTheme = root.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
-              if (newTheme === 'light') {
-                root.setAttribute('data-theme', 'light');
-              } else {
-                root.removeAttribute('data-theme');
-              }
-              if (window.toggleTheme) window.toggleTheme();
-              else {
-                localStorage.setItem('argus_theme', newTheme);
-              }
-            }}
-            style={{background: 'var(--bg-input)', border: '1px solid var(--border-subtle)', color: 'var(--text-main)', cursor: 'pointer', padding: '10px', borderRadius: '50%', marginRight: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.1)'}}
+            title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+            onClick={toggleTheme}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-            </svg>
+            {theme === 'dark' ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="5" />
+                <line x1="12" y1="1" x2="12" y2="3" />
+                <line x1="12" y1="21" x2="12" y2="23" />
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+                <line x1="1" y1="12" x2="3" y2="12" />
+                <line x1="21" y1="12" x2="23" y2="12" />
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            )}
           </button>
-
-          <div className="security-badge">
-            <div className="badge-top-row">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-              <span>SECURE ENVIRONMENT</span>
-              <span className="status-dot-green"></span>
-            </div>
-            <span className="badge-sub-row">TRUST • ANALYZE • PROTECT</span>
-          </div>
         </div>
       </header>
 
-      {/* FEATURE BADGES LIST (VERTICAL ON LEFT) */}
-      <div className="feature-badges-list" style={{ 
-        position: 'fixed', top: '50%', left: '4vw', transform: 'translateY(-50%)', 
-        display: 'flex', flexDirection: 'column', gap: '32px', zIndex: 15, pointerEvents: 'none'
-      }}>
-        <div className="feature-badge-item">
-          <div className="badge-icon-circle" style={{ width: '42px', height: '42px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <circle cx="11" cy="11" r="8"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-          </div>
-          <div className="badge-text-group">
-            <span className="badge-title">INVESTIGATE</span>
-            <span className="badge-sub">DEEPER</span>
-          </div>
-        </div>
+      {/* Main Split-Stage Layout */}
+      <main className="preview-stage-container">
 
-        <div className="feature-badge-item">
-          <div className="badge-icon-circle" style={{ width: '42px', height: '42px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <line x1="18" y1="20" x2="18" y2="10"/>
-              <line x1="12" y1="20" x2="12" y2="4"/>
-              <line x1="6" y1="20" x2="6" y2="14"/>
-            </svg>
-          </div>
-          <div className="badge-text-group">
-            <span className="badge-title">UNLOCK</span>
-            <span className="badge-sub">INSIGHTS</span>
-          </div>
-        </div>
+        {/* Left Column: Project Overview & 3 Verified Capability Cards */}
+        <section className="mission-showcase-column">
+          <h2 className="mission-title">
+            Multi-Agent Forensic Investigation &amp; <span className="highlight-gradient">Evidence Synthesis</span>
+          </h2>
 
-        <div className="feature-badge-item">
-          <div className="badge-icon-circle" style={{ width: '42px', height: '42px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <path d="M9 12l2 2 4-4"/>
-            </svg>
-          </div>
-          <div className="badge-text-group">
-            <span className="badge-title">PROTECT</span>
-            <span className="badge-sub">WHAT MATTERS</span>
-          </div>
-        </div>
+          <p className="mission-desc">
+            ARGUS empowers digital investigators with automated multi-agent artifact parsing, immutable chain of custody verification, and AI-driven cross-source correlation across disk, memory, registry, and event logs.
+          </p>
 
-        <div className="feature-badge-item">
-          <div className="badge-icon-circle" style={{ width: '42px', height: '42px' }}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <circle cx="18" cy="5" r="3"/>
-              <circle cx="6" cy="12" r="3"/>
-              <circle cx="18" cy="19" r="3"/>
-              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-            </svg>
-          </div>
-          <div className="badge-text-group">
-            <span className="badge-title">CONNECT</span>
-            <span className="badge-sub">THE EVIDENCE</span>
-          </div>
-        </div>
-      </div>
-
-      {/* RIGHT STAGE LOGIN CARD */}
-      <main className="page-center-stage" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '12vw', pointerEvents: 'none' }}>
-        <div className="login-card-container" style={{ pointerEvents: 'auto' }}>
-          <div className="login-card">
-            
-            {/* CARD TOP LOGO */}
-            <div className="card-logo-wrapper" style={{ overflow: 'visible', border: 'none', background: 'transparent', boxShadow: 'none', display: 'flex', justifyContent: 'center' }}>
-              <img src="/argus_logo_new.png" alt="ARGUS Logo" style={{ width: '90px', height: '90px', objectFit: 'contain', display: 'block', mixBlendMode: 'multiply' }} />
-            </div>
-
-            <div className="card-title-group">
-              <h1 className="card-brand-title">ARGUS</h1>
-              <p className="card-brand-sub">Digital Forensic Intelligence</p>
-              <div className="blue-divider-line"></div>
-              <span className="card-micro-tagline">EVIDENCE • ANALYZE • DELIVER TRUTH</span>
-            </div>
-
-            {/* FORM */}
-            <form id="login-form" className="login-form" onSubmit={handleLogin}>
-              {error && <div className="error-banner">{error}</div>}
-              {resetSuccess && (
-                <div className="error-banner" style={{ backgroundColor: 'rgba(16, 185, 129, 0.1)', border: '1px solid var(--success-green)', color: 'var(--success-green)' }}>
-                  {typeof resetSuccess === 'string' ? resetSuccess : 'OTP sent successfully'}
+          {/* 3 Compact Feature Cards in 1 Row */}
+          <div className="feature-capabilities-grid">
+            {VERIFIED_CARDS.map((card) => (
+              <div key={card.id} className="capability-card">
+                <div className="capability-icon-wrap">
+                  {card.icon}
                 </div>
-              )}
+                <h4>{card.title}</h4>
+                <p>{card.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
 
-              {/* ANALYST ID FIELD */}
+        {/* Right Column: Prominent Login Card */}
+        <section className="auth-card-stage">
+          <div className="forensic-login-card">
+
+            {/* Card Brand Header */}
+            <div className="card-header-block">
+              <div className="logo-halo-wrapper">
+                <ArgusLogo size={52} />
+              </div>
+              <h1 className="card-title-text">ARGUS</h1>
+              <p className="card-subtitle-text">
+                {isOtpMode 
+                  ? 'Verify Security Code' 
+                  : isForgotPasswordMode 
+                    ? 'Account Recovery' 
+                    : 'Digital Forensic Intelligence'}
+              </p>
+              <div className="card-tagline-divider">
+                <span>EVIDENCE • ANALYZE • TRUTH</span>
+              </div>
+            </div>
+
+            {/* Notification Banners */}
+            {sessionNotice && !error && (
+              <div className="alert-feedback-banner session">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>{sessionNotice}</span>
+              </div>
+            )}
+
+            {error && (
+              <div className="alert-feedback-banner error">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>{error}</span>
+              </div>
+            )}
+
+            {resetSuccess && (
+              <div className="alert-feedback-banner success">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0, marginTop: 1 }}>
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>{resetSuccess}</span>
+              </div>
+            )}
+
+            {/* Authentication Form */}
+            <form className="login-form" onSubmit={handleLogin}>
+              
+              {/* Analyst ID Field */}
               {!isOtpMode && (
-                <div className="input-field-group">
-                  <label className="field-label" htmlFor="login-userid">Analyst ID</label>
-                  <div className="input-box-wrapper">
-                    <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
+                <div className="form-field-group">
+                  <div className="field-label-row">
+                    <label htmlFor="login-userid" className="field-label">Analyst ID or Work Email</label>
+                  </div>
+                  <div className="input-container-box">
+                    <svg className="field-leading-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                      <circle cx="12" cy="7" r="4" />
                     </svg>
-                    <input type="text" id="login-userid" className="form-input" placeholder="Enter your User ID" value={userid} onChange={(e) => setUserid(e.target.value)} required autoComplete="username" />
+                    <input 
+                      id="login-userid"
+                      type="text"
+                      className="form-text-input"
+                      placeholder="Enter your User ID"
+                      value={userid}
+                      onChange={(e) => setUserid(e.target.value)}
+                      autoComplete="username"
+                      required
+                    />
                   </div>
                 </div>
               )}
 
-              {/* OTP FIELD */}
+              {/* OTP Field (Password Reset Mode) */}
               {isOtpMode && (
                 <>
-                  <div className="input-field-group">
-                    <label className="field-label" htmlFor="login-otp">One-Time Password</label>
-                    <div className="input-box-wrapper">
-                      <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  <div className="form-field-group">
+                    <div className="field-label-row">
+                      <label htmlFor="login-otp" className="field-label">One-Time Password</label>
+                    </div>
+                    <div className="input-container-box">
+                      <svg className="field-leading-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                       </svg>
-                      <input type="text" id="login-otp" className="form-input" placeholder="Enter 6-digit OTP" value={otp} onChange={(e) => setOtp(e.target.value)} required autoComplete="off" maxLength={6} />
+                      <input 
+                        id="login-otp"
+                        type="text"
+                        className="form-text-input"
+                        placeholder="Enter 6-digit OTP"
+                        value={otp}
+                        onChange={(e) => setOtp(e.target.value)}
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        required
+                      />
                     </div>
                   </div>
-                  <div className="input-field-group">
-                    <label className="field-label" htmlFor="login-new-password">New Password</label>
-                    <div className="input-box-wrapper">
-                      <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+
+                  <div className="form-field-group">
+                    <div className="field-label-row">
+                      <label htmlFor="login-new-password" className="field-label">New Password</label>
+                    </div>
+                    <div className="input-container-box">
+                      <svg className="field-leading-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                       </svg>
-                      <input type={showPassword ? "text" : "password"} id="login-new-password" className="form-input" placeholder="Enter new password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required autoComplete="new-password" />
-                      <button type="button" className="pw-toggle-btn" aria-label="Toggle password visibility" onClick={() => setShowPassword(!showPassword)}>
+                      <input 
+                        id="login-new-password"
+                        type={showPassword ? 'text' : 'password'}
+                        className="form-text-input"
+                        placeholder="Enter new password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        autoComplete="new-password"
+                        required
+                      />
+                      <button 
+                        type="button" 
+                        className="pw-reveal-button"
+                        aria-label={showPassword ? 'Hide password' : 'Show password'}
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           {showPassword ? (
                             <>
-                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                              <line x1="1" y1="1" x2="23" y2="23"/>
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                              <line x1="1" y1="1" x2="23" y2="23" />
                             </>
                           ) : (
                             <>
-                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                              <circle cx="12" cy="12" r="3"/>
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
                             </>
                           )}
                         </svg>
@@ -573,27 +609,43 @@ const Login = () => {
                 </>
               )}
 
-              {/* PASSWORD FIELD */}
+              {/* Password Field (Standard Mode) */}
               {!isForgotPasswordMode && !isOtpMode && (
-                <div className="input-field-group">
-                  <label className="field-label" htmlFor="login-password">Password</label>
-                  <div className="input-box-wrapper">
-                    <svg className="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                <div className="form-field-group">
+                  <div className="field-label-row">
+                    <label htmlFor="login-password" className="field-label">Security Clearance Key</label>
+                  </div>
+                  <div className="input-container-box">
+                    <svg className="field-leading-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                     </svg>
-                    <input type={showPassword ? "text" : "password"} id="login-password" className="form-input" placeholder="Enter your password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
-                    <button type="button" className="pw-toggle-btn" aria-label="Toggle password visibility" onClick={() => setShowPassword(!showPassword)}>
+                    <input 
+                      id="login-password"
+                      type={showPassword ? 'text' : 'password'}
+                      className="form-text-input"
+                      placeholder="Enter your password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      autoComplete="current-password"
+                      required
+                    />
+                    <button 
+                      type="button" 
+                      className="pw-reveal-button"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         {showPassword ? (
                           <>
-                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                            <line x1="1" y1="1" x2="23" y2="23"/>
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
                           </>
                         ) : (
                           <>
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
                           </>
                         )}
                       </svg>
@@ -602,31 +654,80 @@ const Login = () => {
                 </div>
               )}
 
+              {/* Subactions (Remember & Forgot Link) */}
               {!isForgotPasswordMode && !isOtpMode && (
-                <div className="forgot-row" style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '-12px', marginBottom: '24px' }}>
-                  <a href="#" className="forgot-link" onClick={(e) => { e.preventDefault(); setIsForgotPasswordMode(true); setError(null); setResetSuccess(false); }} style={{ color: 'var(--brand-blue)', fontSize: '13px', fontWeight: '600', textDecoration: 'none', transition: 'opacity 0.2s' }}>Forgot credentials?</a>
+                <div className="form-subactions-row">
+                  <label className="remember-label">
+                    <input 
+                      type="checkbox" 
+                      className="remember-checkbox" 
+                      checked={keepActive}
+                      onChange={(e) => setKeepActive(e.target.checked)}
+                    />
+                    <span>Keep session active</span>
+                  </label>
+                  <a 
+                    href="#forgot" 
+                    className="forgot-pw-link"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setIsForgotPasswordMode(true);
+                      setError(null);
+                      setResetSuccess(null);
+                    }}
+                  >
+                    Forgot credentials?
+                  </a>
                 </div>
               )}
 
-              <button type="submit" className="btn-login-submit" style={{ opacity: (isSendingReset || isLoggingIn) ? 0.8 : 1, cursor: (isSendingReset || isLoggingIn) ? 'not-allowed' : 'pointer' }}>
-                {isLoggingIn ? 'AUTHENTICATING...' : (isSendingReset ? (isOtpMode ? 'VERIFYING...' : 'SENDING...') : (isOtpMode ? 'VERIFY OTP' : (isForgotPasswordMode ? 'SEND OTP' : 'SECURE LOGIN')))}
-                {!isForgotPasswordMode && !isOtpMode && !isSendingReset && !isLoggingIn && <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>}
+              {/* Submit Button */}
+              <button 
+                type="submit" 
+                className="btn-submit-action"
+                disabled={isLoggingIn || isSendingReset}
+              >
+                <span>
+                  {isLoggingIn 
+                    ? 'AUTHENTICATING...' 
+                    : (isSendingReset 
+                      ? (isOtpMode ? 'VERIFYING...' : 'SENDING...') 
+                      : (isOtpMode ? 'VERIFY OTP' : (isForgotPasswordMode ? 'SEND OTP' : 'SECURE LOGIN')))}
+                </span>
+                {!isLoggingIn && !isSendingReset && (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                    <polyline points="12 5 19 12 12 19" />
+                  </svg>
+                )}
               </button>
 
-
-
+              {/* Recovery Navigation */}
               {(isForgotPasswordMode || isOtpMode) && (
-                <div className="forgot-row" style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
-                  <a href="#" className="forgot-link" onClick={(e) => { e.preventDefault(); setIsForgotPasswordMode(false); setIsOtpMode(false); setError(null); setResetSuccess(false); }} style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: '600', textDecoration: 'none', transition: 'color 0.2s' }}>← Back to login</a>
-                </div>
+                <a 
+                  href="#login" 
+                  className="back-to-login-link"
+                  onClick={handleCancelRecovery}
+                >
+                  ← Back to login
+                </a>
               )}
             </form>
-            
-            <div className="card-footer-note">RESTRICTED ACCESS ONLY</div>
-          </div>
-        </div>
-      </main>
 
+            {/* Bottom Security Classification Note */}
+            <div className="card-bottom-warning">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+              <span>RESTRICTED ACCESS ONLY — LAW ENFORCEMENT &amp; FORENSICS</span>
+            </div>
+
+          </div>
+        </section>
+
+      </main>
     </div>
   );
 };

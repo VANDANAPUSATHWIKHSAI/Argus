@@ -20,11 +20,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Set
 
 
-import torch
 import tldextract
 import ioc_finder
 import yara
-from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
 
 from preprocessing.schemas import Artifact, NormalizedFields, ExtractedEntity
 from preprocessing.artifact_extractor.resolver import CommandLineSpanResolver
@@ -242,13 +240,15 @@ class ArtifactExtractor:
             logger.error(f"YaraScanner initialization failed: {e}")
             self._yara_scanner = None
 
-        # Load CyNER model
-        self._load_model()
+        # CyNER model is loaded lazily on demand
+        pass
 
     def get_model_state(self) -> str:
         return self._model_state
 
     def health_check(self) -> bool:
+        if self._model_state == MODEL_LOADING:
+            self._load_model()
         return self._model_state == MODEL_AVAILABLE
 
     def _load_model(self) -> None:
@@ -343,7 +343,10 @@ class ArtifactExtractor:
                         logger.error(self._degraded_reason)
                         return
 
-                # Load model and tokenizer
+                # Load model and tokenizer lazily
+                import torch
+                from transformers import pipeline, AutoTokenizer, AutoModelForTokenClassification
+
                 self._tokenizer = AutoTokenizer.from_pretrained(
                     NER_MODEL_ID,
                     revision=NER_REVISION,
@@ -458,6 +461,8 @@ class ArtifactExtractor:
 
     def _predict_gliner(self, texts: List[str]) -> List[List[dict]]:
         """Mock/compat method that performs CyNER prediction but returns in the legacy format."""
+        if getattr(self, "_model_state", None) == MODEL_LOADING:
+            self._load_model()
         model = getattr(self, "_model", None)
         pipeline_obj = getattr(self, "_pipeline", None)
         if model is None:

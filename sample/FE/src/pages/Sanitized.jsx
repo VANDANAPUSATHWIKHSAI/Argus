@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../css/style.css';
+import { safeFormatDateTime } from '../js/dateUtils';
 
 const SEVERITY_MAP = {
   critical: { color: '#dc2626', bg: '#fee2e2', label: 'Critical' },
@@ -108,7 +109,7 @@ const Sanitized = () => {
             layer: f.layer || 'network.alert',
             severity: (f.severity || 'low').toLowerCase(),
             confidence: conf,
-            timestamp: f.timestamp ? new Date(f.timestamp).toLocaleString() : '2026-09-11 14:22:00 UTC',
+            timestamp: safeFormatDateTime(f.timestamp, '2026-09-11 14:22:00 UTC'),
             ref: Array.isArray(f.evidence_reference) ? f.evidence_reference.join(', ') : (f.evidence_reference || 'EVID-001'),
             injectionFlagged: (ctx && ctx.injection_flagged) || f.injection_flagged || false,
             injectionScore: (ctx && ctx.injection_score) || 0.0,
@@ -158,6 +159,7 @@ const Sanitized = () => {
   const filtered = data.filter(item => {
     const matchSearch = item.fact.toLowerCase().includes(search.toLowerCase()) ||
       item.ref.toLowerCase().includes(search.toLowerCase()) ||
+      (item.id && item.id.toLowerCase().includes(search.toLowerCase())) ||
       item.layer.toLowerCase().includes(search.toLowerCase());
     const matchType = typeFilter === 'all' || item.layer.toLowerCase() === typeFilter;
     return matchSearch && matchType;
@@ -259,14 +261,14 @@ const Sanitized = () => {
               {localStorage.getItem('active_case_id') && <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>}
               <NotificationMenu />
               <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
-                <div className="avatar">A</div>
-                <span style={{ fontWeight: 500 }}>Analyst</span>
+                <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+                <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
                 {showUserDropdown && (
                   <div className="user-dropdown" style={{ display: 'block' }}>
                     <div className="user-dropdown-header">
-                      <div className="ud-name">Analyst</div>
-                      <div className="ud-role">Digital Forensics Investigator</div>
+                      <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</div>
+                      <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
                     </div>
                     <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); setShowProfileModal(true); setShowUserDropdown(false); }}>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -409,6 +411,7 @@ const Sanitized = () => {
                         <th style={{ padding: '16px 24px', width: 40 }}>
                           <input type="checkbox" checked={selectedRows.length === paginated.length && paginated.length > 0} onChange={toggleAll} />
                         </th>
+                        <th style={{ padding: '16px 12px' }}>Finding ID</th>
                         <th style={{ padding: '16px 12px' }}>Sanitized Fact</th>
                         <th style={{ padding: '16px 12px' }}>Gateway Status</th>
                         <th style={{ padding: '16px 12px' }}>Layer</th>
@@ -421,7 +424,7 @@ const Sanitized = () => {
                     <tbody id="sanitized-tbody">
                       {paginated.length === 0 ? (
                         <tr>
-                          <td colSpan={7} style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-muted)', fontSize: 13 }}>
+                          <td colSpan={9} style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--text-muted)', fontSize: 13 }}>
                             <div style={{ marginBottom: 8 }}>
                               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--text-muted)', opacity: 0.5 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
                             </div>
@@ -445,6 +448,20 @@ const Sanitized = () => {
                         >
                           <td style={{ padding: '14px 24px' }} onClick={e => e.stopPropagation()}>
                             <input type="checkbox" checked={selectedRows.includes(item.id)} onChange={() => toggleRow(item.id)} />
+                          </td>
+                          <td style={{ padding: '14px 12px', whiteSpace: 'nowrap' }}>
+                            <span style={{ 
+                              fontFamily: 'monospace', 
+                              fontSize: 12, 
+                              fontWeight: 700, 
+                              color: 'var(--blue)', 
+                              background: 'var(--blue-light, #eff6ff)', 
+                              border: '1px solid #bfdbfe', 
+                              padding: '3px 8px', 
+                              borderRadius: 6 
+                            }}>
+                              {item.id}
+                            </span>
                           </td>
                           <td style={{ padding: '14px 12px', maxWidth: 320 }}>
                             <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-main)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.fact}</span>

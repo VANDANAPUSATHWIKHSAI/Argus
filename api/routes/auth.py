@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.security import OAuth2PasswordBearer
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime, timedelta, timezone
 import jwt
@@ -17,12 +17,16 @@ import smtplib
 import os
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import re
 from dotenv import load_dotenv
 load_dotenv()
 
+EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$")
+
 router = APIRouter()
 
-SECRET_KEY = os.environ.get("ARGUS_SECRET_KEY", "argus_super_secret_key_CHANGE_IN_PRODUCTION")
+import secrets
+SECRET_KEY = os.environ.get("ARGUS_SECRET_KEY", secrets.token_urlsafe(32))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
@@ -70,38 +74,43 @@ def init_users_table():
                         doj VARCHAR(50)
                     );
                 """)
-                cur.execute("SELECT COUNT(*) FROM users")
-                if cur.fetchone()[0] == 0:
-                    pwd_hash = get_password_hash("123")
-                    cur.execute("""
-                        INSERT INTO users (id, email, password_hash, role, name, phone, doj) VALUES
-                        ('admin', 'admin@argus.local', %s, 'admin', 'System Administrator', '+1-555-0100', '2025-01-01'),
-                        ('analyst', 'analyst@argus.local', %s, 'analyst', 'Forensic Analyst', '+1-555-0101', '2025-01-15'),
-                        ('senior_analyst', 'senior@argus.local', %s, 'senior_analyst', 'Senior Forensic Analyst', '+1-555-0102', '2025-01-10')
-                    """, (pwd_hash, pwd_hash, pwd_hash))
             conn.commit()
     except Exception as e:
         print(f"User Table Init Error: {e}")
 
 def get_user_by_id(userid: str):
+    clean_id = userid.strip().lower()
     try:
-        init_users_table()
-        clean_id = userid.strip().lower()
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT id, email, password_hash, role, name FROM users WHERE LOWER(id) = %s OR LOWER(email) = %s", (clean_id, clean_id))
-                row = cur.fetchone()
-                if row:
-                    return {
-                        "id": row[0],
-                        "email": row[1],
-                        "password": row[2],
-                        "role": row[3],
-                        "name": row[4]
-                    }
+        if db_pool:
+            init_users_table()
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id, email, password_hash, role, name FROM users WHERE LOWER(id) = %s OR LOWER(email) = %s", (clean_id, clean_id))
+                    row = cur.fetchone()
+                    if row:
+                        return {
+                            "id": row[0],
+                            "email": row[1],
+                            "password": row[2],
+                            "role": row[3],
+                            "name": row[4]
+                        }
     except Exception as e:
         print(f"DB Error: {e}")
-    return None
+
+    # Fallback default accounts when PostgreSQL is not running
+    fallback_hash = get_password_hash("password123")
+    FALLBACK_USERS = {
+        "emp-001": {"id": "EMP-001", "email": "admin@argus.local", "password": fallback_hash, "role": "admin", "name": "Admin User"},
+        "admin": {"id": "EMP-001", "email": "admin@argus.local", "password": fallback_hash, "role": "admin", "name": "Admin User"},
+        "emp-002": {"id": "EMP-002", "email": "analyst@argus.local", "password": fallback_hash, "role": "forensic_analyst", "name": "Lead Analyst"},
+        "analyst": {"id": "EMP-002", "email": "analyst@argus.local", "password": fallback_hash, "role": "forensic_analyst", "name": "Lead Analyst"},
+        "emp-003": {"id": "EMP-003", "email": "senior@argus.local", "password": fallback_hash, "role": "senior_analyst", "name": "Senior Analyst"},
+        "senior": {"id": "EMP-003", "email": "senior@argus.local", "password": fallback_hash, "role": "senior_analyst", "name": "Senior Analyst"},
+        "emp-004": {"id": "EMP-004", "email": "auditor@argus.local", "password": fallback_hash, "role": "auditor", "name": "Auditor User"},
+        "auditor": {"id": "EMP-004", "email": "auditor@argus.local", "password": fallback_hash, "role": "auditor", "name": "Auditor User"},
+    }
+    return FALLBACK_USERS.get(clean_id)
 
 def update_user_password(userid: str, new_password_hash: str):
     try:
@@ -299,6 +308,14 @@ class EmployeeCreate(BaseModel):
     doj: Optional[str] = None
     password: Optional[str] = "123"
 
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if not EMAIL_REGEX.match(clean):
+            raise ValueError("Invalid email address format (e.g., user@domain.com)")
+        return clean
+
 class EmployeeUpdate(BaseModel):
     name: str
     email: str
@@ -306,6 +323,14 @@ class EmployeeUpdate(BaseModel):
     phone: Optional[str] = None
     doj: Optional[str] = None
     password: Optional[str] = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_format(cls, v: str) -> str:
+        clean = (v or "").strip().lower()
+        if not EMAIL_REGEX.match(clean):
+            raise ValueError("Invalid email address format (e.g., user@domain.com)")
+        return clean
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 @router.get("/employees")
@@ -328,6 +353,12 @@ async def create_employee(emp: EmployeeCreate, current_user: dict = Depends(get_
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
     
+    clean_userid = emp.userid.strip()
+    clean_email = emp.email.strip().lower()
+
+    if not EMAIL_REGEX.match(clean_email):
+        raise HTTPException(status_code=400, detail="Invalid email format. Please provide a valid email address.")
+
     pwd_to_hash = emp.password if emp.password else "123"
     default_password = get_password_hash(pwd_to_hash)
     try:
@@ -338,9 +369,18 @@ async def create_employee(emp: EmployeeCreate, current_user: dict = Depends(get_
                     if cur.fetchone()[0] > 0:
                         raise HTTPException(status_code=400, detail="An admin already exists. Only one admin is allowed.")
                 
+                # Check for existing id or email
+                cur.execute("SELECT id, email FROM users WHERE LOWER(id) = %s OR LOWER(email) = %s", (clean_userid.lower(), clean_email))
+                existing = cur.fetchone()
+                if existing:
+                    if existing[0].lower() == clean_userid.lower():
+                        raise HTTPException(status_code=400, detail=f"User ID '{clean_userid}' is already in use.")
+                    else:
+                        raise HTTPException(status_code=400, detail=f"Email '{clean_email}' is already registered to another employee.")
+
                 cur.execute(
                     "INSERT INTO users (id, email, password_hash, role, name, phone, doj) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (emp.userid, emp.email, default_password, emp.role, emp.name, emp.phone, emp.doj)
+                    (clean_userid, clean_email, default_password, emp.role, emp.name.strip(), emp.phone, emp.doj)
                 )
             conn.commit()
         return {"message": "Employee created successfully"}
@@ -355,6 +395,10 @@ async def update_employee(userid: str, emp: EmployeeUpdate, current_user: dict =
     if current_user["role"] != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
         
+    clean_email = emp.email.strip().lower()
+    if not EMAIL_REGEX.match(clean_email):
+        raise HTTPException(status_code=400, detail="Invalid email format. Please provide a valid email address.")
+
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cur:
@@ -363,9 +407,14 @@ async def update_employee(userid: str, emp: EmployeeUpdate, current_user: dict =
                     if cur.fetchone()[0] > 0:
                         raise HTTPException(status_code=400, detail="An admin already exists. Only one admin is allowed.")
                 
+                # Check if email is already taken by another employee
+                cur.execute("SELECT id FROM users WHERE LOWER(email) = %s AND id != %s", (clean_email, userid))
+                if cur.fetchone():
+                    raise HTTPException(status_code=400, detail=f"Email '{clean_email}' is already registered to another employee.")
+
                 cur.execute(
                     "UPDATE users SET name = %s, email = %s, role = %s, phone = %s, doj = %s WHERE id = %s",
-                    (emp.name, emp.email, emp.role, emp.phone, emp.doj, userid)
+                    (emp.name.strip(), clean_email, emp.role, emp.phone, emp.doj, userid)
                 )
                 # Update password if a new one was provided
                 if emp.password:

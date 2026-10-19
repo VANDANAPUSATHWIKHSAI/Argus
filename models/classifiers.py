@@ -10,7 +10,6 @@ Note: Prompt injection detection uses fast regex heuristics without ML model ove
 
 import logging
 from typing import Any, List, Dict
-from transformers import pipeline
 
 logger = logging.getLogger(__name__)
 

@@ -4,6 +4,8 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import { API_BASE_URL } from '../js/api';
 
+const EMAIL_REGEX = /^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}$/;
+
 const AdminPanel = () => {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11,6 +13,8 @@ const AdminPanel = () => {
   const [newEmp, setNewEmp] = useState({ userid: '', name: '', email: '', role: 'analyst' });
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
   const navigate = useNavigate();
+  const currentUserStr = localStorage.getItem('argus_user');
+  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
   const [theme, setTheme] = useState(localStorage.getItem('argus_theme') || 'dark');
 
   const toggleTheme = () => {
@@ -49,30 +53,59 @@ const AdminPanel = () => {
 
   const handleAddEmployee = async (e) => {
     e.preventDefault();
-    if (!newEmp.userid || !newEmp.name || !newEmp.email) {
+    const cleanUserId = newEmp.userid.trim();
+    const cleanName = newEmp.name.trim();
+    const cleanEmail = newEmp.email.trim();
+
+    if (!cleanUserId || !cleanName || !cleanEmail) {
       setCustomAlert({ isOpen: true, title: 'Validation', message: 'All fields are required.', type: 'warning' });
+      return;
+    }
+
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      setCustomAlert({ 
+        isOpen: true, 
+        title: 'Invalid Email Format', 
+        message: 'Please enter a valid email address (e.g. employee@agency.gov).', 
+        type: 'warning' 
+      });
       return;
     }
     
     try {
       const token = localStorage.getItem('argus_token');
+      const payload = {
+        ...newEmp,
+        userid: cleanUserId,
+        name: cleanName,
+        email: cleanEmail.toLowerCase(),
+      };
       const res = await fetch(`${API_BASE_URL}/auth/employees`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` 
         },
-        body: JSON.stringify(newEmp)
+        body: JSON.stringify(payload)
       });
       
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Failed to add employee');
+        let errMsg = 'Failed to add employee';
+        try {
+          const errData = await res.json();
+          if (Array.isArray(errData.detail)) {
+            errMsg = errData.detail.map(d => d.msg).join('; ');
+          } else if (typeof errData.detail === 'string') {
+            errMsg = errData.detail;
+          }
+        } catch (_) {}
+        throw new Error(errMsg);
       }
       
       setShowAddModal(false);
       setNewEmp({ userid: '', name: '', email: '', role: 'analyst' });
       fetchEmployees();
+      setCustomAlert({ isOpen: true, title: 'Success', message: 'Employee added successfully!', type: 'success' });
     } catch (err) {
       setCustomAlert({ isOpen: true, title: 'Error', message: err.message, type: 'error' });
     }
@@ -124,8 +157,8 @@ const AdminPanel = () => {
               )}
             </button>
             <div className="user-profile">
-              <div className="avatar">A</div>
-              <span style={{ fontWeight: 500 }}>Admin</span>
+              <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+              <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
             </div>
           </div>
         </header>
@@ -208,8 +241,28 @@ const AdminPanel = () => {
                 <input type="text" value={newEmp.name} onChange={e => setNewEmp({...newEmp, name: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-strong)', background: 'var(--bg-input)', color: 'var(--text-main)', outline: 'none' }} placeholder="Jane Doe" required />
               </div>
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Email Address</label>
-                <input type="email" value={newEmp.email} onChange={e => setNewEmp({...newEmp, email: e.target.value})} style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--border-strong)', background: 'var(--bg-input)', color: 'var(--text-main)', outline: 'none' }} placeholder="jane@agency.gov" required />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)' }}>Email Address *</label>
+                  {newEmp.email && !EMAIL_REGEX.test(newEmp.email.trim()) && (
+                    <span style={{ fontSize: '11px', color: '#ef4444', fontWeight: 500 }}>Invalid email format</span>
+                  )}
+                </div>
+                <input 
+                  type="email" 
+                  value={newEmp.email} 
+                  onChange={e => setNewEmp({...newEmp, email: e.target.value})} 
+                  style={{ 
+                    width: '100%', 
+                    padding: '10px 12px', 
+                    borderRadius: '8px', 
+                    border: `1px solid ${newEmp.email && !EMAIL_REGEX.test(newEmp.email.trim()) ? '#ef4444' : 'var(--border-strong)'}`, 
+                    background: 'var(--bg-input)', 
+                    color: 'var(--text-main)', 
+                    outline: 'none' 
+                  }} 
+                  placeholder="jane@agency.gov" 
+                  required 
+                />
               </div>
               <div style={{ marginBottom: '24px' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, marginBottom: '6px', color: 'var(--text-muted)' }}>Role</label>

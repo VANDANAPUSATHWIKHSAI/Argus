@@ -29,7 +29,8 @@ const NotificationMenu = () => {
         const items = data.data || [];
 
         const mapped = items.map((a, i) => {
-          const age = a.created_at ? Date.now() - new Date(a.created_at).getTime() : 0;
+          const rawTs = a.created_at ? String(a.created_at).replace(/\s+/, 'T') : null;
+          const age = rawTs ? Date.now() - new Date(rawTs).getTime() : 0;
           const mins = Math.floor(age / 60000);
           const hrs  = Math.floor(age / 3600000);
           const days = Math.floor(age / 86400000);
@@ -52,8 +53,26 @@ const NotificationMenu = () => {
       }
     };
     load();
-    const iv = setInterval(load, 30000);
-    return () => clearInterval(iv);
+
+    const handleInterval = () => {
+      if (document.visibilityState === 'visible') {
+        load();
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        load();
+      }
+    };
+
+    const iv = setInterval(handleInterval, 30000);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
   }, [isAdmin]);
 
   useEffect(() => {

@@ -114,3 +114,24 @@ CREATE TABLE IF NOT EXISTS case_notes (
     related_evidence_id TEXT,
     related_finding_id TEXT
 );
+
+-- -- Users (roles and credentials) --------------------------------
+CREATE TABLE IF NOT EXISTS users (
+    id VARCHAR(255) PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    role VARCHAR(50) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    phone VARCHAR(50),
+    doj VARCHAR(50)
+);
+
+INSERT INTO users (id, email, password_hash, role, name, phone, doj) VALUES
+('2', 'admin2@argus.local', '$2b$12$R00p584VWscdIX6j2MUTSOE5rafy3w8BUQYifTUST8lgxCdqXusSC', 'admin', 'System Administrator', '+1-555-0100', '2025-01-01'),
+('4', 'vandanapusathwikhsai88@gmail.com', '$2b$12$R00p584VWscdIX6j2MUTSOE5rafy3w8BUQYifTUST8lgxCdqXusSC', 'analyst', 'sathwik', '+1-555-0101', '2025-01-15'),
+('5', 'analyst5@argus.local', '$2b$12$R00p584VWscdIX6j2MUTSOE5rafy3w8BUQYifTUST8lgxCdqXusSC', 'analyst', 'Analyst 5', '+1-555-0102', '2025-01-15'),
+('6', 'remakhat115@gmail.com', '$2b$12$R00p584VWscdIX6j2MUTSOE5rafy3w8BUQYifTUST8lgxCdqXusSC', 'senior_analyst', 'Senior Analyst 6', '+1-555-0103', '2025-01-10'),
+('7', 'senior7@argus.local', '$2b$12$R00p584VWscdIX6j2MUTSOE5rafy3w8BUQYifTUST8lgxCdqXusSC', 'senior_analyst', 'Senior Analyst 7', '+1-555-0104', '2025-01-10'),
+('8', 'senior8@argus.local', '$2b$12$R00p584VWscdIX6j2MUTSOE5rafy3w8BUQYifTUST8lgxCdqXusSC', 'senior_analyst', 'Senior Analyst 8', '+1-555-0105', '2025-01-10'),
+('12', 'auditor12@argus.local', '$2b$12$R00p584VWscdIX6j2MUTSOE5rafy3w8BUQYifTUST8lgxCdqXusSC', 'auditor', 'Auditor 12', '+1-555-0106', '2025-01-20')
+ON CONFLICT DO NOTHING;

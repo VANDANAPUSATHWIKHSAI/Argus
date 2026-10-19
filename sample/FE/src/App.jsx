@@ -13,10 +13,21 @@ import CaseNotes from './pages/CaseNotes';
 import Chatbot from './pages/Chatbot';
 import Findings from './pages/Findings';
 import TimelineDetail from './pages/TimelineDetail';
-import EvidenceCoverage from './pages/EvidenceCoverage';
 import Notifications from './pages/Notifications';
+import Cases from './pages/Cases';
 import ProtectedRoute from './components/ProtectedRoute';// Global styles for the app (can also just import individual ones in components)
 import './App.css';
+
+import SessionManager from './components/SessionManager';
+import DevRoleSwitcher from './components/DevRoleSwitcher';
+import TemplateHub from './templates/TemplateHub';
+import TechnicalMinimalTemplate from './templates/TechnicalMinimalTemplate';
+import ModernWorkspaceTemplate from './templates/ModernWorkspaceTemplate';
+import TechnicalMinimalCompactTemplate from './templates/TechnicalMinimalCompactTemplate';
+import TechnicalMinimalAdvancedTemplate from './templates/TechnicalMinimalAdvancedTemplate';
+import ModernWorkspaceDetailedTemplate from './templates/ModernWorkspaceDetailedTemplate';
+import ModernWorkspaceSplitTemplate from './templates/ModernWorkspaceSplitTemplate';
+import TechnicalWorkstationV2 from './templates_v2/TechnicalWorkstationV2';
 
 function App() {
   React.useEffect(() => {
@@ -26,17 +37,20 @@ function App() {
 
   return (
     <Router>
+      <SessionManager />
+      <DevRoleSwitcher />
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/cases" element={<ProtectedRoute><Cases /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
         <Route path="/case-notes" element={<ProtectedRoute><CaseNotes /></ProtectedRoute>} />
         <Route path="/chatbot" element={<ProtectedRoute><Chatbot /></ProtectedRoute>} />
         <Route path="/findings" element={<ProtectedRoute><Findings /></ProtectedRoute>} />
         <Route path="/timeline" element={<ProtectedRoute><TimelineDetail /></ProtectedRoute>} />
-        <Route path="/evidence-coverage" element={<ProtectedRoute><EvidenceCoverage /></ProtectedRoute>} />
+        <Route path="/evidence-coverage" element={<Navigate to="/evidence" replace />} />
         <Route path="/index.html" element={<Navigate to="/dashboard" replace />} />
         <Route path="/evidence" element={<ProtectedRoute><Evidence /></ProtectedRoute>} />
         <Route path="/evidence.html" element={<Navigate to="/evidence" replace />} />
@@ -48,6 +62,16 @@ function App() {
         <Route path="/sanitized" element={<ProtectedRoute><Sanitized /></ProtectedRoute>} />
         <Route path="/sanitized/:id" element={<ProtectedRoute><SanitizedDetail /></ProtectedRoute>} />
         <Route path="/sanitized.html" element={<Navigate to="/sanitized" replace />} />
+
+        {/* ARGUS Approved-Direction Design Exploration Suite (6 Templates) */}
+        <Route path="/templates" element={<TemplateHub />} />
+        <Route path="/templates/technical-minimal" element={<TechnicalMinimalTemplate />} />
+        <Route path="/templates/modern-workspace" element={<ModernWorkspaceTemplate />} />
+        <Route path="/templates/technical-minimal-compact" element={<TechnicalMinimalCompactTemplate />} />
+        <Route path="/templates/technical-minimal-advanced" element={<TechnicalMinimalAdvancedTemplate />} />
+        <Route path="/templates/modern-workspace-detailed" element={<ModernWorkspaceDetailedTemplate />} />
+        <Route path="/templates/modern-workspace-split" element={<ModernWorkspaceSplitTemplate />} />
+        <Route path="/templates/v2-technical" element={<TechnicalWorkstationV2 />} />
       </Routes>
     </Router>
   );

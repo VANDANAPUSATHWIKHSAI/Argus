@@ -6,16 +6,23 @@ import NotificationMenu from '../components/NotificationMenu';
 import { fetchReport, fetchFindings, fetchCases, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 import '../css/style.css';
 
+import AuditorReportWorkspace from './AuditorReportWorkspace';
+
 export default function Report() {
   const navigate = useNavigate();
-  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || 'CASE-2026-001');
-  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'CASE-2026-001');
-  const [casesList, setCasesList] = useState([]);
   
   let user = null;
   try {
     user = JSON.parse(localStorage.getItem('argus_user'));
   } catch (e) {}
+
+  if (user?.role === 'auditor') {
+    return <AuditorReportWorkspace />;
+  }
+
+  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || 'CASE-2026-001');
+  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'CASE-2026-001');
+  const [casesList, setCasesList] = useState([]);
   
   // Theme state: support both dark and light themes smoothly
   const [theme, setTheme] = useState(

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { fetchAuditorStats } from '../js/api';
 
 export default function AuditorDashboard() {
+  const navigate = useNavigate();
   const currentUser = JSON.parse(localStorage.getItem('argus_user') || '{}');
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
@@ -66,7 +68,10 @@ export default function AuditorDashboard() {
             Review AI findings, verify evidence and audit the investigation.
           </p>
         </div>
-        <button style={{ 
+        <button 
+          type="button"
+          onClick={() => navigate('/report')}
+          style={{ 
           display: 'flex', alignItems: 'center', gap: '8px', 
           backgroundColor: '#3b82f6', color: '#fff', 
           padding: '10px 18px', borderRadius: '8px', 

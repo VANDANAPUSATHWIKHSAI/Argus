@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
 import '../css/style.css';
 import Sidebar from '../components/Sidebar';
 import ProfileModal from '../components/ProfileModal';
@@ -232,6 +232,10 @@ const Dashboard = () => {
   const stepRatio = Math.max(0, activeStep) / (timelineSteps.length - 1);
   const activeLineWidth = `calc((100% - 80px) * ${stepRatio})`;
   const progressBarWidth = `${(completedSteps / timelineSteps.length) * 100}%`;
+
+  if (isAuditor) {
+    return <Navigate to="/report" replace />;
+  }
 
   return (
     <>

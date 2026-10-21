@@ -60,12 +60,9 @@ const DEV_ACCOUNTS = [
     userid: '12',
     name: 'Auditor 12',
     badgeColor: '#10b981',
-    defaultRoute: '/dashboard',
+    defaultRoute: '/report',
     allowedRoutes: [
-      { name: 'Dashboard', path: '/dashboard' },
-      { name: 'Forensic Report', path: '/report' },
-      { name: 'Audit Logs', path: '/audit-logs' },
-      { name: 'Settings', path: '/settings' },
+      { name: 'Forensic Report', path: '/report' }
     ]
   }
 ];

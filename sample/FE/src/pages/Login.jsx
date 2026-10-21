@@ -367,7 +367,11 @@ const Login = () => {
       } else {
         localStorage.removeItem('argus_remembered_userid');
       }
-      navigate('/dashboard');
+      if (data.user?.role === 'auditor') {
+        navigate('/report');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err) {
       setError(err.message || 'Authentication failed. Please verify credentials.');
       setIsLoggingIn(false);

@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import { fetchFindings } from '../js/api';
+import { formatEvidenceId } from '../js/dateUtils';
 import '../css/style.css';
 
 const SEVERITY_MAP = {
@@ -53,6 +54,15 @@ const Findings = () => {
   const navigate = useNavigate();
   const activeCaseId = localStorage.getItem('active_case_id');
   const activeCaseName = localStorage.getItem('active_case_name') || 'Current Case';
+
+  const currentUserStr = localStorage.getItem('argus_user');
+  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+
+  useEffect(() => {
+    if (currentUser && (currentUser.role === 'analyst' || currentUser.role === 'senior_analyst')) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, navigate]);
 
   const [findings, setFindings] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -388,7 +398,9 @@ const Findings = () => {
                   <div style={{ marginBottom: 20 }}>
                     <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Evidence References</label>
                     <div style={{ fontSize: '13px', color: 'var(--text-main)', marginTop: 6 }}>
-                      {Array.isArray(selectedFinding.evidence_reference) ? selectedFinding.evidence_reference.join(', ') : (selectedFinding.evidence_reference || 'N/A')}
+                      {Array.isArray(selectedFinding.evidence_reference)
+                        ? selectedFinding.evidence_reference.map(r => formatEvidenceId(r)).join(', ')
+                        : (selectedFinding.evidence_reference ? formatEvidenceId(selectedFinding.evidence_reference) : 'N/A')}
                     </div>
                   </div>
 
@@ -396,7 +408,7 @@ const Findings = () => {
                     <div style={{ marginBottom: 20 }}>
                       <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Source Artifact ID</label>
                       <div style={{ fontSize: '13px', color: 'var(--text-main)', marginTop: 6, fontFamily: 'monospace' }}>
-                        {selectedFinding.source_artifact_id}
+                        {formatEvidenceId(selectedFinding.source_artifact_id)}
                       </div>
                     </div>
                   )}

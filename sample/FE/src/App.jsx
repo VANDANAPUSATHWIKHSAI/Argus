@@ -16,6 +16,7 @@ import TimelineDetail from './pages/TimelineDetail';
 import Notifications from './pages/Notifications';
 import Cases from './pages/Cases';
 import Agents from './pages/Agents';
+import Report from './pages/Report';
 import ProtectedRoute from './components/ProtectedRoute';// Global styles for the app (can also just import individual ones in components)
 import './App.css';
 
@@ -34,6 +35,23 @@ function App() {
   React.useEffect(() => {
     const savedTheme = localStorage.getItem('argus_theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
+
+    // Validate "Keep session active" policy on app boot:
+    // If user logged in without "Keep session active" (argus_keep_active === 'false'),
+    // their session is tab-scoped via sessionStorage.
+    // If sessionStorage is empty (e.g. browser or tab was reopened), clear persistent tokens!
+    const keepActive = localStorage.getItem('argus_keep_active');
+    if (keepActive === 'false') {
+      const sessionToken = sessionStorage.getItem('argus_token');
+      if (!sessionToken) {
+        localStorage.removeItem('argus_token');
+        localStorage.removeItem('argus_user');
+      } else {
+        localStorage.setItem('argus_token', sessionToken);
+        const sessionUser = sessionStorage.getItem('argus_user');
+        if (sessionUser) localStorage.setItem('argus_user', sessionUser);
+      }
+    }
   }, []);
 
   return (
@@ -46,6 +64,8 @@ function App() {
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
         <Route path="/cases" element={<ProtectedRoute><Cases /></ProtectedRoute>} />
         <Route path="/agents" element={<ProtectedRoute><Agents /></ProtectedRoute>} />
+        <Route path="/report" element={<ProtectedRoute><Report /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute><Report /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
         <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
         <Route path="/case-notes" element={<ProtectedRoute><CaseNotes /></ProtectedRoute>} />

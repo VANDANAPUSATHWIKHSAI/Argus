@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { login as apiLogin } from '../js/api';
+import { setAuthSession } from '../js/authSession';
 import ArgusLogo from '../components/ArgusLogo';
 import '../css/style.css';
 import '../css/login.css';
@@ -52,11 +53,11 @@ const Login = () => {
   const location = useLocation();
   const canvasRef = useRef(null);
 
-  // Form State
-  const [userid, setUserid] = useState('');
+  // Form State (supports Remember Me / Keep Session Active)
+  const [userid, setUserid] = useState(() => localStorage.getItem('argus_remembered_userid') || '');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [keepActive, setKeepActive] = useState(true);
+  const [keepActive, setKeepActive] = useState(() => localStorage.getItem('argus_keep_active') !== 'false');
   const [isForgotPasswordMode, setIsForgotPasswordMode] = useState(false);
   const [isOtpMode, setIsOtpMode] = useState(false);
   const [otp, setOtp] = useState('');
@@ -360,8 +361,12 @@ const Login = () => {
     try {
       setIsLoggingIn(true);
       const data = await apiLogin(userid.trim(), password);
-      localStorage.setItem('argus_token', data.token);
-      localStorage.setItem('argus_user', JSON.stringify(data.user));
+      setAuthSession(data.token, data.user, keepActive);
+      if (keepActive) {
+        localStorage.setItem('argus_remembered_userid', userid.trim());
+      } else {
+        localStorage.removeItem('argus_remembered_userid');
+      }
       navigate('/dashboard');
     } catch (err) {
       setError(err.message || 'Authentication failed. Please verify credentials.');

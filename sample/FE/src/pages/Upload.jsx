@@ -159,13 +159,17 @@ const Upload = () => {
 
     for (const item of itemsToUpload) {
       try {
-        await uploadEvidenceFile(item.file, caseId);
-        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done' } : i));
+        const res = await uploadEvidenceFile(item.file, caseId);
+        if (res && (res.status === 'FAILED' || res.status === 'ERROR' || res.status === 'validation_failed' || res.error)) {
+          const errDetail = res.message || res.detail || res.error || 'Upload validation failed';
+          throw new Error(errDetail);
+        }
+        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', error: null } : i));
         successCount++;
       } catch (err) {
         console.error(`Upload failed for ${item.name}:`, err);
         lastErrorMsg = err.message || 'Upload failed';
-        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error' } : i));
+        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: lastErrorMsg } : i));
         failedCount++;
       }
     }
@@ -404,73 +408,94 @@ const Upload = () => {
                   </div>
 
                   {/* Upload Queue */}
-                  <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-strong)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-main)' }}>
-                        Upload Queue <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 14 }}>({queue.length} files)</span>
-                      </h3>
-                      <button onClick={clearAll} style={{ fontSize: 12, color: 'var(--blue)', padding: '4px 8px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                        Clear All
-                      </button>
-                    </div>
+                  {(() => {
+                    const failedQueueCount = queue.filter(item => item.status === 'error').length;
+                    const hasPendingItems = queue.some(item => item.status === 'ready' || item.status === 'error');
+                    return (
+                      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', display: 'flex', flexDirection: 'column' }}>
+                        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-strong)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            Upload Queue <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 14 }}>({queue.length} files)</span>
+                            {failedQueueCount > 0 && (
+                              <span style={{ fontSize: 12, color: 'var(--red, #ef4444)', background: 'var(--red-light, #fee2e2)', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+                                • {failedQueueCount} failed
+                              </span>
+                            )}
+                          </h3>
+                          <button onClick={clearAll} style={{ fontSize: 12, color: 'var(--blue)', padding: '4px 8px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            Clear All
+                          </button>
+                        </div>
 
-                    {queue.length === 0 ? (
-                      <div style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                        No files in queue. Drop files or click Browse.
-                      </div>
-                    ) : (
-                      <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                        {queue.map(item => (
-                          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-app)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 8, background: 'var(--blue-light)', color: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{item.type} · {item.size}</div>
-                            </div>
-                            {statusBadge(item.status)}
-                            <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
+                        {queue.length === 0 ? (
+                          <div style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                            No files in queue. Drop files or click Browse.
                           </div>
-                        ))}
-                      </div>
-                    )}
+                        ) : (
+                          <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {queue.map(item => (
+                              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-app)', borderRadius: 'var(--radius-md)', border: item.status === 'error' ? '1px solid var(--red, #ef4444)' : '1px solid var(--border-subtle)' }}>
+                                <div style={{ width: 36, height: 36, borderRadius: 8, background: item.status === 'error' ? 'var(--red-light, #fee2e2)' : 'var(--blue-light)', color: item.status === 'error' ? 'var(--red, #ef4444)' : 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                  {item.status === 'error' ? (
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                  ) : (
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                  )}
+                                </div>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                    {item.type} · {item.size}
+                                    {item.error && <span style={{ color: 'var(--red, #ef4444)', marginLeft: 8, fontWeight: 500 }}>— {item.error}</span>}
+                                  </div>
+                                </div>
+                                {statusBadge(item.status)}
+                                <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
 
-                    {/* Status bar */}
-                    {queue.length > 0 && !activeCaseId && (
-                      <div style={{ margin: '0 24px 0 24px', padding: '10px 14px', background: 'rgba(234,88,12,0.1)', border: '1px solid var(--orange, #ea580c)', borderRadius: 8, fontSize: 13, color: 'var(--orange, #ea580c)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                        No case selected. Select a case from the dropdown above before uploading.
+                        {/* Status bar */}
+                        {queue.length > 0 && !activeCaseId && (
+                          <div style={{ margin: '0 24px 0 24px', padding: '10px 14px', background: 'rgba(234,88,12,0.1)', border: '1px solid var(--orange, #ea580c)', borderRadius: 8, fontSize: 13, color: 'var(--orange, #ea580c)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            No case selected. Select a case from the dropdown above before uploading.
+                          </div>
+                        )}
+                        <div style={{ padding: '16px 24px 20px', borderTop: '1px solid var(--border-strong)', display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 'auto', background: 'var(--bg-app)', borderBottomLeftRadius: 'var(--radius-lg)', borderBottomRightRadius: 'var(--radius-lg)' }}>
+                          <button className="btn btn-outline" onClick={clearAll} style={{ padding: '12px 24px', fontWeight: 600 }}>Clear Queue</button>
+                          <button
+                            id="btn-upload"
+                            className="btn btn-primary"
+                            onClick={handleUpload}
+                            disabled={uploading || queue.length === 0 || !activeCaseId || !hasPendingItems}
+                            title={!activeCaseId ? 'Select a case first' : queue.length === 0 ? 'Add files to the queue first' : !hasPendingItems ? 'All files in queue have been uploaded' : 'Upload and analyze'}
+                            style={{
+                              padding: '12px 24px',
+                              fontWeight: 600,
+                              background: (failedQueueCount > 0 && !queue.some(i => i.status === 'ready')) ? 'var(--red, #ef4444)' : undefined,
+                              opacity: (uploading || queue.length === 0 || !activeCaseId || !hasPendingItems) ? 0.45 : 1,
+                              cursor: (uploading || queue.length === 0 || !activeCaseId || !hasPendingItems) ? 'not-allowed' : 'pointer'
+                            }}
+                          >
+                            {uploading ? (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                Uploading...
+                              </span>
+                            ) : (failedQueueCount > 0 && !queue.some(i => i.status === 'ready')) ? (
+                              `Retry Failed (${failedQueueCount}) ↺`
+                            ) : 'Upload & Analyze →'}
+                          </button>
+                        </div>
+                        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
                       </div>
-                    )}
-                    <div style={{ padding: '16px 24px 20px', borderTop: '1px solid var(--border-strong)', display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 'auto', background: 'var(--bg-app)', borderBottomLeftRadius: 'var(--radius-lg)', borderBottomRightRadius: 'var(--radius-lg)' }}>
-                      <button className="btn btn-outline" onClick={clearAll} style={{ padding: '12px 24px', fontWeight: 600 }}>Clear Queue</button>
-                      <button
-                        id="btn-upload"
-                        className="btn btn-primary"
-                        onClick={handleUpload}
-                        disabled={uploading || queue.length === 0 || !activeCaseId}
-                        title={!activeCaseId ? 'Select a case first' : queue.length === 0 ? 'Add files to the queue first' : 'Upload and analyze'}
-                        style={{
-                          padding: '12px 24px',
-                          fontWeight: 600,
-                          opacity: (uploading || queue.length === 0 || !activeCaseId) ? 0.45 : 1,
-                          cursor: (uploading || queue.length === 0 || !activeCaseId) ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        {uploading ? (
-                          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: 'spin 1s linear infinite' }}><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                            Uploading...
-                          </span>
-                        ) : 'Upload & Analyze →'}
-                      </button>
-                    </div>
-                    <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
-                  </div>
+                    );
+                  })()}
                 </div>
 
               </div>

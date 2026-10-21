@@ -227,7 +227,7 @@ export default function MonochromeWorkspaceTemplate() {
                 <div style={{ marginBottom: 16 }}>
                   <div style={{ fontSize: '11px', color: '#666', fontWeight: 700, marginBottom: 4 }}>EVIDENCE REFERENCE</div>
                   <div style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: '#111' }}>
-                    {Array.isArray(selectedFinding.evidence_reference) ? selectedFinding.evidence_reference.join(', ') : selectedFinding.evidence_reference || 'EVID-REF-001'}
+                    {Array.isArray(selectedFinding.evidence_reference) ? selectedFinding.evidence_reference.join(', ') : selectedFinding.evidence_reference || 'e-01'}
                   </div>
                 </div>
 

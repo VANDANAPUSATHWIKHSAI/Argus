@@ -5,7 +5,7 @@ import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import ProfileModal from '../components/ProfileModal';
 import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
-import { safeFormatDateTime } from '../js/dateUtils';
+import { safeFormatDateTime, formatEvidenceId } from '../js/dateUtils';
 import '../css/style.css';
 
 const CaseNotes = () => {
@@ -56,20 +56,28 @@ const CaseNotes = () => {
       });
       if (res.ok) {
         const data = await res.json();
-        const notesData = data.data || [];
-        setNotes(notesData);
-        localStorage.setItem(`seen_notes_${activeCaseId}`, notesData.length);
+        const serverNotes = data.data || [];
+        const localNotes = JSON.parse(localStorage.getItem(`case_notes_${activeCaseId}`) || '[]');
+        const serverIds = new Set(serverNotes.map(n => n.noteId));
+        const combined = [...localNotes.filter(n => !serverIds.has(n.noteId)), ...serverNotes];
+        setNotes(combined);
+        localStorage.setItem(`seen_notes_${activeCaseId}`, combined.length);
         
-        const latestUpdate = Math.max(0, ...notesData.map(n => {
+        const latestUpdate = Math.max(0, ...combined.map(n => {
           const d = new Date(n.updatedAt || n.createdAt);
           return isNaN(d.getTime()) ? 0 : d.getTime();
         }));
         if (latestUpdate > 0) {
           localStorage.setItem(`last_seen_update_${activeCaseId}`, latestUpdate);
         }
+      } else {
+        const localNotes = JSON.parse(localStorage.getItem(`case_notes_${activeCaseId}`) || '[]');
+        if (localNotes.length > 0) setNotes(localNotes);
       }
     } catch (e) {
       console.error('Error fetching notes', e);
+      const localNotes = JSON.parse(localStorage.getItem(`case_notes_${activeCaseId}`) || '[]');
+      if (localNotes.length > 0) setNotes(localNotes);
     }
   };
 
@@ -686,7 +694,7 @@ const CaseNotes = () => {
                                 >
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                                   <span>Evidence:</span>
-                                  <span style={{ color: '#2563eb', fontWeight: 700, textDecoration: 'underline' }}>{note.relatedEvidenceId}</span>
+                                  <span style={{ color: '#2563eb', fontWeight: 700, textDecoration: 'underline' }}>{formatEvidenceId(note.relatedEvidenceId)}</span>
                                 </span>
                               )}
 
@@ -819,7 +827,7 @@ const CaseNotes = () => {
 
               <div>
                 <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '8px', textTransform: 'uppercase' }}>Related Evidence (Optional)</label>
-                <input type="text" value={relatedEvidence} onChange={e => setRelatedEvidence(e.target.value)} placeholder="e.g. EV-001" style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '10px 12px', borderRadius: '6px', outline: 'none' }} />
+                <input type="text" value={relatedEvidence} onChange={e => setRelatedEvidence(e.target.value)} placeholder="e.g. e-01" style={{ width: '100%', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '10px 12px', borderRadius: '6px', outline: 'none' }} />
               </div>
 
               <div>

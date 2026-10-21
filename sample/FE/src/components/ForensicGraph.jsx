@@ -73,7 +73,7 @@ export default function ForensicGraph({ caseId }) {
             const row = Math.floor(i / 4);
             const maxCols = Math.min(total, 4);
             n.x = maxCols > 1 ? Math.round(15 + (70 / (maxCols - 1)) * col) : 50;
-            n.y = Math.round(25 + row * 30);
+            n.y = total === 1 ? 50 : Math.round(25 + row * 30);
           });
         }
 
@@ -281,15 +281,16 @@ export default function ForensicGraph({ caseId }) {
           <div className="panel-actions">
             {selectedNode && (
               <button
-                className="btn-icon"
-                style={{ color: 'var(--red)', background: 'var(--red-light)', border: 'none', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '28px', height: '28px', padding: 0 }}
+                className="close-details-btn"
+                title="Close Details"
+                aria-label="Close Details"
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   setSelectedNodeId(null);
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
               </button>
             )}
           </div>
@@ -302,13 +303,13 @@ export default function ForensicGraph({ caseId }) {
                 {ICONS[selectedNode.type] || ICONS.finding}
               </div>
               <div className="details-title-wrap">
-                <h4>{selectedNode.details.title}</h4>
-                <p>{selectedNode.details.subtitle}</p>
-              </div>
-              <div>
-                <div style={{ backgroundColor: selectedNode.details.badgeBg, color: selectedNode.details.badgeColor, padding: '4px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600 }}>
-                  {selectedNode.details.badge}
+                <div className="details-heading-line">
+                  <h4 title={selectedNode.details.title}>{selectedNode.details.title}</h4>
+                  <span className="details-badge" style={{ backgroundColor: selectedNode.details.badgeBg, color: selectedNode.details.badgeColor }}>
+                    {selectedNode.details.badge}
+                  </span>
                 </div>
+                <p>{selectedNode.details.subtitle}</p>
               </div>
             </div>
 

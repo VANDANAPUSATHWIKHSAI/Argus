@@ -14,6 +14,8 @@ const DEV_ACCOUNTS = [
       { name: 'Dashboard', path: '/dashboard' },
       { name: 'Previous Cases', path: '/cases' },
       { name: 'Employees', path: '/employees' },
+      { name: 'Agents Swarm', path: '/agents' },
+      { name: 'Forensic Report', path: '/report' },
       { name: 'Audit Logs', path: '/audit-logs' },
       { name: 'Settings', path: '/settings' },
     ]
@@ -28,9 +30,11 @@ const DEV_ACCOUNTS = [
     allowedRoutes: [
       { name: 'Dashboard', path: '/dashboard' },
       { name: 'Evidence', path: '/evidence' },
+      { name: 'Agents Swarm', path: '/agents' },
+      { name: 'AI Assistant', path: '/chatbot' },
       { name: 'Case Notes', path: '/case-notes' },
       { name: 'Sanitized Output', path: '/sanitized' },
-      { name: 'Audit Logs', path: '/audit-logs' },
+      { name: 'Forensic Report', path: '/report' },
       { name: 'Settings', path: '/settings' },
     ]
   },
@@ -43,8 +47,10 @@ const DEV_ACCOUNTS = [
     defaultRoute: '/dashboard',
     allowedRoutes: [
       { name: 'Dashboard', path: '/dashboard' },
+      { name: 'Agents Swarm', path: '/agents' },
       { name: 'Chatbot', path: '/chatbot' },
       { name: 'Notes', path: '/case-notes' },
+      { name: 'Forensic Report', path: '/report' },
       { name: 'Settings', path: '/settings' },
     ]
   },
@@ -57,6 +63,7 @@ const DEV_ACCOUNTS = [
     defaultRoute: '/dashboard',
     allowedRoutes: [
       { name: 'Dashboard', path: '/dashboard' },
+      { name: 'Forensic Report', path: '/report' },
       { name: 'Audit Logs', path: '/audit-logs' },
       { name: 'Settings', path: '/settings' },
     ]

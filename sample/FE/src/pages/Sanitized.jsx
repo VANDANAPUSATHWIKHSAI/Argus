@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../css/style.css';
-import { safeFormatDateTime } from '../js/dateUtils';
+import { safeFormatDateTime, formatEvidenceId } from '../js/dateUtils';
 
 const SEVERITY_MAP = {
   critical: { color: '#dc2626', bg: '#fee2e2', label: 'Critical' },
@@ -110,7 +110,7 @@ const Sanitized = () => {
             severity: (f.severity || 'low').toLowerCase(),
             confidence: conf,
             timestamp: safeFormatDateTime(f.timestamp, '2026-09-11 14:22:00 UTC'),
-            ref: Array.isArray(f.evidence_reference) ? f.evidence_reference.join(', ') : (f.evidence_reference || 'EVID-001'),
+            ref: Array.isArray(f.evidence_reference) ? f.evidence_reference.map(r => formatEvidenceId(r)).join(', ') : formatEvidenceId(f.evidence_reference || 'e-01'),
             injectionFlagged: (ctx && ctx.injection_flagged) || f.injection_flagged || false,
             injectionScore: (ctx && ctx.injection_score) || 0.0,
             sanitizationActions: (ctx && ctx.sanitization_actions) || ['pii_secret_scanned', 'prompt_injection_scanned'],

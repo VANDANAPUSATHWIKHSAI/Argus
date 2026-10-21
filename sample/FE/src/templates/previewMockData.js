@@ -72,7 +72,7 @@ export const PREVIEW_MOCK_CASES = [
 
 export const PREVIEW_MOCK_EVIDENCE = [
   {
-    id: 'EVID-001',
+    id: 'e-01',
     filename: 'mem_dump_srv_dc01.raw',
     artifact_type: 'RAM Memory Dump',
     size_mb: '16,384 MB',
@@ -81,7 +81,7 @@ export const PREVIEW_MOCK_EVIDENCE = [
     hash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
   },
   {
-    id: 'EVID-002',
+    id: 'e-02',
     filename: 'suricata_nids_alerts_pcap.pcap',
     artifact_type: 'Network Capture',
     size_mb: '2,410 MB',
@@ -90,7 +90,7 @@ export const PREVIEW_MOCK_EVIDENCE = [
     hash: 'a591a6d40bf420404a011733cfb7b190d62c65bf0bcda32b57b277d9ad9f146e'
   },
   {
-    id: 'EVID-003',
+    id: 'e-03',
     filename: 'auth_domain_controller_evtx.evtx',
     artifact_type: 'Windows Event Logs',
     size_mb: '512 MB',
@@ -99,7 +99,7 @@ export const PREVIEW_MOCK_EVIDENCE = [
     hash: '7f83b1657ff1fc53b92dc18148a1d65dfc2d4b1fa3d677284ddd200126d90699'
   },
   {
-    id: 'EVID-004',
+    id: 'e-04',
     filename: 'exfil_stage_archive_backup.zip',
     artifact_type: 'Encrypted Zip Archive',
     size_mb: '4,100 MB',
@@ -108,7 +108,7 @@ export const PREVIEW_MOCK_EVIDENCE = [
     hash: '8f4e2c819a3b61029c78213456789012abcdef3456789012abcdef3456789012'
   },
   {
-    id: 'EVID-005',
+    id: 'e-05',
     filename: 'powershell_execution_history.log',
     artifact_type: 'Process Logs',
     size_mb: '48 MB',

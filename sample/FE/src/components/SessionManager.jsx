@@ -5,6 +5,7 @@ import {
   getTokenRemainingMs,
   logout,
   IDLE_TIMEOUT_MS,
+  getAuthToken,
 } from '../js/authSession';
 
 /**
@@ -29,7 +30,7 @@ const SessionManager = () => {
       return;
     }
 
-    const token = localStorage.getItem('argus_token');
+    const token = getAuthToken();
     if (!token) return;
 
     // 1. Check if token is already expired
@@ -68,7 +69,7 @@ const SessionManager = () => {
     // Interval to check idle timeout every 20 seconds
     if (idleCheckIntervalRef.current) clearInterval(idleCheckIntervalRef.current);
     idleCheckIntervalRef.current = setInterval(() => {
-      const currentToken = localStorage.getItem('argus_token');
+      const currentToken = getAuthToken();
       if (!currentToken) return;
 
       const storedLastActive = Number(localStorage.getItem('argus_last_active') || lastActiveTimestampRef.current);

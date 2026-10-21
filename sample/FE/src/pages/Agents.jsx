@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import { fetchAgentResults, triggerAgentAnalysis, fetchCases, DEFAULT_TENANT_ID } from '../js/api';
+import { formatEvidenceId } from '../js/dateUtils';
 import '../css/style.css';
 
 const AGENT_METADATA = {
@@ -146,7 +147,6 @@ const Agents = () => {
   const navigate = useNavigate();
   const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
   const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'Current Case');
-  const [casesList, setCasesList] = useState([]);
   const [agentData, setAgentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [runningAgents, setRunningAgents] = useState(false);
@@ -155,26 +155,31 @@ const Agents = () => {
   const [claimsFilter, setClaimsFilter] = useState('all');
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
 
-  // Load cases list
+  // Load active case details if unset
   useEffect(() => {
     const initCases = async () => {
       try {
         const res = await fetchCases();
         const list = res.data || [];
-        setCasesList(list);
         if (!activeCaseId && list.length > 0) {
           const first = list.find(c => c.status === 'open') || list[0];
           setActiveCaseId(first.case_id);
           setActiveCaseName(first.name || first.case_id);
           localStorage.setItem('active_case_id', first.case_id);
           localStorage.setItem('active_case_name', first.name || first.case_id);
+        } else if (activeCaseId && (!activeCaseName || activeCaseName === 'Current Case')) {
+          const found = list.find(c => c.case_id === activeCaseId);
+          if (found && found.name) {
+            setActiveCaseName(found.name);
+            localStorage.setItem('active_case_name', found.name);
+          }
         }
       } catch (err) {
         console.error('Failed to load cases:', err);
       }
     };
     initCases();
-  }, []);
+  }, [activeCaseId, activeCaseName]);
 
   // Fetch agent results
   const loadAgentResults = async (caseId) => {
@@ -284,15 +289,6 @@ const Agents = () => {
     }
   };
 
-  const handleSelectCase = (newId) => {
-    const sel = casesList.find(c => c.case_id === newId);
-    if (sel) {
-      setActiveCaseId(sel.case_id);
-      setActiveCaseName(sel.name || sel.case_id);
-      localStorage.setItem('active_case_id', sel.case_id);
-      localStorage.setItem('active_case_name', sel.name || sel.case_id);
-    }
-  };
 
   const closeAlert = () => setCustomAlert(prev => ({ ...prev, isOpen: false }));
 
@@ -349,28 +345,21 @@ const Agents = () => {
               <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>Multi-Agent Forensic Intelligence</span>
             </div>
 
-            {/* Case selector */}
-            <select
-              value={activeCaseId}
-              onChange={(e) => handleSelectCase(e.target.value)}
-              style={{
-                background: 'var(--bg-card)',
-                color: 'var(--text-main)',
-                border: '1px solid var(--border-strong)',
-                padding: '6px 14px',
-                borderRadius: 6,
-                fontSize: 13,
-                fontWeight: 600,
-                outline: 'none',
-                cursor: 'pointer'
-              }}
-            >
-              {casesList.map(c => (
-                <option key={c.case_id} value={c.case_id}>
-                  {c.name || c.case_id} ({c.status})
-                </option>
-              ))}
-            </select>
+            {/* Active Case Badge */}
+            <div style={{
+              background: 'var(--bg-card)',
+              border: '1px solid var(--border-strong)',
+              padding: '6px 14px',
+              borderRadius: 6,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Active Case:</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
+                {activeCaseId ? `${activeCaseName} (${activeCaseId})` : 'No Active Case'}
+              </span>
+            </div>
           </div>
 
           <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -958,7 +947,7 @@ const Agents = () => {
                                   <td style={{ padding: '8px 12px', fontWeight: 700, color: 'var(--text-main)' }}>{step.stage}</td>
                                   <td style={{ padding: '8px 12px', color: 'var(--text-main)' }}>{step.description}</td>
                                   <td style={{ padding: '8px 12px', color: 'var(--blue)', fontFamily: 'monospace', fontSize: 11 }}>
-                                    {(step.evidence_ids && step.evidence_ids.length > 0) ? step.evidence_ids.join(', ') : 'None'}
+                                    {(step.evidence_ids && step.evidence_ids.length > 0) ? step.evidence_ids.map(id => formatEvidenceId(id)).join(', ') : 'None'}
                                   </td>
                                 </tr>
                               ))}
@@ -1062,7 +1051,7 @@ const Agents = () => {
                                   <td style={{ padding: '10px 14px', color: 'var(--text-main)' }}>{obs.action || 'Observed action'}</td>
                                   <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{obs.subject || obs.target || 'N/A'}</td>
                                   <td style={{ padding: '10px 14px', color: 'var(--blue)', fontFamily: 'monospace', fontSize: 11 }}>
-                                    {(obs.evidence_ids && obs.evidence_ids.length > 0) ? obs.evidence_ids.join(', ') : 'None'}
+                                    {(obs.evidence_ids && obs.evidence_ids.length > 0) ? obs.evidence_ids.map(id => formatEvidenceId(id)).join(', ') : 'None'}
                                   </td>
                                 </tr>
                               ))
@@ -1181,7 +1170,7 @@ const Agents = () => {
                                     </span>
                                   </td>
                                   <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 11 }}>
-                                    {(m.evidence_ids && m.evidence_ids.length > 0) ? m.evidence_ids.join(', ') : 'None Cited'}
+                                    {(m.evidence_ids && m.evidence_ids.length > 0) ? m.evidence_ids.map(id => formatEvidenceId(id)).join(', ') : 'None Cited'}
                                   </td>
                                 </tr>
                               ))
@@ -1401,7 +1390,7 @@ const Agents = () => {
                                     </span>
                                   </td>
                                   <td style={{ padding: '10px 14px', color: 'var(--text-muted)', fontFamily: 'monospace', fontSize: 11 }}>
-                                    {(asset.evidence_ids && asset.evidence_ids.length > 0) ? asset.evidence_ids.join(', ') : 'None'}
+                                    {(asset.evidence_ids && asset.evidence_ids.length > 0) ? asset.evidence_ids.map(id => formatEvidenceId(id)).join(', ') : 'None'}
                                   </td>
                                 </tr>
                               ))
@@ -1511,7 +1500,7 @@ const Agents = () => {
                             {c.claim}
                           </td>
                           <td style={{ padding: '12px 14px', color: 'var(--text-muted)', fontSize: 11, fontFamily: 'monospace' }}>
-                            {(c.evidence_ids && c.evidence_ids.length > 0) ? c.evidence_ids.slice(0, 3).join(', ') : 'None Cited'}
+                            {(c.evidence_ids && c.evidence_ids.length > 0) ? c.evidence_ids.slice(0, 3).map(id => formatEvidenceId(id)).join(', ') : 'None Cited'}
                           </td>
                           <td style={{ padding: '12px 14px', fontWeight: 700, color: 'var(--text-main)' }}>
                             {c.confidence !== undefined && c.confidence !== null ? `${Math.round(c.confidence * 100)}%` : 'N/A'}

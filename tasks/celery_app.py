@@ -34,14 +34,14 @@ celery_app.conf.update(
 )
 
 
-def is_celery_broker_available(timeout_sec: float = 1.0) -> bool:
+def is_celery_broker_available(timeout_sec: float = 0.2) -> bool:
     """
     Check if the Redis broker is reachable.
     Used by FastAPI to choose between Celery async dispatch and thread pool fallback.
     """
     try:
         import redis
-        host = getattr(settings, "redis_host", "localhost")
+        host = getattr(settings, "redis_host", "127.0.0.1")
         port = int(getattr(settings, "redis_port", 6379))
         password = getattr(settings, "redis_password", None)
         r = redis.Redis(

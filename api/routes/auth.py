@@ -39,7 +39,7 @@ from contextlib import contextmanager
 try:
     db_pool = psycopg2.pool.SimpleConnectionPool(
         1, 20,
-        host=os.environ.get("POSTGRES_HOST", "localhost"),
+        host=os.environ.get("POSTGRES_HOST", "127.0.0.1"),
         port=os.environ.get("POSTGRES_PORT", "5433"),
         database=os.environ.get("POSTGRES_DB", "argus"),
         user=os.environ.get("POSTGRES_USER", "argus_user"),
@@ -444,18 +444,23 @@ async def create_employee(emp: EmployeeCreate, current_user: dict = Depends(get_
 
 @router.put("/employees/{userid}")
 async def update_employee(userid: str, emp: EmployeeUpdate, current_user: dict = Depends(get_current_user)):
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Not authorized")
+    is_admin = current_user.get("role") == "admin"
+    is_self = str(current_user.get("id", "")).lower() == userid.lower()
+
+    if not is_admin and not is_self:
+        raise HTTPException(status_code=403, detail="Not authorized to update other employee details")
         
     clean_email = emp.email.strip().lower()
     if not EMAIL_REGEX.match(clean_email):
         raise HTTPException(status_code=400, detail="Invalid email format. Please provide a valid email address.")
 
+    target_role = emp.role if is_admin else current_user.get("role", "analyst")
+
     try:
         if db_pool:
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    if emp.role == "admin":
+                    if target_role == "admin":
                         cur.execute("SELECT COUNT(*) FROM users WHERE role = 'admin' AND id != %s", (userid,))
                         if cur.fetchone()[0] > 0:
                             raise HTTPException(status_code=400, detail="An admin already exists. Only one admin is allowed.")
@@ -466,7 +471,7 @@ async def update_employee(userid: str, emp: EmployeeUpdate, current_user: dict =
 
                     cur.execute(
                         "UPDATE users SET name = %s, email = %s, role = %s, phone = %s, doj = %s WHERE id = %s",
-                        (emp.name.strip(), clean_email, emp.role, emp.phone, emp.doj, userid)
+                        (emp.name.strip(), clean_email, target_role, emp.phone, emp.doj, userid)
                     )
                     if emp.password:
                         new_hash = get_password_hash(emp.password)
@@ -483,14 +488,14 @@ async def update_employee(userid: str, emp: EmployeeUpdate, current_user: dict =
         if u["id"].lower() == userid.lower():
             u["name"] = emp.name.strip()
             u["email"] = clean_email
-            u["role"] = emp.role
+            u["role"] = target_role
             u["phone"] = emp.phone or ""
             u["doj"] = emp.doj or ""
     auth_rec = FALLBACK_USERS.get(userid.lower())
     if auth_rec:
         auth_rec["name"] = emp.name.strip()
         auth_rec["email"] = clean_email
-        auth_rec["role"] = emp.role
+        auth_rec["role"] = target_role
         if emp.password:
             auth_rec["password"] = get_password_hash(emp.password)
     return {"message": "Employee updated successfully"}

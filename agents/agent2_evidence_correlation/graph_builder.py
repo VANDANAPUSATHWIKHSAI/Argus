@@ -136,40 +136,71 @@ class GraphBuilder:
                         rel_idx += 1
 
         # Step 2: Push nodes and relationships to Neo4j with strict case_id & tenant_id isolation
-        try:
-            sync_counts = self._sync_to_neo4j(case_id, tenant_id, finding_entities, entity_to_findings, deterministic_rels)
-        except Exception as exc:
-            logger.error("Neo4j graph construction error: %s", exc)
-            raise RuntimeError(f"Neo4j graph construction failed: {exc}") from exc
+        sync_counts = None
+        communities = None
+        wcc_success = False
+        algorithm_executed = "none"
+        is_degraded = False
+        degraded_reason = None
 
-        if not findings:
-            return [], {
-                "total_nodes": 0,
-                "total_findings": 0,
-                "total_finding_nodes": 0,
-                "total_entity_nodes": 0,
-                "total_graph_nodes": 0,
-                "total_edges": 0,
-                "total_communities": 0,
-                "total_relationships": 0,
-                "neo4j_synced": True,
-                "gds_executed": True,
-                "gds_installed": True,
-                "algorithm_executed": "none_empty_graph",
-                "is_degraded": False,
-                "degraded_reason": None
-            }, []
+        if self.neo4j_client is not None:
+            try:
+                sync_counts = self._sync_to_neo4j(case_id, tenant_id, finding_entities, entity_to_findings, deterministic_rels)
+                communities, wcc_success, algorithm_executed, is_degraded, degraded_reason = self._run_neo4j_gds_wcc(case_id, tenant_id, finding_entities)
+            except Exception as exc:
+                logger.warning("Neo4j graph sync/GDS error (%s). Falling back to deterministic in-memory graph clustering.", exc)
+                sync_counts = None
+                communities = None
 
-        # Step 3: Execute GDS WCC / Cypher Community Detection on Neo4j
-        try:
-            communities, wcc_success, algorithm_executed, is_degraded, degraded_reason = self._run_neo4j_gds_wcc(case_id, tenant_id, finding_entities)
-        except Exception as exc:
-            logger.error("Neo4j GDS WCC computation error: %s", exc)
-            raise RuntimeError(f"Neo4j GDS WCC computation failed: {exc}") from exc
+        # Fallback to in-memory graph clustering if Neo4j is offline or unavailable
+        if communities is None:
+            is_degraded = True
+            degraded_reason = "Neo4j offline / unreachable; deterministic in-memory connected components executed."
+            algorithm_executed = "in_memory_connected_components"
+            wcc_success = False
+
+            # In-memory connected components on finding_entities via shared entities
+            adj = defaultdict(set)
+            for rel in deterministic_rels:
+                adj[rel.source_entity].add(rel.target_entity)
+                adj[rel.target_entity].add(rel.source_entity)
+            for fid in finding_entities.keys():
+                if fid not in adj:
+                    adj[fid] = set()
+
+            visited = set()
+            communities = []
+            c_idx = 1
+            for fid in sorted(finding_entities.keys()):
+                if fid not in visited:
+                    comp = []
+                    q = [fid]
+                    visited.add(fid)
+                    while q:
+                        curr = q.pop(0)
+                        comp.append(curr)
+                        for n in sorted(adj[curr]):
+                            if n not in visited:
+                                visited.add(n)
+                                q.append(n)
+                    comp_entities = sorted(list({v for (t, v), fids in entity_to_findings.items() if any(f in comp for f in fids)}))
+                    comp_etypes = sorted(list({t for (t, v), fids in entity_to_findings.items() if any(f in comp for f in fids)}))
+                    comp_rels = sorted([f"SHARED_{et.upper()}" for et in comp_etypes])
+                    communities.append(
+                        GraphCommunity(
+                            community_id=f"GC-{c_idx:03d}",
+                            finding_ids=comp,
+                            entity_names=comp_entities,
+                            entity_types=comp_etypes,
+                            relationship_types=comp_rels,
+                            wcc_component_id=c_idx
+                        )
+                    )
+                    c_idx += 1
 
         all_finding_ids = list(finding_entities.keys())
-        total_graph_nodes = sync_counts.get("total_nodes", len(all_finding_ids) + len(entity_to_findings))
-        actual_edges = sync_counts.get("total_edges", 0)
+        total_graph_nodes = (sync_counts.get("total_nodes") if sync_counts else None) or (len(all_finding_ids) + len(entity_to_findings))
+        actual_edges = (sync_counts.get("total_edges") if sync_counts else None) or len(deterministic_rels)
 
         metrics = {
             "total_nodes": len(all_finding_ids),
@@ -180,7 +211,7 @@ class GraphBuilder:
             "total_edges": actual_edges,
             "total_communities": len(communities),
             "total_relationships": len(deterministic_rels),
-            "neo4j_synced": True,
+            "neo4j_synced": bool(sync_counts),
             "gds_executed": wcc_success,
             "gds_installed": wcc_success and not is_degraded,
             "algorithm_executed": algorithm_executed,

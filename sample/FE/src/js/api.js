@@ -1,11 +1,11 @@
-import { logout, isTokenExpired } from './authSession';
+import { logout, isTokenExpired, getAuthToken } from './authSession';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 export const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID || 'default';
 
 // Helper for authenticated requests
 export async function fetchWithAuth(url, options = {}) {
-  const token = localStorage.getItem('argus_token');
+  const token = getAuthToken();
 
   // Proactive check: if token is expired before making request, log out immediately
   if (token && isTokenExpired(token)) {
@@ -111,7 +111,7 @@ export async function fetchActivity() {
 }
 
 export async function fetchAuditorStats(limit = 50) {
-  const token = localStorage.getItem('argus_token');
+  const token = getAuthToken();
   const headers = {
     'Accept': 'application/json',
     'X-Tenant-ID': DEFAULT_TENANT_ID,
@@ -131,6 +131,17 @@ export async function fetchAuditorStats(limit = 50) {
 
 
 
+
+export async function fetchCaseNotes(caseId) {
+  return fetchWithAuth(`/cases/${caseId}/notes`);
+}
+
+export async function createCaseNote(caseId, noteData) {
+  return fetchWithAuth(`/cases/${caseId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify(noteData),
+  });
+}
 
 export async function fetchReviewNotes(caseId) {
   return fetchWithAuth(`/cases/${caseId}/review-notes`);
@@ -163,9 +174,10 @@ export async function queryCase(caseId, queryText) {
   });
 }
 
-export async function fetchReport(caseId, format = 'html') {
-  const token = localStorage.getItem('argus_token');
-  const response = await fetch(`${API_BASE_URL}/reports/${caseId}/report?format=${format}`, {
+export async function fetchReport(caseId, format = 'html', allowUnreviewed = true) {
+  const token = getAuthToken();
+  const url = `${API_BASE_URL}/reports/${caseId}/report?format=${format}&allow_unreviewed=${allowUnreviewed}`;
+  const response = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'X-Tenant-ID': DEFAULT_TENANT_ID,
@@ -178,6 +190,9 @@ export async function fetchReport(caseId, format = 'html') {
       errorMsg = errData.detail || errorMsg;
     } catch(e) {}
     throw new Error(errorMsg);
+  }
+  if (format === 'json') {
+    return response.json();
   }
   return response.text();
 }

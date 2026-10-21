@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import uuid
 import hashlib
+import json
 from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Header, HTTPException, Query, Depends, BackgroundTasks
@@ -320,77 +321,75 @@ async def get_recent_activity(
 
                 # 3. Analyst Findings
                 cur.execute(
-            """
-            SELECT f.case_id, f.created_at, f.fact, f.source_engine, f.reviewed_by, f.review_status, f.timestamp
-            FROM fir_findings f
-            INNER JOIN cases c ON f.case_id = c.case_id
-            WHERE c.tenant_id = %s
-            ORDER BY f.timestamp DESC
-            """,
-            (x_tenant_id,)
-        )
-        
-        # Deduplicate findings by action, case, user, and approximate minute
-        finding_events = {}
-        for row in cur.fetchall():
-            case_id, created_at, fact, source_engine, reviewed_by, review_status, review_time = row
-            
-            action_name = None
-            evt_time = None
-            if review_status in ('analyst_confirmed', 'analyst_rejected') and review_time:
-                action_name = "Confirmed Finding" if review_status == 'analyst_confirmed' else "Rejected Finding"
-                evt_time = review_time
-            elif source_engine == 'manual' or review_status == 'manual_entry':
-                action_name = "Created Finding"
-                evt_time = created_at
+                    """
+                    SELECT f.case_id, f.created_at, f.fact, f.source_engine, f.reviewed_by, f.review_status, f.timestamp
+                    FROM fir_findings f
+                    INNER JOIN cases c ON f.case_id = c.case_id
+                    WHERE c.tenant_id = %s
+                    ORDER BY f.timestamp DESC
+                    """,
+                    (x_tenant_id,)
+                )
                 
-            if action_name and evt_time:
-                # Group by minute
-                minute_key = evt_time.replace(second=0, microsecond=0)
-                user_name = user_map.get(reviewed_by, reviewed_by) if reviewed_by else "Analyst"
-                group_key = (action_name, case_id, user_name, minute_key)
-                
-                if group_key not in finding_events:
-                    finding_events[group_key] = {
-                        "action": action_name,
-                        "case_id": case_id,
-                        "created_by": user_name,
-                        "created_by_id": reviewed_by if reviewed_by else "system",
-                        "created_at": evt_time,
-                        "details": fact[:50] + "..." if fact and len(fact) > 50 else fact,
-                        "count": 1
-                    }
-                else:
-                    finding_events[group_key]["count"] += 1
+                # Deduplicate findings by action, case, user, and approximate minute
+                finding_events = {}
+                for row in cur.fetchall():
+                    case_id, created_at, fact, source_engine, reviewed_by, review_status, review_time = row
+                    
+                    action_name = None
+                    evt_time = None
+                    if review_status in ('analyst_confirmed', 'analyst_rejected') and review_time:
+                        action_name = "Confirmed Finding" if review_status == 'analyst_confirmed' else "Rejected Finding"
+                        evt_time = review_time
+                    elif source_engine == 'manual' or review_status == 'manual_entry':
+                        action_name = "Created Finding"
+                        evt_time = created_at
+                        
+                    if action_name and evt_time:
+                        # Group by minute
+                        minute_key = evt_time.replace(second=0, microsecond=0)
+                        user_name = user_map.get(reviewed_by, reviewed_by) if reviewed_by else "Analyst"
+                        group_key = (action_name, case_id, user_name, minute_key)
+                        
+                        if group_key not in finding_events:
+                            finding_events[group_key] = {
+                                "action": action_name,
+                                "case_id": case_id,
+                                "created_by": user_name,
+                                "created_by_id": reviewed_by if reviewed_by else "system",
+                                "created_at": evt_time,
+                                "details": fact[:50] + "..." if fact and len(fact) > 50 else fact,
+                                "count": 1
+                            }
+                        else:
+                            finding_events[group_key]["count"] += 1
 
-        for grp, evt in finding_events.items():
-            if evt["count"] > 1:
-                evt["action"] = f"{evt['action']} ({evt['count']})"
-                evt["details"] = f"Multiple findings ({evt['count']}) updated"
-            evt["created_at"] = evt["created_at"].isoformat() if hasattr(evt["created_at"], "isoformat") else str(evt["created_at"])
-            activity.append(evt)
-            
-        # 4. Case Notes
-        cur.execute(
-            """
-            SELECT note_id, case_id, created_by, created_at, title, type
-            FROM case_notes
-            WHERE tenant_id = %s
-            """,
-            (x_tenant_id,)
-        )
-        for row in cur.fetchall():
-            note_id, case_id, created_by, created_at, title, note_type = row
-            activity.append({
-                "action": "Created Note",
-                "case_id": case_id,
-                "created_by": user_map.get(created_by, created_by),
-                "created_by_id": created_by,
-                "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
-                "details": f"{title} ({note_type})"
-            })
-            
-        conn.close()
+                for grp, evt in finding_events.items():
+                    if evt["count"] > 1:
+                        evt["action"] = f"{evt['action']} ({evt['count']})"
+                        evt["details"] = f"Multiple findings ({evt['count']}) updated"
+                    evt["created_at"] = evt["created_at"].isoformat() if hasattr(evt["created_at"], "isoformat") else str(evt["created_at"])
+                    activity.append(evt)
+                    
+                # 4. Case Notes
+                cur.execute(
+                    """
+                    SELECT note_id, case_id, created_by, created_at, title, type
+                    FROM case_notes
+                    WHERE tenant_id = %s
+                    """,
+                    (x_tenant_id,)
+                )
+                for row in cur.fetchall():
+                    note_id, case_id, created_by, created_at, title, note_type = row
+                    activity.append({
+                        "action": "Created Note",
+                        "case_id": case_id,
+                        "created_by": user_map.get(created_by, created_by),
+                        "created_by_id": created_by,
+                        "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+                        "details": f"{title} ({note_type})"
+                    })
     except Exception as e:
         print(f"[DB WARNING] Could not fetch comprehensive activity: {e}")
         
@@ -1101,10 +1100,10 @@ async def create_review_note(
         # Log to audit log
         cur.execute(
             """
-            INSERT INTO audit_log (tenant_id, case_id, user_id, action, target_type, target_id, details)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (x_tenant_id, case_id, current_user.get("user_id", "admin"), "Created Review Note", "review_note", note_id, f"{note.title}")
+            (x_tenant_id, case_id, current_user.get("user_id", "admin"), current_user.get("name", "analyst"), "Created Review Note", json.dumps({"note_id": note_id, "title": note.title}))
         )
         conn.commit()
         conn.close()
@@ -1142,10 +1141,10 @@ async def update_review_note(
         action_name = "Resolved Review Note" if note.status == "Resolved" else "Updated Review Note"
         cur.execute(
             """
-            INSERT INTO audit_log (tenant_id, case_id, user_id, action, target_type, target_id, details)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (x_tenant_id, case_id, current_user.get("user_id", "admin"), action_name, "review_note", note_id, f"{note.title}")
+            (x_tenant_id, case_id, current_user.get("user_id", "admin"), current_user.get("name", "analyst"), action_name, json.dumps({"note_id": note_id, "title": note.title}))
         )
         conn.commit()
         conn.close()
@@ -1477,10 +1476,10 @@ async def run_case_agents(
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO audit_log (tenant_id, case_id, user_id, action, target_type, target_id, details)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
+            VALUES (%s, %s, %s, %s, %s, %s)
             """,
-            (x_tenant_id, clean_case_id, current_user.get("id") or current_user.get("user_id", "analyst"), "Triggered Multi-Agent Analysis", "case", clean_case_id, "Launched Agents 1-7 reasoning swarm")
+            (x_tenant_id, clean_case_id, current_user.get("id") or current_user.get("user_id", "analyst"), current_user.get("name") or "analyst", "Triggered Multi-Agent Analysis", json.dumps({"description": "Launched Agents 1-7 reasoning swarm"}))
         )
         conn.commit()
         conn.close()

@@ -1,9 +1,9 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { isTokenExpired, clearSession } from '../js/authSession';
+import { isTokenExpired, clearSession, getAuthToken } from '../js/authSession';
 
 const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('argus_token');
+  const token = getAuthToken();
 
   if (!token) {
     return <Navigate to="/login" replace />;

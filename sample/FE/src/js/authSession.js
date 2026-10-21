@@ -48,7 +48,72 @@ export function getTokenRemainingMs(token) {
 }
 
 /**
- * Clear all authentication and session data from localStorage
+ * Get active auth token from localStorage (persistent) or sessionStorage (temporary)
+ */
+export function getAuthToken() {
+  try {
+    return localStorage.getItem('argus_token') || sessionStorage.getItem('argus_token') || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Get active user object from localStorage or sessionStorage
+ */
+export function getAuthUser() {
+  try {
+    const raw = localStorage.getItem('argus_user') || sessionStorage.getItem('argus_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Store auth session.
+ * @param {string} token
+ * @param {object} user
+ * @param {boolean} keepActive - If true, persist in localStorage across browser restarts.
+ *                                If false, store strictly in sessionStorage (expires on browser/tab close).
+ */
+export function setAuthSession(token, user, keepActive = true) {
+  try {
+    const userStr = JSON.stringify(user);
+    if (keepActive) {
+      localStorage.setItem('argus_token', token);
+      localStorage.setItem('argus_user', userStr);
+      localStorage.setItem('argus_keep_active', 'true');
+      sessionStorage.setItem('argus_token', token);
+      sessionStorage.setItem('argus_user', userStr);
+    } else {
+      // Ephemeral tab session: active while tab is open, cleared when tab/browser closes
+      sessionStorage.setItem('argus_token', token);
+      sessionStorage.setItem('argus_user', userStr);
+      localStorage.setItem('argus_token', token);
+      localStorage.setItem('argus_user', userStr);
+      localStorage.setItem('argus_keep_active', 'false');
+    }
+    localStorage.setItem('argus_last_active', String(Date.now()));
+  } catch (e) {
+    console.error('Error saving auth session:', e);
+  }
+}
+
+// Clean up temporary session tokens when tab/browser is closed if keepActive was false
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    try {
+      if (localStorage.getItem('argus_keep_active') === 'false') {
+        localStorage.removeItem('argus_token');
+        localStorage.removeItem('argus_user');
+      }
+    } catch (e) {}
+  });
+}
+
+/**
+ * Clear all authentication and session data from both localStorage and sessionStorage
  */
 export function clearSession() {
   try {
@@ -57,6 +122,8 @@ export function clearSession() {
     localStorage.removeItem('active_case_id');
     localStorage.removeItem('active_case_name');
     localStorage.removeItem('argus_last_active');
+    sessionStorage.removeItem('argus_token');
+    sessionStorage.removeItem('argus_user');
     window.dispatchEvent(new Event('argus_logout'));
   } catch (e) {
     console.error('Error clearing session:', e);

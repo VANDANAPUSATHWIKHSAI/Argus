@@ -1,4 +1,5 @@
 import { DEFAULT_TENANT_ID } from './api';
+import { formatEvidenceId } from './dateUtils';
 
 class EvidenceApp {
   constructor() {
@@ -111,35 +112,60 @@ class EvidenceApp {
       if (!response.ok) throw new Error('Failed to fetch evidence');
       const result = await response.json();
 
-      this.evidenceData = result.data.map(item => {
+      this.evidenceData = result.data.map((item, index) => {
         const type = this.detectType(item.filename);
-        return {
-          id:         item.evidence_id,
-          name:       item.filename,
-          type,
-          typeClass:  'type-file',
-          source:     item.metadata?.host_id || item.uploaded_by || 'Unknown',
-          size:       this.formatBytes(item.metadata?.size_bytes || 0),
-          status:     item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase(),
-          statusClass:`status-${item.status.toLowerCase()}`,
-          added:      item.upload_timestamp ? new Date(item.upload_timestamp).toLocaleString() : 'N/A',
-          risk:       'Medium',
-          riskClass:  'risk-medium',
-          desc:       item.metadata?.description || 'No description available.',
-          sha:        item.sha256_hash,
-          process:    'N/A',
-          user:       item.uploaded_by || 'system',
-          finding:    'N/A'
-        };
-      });
+        const displayId = formatEvidenceId(item.evidence_id, index + 1);
+        const rawStatus = (item.status || '').toLowerCase();
+        let normalizedStatus = 'Stored';
+        let statusClass = 'status-stored';
+        if (rawStatus.includes('fail') || rawStatus === 'error' || rawStatus === 'rejected' || Boolean(item.metadata?.error || item.error)) {
+          normalizedStatus = 'Failed';
+          statusClass = 'status-failed';
+        } else if (rawStatus === 'processing' || rawStatus === 'uploaded' || rawStatus === 'sandboxed' || rawStatus === 'hashed' || rawStatus === 'metadata_extracted') {
+          normalizedStatus = 'Processing';
+          statusClass = 'status-processing';
+        } else if (rawStatus === 'stored' || rawStatus === 'analyzed' || rawStatus === 'ingested' || rawStatus === 'completed') {
+          normalizedStatus = 'Stored';
+          statusClass = 'status-stored';
+        } else if (item.status) {
+          normalizedStatus = item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase();
+          statusClass = `status-${rawStatus}`;
+        }
+
+          return {
+            id:         item.evidence_id,
+            displayId:  displayId,
+            name:       item.filename,
+            type,
+            typeClass:  'type-file',
+            source:     item.metadata?.host_id || item.uploaded_by || 'Unknown',
+            size:       this.formatBytes(item.metadata?.size_bytes || 0),
+            status:     normalizedStatus,
+            statusClass,
+            added:      item.upload_timestamp ? new Date(item.upload_timestamp).toLocaleString() : 'N/A',
+            risk:       normalizedStatus === 'Failed' ? 'High' : 'Medium',
+            riskClass:  normalizedStatus === 'Failed' ? 'risk-high' : 'risk-medium',
+            desc:       item.metadata?.description || (item.metadata?.error ? `Error: ${item.metadata.error}` : 'No description available.'),
+            sha:        item.sha256_hash,
+            process:    'N/A',
+            user:       item.uploaded_by || 'system',
+            finding:    'N/A'
+          };
+        });
 
       // Summary stats
       let ingestedCount = 0, processingCount = 0, failedCount = 0, totalBytes = 0;
       result.data.forEach(item => {
         const s = (item.status || '').toLowerCase();
-        if (s === 'ingested' || s === 'stored') ingestedCount++;
-        else if (s === 'processing' || s === 'uploaded') processingCount++;
-        else if (s === 'failed') failedCount++;
+        if (s.includes('fail') || s === 'error' || s === 'rejected' || Boolean(item.metadata?.error || item.error)) {
+          failedCount++;
+        } else if (s === 'processing' || s === 'uploaded' || s === 'sandboxed' || s === 'hashed' || s === 'metadata_extracted') {
+          processingCount++;
+        } else if (s === 'ingested' || s === 'stored' || s === 'analyzed' || s === 'completed') {
+          ingestedCount++;
+        } else {
+          ingestedCount++;
+        }
         totalBytes += (item.metadata?.size_bytes || 0);
       });
       this.updateSummaryStats(this.evidenceData.length, ingestedCount, processingCount, failedCount, totalBytes);

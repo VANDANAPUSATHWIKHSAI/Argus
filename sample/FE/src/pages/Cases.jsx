@@ -20,13 +20,19 @@ const Cases = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
+  const currentUserStr = localStorage.getItem('argus_user');
+  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
+  const activeCaseId = localStorage.getItem('active_case_id');
+
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, statusFilter]);
 
-  const currentUserStr = localStorage.getItem('argus_user');
-  const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
-  const activeCaseId = localStorage.getItem('active_case_id');
+  useEffect(() => {
+    if (currentUser && (currentUser.role === 'analyst' || currentUser.role === 'senior_analyst')) {
+      navigate('/dashboard');
+    }
+  }, [currentUser, navigate]);
 
   const closeAlert = () => setCustomAlert({ ...customAlert, isOpen: false });
 

@@ -198,25 +198,34 @@ const Dashboard = () => {
   let activeStep = -1;
   
   if (activeSummary) {
-    const evidenceCount = (activeSummary.total_evidence_files || activeSummary.evidence_count || 0);
-    const findingsCount  = (activeSummary.findings_count || 0);
-
-    if (findingsCount > 0) {
-      // Findings generated → Evidence + Analysis + Correlation + Findings all done
-      completedSteps = 4;
-      activeStep = 4;
-    } else if ((activeSummary.total_artifacts || 0) > 0) {
-      // Artifacts extracted → Analysis is COMPLETED (blue), Correlation is ACTIVE
-      completedSteps = 2;
-      activeStep = 2;
-    } else if (evidenceCount > 0) {
-      // Evidence uploaded → Evidence Collection is COMPLETED (blue), Analysis is ACTIVE
-      completedSteps = 1;
-      activeStep = 1;
+    if (activeSummary.investigation_progress) {
+      const prog = activeSummary.investigation_progress;
+      const stageKeys = ['evidence_collection', 'analysis', 'correlation', 'findings', 'report'];
+      const stages = stageKeys.map(k => (typeof prog[k] === 'object' ? prog[k]?.status : prog[k]));
+      completedSteps = stages.filter(s => s === 'completed').length;
+      const inProgIdx = stages.findIndex(s => s === 'in_progress');
+      activeStep = inProgIdx !== -1 ? inProgIdx : (completedSteps >= 5 ? 4 : completedSteps);
     } else {
-      // Case created but no evidence yet → Evidence Collection is the ACTIVE step
-      completedSteps = 0;
-      activeStep = 0;
+      const evidenceCount = (activeSummary.total_evidence_files || activeSummary.evidence_count || 0);
+      const findingsCount = (activeSummary.total_findings ?? activeSummary.findings_count ?? 0);
+
+      if (findingsCount > 0) {
+        // Findings generated → Evidence, Analysis, Correlation completed
+        completedSteps = 4;
+        activeStep = 4;
+      } else if ((activeSummary.total_artifacts || 0) > 0) {
+        // Artifacts extracted → Analysis is completed, Correlation is active
+        completedSteps = 2;
+        activeStep = 2;
+      } else if (evidenceCount > 0) {
+        // Evidence uploaded → Evidence Collection completed, Analysis is active
+        completedSteps = 1;
+        activeStep = 1;
+      } else {
+        // Case created but no evidence yet
+        completedSteps = 0;
+        activeStep = 0;
+      }
     }
   }
 
@@ -536,8 +545,29 @@ const Dashboard = () => {
                     <div className="timeline-card" style={{ flexShrink: 0 }}>
                       <div className="timeline-header">
                         <div>
-                          <h3>Investigation Progress</h3>
-                          <p>Track the lifecycle of the active case.</p>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <h3 style={{ margin: 0 }}>Investigation Progress</h3>
+                            <Link 
+                              to="/timeline" 
+                              style={{ 
+                                fontSize: '11.5px', 
+                                fontWeight: 700, 
+                                color: '#3b82f6', 
+                                textDecoration: 'none', 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '4px', 
+                                padding: '3px 8px', 
+                                borderRadius: '6px', 
+                                background: 'rgba(59, 130, 246, 0.1)', 
+                                border: '1px solid rgba(59, 130, 246, 0.25)' 
+                              }}
+                            >
+                              <span>Attack Timeline</span>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </Link>
+                          </div>
+                          <p style={{ margin: '4px 0 0 0' }}>Track the lifecycle of the active case.</p>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                           <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)' }}>{completedSteps} of {timelineSteps.length} stages complete</span>

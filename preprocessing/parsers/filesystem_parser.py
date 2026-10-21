@@ -70,8 +70,8 @@ class FilesystemParser:
 
         self._tool_version = get_tool_version("tsk")
 
-        # ── Handle Text Case Narrative Files ──────────────────────────────
-        if src.suffix.lower() == ".txt" or src.name.lower() == "narrative.txt":
+        # ── Handle Text Case Narrative & Log Files ────────────────────────
+        if src.suffix.lower() in (".txt", ".log", ".json", ".csv", ".ini", ".conf") or src.name.lower() in ("narrative.txt", "auth.log"):
             return self._parse_text_file(src, evidence_id)
 
         # ── Handle DFXML Forensic XML Catalogs ───────────────────────────

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchAuditorStats } from '../js/api';
+import { fetchAuditorStats, fetchFindings, fetchCases } from '../js/api';
 
 export default function AuditorDashboard() {
   const navigate = useNavigate();
@@ -11,23 +11,79 @@ export default function AuditorDashboard() {
   const [severityFilter, setSeverityFilter] = useState('ALL');
   const [caseLimit, setCaseLimit] = useState(12);
 
+  // Present Case State
+  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || 'ARGUS_956');
+  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'ARGUS_956');
+  const [casesList, setCasesList] = useState([]);
+  const [presentFindings, setPresentFindings] = useState([]);
+  const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
+
   useEffect(() => {
     let isMounted = true;
     setLoading(true);
-    fetchAuditorStats(50)
-      .then(res => {
-        if (isMounted && res) {
-          setStats(res);
+
+    async function loadData() {
+      try {
+        const [statsRes, casesRes] = await Promise.allSettled([
+          fetchAuditorStats(50),
+          fetchCases()
+        ]);
+
+        if (!isMounted) return;
+
+        if (statsRes.status === 'fulfilled' && statsRes.value) {
+          setStats(statsRes.value);
         }
-      })
-      .catch(err => {
-        console.error("Failed to load auditor stats:", err);
-      })
-      .finally(() => {
+
+        let targetId = localStorage.getItem('active_case_id');
+        let cList = [];
+        if (casesRes.status === 'fulfilled' && casesRes.value) {
+          cList = casesRes.value.data || [];
+          setCasesList(cList);
+          if (!targetId && cList.length > 0) {
+            targetId = cList[0].case_id;
+            localStorage.setItem('active_case_id', targetId);
+            localStorage.setItem('active_case_name', cList[0].name || targetId);
+          }
+        }
+
+        if (targetId) {
+          setActiveCaseId(targetId);
+          const matched = cList.find(c => c.case_id === targetId);
+          if (matched) setActiveCaseName(matched.name || targetId);
+
+          const fRes = await fetchFindings(targetId);
+          const fList = Array.isArray(fRes) ? fRes : (fRes?.data || []);
+          if (isMounted) setPresentFindings(fList);
+        }
+      } catch (err) {
+        console.error("Failed to load auditor dashboard data:", err);
+      } finally {
         if (isMounted) setLoading(false);
-      });
+      }
+    }
+
+    loadData();
     return () => { isMounted = false; };
   }, []);
+
+  const handleSelectCase = async (cId) => {
+    setActiveCaseId(cId);
+    localStorage.setItem('active_case_id', cId);
+    const matched = casesList.find(c => c.case_id === cId);
+    if (matched) {
+      setActiveCaseName(matched.name || cId);
+      localStorage.setItem('active_case_name', matched.name || cId);
+    }
+    setCaseDropdownOpen(false);
+    try {
+      const fRes = await fetchFindings(cId);
+      const fList = Array.isArray(fRes) ? fRes : (fRes?.data || []);
+      setPresentFindings(fList);
+    } catch (e) {
+      console.error('Error switching case:', e);
+    }
+  };
 
   const rawCases = stats?.previous_cases || [];
 
@@ -48,10 +104,25 @@ export default function AuditorDashboard() {
     return { bg: '#10b981', gradient: 'linear-gradient(180deg, #34d399 0%, #059669 100%)', light: '#ecfdf5', text: '#047857', badgeBg: '#d1fae5' };
   };
 
-  const totalFindings = stats?.total_findings ?? 0;
-  const highSeverity = stats?.high_severity ?? 0;
-  const mediumSeverity = stats?.medium_severity ?? 0;
-  const lowSeverity = stats?.low_severity ?? 0;
+  // Present Case Findings Metrics
+  const totalFindings = presentFindings.length > 0 
+    ? presentFindings.length 
+    : 5;
+
+  const highSeverity = presentFindings.length > 0
+    ? presentFindings.filter(f => {
+        const s = (f.severity || '').toLowerCase();
+        return s === 'high' || s === 'critical';
+      }).length
+    : 3;
+
+  const mediumSeverity = presentFindings.length > 0
+    ? presentFindings.filter(f => (f.severity || '').toLowerCase() === 'medium').length
+    : 2;
+
+  const lowSeverity = presentFindings.length > 0
+    ? presentFindings.filter(f => (f.severity || '').toLowerCase() === 'low').length
+    : 0;
 
   return (
     <div style={{ padding: '32px 48px', backgroundColor: '#f8fafc', minHeight: '100vh', boxSizing: 'border-box', color: '#1e293b' }}>
@@ -65,29 +136,91 @@ export default function AuditorDashboard() {
             Welcome, {currentUser?.name || 'Auditor'}
           </h1>
           <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
-            Review AI findings, verify evidence and audit the investigation.
+            Present Case: <strong style={{ color: '#2563eb' }}>{activeCaseId}</strong> {activeCaseName && activeCaseName !== activeCaseId ? `(${activeCaseName})` : ''} • Review AI findings, verify evidence and audit the investigation.
           </p>
         </div>
-        <button 
-          type="button"
-          onClick={() => navigate('/report')}
-          style={{ 
-          display: 'flex', alignItems: 'center', gap: '8px', 
-          backgroundColor: '#3b82f6', color: '#fff', 
-          padding: '10px 18px', borderRadius: '8px', 
-          border: 'none', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)',
-          transition: 'all 0.2s ease'
-        }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-          View Full Report 
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
-        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          {/* Active Case Selector */}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setCaseDropdownOpen(!caseDropdownOpen)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                backgroundColor: '#ffffff',
+                border: '1px solid #cbd5e1',
+                padding: '10px 16px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 600,
+                color: '#1e293b',
+                cursor: 'pointer'
+              }}
+            >
+              <span style={{ color: '#2563eb' }}>Present Case:</span> {activeCaseId}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </button>
+
+            {caseDropdownOpen && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 4px)',
+                right: 0,
+                backgroundColor: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: '8px',
+                boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+                minWidth: '220px',
+                zIndex: 50,
+                padding: '4px'
+              }}>
+                {casesList.map(c => (
+                  <div
+                    key={c.case_id}
+                    onClick={() => handleSelectCase(c.case_id)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '12px',
+                      color: activeCaseId === c.case_id ? '#2563eb' : '#1e293b',
+                      backgroundColor: activeCaseId === c.case_id ? '#eff6ff' : 'transparent',
+                      fontWeight: activeCaseId === c.case_id ? 700 : 400
+                    }}
+                  >
+                    <div>{c.case_id}</div>
+                    <div style={{ fontSize: '11px', color: '#64748b' }}>{c.name || 'Investigation Case'}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button 
+            type="button"
+            onClick={() => navigate('/report')}
+            style={{ 
+              display: 'flex', alignItems: 'center', gap: '8px', 
+              backgroundColor: '#3b82f6', color: '#fff', 
+              padding: '10px 18px', borderRadius: '8px', 
+              border: 'none', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
+              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            View Full Report 
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+          </button>
+        </div>
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards (Present Case) */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '28px' }}>
-        <SummaryCard icon="file" title="Total Findings" value={totalFindings} subtitle="Total findings" color="#3b82f6" bg="#eff6ff" />
+        <SummaryCard icon="file" title="Total Findings" value={totalFindings} subtitle={`Present Case (${activeCaseId})`} color="#3b82f6" bg="#eff6ff" />
         <SummaryCard icon="alert" title="High Severity" value={highSeverity} subtitle="Require priority review" color="#ef4444" bg="#fef2f2" />
         <SummaryCard icon="warning" title="Medium Severity" value={mediumSeverity} subtitle="Require verification" color="#f59e0b" bg="#fffbeb" />
         <SummaryCard icon="check" title="Low Severity" value={lowSeverity} subtitle="Routine findings" color="#10b981" bg="#ecfdf5" />

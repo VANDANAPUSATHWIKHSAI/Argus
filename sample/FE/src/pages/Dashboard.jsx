@@ -233,10 +233,6 @@ const Dashboard = () => {
   const activeLineWidth = `calc((100% - 80px) * ${stepRatio})`;
   const progressBarWidth = `${(completedSteps / timelineSteps.length) * 100}%`;
 
-  if (isAuditor) {
-    return <Navigate to="/report" replace />;
-  }
-
   return (
     <>
       <div id="app-shell">

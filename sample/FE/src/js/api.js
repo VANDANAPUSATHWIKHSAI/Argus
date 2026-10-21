@@ -106,6 +106,32 @@ export async function updatePassword(currentPassword, newPassword) {
   });
 }
 
+export async function requestPasswordResetOtp(userid) {
+  const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userid: userid.trim() }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Failed to send OTP code');
+  }
+  return response.json();
+}
+
+export async function verifyOtpAndResetPassword(userid, otp, newPassword) {
+  const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userid: userid.trim(), otp: otp.trim(), new_password: newPassword }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Failed to verify OTP');
+  }
+  return response.json();
+}
+
 export async function fetchActivity() {
   return fetchWithAuth('/cases/activity');
 }

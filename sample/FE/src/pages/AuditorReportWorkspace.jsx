@@ -808,27 +808,6 @@ Hash Ledger: SHA-256 Preserved
             </button>
 
             <NotificationMenu />
-
-            {/* Auditor Profile Avatar */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', paddingLeft: '8px', borderLeft: `1px solid ${themeStyles.topbarBorder}` }}>
-              <div style={{
-                width: '30px',
-                height: '30px',
-                borderRadius: '50%',
-                background: '#059669',
-                color: '#ffffff',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: '13px',
-                fontWeight: 700
-              }}>
-                {user?.name ? user.name.charAt(0).toUpperCase() : 'A'}
-              </div>
-              <div style={{ fontSize: '12px', fontWeight: 600, color: themeStyles.textMain }}>
-                {user?.name || 'Auditor'}
-              </div>
-            </div>
           </div>
         </header>
 

@@ -98,9 +98,23 @@ export default function AuditorReportWorkspace() {
         setCasesList(list);
         if (list.length > 0) {
           const stored = localStorage.getItem('active_case_id');
-          const matched = list.find(c => c.case_id === stored) || list[0];
-          setActiveCaseId(matched.case_id);
-          setActiveCaseName(matched.name || matched.case_id);
+          const validCases = list.filter(c => c.case_id !== '00000000-0000-0000-0000-000000000001');
+          const matched = (stored && stored !== '00000000-0000-0000-0000-000000000001')
+            ? validCases.find(c => c.case_id === stored)
+            : null;
+          
+          const presentCase = matched 
+            || validCases.find(c => c.status === 'open' || c.is_active)
+            || validCases.find(c => c.case_id === 'ARGUS_956')
+            || validCases[0] 
+            || list[0];
+
+          if (presentCase) {
+            setActiveCaseId(presentCase.case_id);
+            setActiveCaseName(presentCase.name || presentCase.case_id);
+            localStorage.setItem('active_case_id', presentCase.case_id);
+            localStorage.setItem('active_case_name', presentCase.name || presentCase.case_id);
+          }
         }
       } catch (err) {
         console.error('Failed to load cases:', err);
@@ -707,73 +721,24 @@ Hash Ledger: SHA-256 Preserved
               </div>
             </div>
 
-            {/* Case Selector Dropdown */}
-            <div style={{ position: 'relative', marginLeft: '12px' }}>
-              <button
-                type="button"
-                onClick={() => setCaseDropdownOpen(!caseDropdownOpen)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: isDark ? '#1e293b' : '#f1f5f9',
-                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.12)' : '#cbd5e1'}`,
-                  borderRadius: '6px',
-                  padding: '6px 12px',
-                  color: themeStyles.textMain,
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                <span style={{ color: '#3b82f6' }}>Case:</span> {activeCaseId}
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-              </button>
-
-              {caseDropdownOpen && (
-                <div style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 4px)',
-                  left: 0,
-                  background: isDark ? '#0f172a' : '#ffffff',
-                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.15)' : '#e2e8f0'}`,
-                  borderRadius: '8px',
-                  boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
-                  minWidth: '220px',
-                  zIndex: 100,
-                  padding: '4px'
-                }}>
-                  {casesList.length > 0 ? (
-                    casesList.map(c => (
-                      <div
-                        key={c.case_id}
-                        onClick={() => {
-                          setActiveCaseId(c.case_id);
-                          setActiveCaseName(c.name || c.case_id);
-                          localStorage.setItem('active_case_id', c.case_id);
-                          localStorage.setItem('active_case_name', c.name || c.case_id);
-                          setCaseDropdownOpen(false);
-                        }}
-                        style={{
-                          padding: '8px 12px',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '12px',
-                          color: activeCaseId === c.case_id ? '#3b82f6' : themeStyles.textMain,
-                          background: activeCaseId === c.case_id ? (isDark ? 'rgba(59,130,246,0.15)' : '#eff6ff') : 'transparent',
-                          fontWeight: activeCaseId === c.case_id ? 700 : 400
-                        }}
-                      >
-                        <div style={{ fontWeight: 600 }}>{c.case_id}</div>
-                        <div style={{ fontSize: '11px', color: themeStyles.textMuted }}>{c.name || 'Investigation Case'}</div>
-                      </div>
-                    ))
-                  ) : (
-                    <div style={{ padding: '8px 12px', fontSize: '12px', color: themeStyles.textMuted }}>
-                      No other cases available
-                    </div>
-                  )}
-                </div>
+            {/* Present Case Badge (Only Present Case) */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              background: isDark ? 'rgba(59, 130, 246, 0.12)' : '#eff6ff',
+              border: `1px solid ${isDark ? 'rgba(59, 130, 246, 0.25)' : '#bfdbfe'}`,
+              borderRadius: '6px',
+              padding: '6px 12px',
+              color: themeStyles.textMain,
+              fontSize: '12px',
+              fontWeight: 600,
+              marginLeft: '8px'
+            }}>
+              <span style={{ color: '#2563eb', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Present Case:</span>
+              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: themeStyles.textMain }}>{activeCaseId}</span>
+              {activeCaseName && activeCaseName !== activeCaseId && (
+                <span style={{ fontSize: '11px', color: themeStyles.textMuted }}>({activeCaseName})</span>
               )}
             </div>
           </div>

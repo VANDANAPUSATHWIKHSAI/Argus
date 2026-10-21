@@ -38,20 +38,28 @@ export default function AuditorDashboard() {
         let targetId = localStorage.getItem('active_case_id');
         let cList = [];
         if (casesRes.status === 'fulfilled' && casesRes.value) {
-          cList = casesRes.value.data || [];
+          cList = (casesRes.value.data || []).filter(c => c.case_id !== '00000000-0000-0000-0000-000000000001');
           setCasesList(cList);
-          if (!targetId && cList.length > 0) {
-            targetId = cList[0].case_id;
-            localStorage.setItem('active_case_id', targetId);
-            localStorage.setItem('active_case_name', cList[0].name || targetId);
+
+          const matched = (targetId && targetId !== '00000000-0000-0000-0000-000000000001')
+            ? cList.find(c => c.case_id === targetId)
+            : null;
+
+          const presentCase = matched 
+            || cList.find(c => c.status === 'open' || c.is_active)
+            || cList.find(c => c.case_id === 'ARGUS_956')
+            || cList[0];
+
+          if (presentCase) {
+            targetId = presentCase.case_id;
+            setActiveCaseId(presentCase.case_id);
+            setActiveCaseName(presentCase.name || presentCase.case_id);
+            localStorage.setItem('active_case_id', presentCase.case_id);
+            localStorage.setItem('active_case_name', presentCase.name || presentCase.case_id);
           }
         }
 
         if (targetId) {
-          setActiveCaseId(targetId);
-          const matched = cList.find(c => c.case_id === targetId);
-          if (matched) setActiveCaseName(matched.name || targetId);
-
           const fRes = await fetchFindings(targetId);
           const fList = Array.isArray(fRes) ? fRes : (fRes?.data || []);
           if (isMounted) setPresentFindings(fList);
@@ -141,62 +149,21 @@ export default function AuditorDashboard() {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Active Case Selector */}
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              onClick={() => setCaseDropdownOpen(!caseDropdownOpen)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                backgroundColor: '#ffffff',
-                border: '1px solid #cbd5e1',
-                padding: '10px 16px',
-                borderRadius: '8px',
-                fontSize: '13px',
-                fontWeight: 600,
-                color: '#1e293b',
-                cursor: 'pointer'
-              }}
-            >
-              <span style={{ color: '#2563eb' }}>Present Case:</span> {activeCaseId}
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-            </button>
-
-            {caseDropdownOpen && (
-              <div style={{
-                position: 'absolute',
-                top: 'calc(100% + 4px)',
-                right: 0,
-                backgroundColor: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '8px',
-                boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-                minWidth: '220px',
-                zIndex: 50,
-                padding: '4px'
-              }}>
-                {casesList.map(c => (
-                  <div
-                    key={c.case_id}
-                    onClick={() => handleSelectCase(c.case_id)}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                      fontSize: '12px',
-                      color: activeCaseId === c.case_id ? '#2563eb' : '#1e293b',
-                      backgroundColor: activeCaseId === c.case_id ? '#eff6ff' : 'transparent',
-                      fontWeight: activeCaseId === c.case_id ? 700 : 400
-                    }}
-                  >
-                    <div>{c.case_id}</div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>{c.name || 'Investigation Case'}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Present Case Badge (Only Present Case) */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            backgroundColor: '#ffffff',
+            border: '1px solid #cbd5e1',
+            padding: '10px 16px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontWeight: 600,
+            color: '#1e293b'
+          }}>
+            <span style={{ color: '#2563eb', fontWeight: 700, textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.04em' }}>Present Case:</span>
+            <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{activeCaseId}</span>
           </div>
 
           <button 

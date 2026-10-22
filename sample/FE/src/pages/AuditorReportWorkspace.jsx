@@ -49,6 +49,8 @@ export default function AuditorReportWorkspace() {
     user = JSON.parse(localStorage.getItem('argus_user'));
   } catch (e) {}
 
+  const isAuditor = user?.role === 'auditor';
+
   // Theme state
   const [theme, setTheme] = useState(
     document.documentElement.getAttribute('data-theme') || localStorage.getItem('argus_theme') || 'dark'
@@ -195,13 +197,14 @@ export default function AuditorReportWorkspace() {
 
   // Initialize Welcome Message
   const initAuditChatWelcome = (caseId, caseName) => {
+    const roleTitle = isAuditor ? 'Auditor' : 'Senior Analyst';
     setChatMessages([
       {
         id: 'welcome-msg',
         sender: 'assistant',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         text: `### 🛡️ AI Forensic Audit Copilot Ready
-Welcome, **${user?.name || 'Auditor'}**. I am grounded in deterministic evidence and findings for case **${caseId}** (${caseName || 'Active Case'}).
+Welcome, **${user?.name || roleTitle}**. I am grounded in deterministic evidence and findings for case **${caseId}** (${caseName || 'Active Case'}).
 
 #### Active Audit Scope:
 - **Evidence Ledgers:** Cryptographic SHA-256 hashes loaded and verified.
@@ -702,21 +705,25 @@ Hash Ledger: SHA-256 Preserved
               </div>
               <div>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: themeStyles.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  Auditor Forensic Workspace
+                  {isAuditor ? 'Auditor Forensic Workspace' : 'Analyst Forensic Workspace'}
                   <span style={{ 
                     fontSize: '11px', 
                     padding: '2px 8px', 
                     borderRadius: '999px', 
-                    background: isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5', 
-                    color: '#10b981', 
+                    background: isAuditor 
+                      ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5')
+                      : (isDark ? 'rgba(59, 130, 246, 0.15)' : '#dbeafe'), 
+                    color: isAuditor ? '#10b981' : '#2563eb', 
                     fontWeight: 600,
-                    border: '1px solid rgba(16, 185, 129, 0.3)'
+                    border: `1px solid ${isAuditor ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`
                   }}>
-                    Independent Review Mode
+                    {isAuditor ? 'Independent Review Mode' : 'Lead Analyst Mode'}
                   </span>
                 </div>
                 <div style={{ fontSize: '11px', color: themeStyles.textMuted }}>
-                  Side-by-side Live Report Preview & Grounded AI Audit Assistant
+                  {isAuditor 
+                    ? 'Side-by-side Live Report Preview & Grounded AI Audit Assistant' 
+                    : 'Side-by-side Live Forensic Report & Grounded AI Assistant'}
                 </div>
               </div>
             </div>
@@ -763,10 +770,10 @@ Hash Ledger: SHA-256 Preserved
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
-              title="Toggle Auditor Certified Sign-Off"
+              title={isAuditor ? "Toggle Auditor Certified Sign-Off" : "Toggle Analyst Report Verification"}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              <span>{isCertified ? 'Audit Certified' : 'Certify Report'}</span>
+              <span>{isCertified ? (isAuditor ? 'Audit Certified' : 'Report Verified') : (isAuditor ? 'Certify Report' : 'Verify & Sign-Off')}</span>
             </button>
 
             {/* Print / Export PDF */}

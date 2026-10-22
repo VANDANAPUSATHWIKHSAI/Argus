@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import NotificationMenu from '../components/NotificationMenu';
 import AlertModal from '../components/AlertModal';
@@ -17,6 +17,16 @@ const SEVERITY_COLORS = {
 
 const TimelineDetail = () => {
   const navigate = useNavigate();
+
+  let user = null;
+  try {
+    user = JSON.parse(localStorage.getItem('argus_user'));
+  } catch (e) {}
+
+  if (user?.role === 'analyst') {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const activeCaseId = localStorage.getItem('active_case_id');
   const activeCaseName = localStorage.getItem('active_case_name') || 'Current Case';
 

@@ -20,6 +20,12 @@ export default function ForensicGraph({ caseId }) {
   const [scale, setScale] = useState(1.0);
   const [loading, setLoading] = useState(false);
 
+  let currentUser = null;
+  try {
+    currentUser = JSON.parse(localStorage.getItem('argus_user'));
+  } catch (e) {}
+  const isAnalyst = currentUser?.role === 'analyst';
+
   useEffect(() => {
     if (!caseId) {
       setNodes([]);
@@ -129,10 +135,12 @@ export default function ForensicGraph({ caseId }) {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
               Graph View
             </button>
-            <button className="btn btn-outline" onClick={() => navigate('/timeline')}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-              Timeline View
-            </button>
+            {!isAnalyst && (
+              <button className="btn btn-outline" onClick={() => navigate('/timeline')}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                Timeline View
+              </button>
+            )}
           </div>
         </div>
 
@@ -338,13 +346,15 @@ export default function ForensicGraph({ caseId }) {
               </div>
             </div>
 
-            <button
-              className="btn btn-outline"
-              onClick={() => navigate('/timeline')}
-              style={{ width: '100%', justifyContent: 'center', color: 'var(--blue)', borderColor: 'var(--blue-light)', marginTop: 'auto' }}
-            >
-              View in Timeline →
-            </button>
+            {!isAnalyst && (
+              <button
+                className="btn btn-outline"
+                onClick={() => navigate('/timeline')}
+                style={{ width: '100%', justifyContent: 'center', color: 'var(--blue)', borderColor: 'var(--blue-light)', marginTop: 'auto' }}
+              >
+                View in Timeline →
+              </button>
+            )}
           </div>
         ) : (
           <div style={{ padding: '32px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>

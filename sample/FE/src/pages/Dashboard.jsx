@@ -547,25 +547,27 @@ const Dashboard = () => {
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <h3 style={{ margin: 0 }}>Investigation Progress</h3>
-                            <Link 
-                              to="/timeline" 
-                              style={{ 
-                                fontSize: '11.5px', 
-                                fontWeight: 700, 
-                                color: '#3b82f6', 
-                                textDecoration: 'none', 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                gap: '4px', 
-                                padding: '3px 8px', 
-                                borderRadius: '6px', 
-                                background: 'rgba(59, 130, 246, 0.1)', 
-                                border: '1px solid rgba(59, 130, 246, 0.25)' 
-                              }}
-                            >
-                              <span>Attack Timeline</span>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                            </Link>
+                            {currentUser?.role !== 'analyst' && (
+                              <Link 
+                                to="/timeline" 
+                                style={{ 
+                                  fontSize: '11.5px', 
+                                  fontWeight: 700, 
+                                  color: '#3b82f6', 
+                                  textDecoration: 'none', 
+                                  display: 'inline-flex', 
+                                  alignItems: 'center', 
+                                  gap: '4px', 
+                                  padding: '3px 8px', 
+                                  borderRadius: '6px', 
+                                  background: 'rgba(59, 130, 246, 0.1)', 
+                                  border: '1px solid rgba(59, 130, 246, 0.25)' 
+                                }}
+                              >
+                                <span>Attack Timeline</span>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </Link>
+                            )}
                           </div>
                           <p style={{ margin: '4px 0 0 0' }}>Track the lifecycle of the active case.</p>
                         </div>

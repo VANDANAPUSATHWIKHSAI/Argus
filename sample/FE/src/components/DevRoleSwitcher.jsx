@@ -34,7 +34,6 @@ const DEV_ACCOUNTS = [
       { name: 'AI Assistant', path: '/chatbot' },
       { name: 'Case Notes', path: '/case-notes' },
       { name: 'Sanitized Output', path: '/sanitized' },
-      { name: 'Forensic Report', path: '/report' },
       { name: 'Settings', path: '/settings' },
     ]
   },

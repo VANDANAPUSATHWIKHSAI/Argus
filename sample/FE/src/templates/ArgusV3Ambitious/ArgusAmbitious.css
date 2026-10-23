@@ -1,0 +1,5 @@
+/* ARGUS Template 3 (Ambitious) - CSS adjustments on top of style.css */
+.argus-ambitious-shell {
+  height: calc(100vh - 49px);
+  overflow: hidden;
+}

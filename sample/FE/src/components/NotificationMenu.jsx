@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { setActiveCase } from '../js/caseEvents';
 
 const NotificationMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -44,7 +45,7 @@ const NotificationMenu = () => {
           } else {
             title = `${a.action} — ${a.case_id}`;
           }
-          return { id: `${a.case_id}-${i}`, title, time };
+          return { id: `${a.case_id}-${i}`, caseId: a.case_id, title, time };
         });
 
         setNotifications(mapped);
@@ -101,37 +102,148 @@ const NotificationMenu = () => {
 
   return (
     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }} ref={menuRef}>
-      <button className="icon-btn" onClick={() => setIsOpen(!isOpen)} title="Notifications">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <button 
+        className="glass-icon-btn icon-btn" 
+        onClick={() => setIsOpen(!isOpen)} 
+        title="Notifications"
+        aria-label="Notifications"
+        aria-expanded={isOpen}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
           <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
         </svg>
-        {unreadCount > 0 && <div className="notification-dot"></div>}
+        {unreadCount > 0 && <span className="glass-badge-dot notification-dot" />}
       </button>
 
       {isOpen && (
-        <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: '12px', width: '320px', background: 'var(--bg-card)', border: '1px solid var(--border-strong)', borderRadius: '12px', boxShadow: '0 10px 40px rgba(0,0,0,0.6)', zIndex: 1000, overflow: 'hidden' }}>
-          <div style={{ padding: '16px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-main)' }}>Notifications</h3>
+        <div 
+          className="glass-notification-dropdown"
+          style={{ 
+            position: 'absolute', 
+            top: 'calc(100% + 14px)', 
+            right: 0, 
+            width: '360px', 
+            background: 'var(--glass-dash-surface-gradient)', 
+            backdropFilter: 'blur(32px) saturate(200%)',
+            WebkitBackdropFilter: 'blur(32px) saturate(200%)',
+            border: '1px solid var(--glass-dash-border)', 
+            borderRadius: '18px', 
+            boxShadow: 'var(--glass-dash-shadow-card)', 
+            zIndex: 1000, 
+            overflow: 'hidden',
+            animation: 'dropdownFade 0.15s cubic-bezier(0.16, 1, 0.3, 1)'
+          }}
+        >
+          <div style={{ 
+            padding: '16px 20px', 
+            borderBottom: '1px solid var(--glass-dash-border-subtle)', 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            background: 'var(--glass-dash-surface-nested)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--glass-dash-text-main)', letterSpacing: '0.2px' }}>Notifications</h3>
+              {unreadCount > 0 && (
+                <span style={{ 
+                  background: 'var(--glass-dash-blue)', 
+                  color: '#ffffff', 
+                  fontSize: '11px', 
+                  fontWeight: 700, 
+                  padding: '1px 7px', 
+                  borderRadius: '9999px',
+                  boxShadow: '0 2px 6px rgba(37,99,235,0.4)'
+                }}>
+                  {unreadCount}
+                </span>
+              )}
+            </div>
             {unreadCount > 0 && (
-              <span onClick={markAllRead} style={{ fontSize: '12px', color: 'var(--blue)', cursor: 'pointer', fontWeight: 500 }}>Mark all as read</span>
+              <button 
+                type="button"
+                onClick={markAllRead} 
+                style={{ 
+                  fontSize: '12px', 
+                  color: 'var(--glass-dash-blue)', 
+                  background: 'none', 
+                  border: 'none', 
+                  cursor: 'pointer', 
+                  fontWeight: 600,
+                  padding: 0
+                }}
+              >
+                Mark all as read
+              </button>
             )}
           </div>
-          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+
+          <div style={{ maxHeight: '320px', overflowY: 'auto' }}>
             {notifications.length === 0 ? (
-              <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>No notifications</div>
+              <div style={{ padding: '36px 20px', textAlign: 'center', color: 'var(--glass-dash-text-muted)', fontSize: '13px' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.5, marginBottom: '8px', display: 'inline-block' }}>
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <div>No new notifications</div>
+              </div>
             ) : notifications.map(n => (
-              <div key={n.id} onClick={() => markRead(n.id)} style={{ padding: '16px', borderBottom: '1px solid var(--border-subtle)', background: isRead(n.id) ? 'transparent' : 'var(--bg-surface)', cursor: 'pointer', transition: 'background 0.2s' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: isRead(n.id) ? 500 : 600, color: 'var(--text-main)', paddingRight: '12px' }}>{n.title}</div>
-                  {!isRead(n.id) && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--blue)', flexShrink: 0, marginTop: '4px' }}></div>}
+              <div 
+                key={n.id} 
+                onClick={() => {
+                  markRead(n.id);
+                  if (n.caseId) {
+                    setActiveCase(n.caseId);
+                    setIsOpen(false);
+                    navigate('/dashboard');
+                  }
+                }} 
+                style={{ 
+                  padding: '14px 18px', 
+                  borderBottom: '1px solid var(--glass-dash-border-subtle)', 
+                  background: isRead(n.id) ? 'transparent' : 'rgba(37, 99, 235, 0.05)', 
+                  cursor: 'pointer', 
+                  transition: 'background 0.2s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--glass-dash-surface-hover)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = isRead(n.id) ? 'transparent' : 'rgba(37, 99, 235, 0.05)'}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                  <div style={{ fontSize: '12.5px', fontWeight: isRead(n.id) ? 500 : 600, color: 'var(--glass-dash-text-main)', lineHeight: '1.4' }}>
+                    {n.title}
+                  </div>
+                  {!isRead(n.id) && (
+                    <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--glass-dash-blue)', flexShrink: 0, marginTop: '5px', boxShadow: '0 0 6px rgba(37,99,235,0.7)' }} />
+                  )}
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{n.time}</div>
+                <div style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)' }}>{n.time}</div>
               </div>
             ))}
           </div>
-          <div style={{ padding: '12px', textAlign: 'center', borderTop: '1px solid var(--border-subtle)', background: 'var(--bg-surface)' }}>
-            <span onClick={() => { setIsOpen(false); navigate('/notifications'); }} style={{ fontSize: '13px', color: 'var(--text-main)', cursor: 'pointer', fontWeight: 500 }}>View all notifications</span>
+
+          <div style={{ 
+            padding: '12px 16px', 
+            textAlign: 'center', 
+            borderTop: '1px solid var(--glass-dash-border-subtle)', 
+            background: 'var(--glass-dash-surface-nested)' 
+          }}>
+            <button 
+              type="button"
+              onClick={() => { setIsOpen(false); navigate('/notifications'); }} 
+              style={{ 
+                fontSize: '12.5px', 
+                color: 'var(--glass-dash-blue)', 
+                background: 'none', 
+                border: 'none', 
+                cursor: 'pointer', 
+                fontWeight: 600 
+              }}
+            >
+              View all notifications →
+            </button>
           </div>
         </div>
       )}

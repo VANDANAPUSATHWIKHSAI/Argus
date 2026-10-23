@@ -146,9 +146,9 @@ const Findings = () => {
 
       <main className="main-content">
         {/* TOPBAR */}
-        <header className="topbar">
+        <header className="glass-topbar-capsule topbar">
           <div className="search-container">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-muted)', marginRight: 8 }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--glass-dash-text-muted)', marginRight: 8 }}>
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
             <input 
@@ -159,10 +159,10 @@ const Findings = () => {
             />
           </div>
 
-          <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <NotificationMenu />
-            <div className="user-profile-badge" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-main)' }}>
+            <div className="glass-profile-pill">
+              <span className="glass-profile-name" style={{ fontSize: '13px', fontWeight: '600' }}>
                 {activeCaseId ? `${activeCaseName} (${activeCaseId})` : 'No Active Case'}
               </span>
             </div>
@@ -170,7 +170,7 @@ const Findings = () => {
         </header>
 
         {/* PAGE CONTENT */}
-        <div style={{ padding: '32px 40px' }}>
+        <div className="dashboard-scroll">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
             <div>
               <h1 style={{ fontSize: '26px', fontWeight: '700', color: 'var(--text-main)', margin: '0 0 6px 0' }}>
@@ -184,23 +184,23 @@ const Findings = () => {
 
           {/* STATS CARDS */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 28 }}>
-            <div className="card-panel" style={{ padding: '16px 20px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
+            <div className="stat-card" style={{ padding: '16px 20px' }}>
               <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Findings</span>
               <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-main)', marginTop: 4 }}>{counts.total}</div>
             </div>
-            <div className="card-panel" style={{ padding: '16px 20px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
+            <div className="stat-card" style={{ padding: '16px 20px' }}>
               <span style={{ fontSize: '12px', fontWeight: '600', color: '#ef4444', textTransform: 'uppercase' }}>Critical</span>
               <div style={{ fontSize: '24px', fontWeight: '800', color: '#ef4444', marginTop: 4 }}>{counts.critical}</div>
             </div>
-            <div className="card-panel" style={{ padding: '16px 20px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
+            <div className="stat-card" style={{ padding: '16px 20px' }}>
               <span style={{ fontSize: '12px', fontWeight: '600', color: '#f97316', textTransform: 'uppercase' }}>High</span>
               <div style={{ fontSize: '24px', fontWeight: '800', color: '#f97316', marginTop: 4 }}>{counts.high}</div>
             </div>
-            <div className="card-panel" style={{ padding: '16px 20px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
+            <div className="stat-card" style={{ padding: '16px 20px' }}>
               <span style={{ fontSize: '12px', fontWeight: '600', color: '#3b82f6', textTransform: 'uppercase' }}>Medium</span>
               <div style={{ fontSize: '24px', fontWeight: '800', color: '#3b82f6', marginTop: 4 }}>{counts.medium}</div>
             </div>
-            <div className="card-panel" style={{ padding: '16px 20px', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderRadius: '12px' }}>
+            <div className="stat-card" style={{ padding: '16px 20px' }}>
               <span style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Pending Review</span>
               <div style={{ fontSize: '24px', fontWeight: '800', color: 'var(--text-main)', marginTop: 4 }}>{counts.pending}</div>
             </div>
@@ -213,7 +213,7 @@ const Findings = () => {
               <select 
                 value={severityFilter} 
                 onChange={(e) => setSeverityFilter(e.target.value)}
-                style={{ background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', padding: '6px 12px', borderRadius: '8px', fontSize: '13px' }}
+                style={{ background: 'var(--glass-dash-surface-nested)', color: 'var(--glass-dash-text-main)', border: '1px solid var(--glass-dash-border-subtle)', padding: '6px 14px', borderRadius: '12px', fontSize: '13px', cursor: 'pointer', outline: 'none' }}
               >
                 <option value="all">All Severities</option>
                 <option value="critical">Critical</option>
@@ -228,7 +228,7 @@ const Findings = () => {
               <select 
                 value={statusFilter} 
                 onChange={(e) => setStatusFilter(e.target.value)}
-                style={{ background: 'var(--bg-card)', color: 'var(--text-main)', border: '1px solid var(--border-color)', padding: '6px 12px', borderRadius: '8px', fontSize: '13px' }}
+                style={{ background: 'var(--glass-dash-surface-nested)', color: 'var(--glass-dash-text-main)', border: '1px solid var(--glass-dash-border-subtle)', padding: '6px 14px', borderRadius: '12px', fontSize: '13px', cursor: 'pointer', outline: 'none' }}
               >
                 <option value="all">All Statuses</option>
                 <option value="pending_review">Pending Review</option>
@@ -240,29 +240,29 @@ const Findings = () => {
 
           {/* MAIN CONTENT AREA */}
           {!activeCaseId ? (
-            <div className="card-panel" style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div className="panel-card" style={{ padding: '48px', textAlign: 'center' }}>
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" style={{ marginBottom: 12 }}>
                 <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
                 <polyline points="13 2 13 9 20 9"></polyline>
               </svg>
               <h3 style={{ fontSize: '18px', fontWeight: '600', color: 'var(--text-main)', margin: '0 0 8px 0' }}>No Active Case Selected</h3>
               <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: '0 0 20px 0' }}>Please select or create an active investigation case from the Dashboard to view findings.</p>
-              <button onClick={() => navigate('/dashboard')} className="btn-primary" style={{ padding: '8px 20px', borderRadius: '8px', cursor: 'pointer' }}>
+              <button onClick={() => navigate('/dashboard')} className="btn-primary" style={{ padding: '8px 20px', borderRadius: '9999px', cursor: 'pointer' }}>
                 Go to Dashboard
               </button>
             </div>
           ) : loading ? (
-            <div className="card-panel" style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div className="panel-card" style={{ padding: '48px', textAlign: 'center' }}>
               <div className="spinner" style={{ margin: '0 auto 16px auto' }}></div>
               <p style={{ color: 'var(--text-muted)', margin: 0 }}>Loading findings for case {activeCaseId}...</p>
             </div>
           ) : error ? (
-            <div className="card-panel" style={{ padding: '32px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid #ef4444', borderRadius: '12px', color: '#ef4444' }}>
+            <div className="panel-card" style={{ padding: '32px', background: 'var(--glass-dash-red-soft)', border: '1px solid var(--glass-dash-red-border)', color: 'var(--glass-dash-red)' }}>
               <h4 style={{ margin: '0 0 6px 0', fontSize: '16px' }}>Error Loading Findings</h4>
               <p style={{ margin: 0, fontSize: '14px' }}>{error}</p>
             </div>
           ) : filteredFindings.length === 0 ? (
-            <div className="card-panel" style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <div className="panel-card" style={{ padding: '48px', textAlign: 'center' }}>
               <p style={{ color: 'var(--text-muted)', fontSize: '15px', margin: 0 }}>
                 {findings.length === 0 ? 'No forensic findings recorded for this case yet.' : 'No findings match the current filter criteria.'}
               </p>
@@ -270,7 +270,7 @@ const Findings = () => {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: selectedFinding ? '1fr 380px' : '1fr', gap: 24 }}>
               {/* FINDINGS TABLE */}
-              <div className="card-panel" style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
+              <div className="panel-card" style={{ overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border-color)' }}>

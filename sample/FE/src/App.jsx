@@ -21,6 +21,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
 import SessionManager from './components/SessionManager';
+import DevTools from './components/DevTools';
 import TemplateHub from './templates/TemplateHub';
 import TechnicalMinimalTemplate from './templates/TechnicalMinimalTemplate';
 import ModernWorkspaceTemplate from './templates/ModernWorkspaceTemplate';
@@ -56,7 +57,11 @@ function App() {
 
   return (
     <Router>
+      <div className="glass-dash-ambient-grid" aria-hidden="true" />
+      <div className="glass-dash-neutral-glow-1" aria-hidden="true" />
+      <div className="glass-dash-neutral-glow-2" aria-hidden="true" />
       <SessionManager />
+      <DevTools />
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
@@ -68,9 +73,9 @@ function App() {
         <Route path="/report" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst', 'auditor']}><Report /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst', 'auditor']}><Report /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute allowedRoles={['admin']}><Employees /></ProtectedRoute>} />
-        <Route path="/audit-logs" element={<ProtectedRoute allowedRoles={['admin']}><AuditLogs /></ProtectedRoute>} />
+        <Route path="/audit-logs" element={<ProtectedRoute allowedRoles={['admin', 'auditor']}><AuditLogs /></ProtectedRoute>} />
         <Route path="/case-notes" element={<ProtectedRoute allowedRoles={['analyst', 'senior_analyst']}><CaseNotes /></ProtectedRoute>} />
-        <Route path="/chatbot" element={<ProtectedRoute allowedRoles={['analyst', 'senior_analyst']}><Chatbot /></ProtectedRoute>} />
+        <Route path="/chatbot" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst', 'auditor']}><Chatbot /></ProtectedRoute>} />
         <Route path="/findings" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst']}><Findings /></ProtectedRoute>} />
         <Route path="/timeline" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst']}><TimelineDetail /></ProtectedRoute>} />
         <Route path="/evidence" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Evidence /></ProtectedRoute>} />

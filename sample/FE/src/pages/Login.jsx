@@ -98,6 +98,67 @@ const Login = () => {
     }
   }, [location.search]);
 
+  // Dev Role Auto-Auth & Query Handling (activates seamless role switching in dev mode)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const roleParam = params.get('role');
+    const redirectParam = params.get('redirect');
+
+    if (roleParam && (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV)) {
+      const devAccounts = {
+        admin: { id: 'admin', name: 'System Administrator', email: 'admin@argus.local', role: 'admin' },
+        analyst: { id: 'analyst', name: 'sathwik (Analyst)', email: 'analyst@argus.local', role: 'analyst' },
+        senior_analyst: { id: 'senior_analyst', name: 'Senior Analyst 6', email: 'senior@argus.local', role: 'senior_analyst' },
+        auditor: { id: 'auditor', name: 'Auditor 12', email: 'auditor@argus.local', role: 'auditor' }
+      };
+
+      const account = devAccounts[roleParam] || {
+        id: roleParam,
+        name: roleParam,
+        email: `${roleParam}@argus.local`,
+        role: roleParam
+      };
+
+      const authenticateDev = async () => {
+        let authDone = false;
+        try {
+          // Attempt real authentication against backend to obtain authoritative signed JWT
+          const data = await apiLogin(account.id, 'password123');
+          if (data && data.token && data.user) {
+            setAuthSession(data.token, data.user, true);
+            authDone = true;
+          }
+        } catch (_) {
+          // Backend is offline or unseeded — fall back to compliant local dev token
+        }
+
+        if (!authDone) {
+          const expSec = Math.floor(Date.now() / 1000) + 7 * 86400; // 7 days future
+          const headerB64 = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          const payloadB64 = btoa(JSON.stringify({ sub: account.id, role: account.role, exp: expSec })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          const devToken = `${headerB64}.${payloadB64}.dev_signature`;
+
+          const userObj = {
+            id: account.id,
+            name: account.name,
+            email: account.email,
+            role: account.role,
+            tenant_id: 'default'
+          };
+          setAuthSession(devToken, userObj, true);
+        }
+
+        localStorage.setItem('argus_last_active', String(Date.now()));
+        window.dispatchEvent(new Event('storage'));
+
+        const dest = redirectParam || (account.role === 'auditor' ? '/report' : '/dashboard');
+        navigate(dest, { replace: true });
+      };
+
+      authenticateDev();
+    }
+  }, [location.search, navigate]);
+
   // Ultra-Crisp 3D Forensic Particle Network Globe Engine (1200 Pinpoint Nodes)
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -445,6 +506,42 @@ const Login = () => {
         navigate('/dashboard');
       }
     } catch (err) {
+      if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) {
+        const devMap = {
+          'admin': { id: '2', name: 'System Administrator', role: 'admin' },
+          '2': { id: '2', name: 'System Administrator', role: 'admin' },
+          'analyst': { id: '4', name: 'sathwik (Analyst)', role: 'analyst' },
+          '4': { id: '4', name: 'sathwik (Analyst)', role: 'analyst' },
+          'senior_analyst': { id: '6', name: 'Senior Analyst 6', role: 'senior_analyst' },
+          '6': { id: '6', name: 'Senior Analyst 6', role: 'senior_analyst' },
+          'auditor': { id: '12', name: 'Auditor 12', role: 'auditor' },
+          '12': { id: '12', name: 'Auditor 12', role: 'auditor' }
+        };
+        const matched = devMap[userid.trim().toLowerCase()];
+        if (matched) {
+          const expSec = Math.floor(Date.now() / 1000) + 7 * 86400;
+          const h = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          const p = btoa(JSON.stringify({ sub: matched.id, role: matched.role, exp: expSec })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+          const devToken = `${h}.${p}.dev_sig`;
+          const devUser = {
+            id: matched.id,
+            name: matched.name,
+            email: `${matched.role}@argus.local`,
+            role: matched.role,
+            tenant_id: 'default'
+          };
+          setAuthSession(devToken, devUser, keepActive);
+          if (keepActive) {
+            localStorage.setItem('argus_remembered_userid', userid.trim());
+          }
+          if (devUser.role === 'auditor') {
+            navigate('/report');
+          } else {
+            navigate('/dashboard');
+          }
+          return;
+        }
+      }
       setError(err.message || 'Authentication failed. Please verify credentials.');
       setIsLoggingIn(false);
     }

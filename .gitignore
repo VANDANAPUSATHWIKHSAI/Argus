@@ -69,10 +69,25 @@ sample/FE/dist/
 
 # ── No duplicate frontend ─────────────────────────────────────
 # frontend/ is deleted. Do not re-add.
+frontend/
 
 # ── Local notes & scratch files ──────────────────────────────
 scratch/
 ARGUS/
 Details/
 sample/FE/scratch/
+DoNotUploadToGIt/
+*.rar
+models/
+external_tools/
+SDC/
+inst.pdf
+sample/FE/capture_*.cjs
+sample/FE/capture_*.js
+sample/FE/take_screenshot.cjs
+patch_*.py
+remove_bg.py
+opencode.json
+
+
 

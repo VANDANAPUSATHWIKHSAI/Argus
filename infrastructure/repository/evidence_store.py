@@ -502,6 +502,15 @@ def get_case_session(tenant_id: str, case_id: str) -> Optional[CaseSession]:
                 logger.warning(f"Failed to read local case_session.json: {e}")
 
         # If evidence was ingested, check metadata.json or evidence folders
+        status_file = case_dir / "status.json"
+        case_status = "open"
+        if status_file.exists():
+            try:
+                sdata = json.loads(status_file.read_text(encoding="utf-8"))
+                case_status = sdata.get("status", "open")
+            except Exception:
+                pass
+
         for child in case_dir.iterdir():
             if child.is_dir():
                 meta_file = child / "metadata.json"
@@ -520,7 +529,7 @@ def get_case_session(tenant_id: str, case_id: str) -> Optional[CaseSession]:
                             tenant_id=ev_tenant or tenant_id,
                             created_at=datetime.now(),
                             created_by=mdata.get("uploaded_by", "analyst"),
-                            status="open"
+                            status=case_status
                         )
                     except Exception:
                         pass
@@ -532,7 +541,7 @@ def get_case_session(tenant_id: str, case_id: str) -> Optional[CaseSession]:
                             tenant_id=tenant_id,
                             created_at=datetime.now(),
                             created_by="analyst",
-                            status="open"
+                            status=case_status
                         )
     return None
 
@@ -646,6 +655,7 @@ def close_case(tenant_id: str, case_id: str) -> bool:
     if not tenant_id or not case_id:
         return False
         
+    closed_any = False
     if _should_attempt_postgres():
         try:
             import psycopg2
@@ -663,13 +673,32 @@ def close_case(tenant_id: str, case_id: str) -> bool:
                 "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s AND tenant_id = %s;",
                 (case_id, tenant_id)
             )
+            if cur.rowcount == 0:
+                cur.execute(
+                    "INSERT INTO cases (case_id, tenant_id, status, closed_at, created_by) "
+                    "VALUES (%s, %s, 'closed', NOW(), 'admin') "
+                    "ON CONFLICT (case_id) DO UPDATE SET status = 'closed', closed_at = NOW();",
+                    (case_id, tenant_id)
+                )
             conn.commit()
             rows_updated = cur.rowcount
             conn.close()
-            return rows_updated > 0
+            if rows_updated > 0:
+                closed_any = True
         except Exception as e:
             logger.error("Failed to close case: %s", e)
-    return False
+
+    # Persist closed status to disk metadata if directory exists
+    try:
+        case_dir = Path(REPOSITORY_DIR) / case_id
+        if case_dir.exists() and case_dir.is_dir():
+            status_file = case_dir / "status.json"
+            status_file.write_text(json.dumps({"status": "closed", "tenant_id": tenant_id}))
+            closed_any = True
+    except Exception as e:
+        logger.warning(f"Could not persist closed status to disk for {case_id}: {e}")
+
+    return closed_any
 
 def get_evidence(tenant_id: str, evidence_id: str) -> Optional[Evidence]:
     """

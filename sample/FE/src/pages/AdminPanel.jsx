@@ -136,29 +136,30 @@ const AdminPanel = () => {
       <AlertModal {...customAlert} onClose={closeAlert} />
       <Sidebar />
       <main className="main-content">
-        <header className="topbar">
+        <header className="glass-topbar-capsule topbar">
           <div className="search-container">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-muted)', marginRight: '8px' }}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--glass-dash-text-muted)', marginRight: '8px' }}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input type="text" placeholder="Search employees..." />
           </div>
-          <div className="topbar-actions">
+          <div className="glass-topbar-right topbar-actions">
             <button
               onClick={() => setShowAddModal(true)}
+              className="btn btn-primary"
               style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px' }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               Add Employee
             </button>
-            <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button className="glass-icon-btn" onClick={toggleTheme} title="Toggle Theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {theme === 'dark' ? (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
               ) : (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
               )}
             </button>
-            <div className="user-profile">
-              <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
-              <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
+            <div className="glass-profile-pill user-profile">
+              <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+              <span className="glass-profile-name" style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
             </div>
           </div>
         </header>
@@ -169,7 +170,7 @@ const AdminPanel = () => {
             <p style={{ color: 'var(--text-muted)', margin: 0 }}>View, add, and remove access for team members.</p>
           </div>
 
-          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+          <div className="panel-card" style={{ borderRadius: '12px', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-card-alt)', borderBottom: '1px solid var(--border-subtle)' }}>

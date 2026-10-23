@@ -67,16 +67,16 @@ const SanitizedDetail = () => {
       <div id="app-shell">
         <Sidebar />
         <main className="main-content">
-          <header className="topbar">
+          <header className="glass-topbar-capsule topbar">
             <div style={{ flex: 1 }} />
-            <div className="topbar-actions" style={{ justifyContent: 'flex-end', display: 'flex' }}>
-              <button onClick={() => navigate('/sanitized')} style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
+            <div className="glass-topbar-right topbar-actions" style={{ justifyContent: 'flex-end', display: 'flex', gap: '12px', alignItems: 'center' }}>
+              <button onClick={() => navigate('/sanitized')} className="btn btn-outline" style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 Back
               </button>
-              <div className="user-profile" onClick={() => setShowProfileModal(true)}>
-                <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
-                <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
+              <div className="glass-profile-pill user-profile" onClick={() => setShowProfileModal(true)}>
+                <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+                <span className="glass-profile-name" style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
               </div>
             </div>
           </header>

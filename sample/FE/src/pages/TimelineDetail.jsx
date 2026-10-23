@@ -287,19 +287,30 @@ const TimelineDetail = () => {
       )}
 
       <Sidebar active="timeline" />
-      <main className="main-content" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 0 }}>
+      <main className="main-content">
         
         {/* Header */}
-        <header style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '14px 32px',
-          background: 'var(--bg-card)',
-          borderBottom: '1px solid var(--border-subtle)',
-          flexShrink: 0
-        }}>
+        <header className="glass-topbar-capsule topbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <button 
+              onClick={() => window.history.length > 1 ? navigate(-1) : navigate('/dashboard')} 
+              className="glass-icon-btn icon-btn" 
+              title="Go Back"
+              aria-label="Go Back"
+              style={{
+                width: '38px',
+                height: '38px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer'
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="19" y1="12" x2="5" y2="12" />
+                <polyline points="12 19 5 12 12 5" />
+              </svg>
+            </button>
             <div style={{
               width: '36px',
               height: '36px',
@@ -339,16 +350,14 @@ const TimelineDetail = () => {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* Theme Toggle */}
             <button
               type="button"
               onClick={toggleTheme}
               title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+              className="glass-icon-btn"
               style={{
-                background: isDark ? '#1e293b' : '#f1f5f9',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '8px',
                 width: '36px',
                 height: '36px',
                 display: 'flex',
@@ -407,7 +416,7 @@ const TimelineDetail = () => {
         </header>
 
         {/* Content Area */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="dashboard-scroll" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
           {/* Top Summary Banner */}
           <div style={{
@@ -545,23 +554,7 @@ const TimelineDetail = () => {
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type="text"
-                  placeholder="Search timeline..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  style={{
-                    background: isDark ? '#0b0f19' : '#f8fafc',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-main)',
-                    borderRadius: '8px',
-                    padding: '6px 12px 6px 30px',
-                    fontSize: '12px',
-                    outline: 'none',
-                    width: '180px'
-                  }}
-                />
+              <div className="search-container" style={{ width: '220px', minWidth: 'unset', padding: '5px 12px' }}>
                 <svg
                   width="14"
                   height="14"
@@ -569,11 +562,16 @@ const TimelineDetail = () => {
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2"
-                  style={{ position: 'absolute', left: '10px', top: '9px', color: 'var(--text-muted)' }}
                 >
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
+                <input
+                  type="text"
+                  placeholder="Search timeline..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
 
               <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>

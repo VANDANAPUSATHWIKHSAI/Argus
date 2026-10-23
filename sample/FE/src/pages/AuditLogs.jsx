@@ -170,59 +170,51 @@ const uniqueUsers = Array.from(
     <div id="app-shell">
       <Sidebar />
       <main className="main-content">
-        <div className="audit-logs-container" style={{ padding: '0' }}>
-          
-          <div className="audit-header" style={{ padding: '24px', borderBottom: '1px solid var(--border-subtle)', marginBottom: '24px' }}>
-            <div className="header-title">
-              <div>
-                <h2 style={{ fontSize: '24px', margin: '0 0 8px 0', color: 'var(--text-main)' }}>
-                  Audit Logs
-                </h2>
-                {activeCaseId ? (
-                  <p style={{ margin: 0, color: 'var(--blue)', fontWeight: 600 }}>Current Case: {activeCaseId}</p>
-                ) : (
-                  <p style={{ margin: 0, color: 'var(--text-muted)' }}>No active case selected.</p>
-                )}
-              </div>
+        <header className="glass-topbar-capsule topbar">
+          <div className="glass-topbar-left">
+            <h2 className="glass-welcome-title">Audit Logs</h2>
+            <p className="glass-welcome-sub">
+              {activeCaseId ? `Current Case: ${activeCaseId}` : 'No active case selected.'}
+            </p>
+          </div>
+          <div className="glass-topbar-right topbar-actions">
+            <div style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--glass-dash-text-main)', background: 'var(--glass-dash-surface-nested)', padding: '6px 14px', borderRadius: '12px', border: '1px solid var(--glass-dash-border-subtle)' }}>
+              {stats.total.toLocaleString()} Events
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-main)', background: 'var(--bg-card)', padding: '6px 12px', borderRadius: '16px', border: '1px solid var(--border-strong)' }}>
-                {stats.total.toLocaleString()} Events
-              </div>
 
-              <button className="btn-export" onClick={exportLogs} style={{ background: 'var(--blue)', border: 'none', padding: '8px 16px', borderRadius: '6px', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Export Logs
-              </button>
+            <button className="btn-primary" onClick={exportLogs} style={{ fontSize: '13px', padding: '8px 16px' }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Export Logs
+            </button>
+          </div>
+        </header>
+
+        <div className="dashboard-scroll">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px' }}>
+            <div className="stat-card" style={{ padding: '24px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--glass-dash-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Total Events</div>
+              <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--glass-dash-text-main)' }}>{stats.total}</div>
+            </div>
+            <div className="stat-card" style={{ padding: '24px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--glass-dash-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Today</div>
+              <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--glass-dash-text-main)' }}>{stats.today}</div>
+            </div>
+            <div className="stat-card" style={{ padding: '24px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--glass-dash-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>User Actions</div>
+              <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--glass-dash-text-main)' }}>{stats.users}</div>
+            </div>
+            <div className="stat-card" style={{ padding: '24px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--glass-dash-text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>System Events</div>
+              <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--glass-dash-text-main)' }}>{stats.system}</div>
             </div>
           </div>
 
-          <div style={{ padding: '0 48px', maxWidth: '1400px', margin: '0 auto', width: '100%' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px', marginBottom: '32px' }}>
-              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Total Events</div>
-                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.total}</div>
-              </div>
-              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>Today</div>
-                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.today}</div>
-              </div>
-              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>User Actions</div>
-                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.users}</div>
-              </div>
-              <div style={{ background: 'var(--bg-card)', borderRadius: '16px', padding: '24px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-                <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>System Events</div>
-                <div style={{ fontSize: '32px', fontWeight: 700, color: 'var(--text-main)' }}>{stats.system}</div>
-              </div>
-            </div>
-
-            <div style={{ background: 'var(--bg-card)', borderRadius: '16px', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', marginBottom: '24px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-                <thead>
-                  <tr style={{ borderBottom: '1px solid var(--border-strong)', background: 'var(--bg-surface)' }}>
+          <div className="panel-card" style={{ overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--glass-dash-border-subtle)', background: 'var(--glass-dash-surface-nested)' }}>
                     <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Timestamp</th>
                     <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>User</th>
                     <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Action</th>
@@ -271,7 +263,6 @@ const uniqueUsers = Array.from(
               </div>
             </div>
           </div>
-        </div>
       </main>
 
       {/* Side Drawer */}

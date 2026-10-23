@@ -78,43 +78,47 @@ const SeniorDashboard = () => {
 
   return (
     <>
-      <header className="topbar" style={{ justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', padding: '16px 40px', background: 'var(--bg-app)' }}>
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            Welcome, {userName}
-          </div>
-          <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Senior Analyst Workspace &middot; Review and Validate Case Findings</div>
+      <header className="glass-topbar-capsule topbar">
+        <div className="glass-topbar-left">
+          <h2 className="glass-welcome-title">Welcome, {userName}</h2>
+          <p className="glass-welcome-sub">Senior Analyst Workspace &middot; Review and Validate Case Findings</p>
         </div>
-        <div className="topbar-actions">
-          <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="glass-topbar-right topbar-actions">
+          <button className="glass-icon-btn icon-btn" onClick={toggleTheme} title="Toggle Theme">
             {theme === 'dark' ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
             ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
             )}
           </button>
           <NotificationMenu />
-          <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div className="avatar" style={{ background: 'var(--blue-light)', color: 'var(--blue)', fontWeight: 600 }}>SA</div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              <span style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-main)' }}>{userName}</span>
-              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Senior Analyst</span>
-            </div>
+          <div className="glass-profile-pill user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
+            <div className="glass-profile-avatar-dark avatar" style={{ background: 'var(--glass-dash-blue-soft)', color: 'var(--glass-dash-blue)' }}>SA</div>
+            <span className="glass-profile-name">{userName}</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            {showUserDropdown && (
+              <div className="user-dropdown" style={{ display: 'block' }}>
+                <div className="user-dropdown-header">
+                  <div className="ud-name">{userName}</div>
+                  <div className="ud-role">Senior Analyst</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </header>
       
-      <div className="dashboard-scroll" style={{ padding: '32px 40px', background: 'var(--bg-body)' }}>
+      <div className="dashboard-scroll">
         
         {/* Case Header */}
-        <div style={{ background: 'var(--bg-card)', borderRadius: '12px', padding: '32px', border: '1px solid var(--border-subtle)', marginBottom: '24px' }}>
+        <div className="panel-card" style={{ padding: '28px 32px', marginBottom: '24px', borderRadius: '22px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
             <div>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
                 <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: 'var(--text-main)' }}>Case #{activeSummary?.case_id || 'ARG-2026-001'}</h1>
-                <span style={{ background: '#fef3c7', color: '#b45309', padding: '4px 12px', borderRadius: '12px', fontSize: '12px', fontWeight: 600 }}>Ready for Review</span>
+                <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600 }}>Ready for Review</span>
               </div>
-              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '16px', color: 'var(--text-muted)' }}>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '15px', color: 'var(--text-muted)' }}>
                 <span>{activeSummary?.name || activeCaseDetails?.name || 'Investigation Case'}</span>
                 <span style={{ color: 'var(--border-strong)' }}>|</span>
                 <span style={{ fontSize: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -125,8 +129,11 @@ const SeniorDashboard = () => {
             </div>
           </div>
           
-          <div style={{ background: 'var(--bg-app)', padding: '16px 24px', borderRadius: '8px', borderLeft: '4px solid var(--blue)' }}>
-            <p style={{ margin: 0, fontSize: '15px', color: 'var(--text-main)', lineHeight: '1.5' }}>
+          <div style={{ background: 'var(--glass-dash-surface-nested)', padding: '16px 22px', borderRadius: '16px', border: '1px solid var(--glass-dash-border-subtle)', display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--glass-dash-blue)" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.85 }}>
+              <path d="M3 21c3 0 7-1 7-8V5c0-1.25-.75-2-2-2H4c-1.25 0-2 .75-2 2v6c0 1.25.75 2 2 2 1 0 1 0 1 1 0 2-1 3-2 4v3zm14 0c3 0 7-1 7-8V5c0-1.25-.75-2-2-2h-4c-1.25 0-2 .75-2 2v6c0 1.25.75 2 2 2 1 0 1 0 1 1 0 2-1 3-2 4v3z"/>
+            </svg>
+            <p style={{ margin: 0, fontSize: '14px', color: 'var(--text-main)', lineHeight: '1.6', fontStyle: 'italic' }}>
               "{activeSummary?.description || activeCaseDetails?.description || 'No specific narrative description provided for this case yet. Review individual findings below to validate the intrusion timeline.'}"
             </p>
           </div>
@@ -135,13 +142,13 @@ const SeniorDashboard = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginBottom: '24px' }}>
           
           {/* AI Findings Preview */}
-          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', padding: '24px' }}>
+          <div className="panel-card" style={{ padding: '28px', borderRadius: '22px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <div>
                 <h2 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 700, color: 'var(--text-main)' }}>AI Findings</h2>
-                <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>{findings.length} Findings detected</div>
+                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{findings.length} Findings detected</div>
               </div>
-              <div style={{ display: 'flex', gap: '16px', fontSize: '14px', fontWeight: 600 }}>
+              <div style={{ display: 'flex', gap: '16px', fontSize: '13px', fontWeight: 600 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444' }}></div> {criticalHighCount} High/Critical</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#f59e0b' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f59e0b' }}></div> {mediumCount} Medium</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#3b82f6' }}><div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6' }}></div> {lowCount} Low</span>
@@ -171,28 +178,57 @@ const SeniorDashboard = () => {
                     const conf = Math.round((f.confidence > 1 ? f.confidence : f.confidence * 100) || 0);
                     const fKey = f.finding_id || f.id || `f-${idx}`;
                     return (
-                      <div key={fKey} style={{ padding: '16px', background: 'var(--bg-app)', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                          <div style={{ fontWeight: 600, color: 'var(--text-main)' }}>{fKey} &mdash; {f.fact || 'Finding details recorded'}</div>
+                      <div key={fKey} style={{ padding: '16px 20px', background: 'var(--glass-dash-surface-nested)', borderRadius: '14px', border: '1px solid var(--glass-dash-border-subtle)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                          <div style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '13.5px' }}>{fKey} &mdash; {f.fact || 'Finding details recorded'}</div>
                         </div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>
-                          <span style={{ color: sevColor, fontWeight: 600, textTransform: 'capitalize' }}>{sev}</span> &middot; {conf}% confidence
+                        <div style={{ fontSize: '12.5px', color: 'var(--text-muted)' }}>
+                          <span style={{ color: sevColor, fontWeight: 700, textTransform: 'capitalize' }}>{sev}</span> &middot; {conf}% confidence
                         </div>
                       </div>
                     );
                   })
               ) : (
-                <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px' }}>
+                <div style={{ padding: '32px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '14px', background: 'var(--glass-dash-surface-nested)', borderRadius: '14px', border: '1px dashed var(--glass-dash-border)' }}>
                   No AI findings available for this case yet.
                 </div>
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button onClick={() => navigate('/findings')} style={{ flex: 1, padding: '12px', background: 'none', border: '1px solid var(--blue)', color: 'var(--blue)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' }}>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button onClick={() => navigate('/findings')} className="btn btn-outline" style={{ flex: 1, padding: '11px 18px', border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', borderRadius: '9999px', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', fontSize: '13px' }}>
                 View All Findings
               </button>
-              <button onClick={() => navigate('/agents')} style={{ flex: 1, padding: '12px', background: 'linear-gradient(135deg, #3b82f6, #6366f1)', border: 'none', color: '#fff', borderRadius: '6px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+              <button 
+                onClick={() => navigate('/agents')} 
+                style={{ 
+                  flex: 1, 
+                  padding: '11px 18px', 
+                  background: 'rgba(59, 130, 246, 0.12)', 
+                  border: '1px solid rgba(59, 130, 246, 0.35)', 
+                  color: 'var(--glass-dash-blue, #60a5fa)', 
+                  borderRadius: '9999px', 
+                  fontWeight: 600, 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '8px', 
+                  fontSize: '13px',
+                  boxShadow: '0 2px 10px rgba(0, 0, 0, 0.2)',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.22)';
+                  e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.55)';
+                  e.currentTarget.style.color = '#93c5fd';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.12)';
+                  e.currentTarget.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+                  e.currentTarget.style.color = 'var(--glass-dash-blue, #60a5fa)';
+                }}
+              >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect></svg>
                 Agent Swarm Intel
               </button>
@@ -202,24 +238,24 @@ const SeniorDashboard = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             
             {/* Evidence Coverage */}
-            <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', padding: '24px' }}>
-              <h2 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 700, color: 'var(--text-main)' }}>Evidence Coverage</h2>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '24px' }}>
-                <span style={{ color: '#22c55e' }}>{evidenceStats.available} Available</span>
-                <span style={{ color: '#f59e0b' }}>{evidenceStats.partial} Partial</span>
-                <span style={{ color: '#ef4444' }}>{evidenceStats.missing} Missing</span>
+            <div className="panel-card" style={{ padding: '24px', borderRadius: '22px', height: 'auto', boxSizing: 'border-box' }}>
+              <h2 style={{ margin: '0 0 16px 0', fontSize: '17px', fontWeight: 700, color: 'var(--text-main)' }}>Evidence Coverage</h2>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '20px' }}>
+                <span style={{ color: '#22c55e', display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }}></div> {evidenceStats.available} Available</span>
+                <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }}></div> {evidenceStats.partial} Partial</span>
+                <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }}></div> {evidenceStats.missing} Missing</span>
               </div>
-              <button onClick={() => navigate('/evidence')} style={{ width: '100%', padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={() => navigate('/evidence')} className="btn btn-outline" style={{ width: '100%', padding: '10px 16px', background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '9999px', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}>
                 View Evidence
               </button>
             </div>
 
             {/* Timeline Preview */}
-            <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', padding: '24px', flexGrow: 1 }}>
-              <h2 style={{ margin: '0 0 4px 0', fontSize: '18px', fontWeight: 700, color: 'var(--text-main)' }}>Recent Timeline</h2>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '20px' }}>Recorded finding events</div>
+            <div className="panel-card" style={{ padding: '24px 24px 24px 24px', borderRadius: '22px', height: 'auto', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
+              <h2 style={{ margin: '0 0 4px 0', fontSize: '17px', fontWeight: 700, color: 'var(--text-main)' }}>Recent Timeline</h2>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '18px' }}>Recorded finding events</div>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '20px' }}>
                 {loading ? (
                   <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Loading timeline events...</div>
                 ) : findings.length > 0 ? (
@@ -228,20 +264,22 @@ const SeniorDashboard = () => {
                     const timeStr = safeFormatTime(rawTime, '--:--');
                     const fKey = f.finding_id || f.id || `tl-${idx}`;
                     return (
-                      <div key={fKey} style={{ display: 'flex', gap: '12px', fontSize: '13px' }}>
-                        <div style={{ color: 'var(--text-muted)', width: '50px', fontWeight: 600, flexShrink: 0 }}>{timeStr}</div>
+                      <div key={fKey} style={{ display: 'flex', gap: '12px', fontSize: '13px', alignItems: 'center', padding: '8px 12px', background: 'var(--glass-dash-surface-nested)', borderRadius: '10px', border: '1px solid var(--glass-dash-border-subtle)' }}>
+                        <div style={{ color: 'var(--glass-dash-blue)', width: '50px', fontWeight: 700, flexShrink: 0, fontSize: '12px', fontFamily: 'monospace' }}>{timeStr}</div>
                         <div style={{ color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.fact || fKey}</div>
                       </div>
                     );
                   })
                 ) : (
-                  <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No timeline events recorded yet.</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '13px', textAlign: 'center', padding: '16px', background: 'var(--glass-dash-surface-nested)', borderRadius: '10px', border: '1px dashed var(--glass-dash-border)' }}>No timeline events recorded yet.</div>
                 )}
               </div>
 
-              <button onClick={() => navigate('/timeline')} style={{ width: '100%', padding: '10px', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '6px', fontWeight: 600, cursor: 'pointer' }}>
-                View Full Timeline
-              </button>
+              <div style={{ marginTop: 'auto', paddingTop: '4px' }}>
+                <button onClick={() => navigate('/timeline')} className="btn btn-outline" style={{ width: '100%', padding: '10px 16px', background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '9999px', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}>
+                  View Full Timeline
+                </button>
+              </div>
             </div>
 
           </div>

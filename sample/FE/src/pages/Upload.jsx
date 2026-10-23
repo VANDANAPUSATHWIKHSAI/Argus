@@ -229,13 +229,13 @@ const Upload = () => {
 
         <main className="main-content">
           {/* TOPBAR */}
-          <header className="topbar">
+          <header className="glass-topbar-capsule topbar">
             <div className="search-container">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-muted)', marginRight: 8 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--glass-dash-text-muted)', marginRight: 8 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" placeholder="Search cases, evidence, or findings..." />
               <span className="search-shortcut">⌘ K</span>
             </div>
-            <div className="topbar-actions" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
+            <div className="glass-topbar-right topbar-actions" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
               {isAdmin && (
                 <button
                   type="button"
@@ -260,9 +260,9 @@ const Upload = () => {
               )}
               {localStorage.getItem('active_case_id') && <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>}
               <NotificationMenu />
-              <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
-                <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
-                <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
+              <div className="glass-profile-pill user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
+                <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+                <span className="glass-profile-name" style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
                 {showUserDropdown && (
                   <div className="user-dropdown" style={{ display: 'block' }}>

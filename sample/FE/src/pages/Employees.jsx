@@ -204,33 +204,34 @@ const Employees = () => {
       <AlertModal {...customAlert} onClose={closeAlert} />
       <Sidebar />
       <main className="main-content">
-        <header className="topbar">
+        <header className="glass-topbar-capsule topbar">
           <div className="search-container">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-muted)', marginRight: '8px' }}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--glass-dash-text-muted)', marginRight: '8px' }}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
             <input type="text" placeholder="Search employees..." />
           </div>
-          <div className="topbar-actions">
+          <div className="glass-topbar-right topbar-actions">
             <button
               onClick={() => setShowAddModal(true)}
-              style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '8px 18px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px' }}
+              className="btn-primary"
+              style={{ padding: '8px 18px', fontSize: '13px' }}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               Add Employee
             </button>
-            <div className="user-profile">
-              <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
-              <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
+            <div className="glass-profile-pill user-profile">
+              <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+              <span className="glass-profile-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
             </div>
           </div>
         </header>
 
-        <div className="dashboard-scroll" style={{ padding: '32px 40px' }}>
-          <div style={{ marginBottom: '24px' }}>
-            <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 8px' }}>Employee Management</h1>
-            <p style={{ color: 'var(--text-muted)', margin: 0 }}>View, add, and remove access for team members.</p>
+        <div className="dashboard-scroll">
+          <div>
+            <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 8px', color: 'var(--glass-dash-text-main)' }}>Employee Management</h1>
+            <p style={{ color: 'var(--glass-dash-text-muted)', margin: 0 }}>View, add, and remove access for team members.</p>
           </div>
 
-          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', overflow: 'hidden', flexShrink: 0 }}>
+          <div className="panel-card" style={{ overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
                 <tr style={{ background: 'var(--bg-card-alt)', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -269,17 +270,17 @@ const Employees = () => {
                         <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           <button 
                             onClick={() => { setEditEmp(emp); setShowEditModal(true); }}
-                            style={{ background: 'rgba(59, 130, 246, 0.1)', border: 'none', color: '#3b82f6', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, transition: 'all 0.2s' }}
-                            onMouseOver={(e) => e.target.style.background = 'rgba(59, 130, 246, 0.2)'}
-                            onMouseOut={(e) => e.target.style.background = 'rgba(59, 130, 246, 0.1)'}
+                            style={{ background: 'var(--glass-dash-blue-soft)', border: '1px solid var(--glass-dash-blue-border)', color: 'var(--glass-dash-blue)', padding: '6px 14px', borderRadius: '9999px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, transition: 'all 0.2s' }}
+                            onMouseOver={(e) => e.target.style.background = 'rgba(59, 130, 246, 0.25)'}
+                            onMouseOut={(e) => e.target.style.background = 'var(--glass-dash-blue-soft)'}
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => handleDeleteEmployee(emp.id)}
-                            style={{ background: 'rgba(239, 68, 68, 0.1)', border: 'none', color: '#ef4444', padding: '6px 14px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px', fontWeight: 600, transition: 'all 0.2s' }}
-                            onMouseOver={(e) => e.target.style.background = 'rgba(239, 68, 68, 0.2)'}
-                            onMouseOut={(e) => e.target.style.background = 'rgba(239, 68, 68, 0.1)'}
+                            style={{ background: 'var(--glass-dash-red-soft)', border: '1px solid var(--glass-dash-red-border)', color: 'var(--glass-dash-red)', padding: '6px 14px', borderRadius: '9999px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, transition: 'all 0.2s' }}
+                            onMouseOver={(e) => e.target.style.background = 'rgba(239, 68, 68, 0.25)'}
+                            onMouseOut={(e) => e.target.style.background = 'var(--glass-dash-red-soft)'}
                           >
                             Delete
                           </button>

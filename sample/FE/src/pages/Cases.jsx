@@ -164,9 +164,9 @@ const Cases = () => {
 
       <main className="main-content">
         {/* TOPBAR */}
-        <header className="topbar">
+        <header className="glass-topbar-capsule topbar">
           <div className="search-container">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-muted)', marginRight: '8px' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--glass-dash-text-muted)', marginRight: '8px' }}>
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
@@ -178,39 +178,30 @@ const Cases = () => {
             />
           </div>
 
-          <div className="topbar-actions" style={{ position: 'relative' }}>
+          <div className="glass-topbar-right topbar-actions">
             <NotificationMenu />
             
             <div
-              className="user-profile"
+              className="glass-profile-pill user-profile"
               onClick={() => setShowUserDropdown(!showUserDropdown)}
-              style={{ cursor: 'pointer', position: 'relative' }}
             >
-              <div className="avatar">
+              <div className="glass-profile-avatar-dark avatar">
                 {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'A'}
               </div>
-              <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>
+              <span className="glass-profile-name" style={{ textTransform: 'capitalize' }}>
                 {currentUser?.name || 'User'}
               </span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
 
               {showUserDropdown && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '120%',
-                    right: 0,
-                    background: 'var(--bg-card)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '8px',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
-                    padding: '8px 0',
-                    zIndex: 100,
-                    minWidth: '160px'
-                  }}
-                >
+                <div className="user-dropdown" style={{ display: 'block' }}>
+                  <div className="user-dropdown-header">
+                    <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'User'}</div>
+                    <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
+                  </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); setShowUserDropdown(false); setShowProfileModal(true); }}
-                    style={{ width: '100%', padding: '8px 16px', background: 'transparent', border: 'none', color: 'var(--text-main)', textAlign: 'left', cursor: 'pointer', fontSize: '13px' }}
+                    className="user-dropdown-item"
                   >
                     My Profile
                   </button>
@@ -221,14 +212,14 @@ const Cases = () => {
         </header>
 
         {/* MAIN SCROLL AREA */}
-        <div className="dashboard-scroll" style={{ padding: '32px 40px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className="dashboard-scroll">
           {/* HEADER */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <h1 style={{ fontSize: '26px', fontWeight: 'bold', margin: '0 0 6px 0', color: 'var(--text-main)' }}>
+              <h1 style={{ fontSize: '26px', fontWeight: 'bold', margin: '0 0 6px 0', color: 'var(--glass-dash-text-main)' }}>
                 Previous Cases & Repository
               </h1>
-              <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '14px' }}>
+              <p style={{ color: 'var(--glass-dash-text-muted)', margin: 0, fontSize: '14px' }}>
                 Browse, search, and manage all active, completed, and archived investigation cases.
               </p>
             </div>
@@ -236,39 +227,39 @@ const Cases = () => {
 
           {/* STAT CARDS */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
-            <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3b82f6' }}>
+            <div className="stat-card" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--glass-dash-blue-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--glass-dash-blue)' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
               </div>
               <div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--text-main)' }}>{loading ? '-' : totalCount}</div>
-                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Total Cases</div>
+                <div style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--glass-dash-text-main)' }}>{loading ? '-' : totalCount}</div>
+                <div style={{ fontSize: '13px', color: 'var(--glass-dash-text-muted)' }}>Total Cases</div>
               </div>
             </div>
 
-            <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
+            <div className="stat-card" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--glass-dash-green-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--glass-dash-green)' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
               </div>
               <div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--text-main)' }}>{loading ? '-' : openCount}</div>
-                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Open Cases</div>
+                <div style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--glass-dash-text-main)' }}>{loading ? '-' : openCount}</div>
+                <div style={{ fontSize: '13px', color: 'var(--glass-dash-text-muted)' }}>Open Cases</div>
               </div>
             </div>
 
-            <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'rgba(148, 163, 184, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+            <div className="stat-card" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--glass-dash-surface-nested)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--glass-dash-text-dim)' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
               </div>
               <div>
-                <div style={{ fontSize: '24px', fontWeight: 'bold', color: 'var(--text-main)' }}>{loading ? '-' : closedCount}</div>
-                <div style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Closed Cases</div>
+                <div style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--glass-dash-text-main)' }}>{loading ? '-' : closedCount}</div>
+                <div style={{ fontSize: '13px', color: 'var(--glass-dash-text-muted)' }}>Closed Cases</div>
               </div>
             </div>
           </div>
 
           {/* TABLE CONTAINER */}
-          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
+          <div className="panel-card" style={{ overflow: 'hidden' }}>
             {/* TOOLBAR */}
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
               <div style={{ color: 'var(--text-muted)', fontSize: '13px' }}>

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
-import { fetchAgentResults, triggerAgentAnalysis } from '../js/api';
+import { fetchAgentResults, triggerAgentAnalysis, fetchCases } from '../js/api';
 import { formatEvidenceId } from '../js/dateUtils';
 import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
@@ -153,6 +153,24 @@ const Agents = () => {
   const [activeViewMode, setActiveViewMode] = useState('pipeline'); // 'pipeline' | 'claims' | 'raw_json'
   const [claimsFilter, setClaimsFilter] = useState('all');
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem('argus_theme') || 'dark');
+  const [caseDetails, setCaseDetails] = useState(null);
+
+  const currentUser = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('argus_user'));
+    } catch (_e) {
+      return null;
+    }
+  })();
+
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(nextTheme);
+    localStorage.setItem('argus_theme', nextTheme);
+    document.documentElement.setAttribute('data-theme', nextTheme);
+  };
 
   // Synchronize active case across tabs and components
   useEffect(() => {
@@ -162,6 +180,7 @@ const Agents = () => {
       setRunningAgents(false); // Cleanly terminate in-progress polling when case changes
       if (!caseId) {
         setAgentData(null);
+        setCaseDetails(null);
         setLoading(false);
       }
     });
@@ -205,6 +224,13 @@ const Agents = () => {
   useEffect(() => {
     if (activeCaseId) {
       loadAgentResults(activeCaseId);
+      fetchCases().then(res => {
+        const list = res.data || [];
+        const match = list.find(c => String(c.case_id) === String(activeCaseId) || String(c.id) === String(activeCaseId));
+        if (match) setCaseDetails(match);
+      }).catch(() => {});
+    } else {
+      setCaseDetails(null);
     }
   }, [activeCaseId]);
 
@@ -348,84 +374,149 @@ const Agents = () => {
       />
       <Sidebar />
 
-      <main className="main-content" style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      <main className="main-content">
         {/* TOPBAR */}
-        <header className="topbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(139, 92, 246, 0.2))',
-              border: '1px solid rgba(59, 130, 246, 0.4)',
-              borderRadius: 8,
-              padding: '6px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--blue)', letterSpacing: '0.05em' }}>ARGUS SWARM</span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>Multi-Agent Forensic Intelligence</span>
+        <header className="glass-topbar-capsule topbar">
+          <div className="glass-topbar-left" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '14px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ 
+                  background: 'var(--glass-dash-blue-soft)', 
+                  color: 'var(--glass-dash-blue)', 
+                  border: '1px solid var(--glass-dash-blue-border)', 
+                  padding: '2px 8px', 
+                  borderRadius: '6px', 
+                  fontSize: '10.5px', 
+                  fontWeight: 800, 
+                  letterSpacing: '0.05em' 
+                }}>
+                  ARGUS SWARM
+                </span>
+                <h2 className="glass-welcome-title" style={{ margin: 0, fontSize: '15px', fontWeight: 700 }}>
+                  Multi-Agent Forensic Intelligence
+                </h2>
+              </div>
+              <p className="glass-welcome-sub" style={{ margin: 0, fontSize: '11px', opacity: 0.75 }}>
+                Autonomous reasoning pipeline, threat intelligence &amp; evidence verification
+              </p>
             </div>
 
             {/* Active Case Badge */}
             <div style={{
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border-strong)',
-              padding: '6px 14px',
-              borderRadius: 6,
+              background: 'var(--glass-dash-surface-nested)',
+              border: '1px solid var(--glass-dash-border-subtle)',
+              padding: '5px 14px',
+              borderRadius: '9999px',
               display: 'flex',
               alignItems: 'center',
-              gap: 8
+              gap: '8px',
+              marginLeft: '4px'
             }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Active Case:</span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>
-                {activeCaseId ? `${activeCaseName} (${activeCaseId})` : 'No Active Case'}
+              <span style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Active Case:</span>
+              <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--glass-dash-text-main)' }}>
+                {activeCaseId ? `${caseDetails?.name || activeCaseName} (${activeCaseId})` : 'No Active Case'}
               </span>
             </div>
           </div>
 
-          <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button
               onClick={handleRunAnalysis}
               disabled={runningAgents || loading || !activeCaseId}
+              className="btn-primary"
               style={{
-                background: (runningAgents || loading || !activeCaseId) ? 'var(--border-strong)' : 'linear-gradient(135deg, #3b82f6, #6366f1)',
-                color: '#fff',
-                border: 'none',
-                padding: '8px 18px',
-                borderRadius: 6,
-                fontSize: 12.5,
-                fontWeight: 700,
+                fontSize: '12.5px',
+                padding: '7px 16px',
+                borderRadius: '10px',
                 cursor: (runningAgents || loading || !activeCaseId) ? 'not-allowed' : 'pointer',
+                opacity: (runningAgents || loading || !activeCaseId) ? 0.6 : 1,
                 display: 'flex',
                 alignItems: 'center',
-                gap: 8,
-                boxShadow: (runningAgents || loading || !activeCaseId) ? 'none' : '0 4px 14px rgba(59, 130, 246, 0.35)'
+                gap: '8px'
               }}
             >
               {runningAgents ? (
                 <>
                   <div className="live-dot" style={{ background: '#38bdf8' }}></div>
-                  Swarm Analyzing...
+                  <span>Swarm Analyzing...</span>
                 </>
               ) : (
                 <>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                  Run Multi-Agent Analysis
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                  <span>Run Multi-Agent Analysis</span>
                 </>
               )}
             </button>
+
+            {/* Theme Toggle */}
+            <button className="glass-icon-btn icon-btn" onClick={toggleTheme} title="Toggle Theme">
+              {theme === 'dark' ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+              )}
+            </button>
+
             <NotificationMenu />
+
+            {/* User Profile Pill */}
+            <div className="glass-profile-pill user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
+              <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}</div>
+              <span className="glass-profile-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'Investigator'}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              {showUserDropdown && (
+                <div className="user-dropdown" style={{ display: 'block' }}>
+                  <div className="user-dropdown-header">
+                    <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'Investigator'}</div>
+                    <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
         {/* WORKSPACE CONTENT */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className="dashboard-scroll">
+          {/* Active Case Details Header Card */}
+          {activeCaseId && (
+            <div className="header-card" style={{ flexShrink: 0, padding: '24px 28px', borderRadius: '18px' }}>
+              <div className="header-info-wrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
+                <div className="header-id">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--glass-dash-blue)', fontWeight: 800 }}>ACTIVE INVESTIGATION CASE</span>
+                    <span style={{ background: 'rgba(59, 130, 246, 0.15)', color: '#38bdf8', padding: '2px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700, fontFamily: 'monospace' }}>
+                      {activeCaseId}
+                    </span>
+                  </div>
+                  <h1 id="dashboard-case-name" style={{ fontSize: '22px', fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
+                    {caseDetails?.name || activeCaseName || 'Unnamed Forensic Case'}
+                  </h1>
+                  <p id="dashboard-case-desc" style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '6px', marginBottom: 0, maxWidth: '750px' }}>
+                    {caseDetails?.description || 'Active digital forensic case undergoing automated agent correlation, threat modeling, and evidence extraction.'}
+                  </p>
+                </div>
+
+                <div className="header-meta" style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+                  <div className="badge-danger" style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '9999px', fontSize: '12px', fontWeight: 700 }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    <span>{caseDetails?.severity ? `${caseDetails.severity.toUpperCase()} RISK` : 'ACTIVE ANALYSIS'}</span>
+                  </div>
+                  <div className="meta-item" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--glass-dash-blue)' }}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <div>
+                      <div style={{ fontSize: '10.5px', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Status</div>
+                      <strong style={{ fontSize: '13px', color: 'var(--text-main)' }}>{caseDetails?.status ? caseDetails.status.toUpperCase() : 'IN PROGRESS'}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* SWARM SUMMARY HEADER */}
-          <div style={{
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 10,
-            padding: '20px 24px',
+          <div className="panel-card" style={{
+            padding: '24px 28px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
@@ -509,18 +600,19 @@ const Agents = () => {
           </div>
 
           {/* VIEW MODE SELECTOR */}
-          <div style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 10, borderBottom: '1px solid var(--glass-dash-border-subtle)', paddingBottom: 14 }}>
             <button
               onClick={() => setActiveViewMode('pipeline')}
               style={{
-                background: activeViewMode === 'pipeline' ? 'var(--blue)' : 'var(--bg-card)',
-                color: activeViewMode === 'pipeline' ? '#fff' : 'var(--text-main)',
-                border: '1px solid var(--border-strong)',
-                padding: '8px 16px',
-                borderRadius: 6,
+                background: activeViewMode === 'pipeline' ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.22) 0%, rgba(37, 99, 235, 0.12) 100%)' : 'var(--glass-dash-surface-nested)',
+                color: activeViewMode === 'pipeline' ? 'var(--glass-dash-blue)' : 'var(--glass-dash-text-muted)',
+                border: `1px solid ${activeViewMode === 'pipeline' ? 'var(--glass-dash-blue-border)' : 'var(--glass-dash-border-subtle)'}`,
+                padding: '8px 18px',
+                borderRadius: '9999px',
                 fontSize: 12.5,
                 fontWeight: 700,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
               }}
             >
               Swarm Architecture &amp; Deep-Dive
@@ -528,14 +620,15 @@ const Agents = () => {
             <button
               onClick={() => setActiveViewMode('claims')}
               style={{
-                background: activeViewMode === 'claims' ? 'var(--blue)' : 'var(--bg-card)',
-                color: activeViewMode === 'claims' ? '#fff' : 'var(--text-main)',
-                border: '1px solid var(--border-strong)',
-                padding: '8px 16px',
-                borderRadius: 6,
+                background: activeViewMode === 'claims' ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.22) 0%, rgba(37, 99, 235, 0.12) 100%)' : 'var(--glass-dash-surface-nested)',
+                color: activeViewMode === 'claims' ? 'var(--glass-dash-blue)' : 'var(--glass-dash-text-muted)',
+                border: `1px solid ${activeViewMode === 'claims' ? 'var(--glass-dash-blue-border)' : 'var(--glass-dash-border-subtle)'}`,
+                padding: '8px 18px',
+                borderRadius: '9999px',
                 fontSize: 12.5,
                 fontWeight: 700,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
               }}
             >
               Claims &amp; Evidence Ledger ({claimsList.length})
@@ -543,14 +636,15 @@ const Agents = () => {
             <button
               onClick={() => setActiveViewMode('raw_json')}
               style={{
-                background: activeViewMode === 'raw_json' ? 'var(--blue)' : 'var(--bg-card)',
-                color: activeViewMode === 'raw_json' ? '#fff' : 'var(--text-main)',
-                border: '1px solid var(--border-strong)',
-                padding: '8px 16px',
-                borderRadius: 6,
+                background: activeViewMode === 'raw_json' ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.22) 0%, rgba(37, 99, 235, 0.12) 100%)' : 'var(--glass-dash-surface-nested)',
+                color: activeViewMode === 'raw_json' ? 'var(--glass-dash-blue)' : 'var(--glass-dash-text-muted)',
+                border: `1px solid ${activeViewMode === 'raw_json' ? 'var(--glass-dash-blue-border)' : 'var(--glass-dash-border-subtle)'}`,
+                padding: '8px 18px',
+                borderRadius: '9999px',
                 fontSize: 12.5,
                 fontWeight: 700,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
               }}
             >
               Raw Swarm Telemetry (JSON)
@@ -585,9 +679,9 @@ const Agents = () => {
                         }
                       }}
                       style={{
-                        background: isSelected ? agent.bg : 'var(--bg-card)',
-                        border: `1px solid ${isSelected ? agent.color : 'var(--border-subtle)'}`,
-                        borderRadius: 8,
+                        background: isSelected ? agent.bg : 'var(--glass-dash-surface-nested)',
+                        border: `1px solid ${isSelected ? agent.color : 'var(--glass-dash-border-subtle)'}`,
+                        borderRadius: 14,
                         padding: '12px 16px',
                         cursor: 'pointer',
                         display: 'flex',
@@ -601,8 +695,8 @@ const Agents = () => {
                         <div style={{
                           width: 32,
                           height: 32,
-                          borderRadius: 6,
-                          background: isSelected ? agent.color : 'var(--bg-app)',
+                          borderRadius: 10,
+                          background: isSelected ? agent.color : 'var(--glass-dash-surface)',
                           color: isSelected ? '#fff' : agent.color,
                           display: 'flex',
                           alignItems: 'center',

@@ -240,21 +240,21 @@ const Evidence = () => {
   <main className="main-content">
     
     {/* TOPBAR */}
-    <header className="topbar">
+    <header className="glass-topbar-capsule topbar">
       <div className="search-container">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style={{color: 'var(--text-muted)', marginRight: '8px'}}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color: 'var(--glass-dash-text-muted)', marginRight: '8px'}}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
         <input type="text" placeholder="Search cases, evidence, or findings..." />
         <span className="search-shortcut">⌘ K</span>
       </div>
-      <div className="topbar-actions">
+      <div className="glass-topbar-right topbar-actions">
         {isAdmin && (
           <button
             type="button"
             onClick={handleCloseCase}
-            className="btn btn-outline"
-            style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '13px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}
+            className="btn-outline"
+            style={{ fontSize: '13px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
             Close Case
           </button>
         )}
@@ -262,19 +262,19 @@ const Evidence = () => {
           <button
             type="button"
             onClick={handleOpenCreateCase}
-            className="btn btn-primary"
-            style={{background: 'var(--blue)', border: 'none', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', color: '#fff'}}
+            className="btn-primary"
+            style={{ fontSize: '13px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Create Case
           </button>
         )}
         {localStorage.getItem('active_case_id') && <div className="badge-live"><div className="live-dot"></div> Live Analysis</div>}
         <NotificationMenu />
-        <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
-          <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
-          <span style={{fontWeight: '500', textTransform: 'capitalize'}}>{currentUser?.name || 'sathwik'}</span>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        <div className="glass-profile-pill user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
+          <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+          <span className="glass-profile-name" style={{textTransform: 'capitalize'}}>{currentUser?.name || 'sathwik'}</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
           {showUserDropdown && (
             <div className="user-dropdown" style={{ display: 'block' }}>
               <div className="user-dropdown-header">
@@ -434,9 +434,9 @@ const Evidence = () => {
           {/* Search & Filters */}
           <div className="evidence-toolbar" style={{display: 'flex', justifyContent: 'space-between', padding: '16px 24px', borderBottom: '1px solid var(--border-strong)', alignItems: 'center', position: 'relative', zIndex: 100}}>
             <div className="toolbar-left" style={{display: 'flex', gap: '16px', alignItems: 'center'}}>
-              <div className="search-container" style={{background: 'var(--bg-app)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', padding: '6px 12px', width: '250px'}}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{color: 'var(--text-muted)'}}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-                <input type="text" placeholder="Search evidence..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{border: 'none', background: 'transparent', outline: 'none', marginLeft: '8px', fontSize: '13px', color: 'var(--text-main)', width: '80%'}} />
+              <div className="search-container" style={{ width: '280px' }}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" placeholder="Search evidence..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
               </div>
             </div>
             <div className="toolbar-right" style={{display: 'flex', gap: '12px', alignItems: 'center'}}>

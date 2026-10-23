@@ -1,0 +1,5 @@
+/* ARGUS Template 2 (Refined) - Polish on top of style.css */
+.argus-refined-shell {
+  height: calc(100vh - 49px);
+  overflow: hidden;
+}

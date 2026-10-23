@@ -89,6 +89,7 @@ const DevRoleSwitcher = () => {
     // Never fabricate dev tokens or try guessed passwords.
     // Cleanly redirect to login page with selected role hint for real authentication.
     setLoadingRole(account.roleKey);
+    setIsExpanded(false);
     const dest = targetPath || account.defaultRoute || '/dashboard';
     navigate(`/login?role=${encodeURIComponent(account.roleKey)}&redirect=${encodeURIComponent(dest)}`);
     setLoadingRole(null);

@@ -248,7 +248,7 @@ const Dashboard = () => {
         <Sidebar />
 
         {/* ── MAIN CONTENT ── */}
-        <main className="main-content" style={{ padding: (isSeniorAnalyst || isAuditor) ? 0 : undefined }}>
+        <main className="main-content">
           {isAuditor ? (
             <AuditorDashboard />
           ) : isSeniorAnalyst ? (
@@ -256,24 +256,24 @@ const Dashboard = () => {
           ) : isAdmin ? (
             <>
               {/* ADMIN TOPBAR */}
-              <header className="topbar" style={{ justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', padding: '16px 40px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ fontSize: '20px', fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '4px' }}>Welcome, {currentUser?.name || 'Admin'}</div>
-                  <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Manage people, cases, and ensure compliance.</div>
+              <header className="glass-topbar-capsule topbar">
+                <div className="glass-topbar-left">
+                  <h2 className="glass-welcome-title">Welcome, {currentUser?.name || 'Admin'}</h2>
+                  <p className="glass-welcome-sub">Manage people, cases, and ensure compliance.</p>
                 </div>
-                <div className="topbar-actions">
-                  <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div className="glass-topbar-right topbar-actions">
+                  <button className="glass-icon-btn icon-btn" onClick={toggleTheme} title="Toggle Theme">
                     {theme === 'dark' ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
                     ) : (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
                     )}
                   </button>
                   <NotificationMenu />
-                  <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)} style={{ cursor: 'pointer' }}>
-                    <div className="avatar" style={{ background: '#4b5563' }}>A</div>
-                    <span style={{ fontWeight: 500 }}>{currentUser?.name || 'Admin'}</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                  <div className="glass-profile-pill user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
+                    <div className="glass-profile-avatar-dark avatar">A</div>
+                    <span className="glass-profile-name">{currentUser?.name || 'Admin'}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
                     {showUserDropdown && (
                       <div className="user-dropdown" style={{ display: 'block' }}>
                         <div className="user-dropdown-header">
@@ -291,51 +291,50 @@ const Dashboard = () => {
             </>
           ) : (
             <>
-              {/* TOPBAR — exact match to HTML */}
-              <header className="topbar">
-            <div className="search-container">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-muted)', marginRight: '8px' }}><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" placeholder="Search cases, evidence, or findings..." />
-              <span className="search-shortcut">⌘ K</span>
-            </div>
-
-            <div className="topbar-actions">
-              {/* Live Analysis badge */}
-              {localStorage.getItem('active_case_id') && (
-                <div className="badge-live">
-                  <div className="live-dot"></div>
-                  Live Analysis
+              {/* ANALYST TOPBAR */}
+              <header className="glass-topbar-capsule topbar">
+                <div className="glass-topbar-left">
+                  <h2 className="glass-welcome-title">Welcome, {currentUser?.name || 'Investigator'}</h2>
+                  <p className="glass-welcome-sub">Autonomous AI Forensic Investigation Workstation</p>
                 </div>
-              )}
 
-              {/* Theme Toggle */}
-              <button className="icon-btn" onClick={toggleTheme} title="Toggle Theme" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {theme === 'dark' ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-                )}
-              </button>
-
-              {/* Bell */}
-              <NotificationMenu />
-
-              {/* User profile */}
-              <div className="user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
-                <div className="avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
-                <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-                {showUserDropdown && (
-                  <div className="user-dropdown" style={{ display: 'block' }}>
-                    <div className="user-dropdown-header">
-                      <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</div>
-                      <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
+                <div className="glass-topbar-right topbar-actions">
+                  {/* Live Analysis badge */}
+                  {localStorage.getItem('active_case_id') && (
+                    <div className="badge-live">
+                      <div className="live-dot"></div>
+                      Live Analysis
                     </div>
+                  )}
+
+                  {/* Theme Toggle */}
+                  <button className="glass-icon-btn icon-btn" onClick={toggleTheme} title="Toggle Theme">
+                    {theme === 'dark' ? (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                    ) : (
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                    )}
+                  </button>
+
+                  {/* Bell */}
+                  <NotificationMenu />
+
+                  {/* User profile */}
+                  <div className="glass-profile-pill user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
+                    <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
+                    <span className="glass-profile-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    {showUserDropdown && (
+                      <div className="user-dropdown" style={{ display: 'block' }}>
+                        <div className="user-dropdown-header">
+                          <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</div>
+                          <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          </header>
+                </div>
+              </header>
 
           {/* DASHBOARD SCROLL */}
           <div className="dashboard-scroll">

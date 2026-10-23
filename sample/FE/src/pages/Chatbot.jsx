@@ -569,7 +569,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
             margin: '12px 0',
             background: isDark ? '#090d16' : '#1e293b',
             color: '#e2e8f0',
-            borderRadius: '8px',
+            borderRadius: '16px',
             overflow: 'hidden',
             fontFamily: 'Consolas, Monaco, monospace',
             fontSize: '12.5px',
@@ -671,38 +671,22 @@ Select a quick prompt below or type your forensic query to begin querying Case *
   };
 
   // Color tokens
-  const themeStyles = isDark ? {
-    bg: '#0b0f19',
-    cardBg: '#111827',
-    topbarBg: '#0f172a',
-    topbarBorder: '#1e293b',
-    border: '#1e293b',
-    borderLight: '#334155',
-    textMain: '#f8fafc',
-    textMuted: '#94a3b8',
-    inputBg: '#0b0f19',
-    cardSubtle: '#1e293b',
-    assistantBubbleBg: '#111827',
-    assistantBubbleBorder: '#1e293b',
+  const themeStyles = {
+    bg: 'var(--glass-dash-bg)',
+    cardBg: 'var(--glass-dash-surface-gradient)',
+    topbarBg: 'var(--glass-dash-surface-gradient)',
+    topbarBorder: 'var(--glass-dash-border)',
+    border: 'var(--glass-dash-border)',
+    borderLight: 'var(--glass-dash-border-subtle)',
+    textMain: 'var(--glass-dash-text-main)',
+    textMuted: 'var(--glass-dash-text-muted)',
+    inputBg: 'var(--glass-dash-surface-nested)',
+    cardSubtle: 'var(--glass-dash-surface-nested)',
+    assistantBubbleBg: isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(255, 255, 255, 0.65)',
+    assistantBubbleBorder: 'var(--glass-dash-border)',
     userBubbleBg: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
     userBubbleText: '#ffffff',
-    drawerBg: '#0d1322'
-  } : {
-    bg: '#f8fafc',
-    cardBg: '#ffffff',
-    topbarBg: '#ffffff',
-    topbarBorder: '#e2e8f0',
-    border: '#e2e8f0',
-    borderLight: '#cbd5e1',
-    textMain: '#0f172a',
-    textMuted: '#64748b',
-    inputBg: '#f8fafc',
-    cardSubtle: '#f1f5f9',
-    assistantBubbleBg: '#ffffff',
-    assistantBubbleBorder: '#e2e8f0',
-    userBubbleBg: 'linear-gradient(135deg, #3b82f6, #2563eb)',
-    userBubbleText: '#ffffff',
-    drawerBg: '#f1f5f9'
+    drawerBg: 'var(--glass-dash-surface-gradient)'
   };
 
   return (
@@ -744,211 +728,166 @@ Select a quick prompt below or type your forensic query to begin querying Case *
       {/* Main Navigation Sidebar */}
       <Sidebar active="chatbot" />
 
-      {/* Main Workspace */}
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        height: '100vh',
-        overflow: 'hidden',
-        position: 'relative'
-      }}>
+      {/* FLOATING TOPBAR CAPSULE */}
+      <header className="glass-topbar-capsule topbar">
+        <div className="glass-topbar-left" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '14px' }}>
+          <div style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ffffff',
+            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.35)',
+            flexShrink: 0
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+            </svg>
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <h2 className="glass-welcome-title" style={{ margin: 0, fontSize: '15px', fontWeight: 700 }}>
+                AI Investigation Assistant
+              </h2>
+              {activeCaseId && (
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  color: 'var(--glass-dash-blue)',
+                  background: 'var(--glass-dash-blue-soft)',
+                  border: '1px solid var(--glass-dash-blue-border)',
+                  padding: '2px 10px',
+                  borderRadius: '9999px',
+                  whiteSpace: 'nowrap'
+                }}>
+                  Case: {activeCaseId}
+                </span>
+              )}
+            </div>
+            <p className="glass-welcome-sub" style={{ margin: 0, fontSize: '11px', opacity: 0.75 }}>
+              Autonomous multi-agent forensic reasoning &amp; evidence correlation
+            </p>
+          </div>
+        </div>
+
+        {/* Topbar Controls */}
+        <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Drawer Toggle */}
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(!drawerOpen)}
+            title="Toggle Case Artifacts Drawer"
+            className="btn-outline"
+            style={{
+              padding: '6px 14px',
+              fontSize: '12px',
+              gap: '6px',
+              background: drawerOpen ? 'var(--glass-dash-blue-soft)' : 'var(--glass-dash-surface-nested)',
+              color: drawerOpen ? 'var(--glass-dash-blue)' : 'var(--glass-dash-text-main)',
+              borderColor: drawerOpen ? 'var(--glass-dash-blue-border)' : 'var(--glass-dash-border-subtle)'
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="15" y1="3" x2="15" y2="21"></line>
+            </svg>
+            <span>{drawerOpen ? 'Hide Artifacts' : 'Case Artifacts'}</span>
+          </button>
+
+          {/* Clear */}
+          <button
+            type="button"
+            onClick={handleClearChat}
+            title="Clear Conversation"
+            className="btn-outline"
+            style={{ padding: '6px 14px', fontSize: '12px', gap: '6px' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Clear</span>
+          </button>
+
+          {/* Export */}
+          <button
+            type="button"
+            onClick={handleExportChat}
+            title="Export Conversation Log"
+            className="btn-primary"
+            style={{ padding: '6px 16px', fontSize: '12px', gap: '6px' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Export</span>
+          </button>
+
+          {/* Theme Toggle */}
+          <button
+            type="button"
+            className="glass-icon-btn icon-btn"
+            onClick={toggleTheme}
+            title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
+          >
+            {isDark ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+              </svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+              </svg>
+            )}
+          </button>
+
+          <NotificationMenu />
+        </div>
+      </header>
+
+      {/* Main Workspace Layout */}
+      <main className="main-content chatbot-layout">
         {/* CENTER CHAT COLUMN */}
-        <main className="main-content" style={{
+        <div style={{
           flex: 1,
+          minWidth: 0,
           display: 'flex',
           flexDirection: 'column',
-          height: '100vh',
-          overflow: 'hidden',
-          background: themeStyles.bg
+          height: '100%',
+          overflow: 'hidden'
         }}>
-          {/* TOPBAR */}
-          <header style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '14px 28px',
-            borderBottom: `1px solid ${themeStyles.topbarBorder}`,
-            background: themeStyles.topbarBg,
-            position: 'sticky',
-            top: 0,
-            zIndex: 40,
-            transition: 'background-color 0.2s, border-color 0.2s'
-          }}>
-            {/* Header Title & Case Info */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '8px',
-                background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#ffffff',
-                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)'
-              }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                </svg>
-              </div>
-              <div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: themeStyles.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>AI Investigation Assistant</span>
-                  {activeCaseId && (
-                    <span style={{
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      color: isDark ? '#93c5fd' : '#2563eb',
-                      background: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.1)',
-                      border: '1px solid rgba(59, 130, 246, 0.3)',
-                      padding: '2px 8px',
-                      borderRadius: '12px'
-                    }}>
-                      Case: {activeCaseId}
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: '11px', color: themeStyles.textMuted }}>
-                  Autonomous multi-agent forensic reasoning & evidence correlation
-                </div>
-              </div>
-            </div>
 
-            {/* Topbar Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              {/* Drawer Toggle */}
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(!drawerOpen)}
-                title="Toggle Case Artifacts Drawer"
-                style={{
-                  background: drawerOpen ? (isDark ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.1)') : 'transparent',
-                  border: `1px solid ${drawerOpen ? '#3b82f6' : themeStyles.border}`,
-                  color: drawerOpen ? (isDark ? '#60a5fa' : '#2563eb') : themeStyles.textMuted,
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                  <line x1="15" y1="3" x2="15" y2="21"></line>
-                </svg>
-                {drawerOpen ? 'Hide Artifacts' : 'Case Artifacts'}
-              </button>
 
-              {/* Theme Toggle */}
-              <button
-                type="button"
-                onClick={toggleTheme}
-                title={`Switch to ${isDark ? 'Light' : 'Dark'} Mode`}
-                style={{
-                  background: isDark ? '#1e293b' : '#f1f5f9',
-                  border: `1px solid ${themeStyles.border}`,
-                  borderRadius: '8px',
-                  width: '36px',
-                  height: '36px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: isDark ? '#f59e0b' : '#64748b'
-                }}
-              >
-                {isDark ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="5"></circle>
-                    <line x1="12" y1="1" x2="12" y2="3"></line>
-                    <line x1="12" y1="21" x2="12" y2="23"></line>
-                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-                    <line x1="1" y1="12" x2="3" y2="12"></line>
-                    <line x1="21" y1="12" x2="23" y2="12"></line>
-                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-                  </svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-                  </svg>
-                )}
-              </button>
-
-              {/* Clear */}
-              <button
-                type="button"
-                onClick={handleClearChat}
-                title="Clear Conversation"
-                style={{
-                  background: 'transparent',
-                  border: `1px solid ${themeStyles.border}`,
-                  color: themeStyles.textMuted,
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
-                Clear
-              </button>
-
-              {/* Export */}
-              <button
-                type="button"
-                onClick={handleExportChat}
-                title="Export Conversation Log"
-                style={{
-                  background: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.1)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                  color: isDark ? '#60a5fa' : '#2563eb',
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px'
-                }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                Export
-              </button>
-
-              <NotificationMenu />
-            </div>
-          </header>
-
-          {/* Evidence context strip: counts reflect records returned by the API, not inferred coverage. */}
+          {/* Evidence context strip */}
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: '12px',
             flexWrap: 'wrap',
-            padding: '10px 28px',
-            background: themeStyles.cardBg,
-            borderBottom: `1px solid ${themeStyles.topbarBorder}`,
-            fontSize: '11px'
+            padding: '10px 22px',
+            background: 'var(--glass-dash-surface-nested)',
+            border: '1px solid var(--glass-dash-border-subtle)',
+            borderRadius: '9999px',
+            fontSize: '11.5px',
+            marginBottom: '14px',
+            backdropFilter: 'blur(16px)',
+            flexShrink: 0
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: themeStyles.textMuted }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--glass-dash-text-muted)' }}>
               <span style={{
                 width: '7px',
                 height: '7px',
@@ -956,18 +895,20 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                 background: contextLoading ? '#f59e0b' : '#10b981',
                 display: 'inline-block'
               }} />
-              <span>{contextLoading ? 'Loading case records…' : 'Case context loaded'}</span>
-              <span style={{ color: themeStyles.borderLight }}>•</span>
+              <span style={{ fontWeight: 600 }}>{contextLoading ? 'Loading case records...' : 'Case context loaded'}</span>
+              <span style={{ opacity: 0.4 }}>•</span>
               <span>{caseFindings.length} finding record{caseFindings.length === 1 ? '' : 's'}</span>
-              <span style={{ color: themeStyles.borderLight }}>•</span>
+              <span style={{ opacity: 0.4 }}>•</span>
               <span>{caseEvidence.length} evidence record{caseEvidence.length === 1 ? '' : 's'}</span>
             </div>
             <div style={{
-              color: themeStyles.textMuted,
-              background: isDark ? 'rgba(245, 158, 11, 0.10)' : '#fffbeb',
-              border: `1px solid ${isDark ? 'rgba(245, 158, 11, 0.25)' : '#fde68a'}`,
-              padding: '4px 9px',
-              borderRadius: '6px'
+              color: '#f59e0b',
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              padding: '3px 12px',
+              borderRadius: '9999px',
+              fontWeight: 700,
+              fontSize: '11px'
             }}>
               Evidence-grounded · No unsupported fallback claims
             </div>
@@ -976,8 +917,9 @@ Select a quick prompt below or type your forensic query to begin querying Case *
           {/* CHAT MESSAGES SCROLLER */}
           <div style={{
             flex: 1,
+            minHeight: 0,
             overflowY: 'auto',
-            padding: '24px 28px',
+            padding: '16px 20px',
             display: 'flex',
             flexDirection: 'column',
             gap: '20px'
@@ -1020,7 +962,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                     <div style={{
                       width: '36px',
                       height: '36px',
-                      borderRadius: '10px',
+                      borderRadius: '12px',
                       background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                       display: 'flex',
                       alignItems: 'center',
@@ -1070,8 +1012,8 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                       <div style={{
                         background: 'rgba(249, 115, 22, 0.15)',
                         border: '1px solid #f97316',
-                        padding: '8px 12px',
-                        borderRadius: '8px',
+                        padding: '10px 14px',
+                        borderRadius: '14px',
                         fontSize: '11px',
                         fontWeight: 600,
                         color: '#f97316',
@@ -1087,14 +1029,16 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
                     {/* Bubble Content */}
                     <div style={{
-                      padding: '16px 20px',
-                      borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                      background: isUser ? themeStyles.userBubbleBg : themeStyles.assistantBubbleBg,
-                      color: isUser ? themeStyles.userBubbleText : themeStyles.textMain,
-                      border: isUser ? 'none' : `1px solid ${themeStyles.assistantBubbleBorder}`,
+                      padding: '24px 28px',
+                      borderRadius: '24px',
+                      background: isUser ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.35) 0%, rgba(29, 78, 216, 0.2) 100%)' : 'var(--glass-dash-surface-gradient)',
+                      backdropFilter: 'blur(28px) saturate(190%)',
+                      WebkitBackdropFilter: 'blur(28px) saturate(190%)',
+                      border: `1px solid ${isUser ? 'rgba(59, 130, 246, 0.45)' : 'var(--glass-dash-border)'}`,
+                      boxShadow: isUser ? '0 8px 24px rgba(37, 99, 235, 0.25)' : 'var(--glass-dash-shadow-card)',
+                      color: isUser ? '#ffffff' : 'var(--glass-dash-text-main)',
                       fontSize: '13.5px',
-                      lineHeight: '1.6',
-                      boxShadow: isDark ? '0 4px 16px rgba(0,0,0,0.2)' : '0 2px 8px rgba(0,0,0,0.06)',
+                      lineHeight: '1.65',
                       wordBreak: 'break-word',
                       width: '100%'
                     }}>
@@ -1106,75 +1050,61 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '14px',
-                        marginTop: '8px',
-                        fontSize: '11px',
-                        color: themeStyles.textMuted
+                        gap: '8px',
+                        marginTop: '12px'
                       }}>
                         <button
                           type="button"
                           onClick={() => handleCopyText(msg.text)}
+                          className="btn-outline"
                           style={{
-                            background: 'none',
-                            border: 'none',
-                            color: themeStyles.textMuted,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontSize: '11px'
+                            padding: '4px 12px',
+                            fontSize: '11.5px',
+                            gap: '6px'
                           }}
-                          className="hover:text-blue-500"
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                             <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
                           </svg>
-                          Copy
+                          <span>Copy</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleSaveToNotes(msg.text)}
+                          className="btn-outline"
                           style={{
-                            background: 'none',
-                            border: 'none',
-                            color: themeStyles.textMuted,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontSize: '11px'
+                            padding: '4px 12px',
+                            fontSize: '11.5px',
+                            gap: '6px'
                           }}
-                          className="hover:text-blue-500"
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
-                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                            <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                            <polyline points="7 3 7 8 15 8"></polyline>
                           </svg>
-                          Save to Notes
+                          <span>Save to Notes</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleAddToReport(msg.text)}
+                          className="btn-outline"
                           style={{
-                            background: 'none',
-                            border: 'none',
-                            color: themeStyles.textMuted,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            fontSize: '11px'
+                            padding: '4px 12px',
+                            fontSize: '11.5px',
+                            gap: '6px'
                           }}
-                          className="hover:text-blue-500"
                         >
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
                             <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="15" y2="15"></line>
                           </svg>
-                          Add to Report
+                          <span>Add to Report</span>
                         </button>
                       </div>
                     )}
@@ -1185,7 +1115,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                     <div style={{
                       width: '36px',
                       height: '36px',
-                      borderRadius: '10px',
+                      borderRadius: '12px',
                       background: isDark ? '#1e293b' : '#e2e8f0',
                       border: `1px solid ${themeStyles.border}`,
                       display: 'flex',
@@ -1209,7 +1139,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                 <div style={{
                   width: '36px',
                   height: '36px',
-                  borderRadius: '10px',
+                  borderRadius: '12px',
                   background: 'linear-gradient(135deg, #3b82f6, #8b5cf6)',
                   display: 'flex',
                   alignItems: 'center',
@@ -1223,7 +1153,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
                 <div style={{
                   padding: '12px 18px',
-                  borderRadius: '16px 16px 16px 4px',
+                  borderRadius: '20px 20px 20px 6px',
                   background: themeStyles.assistantBubbleBg,
                   border: `1px solid ${themeStyles.assistantBubbleBorder}`,
                   color: themeStyles.textMuted,
@@ -1243,12 +1173,13 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
           {/* PROMPT SUGGESTIONS CHIPS */}
           <div style={{
-            padding: '8px 28px 0 28px',
+            padding: '8px 4px',
             display: 'flex',
             gap: '8px',
             overflowX: 'auto',
             whiteSpace: 'nowrap',
-            scrollbarWidth: 'none'
+            scrollbarWidth: 'none',
+            flexShrink: 0
           }}>
             {SUGGESTED_PROMPTS.map((p, idx) => (
               <button
@@ -1256,122 +1187,90 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                 type="button"
                 disabled={loading}
                 onClick={() => handleSendQuery(p.query)}
+                className="btn-outline"
                 style={{
-                  background: isDark ? '#1e293b' : '#f1f5f9',
-                  border: `1px solid ${themeStyles.border}`,
-                  color: themeStyles.textMain,
-                  padding: '6px 12px',
-                  borderRadius: '20px',
-                  fontSize: '11.5px',
-                  fontWeight: 500,
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  transition: 'background-color 0.2s, border-color 0.2s',
-                  display: 'flex',
-                  alignItems: 'center',
+                  padding: '7px 16px',
+                  fontSize: '12px',
+                  fontWeight: 600,
                   gap: '6px',
-                  flexShrink: 0
+                  flexShrink: 0,
+                  cursor: loading ? 'not-allowed' : 'pointer'
                 }}
-                className="hover:border-blue-500"
               >
                 {p.label}
               </button>
             ))}
           </div>
 
-          {/* INPUT DOCK */}
+          {/* FLOATING GLASS INPUT DOCK */}
           <div style={{
-            padding: '12px 28px 20px 28px',
-            background: themeStyles.topbarBg,
-            borderTop: `1px solid ${themeStyles.topbarBorder}`
+            padding: '10px 0 4px 0',
+            flexShrink: 0
           }}>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSendQuery();
               }}
-              style={{
-                display: 'flex',
-                gap: '12px',
-                alignItems: 'center'
-              }}
+              className="chatbot-input-capsule"
             >
-              <div style={{
-                flex: 1,
-                position: 'relative',
-                display: 'flex',
-                alignItems: 'center'
-              }}>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  placeholder={activeCaseId ? `Query Case ${activeCaseId} findings, telemetry, hashes, or MITRE tactics...` : 'Type your forensic query...'}
-                  value={inputQuery}
-                  onChange={(e) => setInputQuery(e.target.value)}
-                  disabled={!activeCaseId || loading}
-                  style={{
-                    width: '100%',
-                    background: themeStyles.inputBg,
-                    color: themeStyles.textMain,
-                    border: `1px solid ${themeStyles.border}`,
-                    borderRadius: '12px',
-                    padding: '14px 20px',
-                    fontSize: '14px',
-                    outline: 'none',
-                    boxShadow: isDark ? 'inset 0 2px 4px rgba(0,0,0,0.3)' : 'inset 0 1px 2px rgba(0,0,0,0.05)',
-                    transition: 'border-color 0.2s'
-                  }}
-                />
-              </div>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--glass-dash-blue)" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.85, marginRight: '4px' }}>
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+              </svg>
+              <input
+                ref={inputRef}
+                type="text"
+                className="chatbot-input-field"
+                placeholder={activeCaseId ? `Query Case ${activeCaseId} findings, telemetry, hashes, or MITRE tactics...` : 'Type your forensic query...'}
+                value={inputQuery}
+                onChange={(e) => setInputQuery(e.target.value)}
+                disabled={!activeCaseId || loading}
+              />
 
               <button
                 type="submit"
                 disabled={!activeCaseId || loading || !inputQuery.trim()}
+                className="btn-primary"
                 style={{
-                  background: (!activeCaseId || loading || !inputQuery.trim()) 
-                    ? (isDark ? '#334155' : '#cbd5e1')
-                    : 'linear-gradient(135deg, #3b82f6, #1d4ed8)',
-                  color: '#ffffff',
-                  border: 'none',
-                  borderRadius: '12px',
-                  padding: '0 24px',
-                  height: '48px',
-                  fontSize: '14px',
-                  fontWeight: 600,
-                  cursor: (!activeCaseId || loading || !inputQuery.trim()) ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
+                  padding: '10px 24px',
+                  fontSize: '13.5px',
                   gap: '8px',
-                  boxShadow: (!activeCaseId || loading || !inputQuery.trim()) ? 'none' : '0 4px 14px rgba(59, 130, 246, 0.4)',
-                  transition: 'all 0.2s'
+                  flexShrink: 0,
+                  opacity: (!activeCaseId || loading || !inputQuery.trim()) ? 0.45 : 1,
+                  cursor: (!activeCaseId || loading || !inputQuery.trim()) ? 'not-allowed' : 'pointer'
                 }}
               >
                 <span>Ask</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                   <line x1="22" y1="2" x2="11" y2="13"></line>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
                 </svg>
               </button>
             </form>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '11px', color: themeStyles.textMuted }}>
-              <span>Deterministic forensic grounding & DeBERTa-v3 injection screening active.</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 18px 0 18px', fontSize: '11px', color: 'var(--glass-dash-text-muted)' }}>
+              <span>Deterministic forensic grounding &amp; DeBERTa-v3 injection screening active.</span>
               <span>Press Enter to send</span>
             </div>
           </div>
-        </main>
+        </div>
 
         {/* RIGHT COLLAPSIBLE DRAWER: Case Artifacts & Evidence Inspector */}
         {drawerOpen && (
           <aside style={{
-            width: '320px',
-            borderLeft: `1px solid ${themeStyles.border}`,
-            background: themeStyles.drawerBg,
+            width: '340px',
+            background: 'var(--glass-dash-surface-gradient)',
+            backdropFilter: 'blur(28px) saturate(190%)',
+            WebkitBackdropFilter: 'blur(28px) saturate(190%)',
+            border: '1px solid var(--glass-dash-border)',
+            borderRadius: '24px',
+            boxShadow: 'var(--glass-dash-shadow-card)',
             display: 'flex',
             flexDirection: 'column',
-            height: '100vh',
+            height: '100%',
             overflowY: 'auto',
-            padding: '20px',
+            padding: '22px',
             gap: '18px',
-            zIndex: 30
+            flexShrink: 0
           }}>
             {/* Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1397,7 +1296,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
             <div style={{
               background: themeStyles.cardBg,
               border: `1px solid ${themeStyles.border}`,
-              borderRadius: '10px',
+              borderRadius: '18px',
               padding: '14px',
               display: 'flex',
               flexDirection: 'column',
@@ -1435,7 +1334,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                   background: isDark ? '#0b0f19' : '#f8fafc',
                   border: `1px solid ${themeStyles.border}`,
                   padding: '8px',
-                  borderRadius: '6px',
+                  borderRadius: '14px',
                   textAlign: 'center'
                 }}>
                   <div style={{ fontSize: '16px', fontWeight: 800, color: themeStyles.textMain }}>
@@ -1448,7 +1347,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                   background: isDark ? '#0b0f19' : '#f8fafc',
                   border: `1px solid ${themeStyles.border}`,
                   padding: '8px',
-                  borderRadius: '6px',
+                  borderRadius: '14px',
                   textAlign: 'center'
                 }}>
                   <div style={{ fontSize: '16px', fontWeight: 800, color: '#ef4444' }}>
@@ -1484,7 +1383,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                         padding: '8px 10px',
                         background: themeStyles.cardBg,
                         border: `1px solid ${themeStyles.border}`,
-                        borderRadius: '6px',
+                        borderRadius: '14px',
                         cursor: 'pointer',
                         textAlign: 'left',
                         color: themeStyles.textMain,
@@ -1531,7 +1430,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                           padding: '8px 10px',
                           background: themeStyles.cardBg,
                           border: `1px solid ${themeStyles.border}`,
-                          borderRadius: '6px',
+                          borderRadius: '14px',
                           cursor: 'pointer',
                           textAlign: 'left',
                           color: themeStyles.textMain,
@@ -1581,7 +1480,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                       border: '1px solid rgba(59,130,246,0.3)',
                       color: isDark ? '#93c5fd' : '#2563eb',
                       padding: '5px 8px',
-                      borderRadius: '5px',
+                      borderRadius: '9999px',
                       fontSize: '11px',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -1626,7 +1525,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                     background: themeStyles.inputBg,
                     border: `1px solid ${themeStyles.border}`,
                     color: themeStyles.textMain,
-                    borderRadius: '6px',
+                    borderRadius: '14px',
                     padding: '6px 10px',
                     fontSize: '12px',
                     outline: 'none'
@@ -1638,7 +1537,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                     background: '#3b82f6',
                     color: '#ffffff',
                     border: 'none',
-                    borderRadius: '6px',
+                    borderRadius: '14px',
                     padding: '0 10px',
                     fontSize: '12px',
                     fontWeight: 600,
@@ -1661,7 +1560,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                       background: themeStyles.cardBg,
                       border: `1px solid ${themeStyles.border}`,
                       padding: '6px 8px',
-                      borderRadius: '6px',
+                      borderRadius: '14px',
                       fontSize: '11px',
                       color: themeStyles.textMain
                     }}>
@@ -1674,7 +1573,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
             </div>
           </aside>
         )}
-      </div>
+      </main>
     </div>
   );
 }

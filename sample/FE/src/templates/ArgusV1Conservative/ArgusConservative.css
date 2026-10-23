@@ -1,0 +1,25 @@
+/* ARGUS Template 1 (Conservative) - CSS Polish on top of style.css */
+.argus-conservative-shell {
+  height: calc(100vh - 49px);
+  overflow: hidden;
+}
+
+.argus-conservative-shell .details-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.argus-conservative-shell .detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 4px;
+}
+
+.argus-conservative-shell .detail-row strong {
+  color: var(--text-main);
+}

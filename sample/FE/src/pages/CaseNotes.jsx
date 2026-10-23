@@ -218,12 +218,12 @@ const CaseNotes = () => {
   };
 
   return (
-    <div id="app-shell" style={{ background: '#f8fafc' }}>
+    <div id="app-shell">
       {showProfileModal && <ProfileModal onClose={() => setShowProfileModal(false)} />}
       <Sidebar />
       <main className="main-content">
         {/* TOPBAR — matching Dashboard */}
-        <header className="topbar">
+        <header className="glass-topbar-capsule topbar">
           <div className="search-container">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--text-muted)', marginRight: '8px' }}>
               <circle cx="11" cy="11" r="8"></circle>
@@ -238,7 +238,7 @@ const CaseNotes = () => {
             <span className="search-shortcut">⌘ K</span>
           </div>
 
-          <div className="topbar-actions" style={{ position: 'relative' }}>
+          <div className="glass-topbar-right topbar-actions" style={{ position: 'relative' }}>
             {/* Live Analysis badge */}
             {activeCaseId && (
               <div className="badge-live">
@@ -261,14 +261,14 @@ const CaseNotes = () => {
 
             {/* User Profile */}
             <div
-              className="user-profile"
+              className="glass-profile-pill user-profile"
               onClick={() => setShowUserDropdown(!showUserDropdown)}
               style={{ cursor: 'pointer', position: 'relative' }}
             >
-              <div className="avatar">
+              <div className="glass-profile-avatar-dark avatar">
                 {currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}
               </div>
-              <span style={{ fontWeight: 500, textTransform: 'capitalize' }}>
+              <span className="glass-profile-name" style={{ fontWeight: 500, textTransform: 'capitalize' }}>
                 {currentUser?.name || 'sathwik'}
               </span>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
@@ -279,22 +279,23 @@ const CaseNotes = () => {
                     position: 'absolute',
                     top: '120%',
                     right: 0,
-                    background: 'var(--bg-card, #fff)',
-                    border: '1px solid var(--border-subtle, #e2e8f0)',
-                    borderRadius: '8px',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.12)',
+                    background: 'var(--glass-dash-surface-gradient)',
+                    backdropFilter: 'blur(16px)',
+                    border: '1px solid var(--glass-dash-border)',
+                    borderRadius: '16px',
+                    boxShadow: '0 10px 25px rgba(0,0,0,0.25)',
                     padding: '8px 0',
                     zIndex: 100,
                     minWidth: '160px'
                   }}
                 >
-                  <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--border-subtle, #e2e8f0)' }}>
-                    <div style={{ fontWeight: 600, fontSize: '13px', textTransform: 'capitalize', color: 'var(--text-main, #0f172a)' }}>{currentUser?.name || 'sathwik'}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted, #64748b)' }}>{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
+                  <div style={{ padding: '8px 16px', borderBottom: '1px solid var(--glass-dash-border-subtle)' }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', textTransform: 'capitalize', color: 'var(--glass-dash-text-main)' }}>{currentUser?.name || 'sathwik'}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)' }}>{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
                   </div>
                   <button
                     onClick={(e) => { e.stopPropagation(); setShowUserDropdown(false); setShowProfileModal(true); }}
-                    style={{ width: '100%', padding: '8px 16px', background: 'transparent', border: 'none', color: 'var(--text-main, #0f172a)', textAlign: 'left', cursor: 'pointer', fontSize: '13px' }}
+                    style={{ width: '100%', padding: '8px 16px', background: 'transparent', border: 'none', color: 'var(--glass-dash-text-main)', textAlign: 'left', cursor: 'pointer', fontSize: '13px' }}
                   >
                     My Profile
                   </button>
@@ -311,27 +312,27 @@ const CaseNotes = () => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '6px' }}>
-                <h1 style={{ fontSize: '26px', margin: 0, color: 'var(--text-main, #0f172a)', fontWeight: 700, letterSpacing: '-0.01em' }}>
+                <h1 style={{ fontSize: '26px', margin: 0, color: 'var(--glass-dash-text-main)', fontWeight: 700, letterSpacing: '-0.01em' }}>
                   Case Notes
                 </h1>
                 {activeCaseId ? (
                   <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#eff6ff', color: '#2563eb', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #dbeafe' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--glass-dash-blue-soft)', color: 'var(--glass-dash-blue)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600, border: '1px solid var(--glass-dash-border)' }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                       {activeCaseId}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#ecfdf5', color: '#059669', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, border: '1px solid #a7f3d0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
                       <div style={{ width: '6px', height: '6px', background: '#10b981', borderRadius: '50%' }}></div>
                       Active
                     </div>
                   </div>
                 ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#f1f5f9', color: '#64748b', padding: '4px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--glass-dash-surface-nested)', color: 'var(--glass-dash-text-muted)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600 }}>
                     No active case selected
                   </div>
                 )}
               </div>
-              <p style={{ margin: 0, color: 'var(--text-muted, #64748b)', fontSize: '14px' }}>
+              <p style={{ margin: 0, color: 'var(--glass-dash-text-muted)', fontSize: '14px' }}>
                 Investigation observations, follow-ups, and case details.
               </p>
             </div>
@@ -340,10 +341,10 @@ const CaseNotes = () => {
               <button 
                 onClick={openNewNote} 
                 style={{ 
-                  background: '#2563eb', 
+                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', 
                   border: 'none', 
-                  padding: '10px 18px', 
-                  borderRadius: '8px', 
+                  padding: '10px 22px', 
+                  borderRadius: '9999px', 
                   color: '#fff', 
                   cursor: 'pointer', 
                   display: 'flex', 
@@ -351,7 +352,7 @@ const CaseNotes = () => {
                   gap: '8px', 
                   fontSize: '13px', 
                   fontWeight: 600,
-                  boxShadow: '0 2px 6px rgba(37, 99, 235, 0.25)',
+                  boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)',
                   transition: 'all 0.15s ease'
                 }}
               >
@@ -364,71 +365,72 @@ const CaseNotes = () => {
             {/* Stats Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px' }}>
               <div 
+                className="stat-card panel-card"
                 onClick={() => { setFilterType('All'); setFilterPriority('All'); }}
-                style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                style={{ background: 'var(--glass-dash-surface-gradient)', border: '1px solid var(--glass-dash-border)', borderRadius: '20px', padding: '18px 22px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'all 0.15s ease' }}
               >
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '14px', background: 'var(--glass-dash-blue-soft)', color: 'var(--glass-dash-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                 </div>
                 <div>
-                  <div style={{ color: '#64748b', fontSize: '12px', fontWeight: 600, marginBottom: '2px' }}>Total Notes</div>
-                  <div style={{ color: '#0f172a', fontSize: '22px', fontWeight: 700 }}>{totalNotes}</div>
+                  <div style={{ color: 'var(--glass-dash-text-muted)', fontSize: '12px', fontWeight: 600, marginBottom: '2px' }}>Total Notes</div>
+                  <div style={{ color: 'var(--glass-dash-text-main)', fontSize: '24px', fontWeight: 800 }}>{totalNotes}</div>
                 </div>
               </div>
 
               <div 
+                className="stat-card panel-card"
                 onClick={() => setFilterPriority('Important')}
-                style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '10px', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                style={{ background: 'var(--glass-dash-surface-gradient)', border: '1px solid var(--glass-dash-border)', borderRadius: '20px', padding: '18px 22px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'all 0.15s ease' }}
               >
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#fee2e2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '14px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
                 </div>
                 <div>
                   <div style={{ color: '#ef4444', fontSize: '12px', fontWeight: 600, marginBottom: '2px' }}>Important</div>
-                  <div style={{ color: '#0f172a', fontSize: '22px', fontWeight: 700 }}>{importantNotes}</div>
+                  <div style={{ color: 'var(--glass-dash-text-main)', fontSize: '24px', fontWeight: 800 }}>{importantNotes}</div>
                 </div>
               </div>
 
               <div 
+                className="stat-card panel-card"
                 onClick={() => setFilterType('Follow-up')}
-                style={{ background: '#ecfdf5', border: '1px solid #d1fae5', borderRadius: '10px', padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'all 0.15s ease' }}
+                style={{ background: 'var(--glass-dash-surface-gradient)', border: '1px solid var(--glass-dash-border)', borderRadius: '20px', padding: '18px 22px', display: 'flex', alignItems: 'center', gap: '16px', cursor: 'pointer', transition: 'all 0.15s ease' }}
               >
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#d1fae5', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ width: '42px', height: '42px', borderRadius: '14px', background: 'rgba(16, 185, 129, 0.15)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                 </div>
                 <div>
-                  <div style={{ color: '#059669', fontSize: '12px', fontWeight: 600, marginBottom: '2px' }}>Follow-ups</div>
-                  <div style={{ color: '#0f172a', fontSize: '22px', fontWeight: 700 }}>{followUpNotes}</div>
+                  <div style={{ color: '#10b981', fontSize: '12px', fontWeight: 600, marginBottom: '2px' }}>Follow-ups</div>
+                  <div style={{ color: 'var(--glass-dash-text-main)', fontSize: '24px', fontWeight: 800 }}>{followUpNotes}</div>
                 </div>
               </div>
             </div>
 
             {/* Modernized Filter Bar */}
-            <div style={{ 
-              background: '#fff', 
-              border: '1px solid #e2e8f0', 
-              borderRadius: '12px', 
-              padding: '12px 16px', 
+            <div className="panel-card" style={{ 
+              background: 'var(--glass-dash-surface-gradient)', 
+              border: '1px solid var(--glass-dash-border)', 
+              borderRadius: '20px', 
+              padding: '14px 20px', 
               display: 'flex', 
+              flexDirection: 'row',
               justifyContent: 'space-between',
               alignItems: 'center', 
+              height: 'auto',
               gap: '14px', 
               marginBottom: '24px',
               flexWrap: 'wrap',
-              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)'
+              boxShadow: 'var(--glass-dash-shadow)'
             }}>
               {/* Search Box */}
-              <div style={{ 
-                flex: '1 1 240px', 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '10px', 
-                background: '#f8fafc', 
-                padding: '8px 14px', 
-                borderRadius: '8px', 
-                border: '1px solid #e2e8f0'
+              <div className="search-container" style={{ 
+                flex: '1 1 260px', 
+                maxWidth: '420px',
+                height: '42px',
+                boxSizing: 'border-box'
               }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '16px', height: '16px', minWidth: '16px', flexShrink: 0 }}>
                   <circle cx="11" cy="11" r="8"></circle>
                   <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                 </svg>
@@ -437,20 +439,11 @@ const CaseNotes = () => {
                   placeholder="Search notes..." 
                   value={searchTerm} 
                   onChange={e => setSearchTerm(e.target.value)} 
-                  style={{ 
-                    width: '100%', 
-                    border: 'none', 
-                    background: 'transparent', 
-                    outline: 'none', 
-                    color: '#0f172a', 
-                    fontSize: '13px',
-                    fontWeight: 500
-                  }} 
                 />
                 {searchTerm && (
                   <button 
                     onClick={() => setSearchTerm('')} 
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#94a3b8' }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--glass-dash-text-muted)' }}
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -471,24 +464,24 @@ const CaseNotes = () => {
                       appearance: 'none',
                       WebkitAppearance: 'none',
                       MozAppearance: 'none',
-                      background: filterType !== 'All' ? '#eff6ff' : '#f8fafc', 
-                      border: `1px solid ${filterType !== 'All' ? '#93c5fd' : '#e2e8f0'}`, 
-                      borderRadius: '8px', 
-                      padding: '8px 30px 8px 12px', 
+                      background: 'var(--glass-dash-surface-nested)', 
+                      border: `1px solid ${filterType !== 'All' ? 'var(--glass-dash-blue)' : 'var(--glass-dash-border)'}`, 
+                      borderRadius: '9999px', 
+                      padding: '8px 32px 8px 14px', 
                       fontSize: '13px', 
                       fontWeight: 600, 
-                      color: filterType !== 'All' ? '#1d4ed8' : '#334155', 
+                      color: filterType !== 'All' ? 'var(--glass-dash-blue)' : 'var(--glass-dash-text-main)', 
                       cursor: 'pointer', 
                       outline: 'none'
                     }}
                   >
-                    <option value="All">All Types</option>
-                    <option value="Observation">Observation</option>
-                    <option value="Investigation">Investigation</option>
-                    <option value="Evidence">Evidence</option>
-                    <option value="Follow-up">Follow-up</option>
+                    <option value="All" style={{ background: '#181a20', color: '#eef2f7' }}>All Types</option>
+                    <option value="Observation" style={{ background: '#181a20', color: '#eef2f7' }}>Observation</option>
+                    <option value="Investigation" style={{ background: '#181a20', color: '#eef2f7' }}>Investigation</option>
+                    <option value="Evidence" style={{ background: '#181a20', color: '#eef2f7' }}>Evidence</option>
+                    <option value="Follow-up" style={{ background: '#181a20', color: '#eef2f7' }}>Follow-up</option>
                   </select>
-                  <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: filterType !== 'All' ? '#2563eb' : '#64748b' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <svg style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: filterType !== 'All' ? 'var(--glass-dash-blue)' : 'var(--glass-dash-text-muted)' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <polyline points="6 9 12 15 18 9"></polyline>
                   </svg>
                 </div>
@@ -502,23 +495,23 @@ const CaseNotes = () => {
                       appearance: 'none',
                       WebkitAppearance: 'none',
                       MozAppearance: 'none',
-                      background: filterPriority !== 'All' ? '#fef2f2' : '#f8fafc', 
-                      border: `1px solid ${filterPriority !== 'All' ? '#fca5a5' : '#e2e8f0'}`, 
-                      borderRadius: '8px', 
-                      padding: '8px 30px 8px 12px', 
+                      background: 'var(--glass-dash-surface-nested)', 
+                      border: `1px solid ${filterPriority !== 'All' ? '#ef4444' : 'var(--glass-dash-border)'}`, 
+                      borderRadius: '9999px', 
+                      padding: '8px 32px 8px 14px', 
                       fontSize: '13px', 
                       fontWeight: 600, 
-                      color: filterPriority !== 'All' ? '#b91c1c' : '#334155', 
+                      color: filterPriority !== 'All' ? '#ef4444' : 'var(--glass-dash-text-main)', 
                       cursor: 'pointer', 
                       outline: 'none'
                     }}
                   >
-                    <option value="All">All Priorities</option>
-                    <option value="Normal">Normal</option>
-                    <option value="Important">Important</option>
-                    <option value="Critical">Critical</option>
+                    <option value="All" style={{ background: '#181a20', color: '#eef2f7' }}>All Priorities</option>
+                    <option value="Normal" style={{ background: '#181a20', color: '#eef2f7' }}>Normal</option>
+                    <option value="Important" style={{ background: '#181a20', color: '#eef2f7' }}>Important</option>
+                    <option value="Critical" style={{ background: '#181a20', color: '#eef2f7' }}>Critical</option>
                   </select>
-                  <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: filterPriority !== 'All' ? '#dc2626' : '#64748b' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <svg style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: filterPriority !== 'All' ? '#ef4444' : 'var(--glass-dash-text-muted)' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <polyline points="6 9 12 15 18 9"></polyline>
                   </svg>
                 </div>
@@ -532,21 +525,21 @@ const CaseNotes = () => {
                       appearance: 'none',
                       WebkitAppearance: 'none',
                       MozAppearance: 'none',
-                      background: '#f8fafc', 
-                      border: '1px solid #e2e8f0', 
-                      borderRadius: '8px', 
-                      padding: '8px 30px 8px 12px', 
+                      background: 'var(--glass-dash-surface-nested)', 
+                      border: '1px solid var(--glass-dash-border)', 
+                      borderRadius: '9999px', 
+                      padding: '8px 32px 8px 14px', 
                       fontSize: '13px', 
                       fontWeight: 600, 
-                      color: '#334155', 
+                      color: 'var(--glass-dash-text-main)', 
                       cursor: 'pointer', 
                       outline: 'none'
                     }}
                   >
-                    <option value="newest">Sort by Date</option>
-                    <option value="oldest">Oldest First</option>
+                    <option value="newest" style={{ background: '#181a20', color: '#eef2f7' }}>Sort by Date</option>
+                    <option value="oldest" style={{ background: '#181a20', color: '#eef2f7' }}>Oldest First</option>
                   </select>
-                  <svg style={{ position: 'absolute', right: '10px', pointerEvents: 'none', color: '#64748b' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <svg style={{ position: 'absolute', right: '12px', pointerEvents: 'none', color: 'var(--glass-dash-text-muted)' }} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                     <polyline points="6 9 12 15 18 9"></polyline>
                   </svg>
                 </div>
@@ -562,7 +555,7 @@ const CaseNotes = () => {
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: '#2563eb',
+                      color: 'var(--glass-dash-blue)',
                       fontSize: '12px',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -578,16 +571,16 @@ const CaseNotes = () => {
 
             {/* Notes List */}
             <div style={{ marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '16px', color: '#0f172a', margin: '0 0 12px 0', fontWeight: 600 }}>Notes ({filteredNotes.length})</h3>
+              <h3 style={{ fontSize: '16px', color: 'var(--glass-dash-text-main)', margin: '0 0 14px 0', fontWeight: 700 }}>Notes ({filteredNotes.length})</h3>
               
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {filteredNotes.length === 0 ? (
-                  <div style={{ background: '#fff', border: '1px dashed #cbd5e1', borderRadius: '8px', padding: '32px', textAlign: 'center', color: '#64748b' }}>
-                    <p style={{ margin: '0 0 12px 0', fontSize: '14px', fontWeight: 600 }}>No Case Notes Found</p>
-                    <p style={{ margin: '0 0 16px 0', fontSize: '13px' }}>Document your observations and investigation progress.</p>
+                  <div className="panel-card" style={{ background: 'var(--glass-dash-surface-gradient)', border: '1px dashed var(--glass-dash-border)', borderRadius: '22px', padding: '48px 24px', textAlign: 'center', color: 'var(--glass-dash-text-muted)', boxShadow: 'var(--glass-dash-shadow)' }}>
+                    <p style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 700, color: 'var(--glass-dash-text-main)' }}>No Case Notes Found</p>
+                    <p style={{ margin: '0 0 20px 0', fontSize: '13px' }}>Document your observations and investigation progress.</p>
                     {activeCaseId && (
-                      <button onClick={openNewNote} style={{ background: '#10b981', border: 'none', padding: '6px 12px', borderRadius: '4px', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px', fontWeight: 600 }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                      <button onClick={openNewNote} style={{ background: 'linear-gradient(135deg, #10b981, #059669)', border: 'none', padding: '10px 22px', borderRadius: '9999px', color: '#fff', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600, boxShadow: '0 4px 14px rgba(16, 185, 129, 0.4)' }}>
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                         Create First Note
                       </button>
                     )}
@@ -596,21 +589,22 @@ const CaseNotes = () => {
                   filteredNotes.map(note => (
                     <div 
                       key={note.noteId} 
+                      className="panel-card"
                       style={{ 
-                        background: '#ffffff', 
-                        border: '1px solid #e2e8f0', 
-                        borderRadius: '14px', 
+                        background: 'var(--glass-dash-surface-gradient)', 
+                        border: '1px solid var(--glass-dash-border)', 
+                        borderRadius: '20px', 
                         padding: '24px 28px', 
                         display: 'flex', 
                         flexDirection: 'column', 
                         gap: '16px',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                        boxShadow: 'var(--glass-dash-shadow)',
                         transition: 'box-shadow 0.2s ease, border-color 0.2s ease'
                       }}
                     >
                       <div style={{ display: 'flex', gap: '18px', alignItems: 'flex-start' }}>
                         {/* Leading note avatar icon */}
-                        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)', border: '1px solid #bfdbfe', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'var(--glass-dash-blue-soft)', border: '1px solid var(--glass-dash-border)', color: 'var(--glass-dash-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
                         </div>
                         
@@ -618,17 +612,17 @@ const CaseNotes = () => {
                           {/* Header row: Title + ID on left, Badges on right */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap', marginBottom: '8px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                              <h4 style={{ margin: 0, fontSize: '18px', color: '#0f172a', fontWeight: 700, letterSpacing: '-0.01em' }}>{note.title}</h4>
-                              <span style={{ fontSize: '11px', color: '#94a3b8', background: '#f1f5f9', padding: '2px 8px', borderRadius: '5px', fontWeight: 600 }}>#{note.noteId}</span>
+                              <h4 style={{ margin: 0, fontSize: '18px', color: 'var(--glass-dash-text-main)', fontWeight: 700, letterSpacing: '-0.01em' }}>{note.title}</h4>
+                              <span style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--glass-dash-border-subtle)', padding: '2px 8px', borderRadius: '9999px', fontWeight: 600 }}>#{note.noteId}</span>
                               {note.syncStatus === 'unsynced' && (
                                 <span style={{
                                   fontSize: '11px',
                                   fontWeight: 700,
                                   color: '#b45309',
-                                  background: '#fef3c7',
+                                  background: 'rgba(245, 158, 11, 0.15)',
                                   border: '1px solid #f59e0b',
-                                  padding: '2px 8px',
-                                  borderRadius: '5px'
+                                  padding: '2px 10px',
+                                  borderRadius: '9999px'
                                 }}>
                                   ⚠️ Unsynced Draft
                                 </span>
@@ -639,11 +633,11 @@ const CaseNotes = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                               {/* Type Badge */}
                               <span style={{ 
-                                background: '#eff6ff', 
-                                border: '1px solid #bfdbfe', 
-                                color: '#1d4ed8', 
+                                background: 'var(--glass-dash-blue-soft)', 
+                                border: '1px solid var(--glass-dash-border)', 
+                                color: 'var(--glass-dash-blue)', 
                                 padding: '5px 12px', 
-                                borderRadius: '20px', 
+                                borderRadius: '9999px', 
                                 fontSize: '12px', 
                                 fontWeight: 600, 
                                 display: 'inline-flex', 
@@ -656,11 +650,11 @@ const CaseNotes = () => {
 
                               {/* Priority Badge */}
                               <span style={{ 
-                                background: note.priority === 'Critical' ? '#fef2f2' : note.priority === 'Important' ? '#fffbeb' : '#f8fafc', 
-                                border: `1px solid ${note.priority === 'Critical' ? '#fecaca' : note.priority === 'Important' ? '#fde68a' : '#e2e8f0'}`, 
-                                color: note.priority === 'Critical' ? '#dc2626' : note.priority === 'Important' ? '#d97706' : '#475569', 
+                                background: note.priority === 'Critical' ? 'rgba(239, 68, 68, 0.15)' : note.priority === 'Important' ? 'rgba(245, 158, 11, 0.15)' : 'var(--glass-dash-surface-nested)', 
+                                border: `1px solid ${note.priority === 'Critical' ? 'rgba(239, 68, 68, 0.3)' : note.priority === 'Important' ? 'rgba(245, 158, 11, 0.3)' : 'var(--glass-dash-border)'}`, 
+                                color: note.priority === 'Critical' ? '#ef4444' : note.priority === 'Important' ? '#f59e0b' : 'var(--glass-dash-text-muted)', 
                                 padding: '5px 12px', 
-                                borderRadius: '20px', 
+                                borderRadius: '9999px', 
                                 fontSize: '12px', 
                                 fontWeight: 600, 
                                 display: 'inline-flex', 
@@ -677,11 +671,11 @@ const CaseNotes = () => {
                                   onClick={() => navigate('/evidence')}
                                   title="View Evidence"
                                   style={{ 
-                                    background: '#f8fafc', 
-                                    border: '1px solid #cbd5e1', 
-                                    color: '#475569', 
+                                    background: 'var(--glass-dash-surface-nested)', 
+                                    border: '1px solid var(--glass-dash-border)', 
+                                    color: 'var(--glass-dash-text-muted)', 
                                     padding: '5px 12px', 
-                                    borderRadius: '20px', 
+                                    borderRadius: '9999px', 
                                     fontSize: '12px', 
                                     fontWeight: 500, 
                                     display: 'inline-flex', 
@@ -693,7 +687,7 @@ const CaseNotes = () => {
                                 >
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                                   <span>Evidence:</span>
-                                  <span style={{ color: '#2563eb', fontWeight: 700, textDecoration: 'underline' }}>{formatEvidenceId(note.relatedEvidenceId)}</span>
+                                  <span style={{ color: 'var(--glass-dash-blue)', fontWeight: 700, textDecoration: 'underline' }}>{formatEvidenceId(note.relatedEvidenceId)}</span>
                                 </span>
                               )}
 
@@ -703,11 +697,11 @@ const CaseNotes = () => {
                                   onClick={() => navigate('/dashboard')}
                                   title="View Finding"
                                   style={{ 
-                                    background: '#fffbeb', 
-                                    border: '1px solid #fde68a', 
-                                    color: '#92400e', 
+                                    background: 'rgba(245, 158, 11, 0.15)', 
+                                    border: '1px solid rgba(245, 158, 11, 0.3)', 
+                                    color: '#f59e0b', 
                                     padding: '5px 12px', 
-                                    borderRadius: '20px', 
+                                    borderRadius: '9999px', 
                                     fontSize: '12px', 
                                     fontWeight: 500, 
                                     display: 'inline-flex', 
@@ -718,29 +712,29 @@ const CaseNotes = () => {
                                 >
                                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
                                   <span>Finding:</span>
-                                  <span style={{ color: '#2563eb', fontWeight: 700, textDecoration: 'underline' }}>{note.relatedFindingId}</span>
+                                  <span style={{ color: 'var(--glass-dash-blue)', fontWeight: 700, textDecoration: 'underline' }}>{note.relatedFindingId}</span>
                                 </span>
                               )}
                             </div>
                           </div>
                           
                           {/* Note Content Block */}
-                          <div style={{ marginTop: '12px', padding: '14px 18px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #f1f5f9', fontSize: '14px', color: '#334155', lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
+                          <div style={{ marginTop: '12px', padding: '16px 20px', background: 'var(--glass-dash-surface-nested)', borderRadius: '16px', border: '1px solid var(--glass-dash-border-subtle)', fontSize: '14px', color: 'var(--glass-dash-text-main)', lineHeight: '1.6', wordBreak: 'break-word', whiteSpace: 'pre-wrap' }}>
                             {note.content}
                           </div>
                         </div>
                       </div>
                       
-                      <div style={{ height: '1px', background: '#f1f5f9', margin: '4px 0' }}></div>
+                      <div style={{ height: '1px', background: 'var(--glass-dash-border-subtle)', margin: '4px 0' }}></div>
                       
                       {/* Footer: Metadata on left, Actions on right */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                        <div style={{ display: 'flex', gap: '20px', color: '#64748b', fontSize: '13px' }}>
+                        <div style={{ display: 'flex', gap: '20px', color: 'var(--glass-dash-text-muted)', fontSize: '13px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-                            Created by: <span style={{ color: '#0f172a', fontWeight: 600 }}>{note.createdBy}</span>
+                            Created by: <span style={{ color: 'var(--glass-dash-text-main)', fontWeight: 600 }}>{note.createdBy}</span>
                           </div>
-                          <div style={{ width: '1px', height: '14px', background: '#e2e8f0' }}></div>
+                          <div style={{ width: '1px', height: '14px', background: 'var(--glass-dash-border-subtle)' }}></div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                             {formatDate(note.createdAt)}
@@ -748,11 +742,11 @@ const CaseNotes = () => {
                         </div>
                         
                         <div style={{ display: 'flex', gap: '12px' }}>
-                          <button onClick={() => openEditNote(note)} style={{ background: '#ffffff', border: '1px solid #cbd5e1', color: '#2563eb', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', transition: 'all 0.15s ease', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                          <button onClick={() => openEditNote(note)} style={{ background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--glass-dash-border)', color: 'var(--glass-dash-blue)', padding: '8px 22px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', transition: 'all 0.15s ease', boxShadow: 'var(--glass-dash-shadow)' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                             Edit
                           </button>
-                          <button onClick={() => setShowDeleteConfirm(note.noteId)} style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#ef4444', padding: '8px 20px', borderRadius: '8px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', transition: 'all 0.15s ease' }}>
+                          <button onClick={() => setShowDeleteConfirm(note.noteId)} style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', padding: '8px 22px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', transition: 'all 0.15s ease' }}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                             Delete
                           </button>

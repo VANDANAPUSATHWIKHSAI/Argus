@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchAuditorStats, fetchFindings, fetchCases } from '../js/api';
+import { setActiveCase } from '../js/caseEvents';
 
 export default function AuditorDashboard() {
   const navigate = useNavigate();
@@ -12,8 +13,8 @@ export default function AuditorDashboard() {
   const [caseLimit, setCaseLimit] = useState(12);
 
   // Present Case State
-  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || 'ARGUS_956');
-  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'ARGUS_956');
+  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
+  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || '');
   const [casesList, setCasesList] = useState([]);
   const [presentFindings, setPresentFindings] = useState([]);
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
@@ -47,15 +48,13 @@ export default function AuditorDashboard() {
 
           const presentCase = matched 
             || cList.find(c => c.status === 'open' || c.is_active)
-            || cList.find(c => c.case_id === 'ARGUS_956')
             || cList[0];
 
           if (presentCase) {
             targetId = presentCase.case_id;
             setActiveCaseId(presentCase.case_id);
             setActiveCaseName(presentCase.name || presentCase.case_id);
-            localStorage.setItem('active_case_id', presentCase.case_id);
-            localStorage.setItem('active_case_name', presentCase.name || presentCase.case_id);
+            setActiveCase(presentCase.case_id, presentCase.name || presentCase.case_id);
           }
         }
 
@@ -77,12 +76,10 @@ export default function AuditorDashboard() {
 
   const handleSelectCase = async (cId) => {
     setActiveCaseId(cId);
-    localStorage.setItem('active_case_id', cId);
     const matched = casesList.find(c => c.case_id === cId);
-    if (matched) {
-      setActiveCaseName(matched.name || cId);
-      localStorage.setItem('active_case_name', matched.name || cId);
-    }
+    const cName = matched ? (matched.name || cId) : cId;
+    setActiveCaseName(cName);
+    setActiveCase(cId, cName);
     setCaseDropdownOpen(false);
     try {
       const fRes = await fetchFindings(cId);
@@ -133,84 +130,152 @@ export default function AuditorDashboard() {
     : 0;
 
   return (
-    <div style={{ padding: '32px 48px', backgroundColor: '#f8fafc', minHeight: '100vh', boxSizing: 'border-box', color: '#1e293b' }}>
-      {/* Header Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
-        <div>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '6px' }}>
-            Auditor Dashboard
-          </div>
-          <h1 style={{ fontSize: '28px', fontWeight: 700, margin: '0 0 6px 0', color: '#0f172a' }}>
-            Welcome, {currentUser?.name || 'Auditor'}
-          </h1>
-          <p style={{ color: '#64748b', fontSize: '14px', margin: 0 }}>
-            Present Case: <strong style={{ color: '#2563eb' }}>{activeCaseId}</strong> {activeCaseName && activeCaseName !== activeCaseId ? `(${activeCaseName})` : ''} • Review AI findings, verify evidence and audit the investigation.
-          </p>
+    <>
+      <header className="glass-topbar-capsule topbar">
+        <div className="glass-topbar-left">
+          <h2 className="glass-welcome-title">Welcome, {currentUser?.name || 'Auditor'}</h2>
+          <p className="glass-welcome-sub">Auditor Workspace &middot; Review AI findings, verify evidence and audit the investigation.</p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Present Case Badge (Only Present Case) */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            backgroundColor: '#ffffff',
-            border: '1px solid #cbd5e1',
-            padding: '10px 16px',
-            borderRadius: '8px',
-            fontSize: '13px',
-            fontWeight: 600,
-            color: '#1e293b'
-          }}>
-            <span style={{ color: '#2563eb', fontWeight: 700, textTransform: 'uppercase', fontSize: '11px', letterSpacing: '0.04em' }}>Present Case:</span>
-            <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{activeCaseId}</span>
+        <div className="glass-topbar-right topbar-actions">
+          {/* Interactive Case Selector Dropdown */}
+          <div style={{ position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => setCaseDropdownOpen(prev => !prev)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: 'var(--glass-dash-surface-nested)',
+                border: '1px solid var(--glass-dash-border-subtle)',
+                padding: '6px 14px',
+                borderRadius: '12px',
+                fontSize: '12.5px',
+                fontWeight: 600,
+                color: 'var(--glass-dash-text-main)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                boxShadow: caseDropdownOpen ? '0 0 0 2px var(--glass-dash-blue)' : 'none'
+              }}
+              title="Click to switch active case"
+            >
+              <span style={{ color: 'var(--glass-dash-blue)', fontWeight: 700, textTransform: 'uppercase', fontSize: '11px' }}>Present Case:</span>
+              <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{activeCaseId || 'Select Case'}</span>
+              {activeCaseName && activeCaseName !== activeCaseId && (
+                <span style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  ({activeCaseName})
+                </span>
+              )}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: caseDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+
+            {caseDropdownOpen && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                width: '300px',
+                maxHeight: '340px',
+                overflowY: 'auto',
+                background: 'var(--glass-dash-surface-elevated, #181a20)',
+                border: '1px solid var(--glass-dash-border, rgba(255,255,255,0.15))',
+                borderRadius: '14px',
+                boxShadow: '0 16px 36px rgba(0,0,0,0.5)',
+                zIndex: 100,
+                padding: '8px',
+                backdropFilter: 'blur(16px)'
+              }}>
+                <div style={{ padding: '6px 10px 8px', fontSize: '11px', fontWeight: 700, color: 'var(--glass-dash-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1px solid var(--glass-dash-border-subtle)' }}>
+                  System Cases ({casesList.length})
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+                  {casesList.map(c => {
+                    const isCurrent = c.case_id === activeCaseId;
+                    return (
+                      <div
+                        key={c.case_id}
+                        onClick={() => handleSelectCase(c.case_id)}
+                        style={{
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          background: isCurrent ? 'var(--glass-dash-blue-soft, rgba(56,189,248,0.15))' : 'transparent',
+                          color: isCurrent ? 'var(--glass-dash-blue, #38bdf8)' : 'var(--glass-dash-text-main)',
+                          transition: 'background 0.15s'
+                        }}
+                        onMouseEnter={(e) => {
+                          if (!isCurrent) e.currentTarget.style.background = 'var(--glass-dash-surface-nested, rgba(255,255,255,0.06))';
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isCurrent) e.currentTarget.style.background = 'transparent';
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>{c.case_id}</span>
+                            {c.status && (
+                              <span style={{ fontSize: '10px', textTransform: 'uppercase', padding: '1px 5px', borderRadius: '4px', background: c.status === 'open' ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.08)', color: c.status === 'open' ? '#10b981' : 'var(--glass-dash-text-dim)' }}>
+                                {c.status}
+                              </span>
+                            )}
+                          </div>
+                          {c.name && <div style={{ fontSize: '11px', color: 'var(--glass-dash-text-dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>{c.name}</div>}
+                        </div>
+                        {isCurrent && (
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           <button 
             type="button"
             onClick={() => navigate('/report')}
-            style={{ 
-              display: 'flex', alignItems: 'center', gap: '8px', 
-              backgroundColor: '#3b82f6', color: '#fff', 
-              padding: '10px 18px', borderRadius: '8px', 
-              border: 'none', fontSize: '14px', fontWeight: 600, cursor: 'pointer',
-              boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)',
-              transition: 'all 0.2s ease'
-            }}
+            className="btn-primary"
+            style={{ fontSize: '13px', padding: '8px 16px' }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-            View Full Report 
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+            View Full Report
           </button>
         </div>
-      </div>
+      </header>
 
-      {/* Summary Cards (Present Case) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '28px' }}>
-        <SummaryCard icon="file" title="Total Findings" value={totalFindings} subtitle={`Present Case (${activeCaseId})`} color="#3b82f6" bg="#eff6ff" />
-        <SummaryCard icon="alert" title="High Severity" value={highSeverity} subtitle="Require priority review" color="#ef4444" bg="#fef2f2" />
-        <SummaryCard icon="warning" title="Medium Severity" value={mediumSeverity} subtitle="Require verification" color="#f59e0b" bg="#fffbeb" />
-        <SummaryCard icon="check" title="Low Severity" value={lowSeverity} subtitle="Routine findings" color="#10b981" bg="#ecfdf5" />
-      </div>
+      <div className="dashboard-scroll">
+        {/* Summary Cards (Present Case) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '28px' }}>
+          <SummaryCard icon="file" title="Total Findings" value={totalFindings} subtitle={`Present Case (${activeCaseId})`} color="var(--glass-dash-blue)" bg="var(--glass-dash-blue-soft)" />
+          <SummaryCard icon="alert" title="High Severity" value={highSeverity} subtitle="Require priority review" color="var(--glass-dash-red)" bg="var(--glass-dash-red-soft)" />
+          <SummaryCard icon="warning" title="Medium Severity" value={mediumSeverity} subtitle="Require verification" color="#f59e0b" bg="rgba(245, 158, 11, 0.12)" />
+          <SummaryCard icon="check" title="Low Severity" value={lowSeverity} subtitle="Routine findings" color="var(--glass-dash-green)" bg="var(--glass-dash-green-soft)" />
+        </div>
 
-      {/* Main Graph Card */}
-      <div style={{ 
-        backgroundColor: '#ffffff', borderRadius: '16px', padding: '28px 32px', 
-        border: '1px solid #e2e8f0', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.03)',
-        display: 'flex', flexDirection: 'column', gap: '24px'
-      }}>
+        {/* Main Graph Card */}
+        <div className="panel-card" style={{ 
+          padding: '28px 32px', 
+          display: 'flex', flexDirection: 'column', gap: '24px'
+        }}>
         {/* Header inside the card */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--glass-dash-text-main)' }}>
                 Previous Cases – Severity & Confidence
               </h2>
-              <span style={{ backgroundColor: '#eff6ff', color: '#2563eb', padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600 }}>
+              <span style={{ backgroundColor: 'var(--glass-dash-blue-soft)', color: 'var(--glass-dash-blue)', padding: '2px 10px', borderRadius: '12px', fontSize: '12px', fontWeight: 600, border: '1px solid var(--glass-dash-blue-border)' }}>
                 {filteredCases.length} {filteredCases.length === 1 ? 'Case' : 'Cases'}
               </span>
             </div>
-            <p style={{ margin: 0, fontSize: '14px', color: '#64748b' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: 'var(--glass-dash-text-muted)' }}>
               Shows severity classification, AI confidence score (bar height & top badge), and recorded findings count (in the center of each bar).
             </p>
           </div>
@@ -219,7 +284,7 @@ export default function AuditorDashboard() {
             <select 
               value={caseLimit} 
               onChange={(e) => setCaseLimit(Number(e.target.value))}
-              style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', color: '#334155', backgroundColor: '#fff', cursor: 'pointer', outline: 'none', fontWeight: 500 }}
+              style={{ padding: '7px 14px', borderRadius: '12px', border: '1px solid var(--glass-dash-border-subtle)', fontSize: '13px', color: 'var(--glass-dash-text-main)', backgroundColor: 'var(--glass-dash-surface-nested)', cursor: 'pointer', outline: 'none', fontWeight: 500 }}
             >
               <option value={8}>Recent 8 Cases</option>
               <option value={12}>Recent 12 Cases</option>
@@ -229,7 +294,7 @@ export default function AuditorDashboard() {
             <select 
               value={severityFilter} 
               onChange={(e) => setSeverityFilter(e.target.value)}
-              style={{ padding: '7px 12px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px', color: '#334155', backgroundColor: '#fff', cursor: 'pointer', outline: 'none', fontWeight: 500 }}
+              style={{ padding: '7px 14px', borderRadius: '12px', border: '1px solid var(--glass-dash-border-subtle)', fontSize: '13px', color: 'var(--glass-dash-text-main)', backgroundColor: 'var(--glass-dash-surface-nested)', cursor: 'pointer', outline: 'none', fontWeight: 500 }}
             >
               <option value="ALL">All Severities</option>
               <option value="CRITICAL">Critical Severity Only</option>
@@ -242,19 +307,19 @@ export default function AuditorDashboard() {
 
         {/* Loading State */}
         {loading && (
-          <div style={{ padding: '60px', textAlign: 'center', color: '#94a3b8', fontSize: '14px' }}>
+          <div style={{ padding: '60px', textAlign: 'center', color: 'var(--glass-dash-text-muted)', fontSize: '14px' }}>
             Loading previous case metrics...
           </div>
         )}
 
         {/* Empty State */}
         {!loading && filteredCases.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '54px 20px', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px dashed #cbd5e1', margin: '12px 0' }}>
-            <div style={{ width: '52px', height: '52px', borderRadius: '50%', backgroundColor: '#eff6ff', color: '#3b82f6', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+          <div style={{ textAlign: 'center', padding: '54px 20px', backgroundColor: 'var(--glass-dash-surface-nested)', borderRadius: '16px', border: '1px dashed var(--glass-dash-border-subtle)', margin: '12px 0' }}>
+            <div style={{ width: '52px', height: '52px', borderRadius: '50%', backgroundColor: 'var(--glass-dash-blue-soft)', color: 'var(--glass-dash-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
             </div>
-            <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 600, color: '#0f172a' }}>No previous cases available</h3>
-            <p style={{ margin: 0, fontSize: '13px', color: '#64748b' }}>Completed investigation cases will appear here automatically.</p>
+            <h3 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: 600, color: 'var(--glass-dash-text-main)' }}>No previous cases available</h3>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--glass-dash-text-muted)' }}>Completed investigation cases will appear here automatically.</p>
           </div>
         )}
 
@@ -269,8 +334,8 @@ export default function AuditorDashboard() {
                 {/* Y-Axis Grid Lines & Tick Labels */}
                 <div style={{ position: 'absolute', top: '48px', left: 0, right: 0, bottom: '40px', pointerEvents: 'none' }}>
                   {[100, 75, 50, 25, 0].map((val, i) => (
-                    <div key={val} style={{ position: 'absolute', top: `${(i / 4) * 100}%`, left: 0, right: 0, borderTop: i < 4 ? '1px dashed #e2e8f0' : '1.5px solid #cbd5e1', width: '100%' }}>
-                      <span style={{ position: 'absolute', left: '0px', top: '-9px', fontSize: '11px', color: '#94a3b8', fontWeight: 600 }}>
+                    <div key={val} style={{ position: 'absolute', top: `${(i / 4) * 100}%`, left: 0, right: 0, borderTop: i < 4 ? '1px dashed var(--glass-dash-border-subtle)' : '1.5px solid var(--glass-dash-border)', width: '100%' }}>
+                      <span style={{ position: 'absolute', left: '0px', top: '-9px', fontSize: '11px', color: 'var(--glass-dash-text-dim)', fontWeight: 600 }}>
                         {val}%
                       </span>
                     </div>
@@ -291,6 +356,10 @@ export default function AuditorDashboard() {
                     return (
                       <div 
                         key={c.case_id}
+                        onClick={() => {
+                          setActiveCase(c.case_id, c.name || c.case_id);
+                          navigate('/report');
+                        }}
                         onMouseEnter={() => setHoveredCase(c)}
                         onMouseLeave={() => setHoveredCase(null)}
                         style={{ 
@@ -303,6 +372,7 @@ export default function AuditorDashboard() {
                           width: '56px',
                           cursor: 'pointer'
                         }}
+                        title={`Click to open Case ${c.case_id} in Report Workspace`}
                       >
                         {/* Numerical Confidence Pill Badge — Generous 12px headroom prevents box overlap */}
                         <div style={{ 
@@ -360,8 +430,8 @@ export default function AuditorDashboard() {
                           textAlign: 'center', 
                           whiteSpace: 'nowrap' 
                         }}>
-                          <div style={{ fontSize: '11px', fontWeight: 700, color: '#0f172a' }}>{displayId}</div>
-                          <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 500 }}>{c.date_formatted}</div>
+                          <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--glass-dash-text-main)' }}>{displayId}</div>
+                          <div style={{ fontSize: '10px', color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>{c.date_formatted}</div>
                         </div>
 
                         {/* Glassmorphic Hover Tooltip Popup */}
@@ -372,14 +442,14 @@ export default function AuditorDashboard() {
                             top: confVal > 50 ? '0px' : 'auto',
                             left: '50%', 
                             transform: 'translateX(-50%)', 
-                            backgroundColor: 'rgba(15, 23, 42, 0.95)', 
-                            backdropFilter: 'blur(8px)',
+                            backgroundColor: 'rgba(24, 26, 32, 0.95)', 
+                            backdropFilter: 'blur(12px)',
                             color: '#fff', 
                             padding: '12px 16px', 
-                            borderRadius: '10px', 
+                            borderRadius: '14px', 
                             fontSize: '12px', 
-                            boxShadow: '0 12px 30px rgba(15, 23, 42, 0.4)', 
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            boxShadow: 'var(--glass-dash-shadow-card)', 
+                            border: '1px solid var(--glass-dash-border)',
                             zIndex: 30,
                             whiteSpace: 'nowrap',
                             pointerEvents: 'none'
@@ -387,16 +457,16 @@ export default function AuditorDashboard() {
                             <div style={{ fontWeight: 700, fontSize: '13px', marginBottom: '4px', color: '#38bdf8' }}>
                               {c.name && c.name !== c.case_id ? c.name : c.case_id}
                             </div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '8px' }}>
+                            <div style={{ fontSize: '11px', color: 'var(--glass-dash-text-dim)', marginBottom: '8px' }}>
                               ID: {c.case_id} • {c.full_date_formatted}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                              <span style={{ color: '#94a3b8' }}>Severity:</span>
+                              <span style={{ color: 'var(--glass-dash-text-muted)' }}>Severity:</span>
                               <span style={{ 
                                 backgroundColor: sevStyles.bg, 
                                 color: '#ffffff', 
                                 padding: '2px 8px', 
-                                borderRadius: '4px', 
+                                borderRadius: '9999px', 
                                 fontWeight: 700, 
                                 fontSize: '10px',
                                 textTransform: 'uppercase',
@@ -406,12 +476,15 @@ export default function AuditorDashboard() {
                               </span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                              <span style={{ color: '#94a3b8' }}>AI Confidence:</span>
+                              <span style={{ color: 'var(--glass-dash-text-muted)' }}>AI Confidence:</span>
                               <span style={{ fontWeight: 700, color: '#38bdf8' }}>{c.confidence}%</span>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span style={{ color: '#94a3b8' }}>Findings:</span>
-                              <span style={{ fontWeight: 600, color: '#e2e8f0' }}>{c.total_findings} recorded</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                              <span style={{ color: 'var(--glass-dash-text-muted)' }}>Findings:</span>
+                              <span style={{ fontWeight: 600, color: 'var(--glass-dash-text-secondary)' }}>{c.total_findings} recorded</span>
+                            </div>
+                            <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: '11px', color: '#38bdf8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              <span>Click bar to open case report</span> &rarr;
                             </div>
                           </div>
                         )}
@@ -423,33 +496,34 @@ export default function AuditorDashboard() {
             </div>
 
             {/* Severity Legend */}
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '28px', borderTop: '1px solid #f1f5f9', paddingTop: '18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569', fontWeight: 500 }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', gap: '28px', borderTop: '1px solid var(--glass-dash-border-subtle)', paddingTop: '18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#ef4444' }}></div>
                 Critical Severity
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569', fontWeight: 500 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#f97316' }}></div>
                 High Severity
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569', fontWeight: 500 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#f59e0b' }}></div>
                 Medium Severity
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#475569', fontWeight: 500 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>
                 <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981' }}></div>
                 Low Severity
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: '#64748b', fontWeight: 600, borderLeft: '1px solid #e2e8f0', paddingLeft: '16px' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '4px', backgroundColor: '#475569', color: '#fff', fontSize: '10px', fontWeight: 700 }}>N</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--glass-dash-text-dim)', fontWeight: 600, borderLeft: '1px solid var(--glass-dash-border-subtle)', paddingLeft: '16px' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '18px', height: '18px', borderRadius: '9999px', backgroundColor: 'var(--glass-dash-surface-nested)', color: 'var(--glass-dash-text-main)', fontSize: '10px', fontWeight: 700, border: '1px solid var(--glass-dash-border-subtle)' }}>N</span>
                 Bar Center = Findings Count
               </div>
             </div>
 
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
@@ -462,14 +536,16 @@ function SummaryCard({ icon, title, value, subtitle, color, bg }) {
   };
 
   return (
-    <div style={{ backgroundColor: bg, border: `1px solid ${color}33`, borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: color }}>
-        {getIcon()}
-        <span style={{ fontSize: '13px', fontWeight: 600, color: '#475569' }}>{title}</span>
+    <div className="stat-card" style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: color }}>
+        <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {getIcon()}
+        </div>
+        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--glass-dash-text-muted)' }}>{title}</span>
       </div>
       <div>
-        <div style={{ fontSize: '36px', fontWeight: 700, color: '#0f172a', lineHeight: '1', marginBottom: '4px' }}>{value}</div>
-        <div style={{ fontSize: '12px', color: '#64748b', fontWeight: 500 }}>{subtitle}</div>
+        <div style={{ fontSize: '32px', fontWeight: 800, color: 'var(--glass-dash-text-main)', lineHeight: '1', marginBottom: '4px' }}>{value}</div>
+        <div style={{ fontSize: '12px', color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>{subtitle}</div>
       </div>
     </div>
   );

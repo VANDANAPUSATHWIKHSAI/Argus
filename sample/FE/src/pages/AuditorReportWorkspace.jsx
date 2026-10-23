@@ -63,8 +63,24 @@ export default function AuditorReportWorkspace() {
   // Active Case state - initialized strictly from canonical storage/state, never hardcoding ARGUS_956
   const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
   const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
-  const [_casesList, setCasesList] = useState([]);
+  const [casesList, setCasesList] = useState([]);
   const [_loadingCaseData, setLoadingCaseData] = useState(false);
+  const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
+  const [caseSearch, setCaseSearch] = useState('');
+  const [selectedFinding, setSelectedFinding] = useState(null);
+  const [selectedEvidence, setSelectedEvidence] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Close case switcher dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setCaseDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Synchronize active case across tabs and components
   useEffect(() => {
@@ -100,10 +116,10 @@ export default function AuditorReportWorkspace() {
       try {
         const res = await fetchCases();
         const list = res.data || [];
-        setCasesList(list);
         if (list.length > 0) {
           const stored = getActiveCaseId();
           const validCases = list.filter(c => c.case_id && c.case_id !== '00000000-0000-0000-0000-000000000001');
+          setCasesList(validCases);
           
           // Validate stored case against authorized backend cases
           const matched = (stored && stored !== '00000000-0000-0000-0000-000000000001')
@@ -125,6 +141,7 @@ export default function AuditorReportWorkspace() {
             setActiveCase('', '');
           }
         } else {
+          setCasesList([]);
           setActiveCaseId('');
           setActiveCaseName('');
           setActiveCase('', '');
@@ -135,6 +152,14 @@ export default function AuditorReportWorkspace() {
     }
     loadCases();
   }, []);
+
+  const handleSelectCase = (cId, cName) => {
+    setActiveCaseId(cId);
+    setActiveCaseName(cName || cId);
+    setActiveCase(cId, cName || cId);
+    setCaseDropdownOpen(false);
+    setCaseSearch('');
+  };
 
   // Initialize Welcome Message
   const initAuditChatWelcome = (caseId, caseName) => {
@@ -529,27 +554,27 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
 
   // Dynamic Theme Colors
   const themeStyles = {
-    appBg: isDark ? '#090d16' : '#f8fafc',
-    topbarBg: isDark ? '#0d1527' : '#ffffff',
-    topbarBorder: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0',
-    cardBg: isDark ? '#0f172a' : '#ffffff',
-    cardBorder: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0',
-    paperBg: isDark ? '#111827' : '#ffffff',
-    paperBorder: isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0',
-    paperText: isDark ? '#f1f5f9' : '#0f172a',
-    paperMuted: isDark ? '#94a3b8' : '#64748b',
-    chatBg: isDark ? '#0b1120' : '#f1f5f9',
-    chatBubbleUser: isDark ? '#2563eb' : '#2563eb',
-    chatBubbleAi: isDark ? '#17223b' : '#ffffff',
-    chatBubbleAiBorder: isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0',
-    textMain: isDark ? '#ffffff' : '#0f172a',
-    textMuted: isDark ? '#94a3b8' : '#64748b',
-    inputBg: isDark ? '#131e33' : '#ffffff',
-    inputBorder: isDark ? 'rgba(255, 255, 255, 0.15)' : '#cbd5e1',
-    accentGreen: '#10b981',
-    accentBlue: '#3b82f6',
-    accentOrange: '#f97316',
-    accentRed: '#ef4444'
+    appBg: 'var(--glass-dash-bg)',
+    topbarBg: 'var(--glass-dash-surface-gradient)',
+    topbarBorder: 'var(--glass-dash-border)',
+    cardBg: 'var(--glass-dash-surface-gradient)',
+    cardBorder: 'var(--glass-dash-border)',
+    paperBg: isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(255, 255, 255, 0.65)',
+    paperBorder: 'var(--glass-dash-border)',
+    paperText: 'var(--glass-dash-text-main)',
+    paperMuted: 'var(--glass-dash-text-muted)',
+    chatBg: 'transparent',
+    chatBubbleUser: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+    chatBubbleAi: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.7)',
+    chatBubbleAiBorder: 'var(--glass-dash-border-subtle)',
+    textMain: 'var(--glass-dash-text-main)',
+    textMuted: 'var(--glass-dash-text-muted)',
+    inputBg: 'var(--glass-dash-surface-nested)',
+    inputBorder: 'var(--glass-dash-border-subtle)',
+    accentGreen: 'var(--glass-dash-green)',
+    accentBlue: 'var(--glass-dash-blue)',
+    accentOrange: '#f59e0b',
+    accentRed: 'var(--glass-dash-red)'
   };
 
   // Calculate Findings Metrics strictly from loaded case data (no fabricated fallbacks)
@@ -588,87 +613,203 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
 
       <Sidebar />
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', padding: '94px 20px 20px 300px', boxSizing: 'border-box', overflow: 'hidden' }}>
         
-        {/* ── TOPBAR ── */}
-        <header style={{
-          height: '62px',
-          background: themeStyles.topbarBg,
-          borderBottom: `1px solid ${themeStyles.topbarBorder}`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '0 24px',
-          flexShrink: 0,
-          zIndex: 20
-        }}>
+        {/* ── TOPBAR CAPSULE ── */}
+        <header className="glass-topbar-capsule topbar">
           {/* Title & Case Selector */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{
-                width: '32px',
-                height: '32px',
-                borderRadius: '8px',
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#ffffff'
-              }}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                  <polyline points="9 12 11 14 15 10"></polyline>
-                </svg>
+          <div className="glass-topbar-left" style={{ display: 'flex', alignItems: 'center', gap: '14px', flexDirection: 'row' }}>
+            <div style={{
+              width: '34px',
+              height: '34px',
+              borderRadius: '10px',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#ffffff',
+              boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+            }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                <polyline points="9 12 11 14 15 10"></polyline>
+              </svg>
+            </div>
+            <div>
+              <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--glass-dash-text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>{isAuditor ? 'Auditor Forensic Workspace' : 'Analyst Forensic Workspace'}</span>
+                <span style={{ 
+                  fontSize: '11px', 
+                  padding: '2px 10px', 
+                  borderRadius: '9999px', 
+                  background: isAuditor 
+                    ? 'var(--glass-dash-green-soft)'
+                    : 'var(--glass-dash-blue-soft)', 
+                  color: isAuditor ? 'var(--glass-dash-green)' : 'var(--glass-dash-blue)', 
+                  fontWeight: 700,
+                  border: `1px solid ${isAuditor ? 'var(--glass-dash-green-border)' : 'var(--glass-dash-blue-border)'}`
+                }}>
+                  {isAuditor ? 'Independent Review Mode' : 'Lead Analyst Mode'}
+                </span>
               </div>
-              <div>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: themeStyles.textMain, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {isAuditor ? 'Auditor Forensic Workspace' : 'Analyst Forensic Workspace'}
-                  <span style={{ 
-                    fontSize: '11px', 
-                    padding: '2px 8px', 
-                    borderRadius: '999px', 
-                    background: isAuditor 
-                      ? (isDark ? 'rgba(16, 185, 129, 0.15)' : '#d1fae5')
-                      : (isDark ? 'rgba(59, 130, 246, 0.15)' : '#dbeafe'), 
-                    color: isAuditor ? '#10b981' : '#2563eb', 
-                    fontWeight: 600,
-                    border: `1px solid ${isAuditor ? 'rgba(16, 185, 129, 0.3)' : 'rgba(59, 130, 246, 0.3)'}`
-                  }}>
-                    {isAuditor ? 'Independent Review Mode' : 'Lead Analyst Mode'}
-                  </span>
-                </div>
-                <div style={{ fontSize: '11px', color: themeStyles.textMuted }}>
-                  {isAuditor 
-                    ? 'Side-by-side Live Report Preview & Grounded AI Audit Assistant' 
-                    : 'Side-by-side Live Forensic Report & Grounded AI Assistant'}
-                </div>
+              <div style={{ fontSize: '11.5px', color: 'var(--glass-dash-text-muted)' }}>
+                {isAuditor 
+                  ? 'Side-by-side Live Report Preview & Grounded AI Audit Assistant' 
+                  : 'Side-by-side Live Forensic Report & Grounded AI Assistant'}
               </div>
             </div>
 
-            {/* Present Case Badge (Only Present Case) */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: isDark ? 'rgba(59, 130, 246, 0.12)' : '#eff6ff',
-              border: `1px solid ${isDark ? 'rgba(59, 130, 246, 0.25)' : '#bfdbfe'}`,
-              borderRadius: '6px',
-              padding: '6px 12px',
-              color: themeStyles.textMain,
-              fontSize: '12px',
-              fontWeight: 600,
-              marginLeft: '8px'
-            }}>
-              <span style={{ color: '#2563eb', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Present Case:</span>
-              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: themeStyles.textMain }}>{activeCaseId}</span>
-              {activeCaseName && activeCaseName !== activeCaseId && (
-                <span style={{ fontSize: '11px', color: themeStyles.textMuted }}>({activeCaseName})</span>
+            {/* Interactive Case Selector Dropdown */}
+            <div ref={dropdownRef} style={{ position: 'relative', marginLeft: '8px' }}>
+              <button
+                type="button"
+                onClick={() => setCaseDropdownOpen(prev => !prev)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: 'var(--glass-dash-surface-nested)',
+                  border: '1px solid var(--glass-dash-border-subtle)',
+                  borderRadius: '9999px',
+                  padding: '6px 14px',
+                  color: 'var(--glass-dash-text-main)',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: caseDropdownOpen ? '0 0 0 2px var(--glass-dash-blue)' : 'none'
+                }}
+                title="Click to open or switch case"
+              >
+                <span style={{ color: 'var(--glass-dash-blue)', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Case:</span>
+                <span style={{ fontFamily: 'var(--glass-dash-mono)', fontWeight: 700, color: 'var(--glass-dash-text-main)' }}>{activeCaseId || 'Select Case'}</span>
+                {activeCaseName && activeCaseName !== activeCaseId && (
+                  <span style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    ({activeCaseName})
+                  </span>
+                )}
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: caseDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+              </button>
+
+              {caseDropdownOpen && (
+                <div style={{
+                  position: 'absolute',
+                  top: 'calc(100% + 8px)',
+                  left: 0,
+                  width: '320px',
+                  maxHeight: '380px',
+                  background: themeStyles.cardBg,
+                  border: `1px solid ${themeStyles.cardBorder}`,
+                  borderRadius: '14px',
+                  boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
+                  zIndex: 100,
+                  padding: '10px',
+                  backdropFilter: 'blur(16px)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 4px 6px', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}` }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: themeStyles.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Available Cases ({casesList.length})
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 600 }}>Click to switch</span>
+                  </div>
+
+                  {/* Case Search Input */}
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      placeholder="Filter cases..."
+                      value={caseSearch}
+                      onChange={(e) => setCaseSearch(e.target.value)}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        padding: '6px 10px',
+                        background: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9',
+                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#cbd5e1'}`,
+                        borderRadius: '8px',
+                        fontSize: '11.5px',
+                        color: themeStyles.textMain,
+                        outline: 'none'
+                      }}
+                    />
+                  </div>
+
+                  {/* Case Items List */}
+                  <div style={{ overflowY: 'auto', maxHeight: '250px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {casesList
+                      .filter(c => {
+                        if (!caseSearch.trim()) return true;
+                        const q = caseSearch.toLowerCase();
+                        return (c.case_id || '').toLowerCase().includes(q) || (c.name || '').toLowerCase().includes(q);
+                      })
+                      .map(c => {
+                        const isCurrent = c.case_id === activeCaseId;
+                        return (
+                          <div
+                            key={c.case_id}
+                            onClick={() => handleSelectCase(c.case_id, c.name)}
+                            style={{
+                              padding: '8px 10px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              background: isCurrent ? (isDark ? 'rgba(56,189,248,0.15)' : '#e0f2fe') : 'transparent',
+                              color: isCurrent ? '#0284c7' : themeStyles.textMain,
+                              transition: 'background 0.15s'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isCurrent) e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.06)' : '#f8fafc';
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isCurrent) e.currentTarget.style.background = 'transparent';
+                            }}
+                          >
+                            <div style={{ minWidth: 0, flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <span style={{ fontFamily: 'var(--glass-dash-mono)', fontWeight: 700, fontSize: '12px' }}>
+                                  {c.case_id}
+                                </span>
+                                {c.status && (
+                                  <span style={{
+                                    fontSize: '9.5px',
+                                    fontWeight: 700,
+                                    textTransform: 'uppercase',
+                                    padding: '1px 5px',
+                                    borderRadius: '4px',
+                                    background: c.status === 'open' ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.08)',
+                                    color: c.status === 'open' ? '#10b981' : themeStyles.textMuted
+                                  }}>
+                                    {c.status}
+                                  </span>
+                                )}
+                              </div>
+                              {c.name && (
+                                <div style={{ fontSize: '11px', color: themeStyles.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
+                                  {c.name}
+                                </div>
+                              )}
+                            </div>
+                            {isCurrent && (
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
               )}
             </div>
           </div>
 
           {/* Right Header Controls */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             {/* Certify Button */}
             <button
               type="button"
@@ -677,13 +818,13 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                background: isCertified ? '#10b981' : (isDark ? 'rgba(16, 185, 129, 0.15)' : '#ecfdf5'),
-                color: isCertified ? '#ffffff' : '#059669',
-                border: `1px solid ${isCertified ? '#059669' : '#a7f3d0'}`,
-                padding: '6px 14px',
-                borderRadius: '6px',
+                background: isCertified ? '#10b981' : 'var(--glass-dash-green-soft)',
+                color: isCertified ? '#ffffff' : 'var(--glass-dash-green)',
+                border: `1px solid ${isCertified ? '#059669' : 'var(--glass-dash-green-border)'}`,
+                padding: '7px 16px',
+                borderRadius: '9999px',
                 fontSize: '12px',
-                fontWeight: 600,
+                fontWeight: 700,
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
@@ -701,14 +842,15 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                background: isDark ? '#1e293b' : '#f8fafc',
-                color: themeStyles.textMain,
-                border: `1px solid ${isDark ? 'rgba(255,255,255,0.15)' : '#cbd5e1'}`,
-                padding: '6px 12px',
-                borderRadius: '6px',
+                background: 'var(--glass-dash-surface-nested)',
+                color: 'var(--glass-dash-text-main)',
+                border: '1px solid var(--glass-dash-border-subtle)',
+                padding: '7px 16px',
+                borderRadius: '9999px',
                 fontSize: '12px',
                 fontWeight: 600,
-                cursor: 'pointer'
+                cursor: 'pointer',
+                transition: 'all 0.2s'
               }}
               title="Print or Save as PDF"
             >
@@ -720,7 +862,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
             <button 
               type="button" 
               onClick={toggleTheme} 
-              className="icon-btn" 
+              className="glass-icon-btn" 
               title="Toggle Theme" 
               style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             >
@@ -739,22 +881,22 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
         <div style={{
           flex: 1,
           display: 'flex',
+          gap: '20px',
           overflow: 'hidden',
-          position: 'relative'
+          position: 'relative',
+          height: '100%'
         }}>
 
           {/* ════════════════════════════════════════════════════════════
               LEFT PANEL: FULL FORENSIC REPORT PREVIEW (SCROLLABLE)
               ════════════════════════════════════════════════════════════ */}
-          <div style={{
+          <div className="panel-card" style={{
             flex: '0 0 54%',
             maxWidth: '54%',
             height: '100%',
             overflowY: 'auto',
-            padding: '24px',
-            borderRight: `1px solid ${themeStyles.topbarBorder}`,
-            boxSizing: 'border-box',
-            background: isDark ? '#090d16' : '#f8fafc'
+            padding: '28px',
+            boxSizing: 'border-box'
           }}>
             <div role="status" style={{
               marginBottom: '14px',
@@ -908,56 +1050,90 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {evidenceFiles.map((ev, idx) => (
-                    <div 
-                      key={idx}
-                      style={{
-                        background: isDark ? '#141d2f' : '#f8fafc',
-                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`,
-                        borderRadius: '8px',
-                        padding: '10px 14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                        <div style={{ color: '#a855f7' }}>
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
-                        </div>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: '12.5px', fontWeight: 600, color: themeStyles.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {ev.filename || ev.name || 'Artifact File'}
-                          </div>
-                          <div style={{ fontSize: '11px', fontFamily: 'monospace', color: themeStyles.textMuted }}>
-                            SHA-256: {ev.sha256_hash ? `${ev.sha256_hash.slice(0, 32)}... (Integrity unverified by server)` : 'Not provided (Unverified)'}
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleAuditArtifact(ev)}
+                  {evidenceFiles.length > 0 ? (
+                    evidenceFiles.map((ev, idx) => (
+                      <div 
+                        key={idx}
+                        onClick={() => setSelectedEvidence(ev)}
                         style={{
-                          background: isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff',
-                          color: '#3b82f6',
-                          border: '1px solid rgba(59, 130, 246, 0.3)',
-                          padding: '4px 10px',
-                          borderRadius: '6px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
+                          background: isDark ? '#141d2f' : '#f8fafc',
+                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`,
+                          borderRadius: '8px',
+                          padding: '10px 14px',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '4px',
-                          flexShrink: 0
+                          justifyContent: 'space-between',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease'
                         }}
-                        title="Query chatbot to audit this evidence artifact"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.borderColor = 'var(--glass-dash-blue)';
+                          e.currentTarget.style.transform = 'translateY(-1px)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0';
+                          e.currentTarget.style.transform = 'none';
+                        }}
+                        title="Click to open evidence details and custody metadata"
                       >
-                        Audit with AI &rarr;
-                      </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                          <div style={{ color: '#a855f7' }}>
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '12.5px', fontWeight: 600, color: themeStyles.textMain, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {ev.filename || ev.name || 'Artifact File'}
+                            </div>
+                            <div style={{ fontSize: '11px', fontFamily: 'monospace', color: themeStyles.textMuted }}>
+                              SHA-256: {ev.sha256_hash ? `${ev.sha256_hash.slice(0, 32)}... (Integrity unverified by server)` : 'Not provided (Unverified)'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                          <span style={{ fontSize: '11px', color: 'var(--glass-dash-blue)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                            View Record
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAuditArtifact(ev);
+                            }}
+                            style={{
+                              background: isDark ? 'rgba(59, 130, 246, 0.15)' : '#eff6ff',
+                              color: '#3b82f6',
+                              border: '1px solid rgba(59, 130, 246, 0.3)',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title="Query chatbot to audit this evidence artifact"
+                          >
+                            Audit with AI &rarr;
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{
+                      padding: '16px',
+                      textAlign: 'center',
+                      color: themeStyles.paperMuted,
+                      fontSize: '12px',
+                      background: isDark ? '#141d2f' : '#f8fafc',
+                      borderRadius: '8px',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`
+                    }}>
+                      No evidence records loaded for Case {activeCaseId}.
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 
@@ -970,7 +1146,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                     </h2>
                   </div>
                   <span style={{ fontSize: '11px', color: themeStyles.textMuted }}>
-                    {findings.length > 0 ? 'Multi-Agent Corroborated' : 'No Findings Loaded'}
+                    {findings.length > 0 ? 'Click any issue to open details' : 'No Findings Loaded'}
                   </span>
                 </div>
 
@@ -984,12 +1160,24 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                       return (
                         <div
                           key={finding.finding_id || idx}
+                          onClick={() => setSelectedFinding(finding)}
                           style={{
                             background: isDark ? '#141d2f' : '#f8fafc',
                             border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`,
                             borderRadius: '8px',
-                            padding: '10px 14px'
+                            padding: '12px 14px',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
                           }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--glass-dash-blue)';
+                            e.currentTarget.style.transform = 'translateY(-1px)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0';
+                            e.currentTarget.style.transform = 'none';
+                          }}
+                          title="Click to open finding details, MITRE alignments, and telemetry"
                         >
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1021,25 +1209,34 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                               )}
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleVerifyFinding(finding)}
-                              style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: '#3b82f6',
-                                fontSize: '11px',
-                                fontWeight: 600,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '4px',
-                                padding: '2px 6px'
-                              }}
-                              title="Cross-examine this finding with AI Assistant"
-                            >
-                              Verify with AI &rarr;
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '11px', color: 'var(--glass-dash-blue)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                                Open Details
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleVerifyFinding(finding);
+                                }}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#3b82f6',
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 6px'
+                                }}
+                                title="Cross-examine this finding with AI Assistant"
+                              >
+                                Verify with AI &rarr;
+                              </button>
+                            </div>
                           </div>
 
                           <div style={{ fontSize: '12px', color: themeStyles.paperText, lineHeight: '1.5' }}>
@@ -1215,13 +1412,13 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
           {/* ════════════════════════════════════════════════════════════
               RIGHT PANEL: AI FORENSIC AUDIT CHATBOT
               ════════════════════════════════════════════════════════════ */}
-          <div style={{
-            flex: '0 0 46%',
-            maxWidth: '46%',
+          <div className="panel-card" style={{
+            flex: 1,
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
-            background: themeStyles.chatBg,
+            padding: 0,
+            overflow: 'hidden',
             position: 'relative'
           }}>
 
@@ -1550,6 +1747,328 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
         </div>
 
       </div>
+
+      {/* ── FINDING DETAIL MODAL ── */}
+      {selectedFinding && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+          onClick={() => setSelectedFinding(null)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '620px',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              background: themeStyles.cardBg,
+              border: `1px solid ${themeStyles.cardBorder}`,
+              borderRadius: '20px',
+              padding: '28px 32px',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.6)',
+              color: themeStyles.textMain,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px'
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`, paddingBottom: '16px' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+                  <span style={{ fontFamily: 'var(--glass-dash-mono)', fontSize: '16px', fontWeight: 800, color: '#38bdf8' }}>
+                    {selectedFinding.finding_id || 'Finding Record'}
+                  </span>
+                  <span style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    color: (selectedFinding.severity || '').toLowerCase() === 'high' || (selectedFinding.severity || '').toLowerCase() === 'critical' ? '#ef4444' : ((selectedFinding.severity || '').toLowerCase() === 'medium' ? '#f97316' : '#10b981'),
+                    background: (selectedFinding.severity || '').toLowerCase() === 'high' || (selectedFinding.severity || '').toLowerCase() === 'critical' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(249, 115, 22, 0.15)'
+                  }}>
+                    {selectedFinding.severity || 'Medium'}
+                  </span>
+                  {selectedFinding.mitre_mapping && (
+                    <span style={{
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      background: 'rgba(234, 179, 8, 0.15)',
+                      color: '#d97706'
+                    }}>
+                      {selectedFinding.mitre_mapping}
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '12px', color: themeStyles.textMuted }}>
+                  Case: <strong style={{ color: themeStyles.textMain }}>{activeCaseId}</strong> &middot; Layer: <strong style={{ color: themeStyles.textMain }}>{selectedFinding.layer || 'Forensic Correlation'}</strong>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedFinding(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: themeStyles.textMuted,
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+
+            {/* Finding Statement */}
+            <div>
+              <label style={{ fontSize: '11px', fontWeight: 700, color: themeStyles.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px' }}>
+                Forensic Finding Fact & Observation
+              </label>
+              <div style={{
+                background: isDark ? 'rgba(0, 0, 0, 0.25)' : '#f8fafc',
+                border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'}`,
+                borderRadius: '10px',
+                padding: '14px 16px',
+                fontSize: '13px',
+                lineHeight: 1.6,
+                color: themeStyles.textMain
+              }}>
+                {selectedFinding.sanitized_fact || selectedFinding.fact || selectedFinding.claim || 'No detailed fact description available.'}
+              </div>
+            </div>
+
+            {/* Metrics Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div style={{ background: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f1f5f9', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.06)' : '#e2e8f0'}` }}>
+                <div style={{ fontSize: '11px', color: themeStyles.textMuted, fontWeight: 600, marginBottom: '4px' }}>Confidence Score</div>
+                <div style={{ fontSize: '15px', fontWeight: 800, color: '#38bdf8' }}>
+                  {Math.round((selectedFinding.confidence > 1 ? selectedFinding.confidence : selectedFinding.confidence * 100) || 85)}%
+                </div>
+              </div>
+              <div style={{ background: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f1f5f9', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.06)' : '#e2e8f0'}` }}>
+                <div style={{ fontSize: '11px', color: themeStyles.textMuted, fontWeight: 600, marginBottom: '4px' }}>Corroboration Source</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: themeStyles.textMain }}>
+                  {selectedFinding.agent || selectedFinding.corroborating_agent || 'ARGUS Multi-Agent Swarm'}
+                </div>
+              </div>
+            </div>
+
+            {/* Evidence Linkage */}
+            {(selectedFinding.evidence_reference || selectedFinding.source_artifact_id) && (
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: themeStyles.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: '8px' }}>
+                  Correlated Evidence References
+                </label>
+                <div style={{
+                  background: isDark ? 'rgba(0, 0, 0, 0.2)' : '#f8fafc',
+                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.06)' : '#e2e8f0'}`,
+                  borderRadius: '10px',
+                  padding: '10px 14px',
+                  fontSize: '12px',
+                  fontFamily: 'monospace',
+                  color: '#38bdf8'
+                }}>
+                  {Array.isArray(selectedFinding.evidence_reference)
+                    ? selectedFinding.evidence_reference.join(', ')
+                    : (selectedFinding.evidence_reference || selectedFinding.source_artifact_id)}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`, paddingTop: '16px' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(JSON.stringify(selectedFinding, null, 2));
+                  setCustomAlert({ isOpen: true, title: 'Copied', message: 'Finding details copied to clipboard.', type: 'info' });
+                }}
+                className="btn-outline"
+                style={{ fontSize: '12px', padding: '8px 14px', borderRadius: '9999px' }}
+              >
+                Copy JSON
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const fToVerify = selectedFinding;
+                  setSelectedFinding(null);
+                  handleVerifyFinding(fToVerify);
+                }}
+                className="btn-primary"
+                style={{ fontSize: '12px', padding: '8px 18px', borderRadius: '9999px' }}
+              >
+                Verify with AI Copilot &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── EVIDENCE DETAIL MODAL ── */}
+      {selectedEvidence && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.65)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+          onClick={() => setSelectedEvidence(null)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '100%',
+              maxWidth: '620px',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              background: themeStyles.cardBg,
+              border: `1px solid ${themeStyles.cardBorder}`,
+              borderRadius: '20px',
+              padding: '28px 32px',
+              boxShadow: '0 24px 60px rgba(0, 0, 0, 0.6)',
+              color: themeStyles.textMain,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '20px'
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`, paddingBottom: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: '16px', fontWeight: 800, color: themeStyles.textMain }}>
+                    {selectedEvidence.filename || selectedEvidence.name || 'Forensic Evidence Artifact'}
+                  </div>
+                  <div style={{ fontSize: '11.5px', color: themeStyles.textMuted }}>
+                    Case: <strong style={{ color: themeStyles.textMain }}>{activeCaseId}</strong> &middot; ID: <span style={{ fontFamily: 'monospace' }}>{selectedEvidence.evidence_id || selectedEvidence.id || 'N/A'}</span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedEvidence(null)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: themeStyles.textMuted,
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+
+            {/* SHA-256 Hash Card */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <label style={{ fontSize: '11px', fontWeight: 700, color: themeStyles.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Cryptographic SHA-256 Hash
+                </label>
+                <span style={{ fontSize: '10.5px', color: '#f59e0b', fontWeight: 600 }}>
+                  Integrity unverified by server
+                </span>
+              </div>
+              <div style={{
+                background: isDark ? 'rgba(0, 0, 0, 0.3)' : '#f8fafc',
+                border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : '#e2e8f0'}`,
+                borderRadius: '10px',
+                padding: '12px 14px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '10px'
+              }}>
+                <span style={{ fontFamily: 'var(--glass-dash-mono)', fontSize: '12px', color: '#38bdf8', wordBreak: 'break-all' }}>
+                  {selectedEvidence.sha256_hash || 'SHA-256 hash not recorded in artifact telemetry'}
+                </span>
+                {selectedEvidence.sha256_hash && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedEvidence.sha256_hash);
+                      setCustomAlert({ isOpen: true, title: 'Copied', message: 'SHA-256 hash copied to clipboard.', type: 'info' });
+                    }}
+                    style={{
+                      background: 'var(--glass-dash-surface-nested)',
+                      border: '1px solid var(--glass-dash-border-subtle)',
+                      color: themeStyles.textMain,
+                      borderRadius: '6px',
+                      padding: '4px 8px',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      flexShrink: 0
+                    }}
+                  >
+                    Copy
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Metadata Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <div style={{ background: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f1f5f9', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.06)' : '#e2e8f0'}` }}>
+                <div style={{ fontSize: '11px', color: themeStyles.textMuted, fontWeight: 600, marginBottom: '4px' }}>File Type / Category</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: themeStyles.textMain }}>
+                  {selectedEvidence.file_type || selectedEvidence.type || 'Forensic Disk / Log Artifact'}
+                </div>
+              </div>
+              <div style={{ background: isDark ? 'rgba(255, 255, 255, 0.03)' : '#f1f5f9', padding: '12px 14px', borderRadius: '10px', border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.06)' : '#e2e8f0'}` }}>
+                <div style={{ fontSize: '11px', color: themeStyles.textMuted, fontWeight: 600, marginBottom: '4px' }}>Processing Status</div>
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#10b981', textTransform: 'capitalize' }}>
+                  {selectedEvidence.status || 'Ingested'}
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}`, paddingTop: '16px' }}>
+              <button
+                type="button"
+                onClick={() => setSelectedEvidence(null)}
+                className="btn-outline"
+                style={{ fontSize: '12px', padding: '8px 16px', borderRadius: '9999px' }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const evToAudit = selectedEvidence;
+                  setSelectedEvidence(null);
+                  handleAuditArtifact(evToAudit);
+                }}
+                className="btn-primary"
+                style={{ fontSize: '12px', padding: '8px 18px', borderRadius: '9999px' }}
+              >
+                Audit with AI Copilot &rarr;
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

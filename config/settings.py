@@ -12,12 +12,12 @@ class Settings(BaseSettings):
     # ── PostgreSQL (structured data) ─────────────
     # FIR findings, case sessions, audit logs,
     # agent outputs, confidence scores, ISM state
-    postgres_host: str = "localhost"
+    postgres_host: str = "127.0.0.1"
     postgres_port: int = 5433
     postgres_db: str = "argus"
     postgres_user: str = "argus_user"
     postgres_password: str = "argus_dev"
-    postgres_url: str = "postgresql://argus_user:argus_dev@localhost:5433/argus"
+    postgres_url: str = "postgresql://argus_user:argus_dev@127.0.0.1:5433/argus"
 
     # ── MinIO (raw evidence object storage) ──────
     # Original evidence files, memory dumps,

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { login as apiLogin } from '../js/api';
+import { getAuthUser } from '../js/authSession.js';
 
 const DEV_ACCOUNTS = [
   {
@@ -68,9 +68,20 @@ const DEV_ACCOUNTS = [
 
 const DevRoleSwitcher = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [loadingRole, setLoadingRole] = useState(null);
+  const currentUser = getAuthUser();
+
   // Strictly isolate behind development environment and explicit opt-in flag.
   // Never bundle or activate in production.
-  if (!import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_SWITCHER !== 'true') {
+  const isDevSwitcherEnabled = Boolean(
+    typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.DEV &&
+    import.meta.env.VITE_ENABLE_DEV_SWITCHER === 'true'
+  );
+  if (!isDevSwitcherEnabled) {
     return null;
   }
 
@@ -78,7 +89,8 @@ const DevRoleSwitcher = () => {
     // Never fabricate dev tokens or try guessed passwords.
     // Cleanly redirect to login page with selected role hint for real authentication.
     setLoadingRole(account.roleKey);
-    navigate(`/login?role=${encodeURIComponent(account.roleKey)}`);
+    const dest = targetPath || account.defaultRoute || '/dashboard';
+    navigate(`/login?role=${encodeURIComponent(account.roleKey)}&redirect=${encodeURIComponent(dest)}`);
     setLoadingRole(null);
   };
 
@@ -353,7 +365,7 @@ const DevRoleSwitcher = () => {
               textAlign: 'center'
             }}
           >
-            Password for all dev accounts: <code style={{ color: '#38bdf8' }}>123</code>
+            Development navigation helper. Real backend credentials required.
           </div>
         </div>
       )}

@@ -5,6 +5,7 @@ import NotificationMenu from '../components/NotificationMenu';
 import AlertModal from '../components/AlertModal';
 import { fetchFindings, fetchEvidenceForCase, createCaseNote } from '../js/api';
 import { safeFormatDateTime } from '../js/dateUtils';
+import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
 const SEVERITY_COLORS = {
@@ -30,21 +31,15 @@ const TimelineDetail = () => {
     }
   }, [user, navigate]);
 
-  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
-  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'Current Case');
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
+  const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
 
-  // Synchronize case changes across tabs and local events
+  // Synchronize case changes across tabs and canonical events
   useEffect(() => {
-    const handleCaseSync = () => {
-      setActiveCaseId(localStorage.getItem('active_case_id') || '');
-      setActiveCaseName(localStorage.getItem('active_case_name') || 'Current Case');
-    };
-    window.addEventListener('storage', handleCaseSync);
-    window.addEventListener('argus_case_change', handleCaseSync);
-    return () => {
-      window.removeEventListener('storage', handleCaseSync);
-      window.removeEventListener('argus_case_change', handleCaseSync);
-    };
+    return subscribeToActiveCase(({ caseId, caseName }) => {
+      setActiveCaseId(caseId);
+      setActiveCaseName(caseName);
+    });
   }, []);
 
   // Theme state

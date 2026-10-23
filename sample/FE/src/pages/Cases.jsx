@@ -6,6 +6,7 @@ import ProfileModal from '../components/ProfileModal';
 import NotificationMenu from '../components/NotificationMenu';
 import { fetchCases, fetchEmployees, fetchReport, closeCase } from '../js/api';
 import { safeFormatDateOnly } from '../js/dateUtils';
+import { getActiveCaseId, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
 const Cases = () => {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ const Cases = () => {
 
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
-  const activeCaseId = localStorage.getItem('active_case_id');
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
 
   useEffect(() => {
     setCurrentPage(1);
@@ -99,12 +100,14 @@ const Cases = () => {
 
   useEffect(() => {
     fetchCasesData();
+    const unsubscribe = subscribeToActiveCase(({ caseId }) => {
+      setActiveCaseId(caseId);
+    });
+    return unsubscribe;
   }, []);
 
   const handleSetActiveCase = (caseItem) => {
-    localStorage.setItem('active_case_id', caseItem.case_id);
-    if (caseItem.name) localStorage.setItem('active_case_name', caseItem.name);
-    window.dispatchEvent(new Event('argus:caseChanged'));
+    setActiveCase(caseItem.case_id, caseItem.name || '');
     setCustomAlert({
       isOpen: true,
       title: 'Active Case Selected',
@@ -117,10 +120,8 @@ const Cases = () => {
   const handleCloseCase = async (caseId, caseName) => {
     try {
       await closeCase(caseId);
-      if (localStorage.getItem('active_case_id') === caseId) {
-        localStorage.removeItem('active_case_id');
-        localStorage.removeItem('active_case_name');
-        window.dispatchEvent(new Event('argus:caseChanged'));
+      if (activeCaseId === caseId) {
+        setActiveCase('', '');
       }
       setCustomAlert({
         isOpen: true,

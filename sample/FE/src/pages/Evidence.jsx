@@ -8,6 +8,7 @@ import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import SearchableSelect from '../components/SearchableSelect';
 import { safeFormatDateOnly, formatEvidenceId } from '../js/dateUtils';
+import { getActiveCaseId, getActiveCaseName, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
 const Evidence = () => {
   const formatBytes = (bytes, decimals = 2) => {
@@ -46,19 +47,13 @@ const Evidence = () => {
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
   const navigate = useNavigate();
 
-  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
 
   // Synchronize active case across tabs and components
   useEffect(() => {
-    const handleCaseSync = () => {
-      setActiveCaseId(localStorage.getItem('active_case_id') || '');
-    };
-    window.addEventListener('storage', handleCaseSync);
-    window.addEventListener('argus_case_change', handleCaseSync);
-    return () => {
-      window.removeEventListener('storage', handleCaseSync);
-      window.removeEventListener('argus_case_change', handleCaseSync);
-    };
+    return subscribeToActiveCase(({ caseId }) => {
+      setActiveCaseId(caseId);
+    });
   }, []);
 
   const currentUserStr = localStorage.getItem('argus_user');
@@ -210,21 +205,21 @@ const Evidence = () => {
   };
 
   const handleCloseCase = () => {
-    const activeCaseName = localStorage.getItem('active_case_name') || 'Current case';
-    const activeCaseId = localStorage.getItem('active_case_id');
-    if (!activeCaseId && !localStorage.getItem('active_case_name')) {
+    const activeCaseName = getActiveCaseName();
+    const activeCaseId = getActiveCaseId();
+    if (!activeCaseId && !activeCaseName) {
       setCustomAlert({ isOpen: true, title: 'Notice', message: "There is no active case currently open.", type: 'warning' });
       return;
     }
-    localStorage.removeItem('active_case_id');
-    localStorage.removeItem('active_case_name');
-    localStorage.removeItem('active_case_desc');
+    setActiveCase('', '');
+    try {
+      localStorage.removeItem('active_case_desc');
+    } catch (_e) {}
     setCustomAlert({
        isOpen: true,
        title: 'Success',
        message: `${activeCaseName} has been closed successfully.`,
-       type: 'success',
-       onClose: () => window.location.reload()
+       type: 'success'
     });
   };
 
@@ -553,7 +548,13 @@ const Evidence = () => {
                   ) : (
                     currentItems.map(item => (
                       <tr key={item.id} className={`ev-row ${selectedItem?.id === item.id ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
-                        <td style={{padding: '16px 24px'}}><input type="checkbox" onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item selection is not yet implemented in this prototype.', type: 'info'}) }} /></td>
+                        <td style={{padding: '16px 24px'}}>
+                          <input 
+                            type="checkbox" 
+                            aria-label={`Select evidence item ${item.displayId || item.id}`}
+                            onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item selection is not yet implemented in this prototype.', type: 'info'}) }} 
+                          />
+                        </td>
                         <td style={{padding: '16px 12px'}}>
                           <span 
                             title={`Evidence ID: ${item.displayId || item.id}\nRaw ID: ${item.id}\nClick to copy`}
@@ -613,10 +614,14 @@ const Evidence = () => {
                         </td>
                         <td>{safeFormatDateOnly(item.ingested_at)}</td>
                         <td>
-                           <span style={{ color: item.risk === 'High' ? 'var(--red)' : item.risk === 'Medium' ? 'var(--orange)' : 'var(--text-muted)' }}>{item.risk || 'Low'}</span>
+                           <span style={{ color: item.risk === 'High' ? 'var(--red)' : item.risk === 'Medium' ? 'var(--orange)' : 'var(--text-muted)' }}>{item.risk || 'Unassessed'}</span>
                         </td>
                         <td style={{ textAlign: 'right', padding: '16px 24px' }}>
-                          <button onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item actions are not yet implemented in this prototype.', type: 'info'}) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                          <button 
+                            aria-label={`Actions for evidence ${item.displayId || item.id}`}
+                            onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item actions are not yet implemented in this prototype.', type: 'info'}) }} 
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                          >
                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
                           </button>
                         </td>
@@ -637,6 +642,7 @@ const Evidence = () => {
               <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
                 <button 
                   className="btn-icon" 
+                  aria-label="Previous page"
                   onClick={() => paginate(currentPage - 1)} 
                   disabled={currentPage === 1}
                   style={{width: '32px', height: '32px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1}}
@@ -647,6 +653,7 @@ const Evidence = () => {
                   <button 
                     key={i + 1} 
                     className="btn-icon" 
+                    aria-label={`Page ${i + 1}`}
                     onClick={() => paginate(i + 1)}
                     style={{width: '32px', height: '32px', cursor: 'pointer', background: currentPage === i + 1 ? 'var(--blue)' : 'var(--bg-app)', color: currentPage === i + 1 ? '#fff' : 'var(--text-main)', borderColor: currentPage === i + 1 ? 'var(--blue)' : 'var(--border-strong)'}}
                   >
@@ -655,6 +662,7 @@ const Evidence = () => {
                 ))}
                 <button 
                   className="btn-icon" 
+                  aria-label="Next page"
                   onClick={() => paginate(currentPage + 1)} 
                   disabled={currentPage === totalPages}
                   style={{width: '32px', height: '32px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1}}

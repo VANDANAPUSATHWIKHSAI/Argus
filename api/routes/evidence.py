@@ -19,6 +19,8 @@ import logging
 import asyncio
 import threading
 import concurrent.futures
+import hmac
+from enum import Enum
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 
@@ -26,8 +28,8 @@ from fastapi import APIRouter, File, UploadFile, Form, Header, HTTPException, Qu
 from api.routes.auth import get_current_user
 from pydantic import BaseModel, Field
 
-from infrastructure.schemas import Evidence, CaseSession
-from infrastructure.repository.evidence_store import create_case_session, store_evidence, list_evidence_by_case
+from infrastructure.schemas import Evidence, CaseSession, CustodyLogEntry
+from infrastructure.repository.evidence_store import create_case_session, store_evidence, list_evidence_by_case, get_evidence, REPOSITORY_DIR
 from preprocessing.router import ParserRouter
 from preprocessing.artifact_extractor.extractor import ArtifactExtractor
 from preprocessing.fcr_engine.engine import FCREngine
@@ -731,3 +733,442 @@ async def get_evidence_by_case(
     except Exception as e:
         logger.error(f"Error fetching evidence for case {case_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── TASK B: Server-side SHA-256 Evidence Integrity Verification ─────────────
+
+_verification_lock = threading.Lock()
+
+class EvidenceVerificationStatus(str, Enum):
+    """
+    Defensible, explicit verification states:
+    VERIFIED: The stored artifact bytes match the authoritative recorded SHA-256 acquisition digest.
+    CORRUPTED: The artifact bytes were successfully read, but the computed SHA-256 digest differs from the recorded seal.
+    UNVERIFIABLE: Verification could not establish a cryptographic verdict (e.g. missing metadata, missing file, inaccessible storage).
+    ERROR: Verification could not complete due to an operational or system failure during execution.
+    """
+    VERIFIED     = "VERIFIED"
+    CORRUPTED    = "CORRUPTED"
+    UNVERIFIABLE = "UNVERIFIABLE"
+    ERROR        = "ERROR"
+
+
+class EvidenceVerificationResponse(BaseModel):
+    evidence_id: str
+    case_id: str
+    tenant_id: str
+    status: EvidenceVerificationStatus
+    digest_match: bool
+    expected_sha256: Optional[str] = None
+    calculated_sha256: Optional[str] = None
+    timestamp_status: Optional[str] = None
+    timestamp_details: Optional[Dict[str, Any]] = None
+    audit_chain_status: Optional[str] = "NOT_CHECKED"
+    verified_at: str
+    verified_by: str
+    failure_reason: Optional[str] = None
+
+
+EVIDENCE_VERIFY_ROLES = {"senior_analyst", "admin", "auditor", "analyst"}
+
+
+def _resolve_authoritative_artifact_path(ev: Evidence) -> Optional[Path]:
+    """
+    Locates the authoritative stored immutable evidence artifact on storage.
+    Preserves read-only evidence semantics. Never returns temporary intake or encrypted files.
+    """
+    candidates: List[Path] = []
+    if ev.original_repository_path:
+        candidates.append(Path(ev.original_repository_path))
+    if ev.original_file_path:
+        candidates.append(Path(ev.original_file_path))
+    if ev.repository_path and not ev.repository_path.endswith(".enc"):
+        candidates.append(Path(ev.repository_path))
+
+    # Standard repository layout: data/repository/{case_id}/{evidence_id}/original/{filename}
+    repo_base = Path(REPOSITORY_DIR) / ev.case_id / ev.evidence_id
+    orig_dir = repo_base / "original"
+    if ev.filename:
+        candidates.append(orig_dir / ev.filename)
+    if orig_dir.exists() and orig_dir.is_dir():
+        for f in orig_dir.iterdir():
+            if f.is_file() and not f.name.endswith(".enc"):
+                candidates.append(f)
+
+    if ev.file_path and not ev.file_path.endswith(".enc"):
+        candidates.append(Path(ev.file_path))
+
+    for path in candidates:
+        if path.exists() and path.is_file():
+            return path
+    return None
+
+
+@router.post("/{evidence_id}/verify", response_model=EvidenceVerificationResponse)
+@router.post("/status/{evidence_id}/verify", response_model=EvidenceVerificationResponse)
+async def verify_evidence_endpoint(
+    evidence_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    POST /evidence/{evidence_id}/verify
+
+    Server-side cryptographic evidence re-verification workflow:
+    1. Authenticate caller and enforce appropriate verification permissions.
+    2. Resolve evidence record using evidence_id and authenticated tenant context.
+    3. Determine authoritative storage backend (Production MinIO/S3 vs Local Repository).
+    4. Stream artifact through SHA-256 computation in 64KB chunks (never load entire file to memory).
+    5. Compare calculated digest against recorded digest using constant-time comparison (hmac.compare_digest).
+    6. Validate associated RFC 3161 timestamp token if available (kept distinct from byte integrity).
+    7. Record an append-only hash-chained audit event via get_audit_logger().
+    8. Persist verification result and custody log with atomic concurrency protection.
+    9. Prevent cross-tenant access and never expose physical paths or secrets.
+    """
+    # 1. Role verification
+    user_role = current_user.get("role", "")
+    if user_role not in EVIDENCE_VERIFY_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Role '{user_role}' is not authorized to verify evidence integrity."
+        )
+
+    # 2. Derive trusted tenant context
+    clean_tenant = authorize_tenant_access(current_user, x_tenant_id)
+
+    # 3. Derive verifier identity
+    verifier_id = current_user.get("id") or current_user.get("email") or current_user.get("username")
+    if not verifier_id or not str(verifier_id).strip():
+        raise HTTPException(status_code=401, detail="Authenticated context lacks a valid verifier identity.")
+
+    # 4. Resolve evidence record strictly within tenant context
+    ev = get_evidence(tenant_id=clean_tenant, evidence_id=evidence_id)
+    if not ev:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Evidence '{evidence_id}' not found for tenant '{clean_tenant}'."
+        )
+
+    from datetime import datetime, timezone
+    verified_at = datetime.now(timezone.utc).isoformat()
+
+    expected_sha256 = (
+        ev.sha256_hash or 
+        (ev.metadata.get("sha256") if ev.metadata else None) or
+        (ev.metadata.get("sha256_hash") if ev.metadata else None)
+    )
+    if expected_sha256:
+        expected_sha256 = str(expected_sha256).strip().lower()
+
+    # Validate recorded expected digest
+    calculated_sha256: Optional[str] = None
+    digest_match: bool = False
+    status: EvidenceVerificationStatus
+    failure_reason: Optional[str] = None
+
+    if not expected_sha256 or len(expected_sha256) != 64:
+        status = EvidenceVerificationStatus.UNVERIFIABLE
+        failure_reason = "Authoritative acquisition metadata lacks a valid 64-character SHA-256 digest."
+    else:
+        # 5. Authoritative Storage Selection & Streaming SHA-256 Computation
+        from infrastructure.repository.evidence_store import _should_attempt_minio
+        from databases.minio_client import minio_store, S3Error
+        from config.settings import settings
+
+        local_path = _resolve_authoritative_artifact_path(ev)
+        
+        is_minio = False
+        if ev.original_repository_path and not os.path.isabs(ev.original_repository_path) and not Path(ev.original_repository_path).is_file():
+            is_minio = True
+        elif ev.repository_path and not os.path.isabs(ev.repository_path) and not Path(ev.repository_path).is_file():
+            is_minio = True
+        elif local_path is None and _should_attempt_minio():
+            is_minio = True
+        elif getattr(settings, "storage_backend", "").lower() == "minio":
+            is_minio = True
+
+        if is_minio:
+            # MinIO Storage Verification Branch
+            if not _should_attempt_minio():
+                # If MinIO is configured but unavailable, return explicit operational failure
+                # Never silently fall back to an alternate local artifact!
+                status = EvidenceVerificationStatus.ERROR
+                failure_reason = "Operational failure: configured production MinIO object storage is offline or unavailable."
+            else:
+                obj_key = ev.original_repository_path or ev.repository_path or f"{clean_tenant}/{ev.case_id}/{ev.evidence_id}/original/{ev.filename}"
+                obj_key = str(obj_key).replace("\\", "/")
+
+                # Enforce tenant, case, and evidence ID boundary on object key
+                key_parts = obj_key.split("/")
+                if not obj_key.startswith(f"{clean_tenant}/") or ev.case_id not in key_parts or ev.evidence_id not in key_parts:
+                    status = EvidenceVerificationStatus.UNVERIFIABLE
+                    failure_reason = (
+                        f"Security boundary or metadata mismatch: MinIO object key '{obj_key}' "
+                        f"does not match authenticated tenant '{clean_tenant}', case '{ev.case_id}', "
+                        f"and evidence ID '{ev.evidence_id}'."
+                    )
+                else:
+                    try:
+                        raw_bucket = getattr(settings, "minio_bucket_raw_evidence", minio_store.RAW_BUCKET)
+                        stat = minio_store.client.stat_object(raw_bucket, obj_key)
+
+                        # Independent object metadata consistency checks
+                        # Metadata disagreement is surfaced explicitly and cannot be silently resolved by trusting one source
+                        meta_conflict = False
+                        if hasattr(stat, "metadata") and stat.metadata:
+                            meta_sha = stat.metadata.get("x-amz-meta-sha256") or stat.metadata.get("sha256")
+                            if meta_sha and meta_sha.strip().lower() != expected_sha256.strip().lower():
+                                meta_conflict = True
+                                status = EvidenceVerificationStatus.CORRUPTED
+                                failure_reason = (
+                                    f"Metadata integrity conflict: MinIO object metadata sha256 ('{meta_sha.strip().lower()}') "
+                                    f"conflicts with authoritative recorded acquisition digest ('{expected_sha256.strip().lower()}')."
+                                )
+
+                        ev_size = getattr(ev, "file_size", getattr(ev, "size_bytes", None))
+                        if not meta_conflict and ev_size is not None and ev_size > 0 and stat.size != ev_size:
+                            meta_conflict = True
+                            status = EvidenceVerificationStatus.CORRUPTED
+                            failure_reason = (
+                                f"Storage size mismatch: MinIO object size ({stat.size} bytes) "
+                                f"does not match authoritative acquisition size ({ev_size} bytes)."
+                            )
+
+                        if not meta_conflict:
+                            # Stream object bytes in bounded 64KB chunks (never load entire file into RAM)
+                            response = None
+                            stream_succeeded = False
+                            hasher = hashlib.sha256()
+                            try:
+                                response = minio_store.client.get_object(raw_bucket, obj_key)
+                                while True:
+                                    chunk = response.read(64 * 1024)
+                                    if not chunk:
+                                        break
+                                    hasher.update(chunk)
+                                stream_succeeded = True
+                            finally:
+                                if response is not None:
+                                    try:
+                                        response.close()
+                                    except Exception as close_err:
+                                        logger.warning("Error closing MinIO response stream: %s", close_err)
+                                    try:
+                                        response.release_conn()
+                                    except Exception as release_err:
+                                        logger.warning("Error releasing MinIO response connection: %s", release_err)
+
+                            if stream_succeeded:
+                                calculated_sha256 = hasher.hexdigest().lower()
+                                digest_match = hmac.compare_digest(calculated_sha256, expected_sha256)
+                                if digest_match:
+                                    status = EvidenceVerificationStatus.VERIFIED
+                                else:
+                                    status = EvidenceVerificationStatus.CORRUPTED
+                                    failure_reason = "Cryptographic integrity failure: computed SHA-256 digest differs from recorded acquisition seal."
+                            else:
+                                calculated_sha256 = None
+                                digest_match = False
+                                status = EvidenceVerificationStatus.ERROR
+                                failure_reason = "Streaming read was interrupted or incomplete before reaching end of object."
+
+                    except S3Error as s3_err:
+                        calculated_sha256 = None
+                        digest_match = False
+                        if s3_err.code in ("NoSuchKey", "NotFound"):
+                            status = EvidenceVerificationStatus.UNVERIFIABLE
+                            failure_reason = f"Authoritative evidence object '{obj_key}' not found in MinIO storage."
+                        elif s3_err.code in ("AccessDenied", "Forbidden"):
+                            status = EvidenceVerificationStatus.ERROR
+                            failure_reason = f"MinIO storage access permission denied for object '{obj_key}'."
+                        else:
+                            status = EvidenceVerificationStatus.ERROR
+                            failure_reason = f"MinIO storage S3 error: {s3_err}"
+                    except (OSError, IOError) as io_err:
+                        calculated_sha256 = None
+                        digest_match = False
+                        status = EvidenceVerificationStatus.ERROR
+                        failure_reason = f"Storage I/O read failure during MinIO streaming: {io_err}"
+                    except Exception as exc:
+                        calculated_sha256 = None
+                        digest_match = False
+                        status = EvidenceVerificationStatus.ERROR
+                        failure_reason = f"Operational verification failure during MinIO streaming: {exc}"
+        else:
+            # Local Filesystem Storage Verification Branch
+            if not local_path:
+                status = EvidenceVerificationStatus.UNVERIFIABLE
+                failure_reason = "Authoritative evidence artifact file not found on storage repository."
+            else:
+                # Stream file through SHA-256 computation in 64KB chunks
+                try:
+                    hasher = hashlib.sha256()
+                    with open(local_path, "rb") as f:
+                        while True:
+                            chunk = f.read(64 * 1024)
+                            if not chunk:
+                                break
+                            hasher.update(chunk)
+                    calculated_sha256 = hasher.hexdigest().lower()
+
+                    # Safe constant-time comparison
+                    digest_match = hmac.compare_digest(calculated_sha256, expected_sha256)
+                    if digest_match:
+                        status = EvidenceVerificationStatus.VERIFIED
+                    else:
+                        status = EvidenceVerificationStatus.CORRUPTED
+                        failure_reason = "Cryptographic integrity failure: computed SHA-256 digest differs from recorded acquisition seal."
+                except (OSError, IOError) as io_err:
+                    status = EvidenceVerificationStatus.ERROR
+                    failure_reason = f"Storage I/O read failure while accessing evidence artifact: {io_err}"
+                except Exception as exc:
+                    status = EvidenceVerificationStatus.ERROR
+                    failure_reason = f"Operational verification failure: {exc}"
+
+    # 7. Independent RFC 3161 Timestamp Verification
+    timestamp_status: Optional[str] = None
+    ts_details: Optional[Dict[str, Any]] = None
+    if not ev.timestamp_record and ev.metadata and isinstance(ev.metadata.get("timestamp_record"), dict):
+        try:
+            from infrastructure.schemas import TimestampRecord
+            ev.timestamp_record = TimestampRecord(**ev.metadata["timestamp_record"])
+        except Exception:
+            pass
+
+    if ev.timestamp_record or ev.rfc3161_timestamp:
+        try:
+            from infrastructure.integrity.timestamp_service import verify_rfc3161_timestamp
+            is_ts_valid = verify_rfc3161_timestamp(ev, expected_sha256=expected_sha256 or calculated_sha256)
+            if is_ts_valid:
+                timestamp_status = (
+                    ev.timestamp_record.timestamp_verification_status.upper()
+                    if ev.timestamp_record and hasattr(ev.timestamp_record, "timestamp_verification_status")
+                    else "VERIFIED"
+                )
+            else:
+                timestamp_status = "FAILED"
+            if ev.timestamp_record and hasattr(ev.timestamp_record, "verification_details"):
+                ts_details = ev.timestamp_record.verification_details
+        except Exception as ts_err:
+            timestamp_status = "FAILED"
+            logger.warning(f"RFC 3161 timestamp verification exception: {ts_err}")
+    else:
+        timestamp_status = "NOT_PRESENT"
+
+    # 8. Append-only Hash-Chained Audit Record (Mandatory Security Rule)
+    from infrastructure.audit_logger import get_audit_logger, verify_chain, AuditChainVerificationError
+    try:
+        audit_logger = get_audit_logger(clean_tenant)
+        audit_entry = {
+            "event": "evidence_integrity_verified",
+            "evidence_id": evidence_id,
+            "case_id": ev.case_id,
+            "tenant_id": clean_tenant,
+            "verifier": str(verifier_id),
+            "verifier_role": user_role,
+            "status": status.value,
+            "digest_match": digest_match,
+            "expected_sha256": expected_sha256,
+            "calculated_sha256": calculated_sha256,
+            "timestamp_status": timestamp_status,
+            "failure_reason": failure_reason,
+            "timestamp": verified_at
+        }
+        audit_logger.info(audit_entry)
+    except Exception as audit_err:
+        logger.error(f"CRITICAL: Failed to write durable audit log for evidence verification: {audit_err}", exc_info=True)
+        # Security Policy: Never claim successful verification if audit persistence fails!
+        raise HTTPException(
+            status_code=500,
+            detail="Critical audit integrity failure: verification audit record could not be written."
+        )
+
+    # 9. Cryptographic Audit Chain Verification
+    # A successful write/append is NOT verification. We explicitly verify the entire hash chain.
+    audit_chain_status = "NOT_CHECKED"
+    try:
+        chain_res = verify_chain(clean_tenant)
+        if chain_res.get("entries_verified", 0) == 0:
+            audit_chain_status = "NOT_PRESENT"
+        else:
+            audit_chain_status = "VERIFIED"
+    except AuditChainVerificationError as chain_err:
+        logger.error("Cryptographic audit chain verification FAILED for tenant %s: %s", clean_tenant, chain_err)
+        audit_chain_status = "FAILED"
+    except Exception as chain_exc:
+        logger.warning("Audit chain verification encountered operational error for tenant %s: %s", clean_tenant, chain_exc)
+        audit_chain_status = "ERROR"
+
+    # 9. Update Custody Log & Metadata with Atomic Concurrency Protection
+    with _verification_lock:
+        try:
+            ev.custody_log.append(CustodyLogEntry(
+                actor=str(verifier_id),
+                action="integrity_verified",
+                notes=f"Evidence verification result: {status.value} (digest_match={digest_match}, timestamp={timestamp_status})"
+            ))
+            if not ev.metadata:
+                ev.metadata = {}
+            ev.metadata["last_verification"] = {
+                "status": status.value,
+                "digest_match": digest_match,
+                "expected_sha256": expected_sha256,
+                "calculated_sha256": calculated_sha256,
+                "timestamp_status": timestamp_status,
+                "audit_chain_status": audit_chain_status,
+                "verified_by": str(verifier_id),
+                "verified_at": verified_at,
+                "failure_reason": failure_reason
+            }
+
+            # Persist to local metadata.json if directory exists
+            repo_base = Path(REPOSITORY_DIR) / ev.case_id / ev.evidence_id
+            meta_file = repo_base / "metadata.json"
+            if repo_base.exists():
+                with open(meta_file, "w", encoding="utf-8") as mf:
+                    import json
+                    json.dump(ev.model_dump(mode="json"), mf, indent=2)
+
+            # Update Postgres metadata if reachable
+            from infrastructure.repository.evidence_store import _should_attempt_postgres
+            if _should_attempt_postgres():
+                try:
+                    import psycopg2
+                    from config.settings import settings
+                    conn = psycopg2.connect(
+                        host=settings.postgres_host,
+                        port=settings.postgres_port,
+                        database=settings.postgres_db,
+                        user=settings.postgres_user,
+                        password=settings.postgres_password,
+                        connect_timeout=1
+                    )
+                    cur = conn.cursor()
+                    import json
+                    cur.execute(
+                        "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
+                        (json.dumps(ev.metadata, default=str), ev.evidence_id)
+                    )
+                    conn.commit()
+                    conn.close()
+                except Exception as db_err:
+                    logger.debug(f"Postgres verification metadata update skipped: {db_err}")
+        except Exception as persist_err:
+            logger.warning(f"Failed to persist verification metadata: {persist_err}")
+
+    return EvidenceVerificationResponse(
+        evidence_id=evidence_id,
+        case_id=ev.case_id,
+        tenant_id=clean_tenant,
+        status=status,
+        digest_match=digest_match,
+        expected_sha256=expected_sha256,
+        calculated_sha256=calculated_sha256,
+        timestamp_status=timestamp_status,
+        timestamp_details=ts_details,
+        audit_chain_status=audit_chain_status,
+        verified_at=verified_at,
+        verified_by=str(verifier_id),
+        failure_reason=failure_reason
+    )
+

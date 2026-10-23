@@ -98,7 +98,7 @@ class Evidence(BaseModel):
     The one object that flows through every sub-component of the Infrastructure Layer.
     Fields are grouped by which person's stage fills them in -- see the comments.
     """
-    evidence_id:      str           = Field(default_factory=lambda: f"e-{uuid.uuid4().hex[:8]}")
+    evidence_id:      str           = Field(default_factory=lambda: str(uuid.uuid4()))
     case_id:          str
     tenant_id:        Optional[str] = None
     filename:         str

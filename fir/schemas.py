@@ -44,6 +44,7 @@ class FIRFinding(BaseModel):
     layer: str               # which analysis engine produced this
     source_artifact_id: Optional[str] = None
     finding_fingerprint: Optional[str] = None
+    outbox_event_id: Optional[str] = None
 
     @field_validator("case_id", "fact", "tenant_id", mode="before")
     @classmethod

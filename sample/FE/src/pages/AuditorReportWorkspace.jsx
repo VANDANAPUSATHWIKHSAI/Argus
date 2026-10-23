@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
@@ -8,10 +7,9 @@ import {
   fetchFindings, 
   fetchEvidenceForCase, 
   fetchCaseSummary, 
-  queryCase, 
-  DEFAULT_TENANT_ID, 
-  API_BASE_URL 
+  queryCase 
 } from '../js/api';
+import { getActiveCaseId, getActiveCaseName, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
 const MITRE_TECHNIQUE_NAMES = {
@@ -42,12 +40,10 @@ const AUDIT_REASONING_STEPS = [
 ];
 
 export default function AuditorReportWorkspace() {
-  const navigate = useNavigate();
-  
   let user = null;
   try {
     user = JSON.parse(localStorage.getItem('argus_user'));
-  } catch (e) {}
+  } catch (_e) {}
 
   const isAuditor = user?.role === 'auditor';
 
@@ -64,12 +60,19 @@ export default function AuditorReportWorkspace() {
     localStorage.setItem('argus_theme', nextTheme);
   };
 
-  // Active Case state
-  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || 'ARGUS_956');
-  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'ARGUS_956');
-  const [casesList, setCasesList] = useState([]);
-  const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
+  // Active Case state - initialized strictly from canonical storage/state, never hardcoding ARGUS_956
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
+  const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
+  const [_casesList, setCasesList] = useState([]);
   const [_loadingCaseData, setLoadingCaseData] = useState(false);
+
+  // Synchronize active case across tabs and components
+  useEffect(() => {
+    return subscribeToActiveCase(({ caseId, caseName }) => {
+      setActiveCaseId(caseId);
+      setActiveCaseName(caseName || caseId);
+    });
+  }, []);
 
   // Case Data
   const [findings, setFindings] = useState([]);
@@ -91,7 +94,7 @@ export default function AuditorReportWorkspace() {
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  // 1. Load cases list on mount
+  // 1. Load cases list on mount and validate active case against authorized backend cases
   useEffect(() => {
     async function loadCases() {
       try {
@@ -99,24 +102,32 @@ export default function AuditorReportWorkspace() {
         const list = res.data || [];
         setCasesList(list);
         if (list.length > 0) {
-          const stored = localStorage.getItem('active_case_id');
-          const validCases = list.filter(c => c.case_id !== '00000000-0000-0000-0000-000000000001');
+          const stored = getActiveCaseId();
+          const validCases = list.filter(c => c.case_id && c.case_id !== '00000000-0000-0000-0000-000000000001');
+          
+          // Validate stored case against authorized backend cases
           const matched = (stored && stored !== '00000000-0000-0000-0000-000000000001')
             ? validCases.find(c => c.case_id === stored)
             : null;
           
           const presentCase = matched 
             || validCases.find(c => c.status === 'open' || c.is_active)
-            || validCases.find(c => c.case_id === 'ARGUS_956')
             || validCases[0] 
-            || list[0];
+            || null;
 
           if (presentCase) {
             setActiveCaseId(presentCase.case_id);
             setActiveCaseName(presentCase.name || presentCase.case_id);
-            localStorage.setItem('active_case_id', presentCase.case_id);
-            localStorage.setItem('active_case_name', presentCase.name || presentCase.case_id);
+            setActiveCase(presentCase.case_id, presentCase.name || presentCase.case_id);
+          } else {
+            setActiveCaseId('');
+            setActiveCaseName('');
+            setActiveCase('', '');
           }
+        } else {
+          setActiveCaseId('');
+          setActiveCaseName('');
+          setActiveCase('', '');
         }
       } catch (err) {
         console.error('Failed to load cases:', err);
@@ -892,7 +903,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                   </div>
                   <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    {evidenceFiles.length > 0 ? 'Evidence metadata loaded' : 'No evidence records'}
+                    {evidenceFiles.length > 0 ? 'Evidence metadata loaded (Integrity unverified by server)' : 'No evidence records'}
                   </span>
                 </div>
 
@@ -919,7 +930,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                             {ev.filename || ev.name || 'Artifact File'}
                           </div>
                           <div style={{ fontSize: '11px', fontFamily: 'monospace', color: themeStyles.textMuted }}>
-                            SHA-256: {ev.sha256_hash ? ev.sha256_hash.slice(0, 32) : 'Not available'}...
+                            SHA-256: {ev.sha256_hash ? `${ev.sha256_hash.slice(0, 32)}... (Integrity unverified by server)` : 'Not provided (Unverified)'}
                           </div>
                         </div>
                       </div>
@@ -1060,12 +1071,23 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                     5. MITRE ATT&CK Kill-Chain Mapping ({observedTechniques.length})
                   </h2>
                 </div>
+                <div style={{ fontSize: '11px', color: themeStyles.textMuted, marginBottom: '8px', fontStyle: 'italic' }}>
+                  Note: MITRE ATT&CK technique names are local UI display labels for reference only, not certified forensic conclusions.
+                </div>
                 {observedTechniques.length > 0 ? (
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     {observedTechniques.map(tech => (
                       <div
                         key={tech.id}
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleQuickAction(`Audit MITRE technique ${tech.id} (${tech.name}) observed in this case.`)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            handleQuickAction(`Audit MITRE technique ${tech.id} (${tech.name}) observed in this case.`);
+                          }
+                        }}
                         style={{
                           background: isDark ? 'rgba(234, 179, 8, 0.12)' : '#fffbeb',
                           border: `1px solid ${isDark ? 'rgba(234, 179, 8, 0.25)' : '#fde68a'}`,

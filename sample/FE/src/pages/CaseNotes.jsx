@@ -6,11 +6,12 @@ import NotificationMenu from '../components/NotificationMenu';
 import ProfileModal from '../components/ProfileModal';
 import { fetchWithAuth } from '../js/api';
 import { safeFormatDateTime, formatEvidenceId } from '../js/dateUtils';
+import { getActiveCaseId, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
 const CaseNotes = () => {
   const navigate = useNavigate();
-  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
 
@@ -20,19 +21,10 @@ const CaseNotes = () => {
 
   // Synchronize active case across tabs and components
   useEffect(() => {
-    const handleCaseSync = () => {
-      const storedId = localStorage.getItem('active_case_id');
-      if (storedId && storedId !== activeCaseId) {
-        setActiveCaseId(storedId);
-      }
-    };
-    window.addEventListener('storage', handleCaseSync);
-    window.addEventListener('argus:caseChanged', handleCaseSync);
-    return () => {
-      window.removeEventListener('storage', handleCaseSync);
-      window.removeEventListener('argus:caseChanged', handleCaseSync);
-    };
-  }, [activeCaseId]);
+    return subscribeToActiveCase(({ caseId }) => {
+      setActiveCaseId(caseId);
+    });
+  }, []);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';

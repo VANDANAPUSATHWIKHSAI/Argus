@@ -5,6 +5,7 @@ import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import { fetchFindings } from '../js/api';
 import { formatEvidenceId } from '../js/dateUtils';
+import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
 const SEVERITY_MAP = {
@@ -52,25 +53,15 @@ const ConfidenceBar = ({ value }) => {
 
 const Findings = () => {
   const navigate = useNavigate();
-  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
-  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'Current Case');
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
+  const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
 
   useEffect(() => {
-    const handleCaseSync = () => {
-      const storedId = localStorage.getItem('active_case_id');
-      const storedName = localStorage.getItem('active_case_name');
-      if (storedId && storedId !== activeCaseId) {
-        setActiveCaseId(storedId);
-        setActiveCaseName(storedName || storedId);
-      }
-    };
-    window.addEventListener('storage', handleCaseSync);
-    window.addEventListener('argus:caseChanged', handleCaseSync);
-    return () => {
-      window.removeEventListener('storage', handleCaseSync);
-      window.removeEventListener('argus:caseChanged', handleCaseSync);
-    };
-  }, [activeCaseId]);
+    return subscribeToActiveCase(({ caseId, caseName }) => {
+      setActiveCaseId(caseId);
+      setActiveCaseName(caseName);
+    });
+  }, []);
 
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;

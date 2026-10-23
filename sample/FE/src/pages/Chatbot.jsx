@@ -34,90 +34,13 @@ const MITRE_TECHNIQUE_NAMES = {
   'T1027': 'Obfuscated Files or Information'
 };
 
-const generateGroundedForensicResponse = (query, caseId, caseName, findings = [], evidence = []) => {
-  const lowerQ = query.toLowerCase();
-  const criticalCount = findings.filter(f => f.severity === 'critical' || f.severity === 'high').length;
-  const evFileNames = evidence.map(e => e.filename || e.name || 'evidence_artifact').join(', ');
+const buildUnavailableResponse = (caseId, reason = 'The case-query service did not return a usable response.') => `## Grounded response unavailable
 
-  // 1. Evidence File Query
-  if (lowerQ.includes('evidence file') || lowerQ.includes('.xlsx') || lowerQ.includes('artifact') || evidence.some(e => e.filename && lowerQ.includes(e.filename.toLowerCase()))) {
-    const targetFile = evidence.find(e => e.filename && lowerQ.includes(e.filename.toLowerCase())) || evidence[0] || { filename: 'Uploaded Artifact' };
-    return `### Forensic Artifact Deep-Dive: \`${targetFile.filename || 'Case Evidence'}\`
-**Case Context:** ${caseId} | **Integrity Status:** Verified (SHA-256 Validated)
+**Case:** ${caseId || 'Not selected'}
 
-#### Ingestion & Telemetry Breakdown:
-- **Evidence Name:** \`${targetFile.filename || 'Artifact'}\`
-- **Associated Case:** **${caseId}** (${caseName || 'Active Case'})
-- **Correlated Findings:** ${findings.length} findings linked to this artifact
-- **SHA-256 Checksum:** \`${targetFile.sha256_hash || '7d2a8b9f...verified'}\`
+${reason}
 
-#### Key Forensic Observations:
-- **Inbound Delivery Vector:** Artifact was identified as an inbound compressed workbook archive containing embedded VBA macro code streams.
-- **Payload Extraction & Execution:** Macro auto-execution trigger (\`Workbook_Open / Auto_Open\`) initiates shellcode unpacking into memory space.
-- **Persistence & C2 Telemetry:** Network telemetry correlates this execution with outbound web beaconing and scheduled job staging.
-
-#### Recommended Next Steps:
-1. Isolate the affected host endpoint from enterprise network segments.
-2. Review memory captures for hollowed processes or injected DLL threads.
-3. Save this analysis to **Case Notes** or export directly to the **Report Builder**.`;
-  }
-
-  // 2. MITRE Technique Query
-  const mitreMatch = query.match(/T\d{4}(?:\.\d{3})?/i);
-  if (mitreMatch || lowerQ.includes('mitre') || lowerQ.includes('technique')) {
-    const techId = mitreMatch ? mitreMatch[0].toUpperCase() : 'T1566.001';
-    const techName = MITRE_TECHNIQUE_NAMES[techId] || 'Adversary Technique';
-    const matchingFindings = findings.filter(f => (f.mitre_mapping || '').toUpperCase().includes(techId));
-
-    return `### MITRE ATT&CK Forensic Breakdown: \`${techId}: ${techName}\`
-**Case Context:** ${caseId} | **Observed Instances:** ${matchingFindings.length || 1}
-
-#### Kill-Chain Stage & Adversary Behavior:
-- **Technique ID:** **${techId}** (${techName})
-- **Telemetry Correlated:** Observed across evidence artifacts including \`${evFileNames || 'case evidence'}\`.
-- **Severity Impact:** ${matchingFindings.length > 0 ? (matchingFindings[0].severity || 'High').toUpperCase() : 'CRITICAL'}
-
-#### Correlated Telemetry & Findings:
-${matchingFindings.length > 0 
-  ? matchingFindings.map(f => `- **${f.finding_id || 'Observed Finding'}**: ${f.sanitized_fact || f.fact}`).join('\n')
-  : `- Telemetry analysis confirms adversary activity consistent with **${techId} (${techName})** in case artifacts.`}
-
-#### Recommended Countermeasures:
-1. Apply endpoint detection rules to restrict execution of scripts from user-writable directories.
-2. Cross-reference destination IP addresses in network logs and block identified C2 communication channels.
-3. Add this finding to the investigation report for executive briefing.`;
-  }
-
-  // 3. Finding-specific query
-  if (lowerQ.includes('finding') || lowerQ.includes('fact')) {
-    return `### Triaged Finding Forensic Assessment
-**Case Context:** ${caseId} | **Confidence:** 94% | **Layer:** Multi-Agent Correlation
-
-#### Analytical Deep-Dive:
-- **Subject Query:** "${query}"
-- **Triaged Artifacts:** Evaluated against ${evidence.length} evidence sources and ${findings.length} registered FIR findings.
-- **Forensic Assessment:** High-confidence malicious indicator consistent with deliberate evasion and unauthorized persistence.
-
-#### Recommended Next Actions:
-1. Confirm finding in the case triage ledger.
-2. Deploy host isolation policy and revoke associated active session tokens.
-3. Export this finding to **Case Notes** or the **Report Builder**.`;
-  }
-
-  // 4. General Forensic Assessment
-  return `### Forensic Assessment for Case ${caseId} (${caseName || 'Investigation'})
-*(Deterministic analysis over ${findings.length} triaged findings and ${evidence.length} evidence artifacts)*
-
-#### Key Findings Summary:
-- **Total Triaged Findings:** **${findings.length}** (${criticalCount} Critical/High severity).
-- **Evidence Files Ingested:** **${evidence.length}** (\`${evFileNames || 'None'}\`).
-- **Primary Attack Vectors:** Spearphishing archive delivery, macro auto-execution, and outbound command-and-control beaconing.
-- **MITRE Coverage:** Tactics observed include Initial Access, Execution, Persistence, and Command & Control.
-
-#### Recommended Next Steps:
-1. Inspect individual evidence files and triaged findings in the right-hand **Case Artifacts** drawer.
-2. Click **Save to Notes** or **Add to Report** on any finding to document the forensic timeline.`;
-};
+ARGUS has not generated a forensic conclusion for this request. Check the case selection, API connection, and backend logs, then retry. Any claim about evidence, hashes, malware behavior, MITRE techniques, or chain of custody must come from retrieved case records—not a UI fallback.`; 
 
 export default function Chatbot() {
   const navigate = useNavigate();
@@ -169,13 +92,14 @@ export default function Chatbot() {
       id: 'welcome',
       sender: 'assistant',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      text: `Hello Analyst! I am your **ARGUS AI Forensic Assistant**, grounded in verified FIR evidence artifacts, Neo4j graph correlations, and multi-agent forensic reasoning.
+      text: `Hello Analyst! I am your **ARGUS AI Forensic Assistant**. I answer using case records returned by the ARGUS backend and show uncertainty when the available records do not support a conclusion.
 
 ### Capabilities:
 - **Evidence Cross-Correlation**: Ask questions across disk, memory, network, and registry logs.
 - **MITRE ATT&CK Mapping**: Map adversary behavior to tactics, techniques, and procedures.
 - **Threat Actor Profiling & IOC Extraction**: Isolate indicators, command lines, and C2 beacons.
-- **Containment & Remediation**: Generate structured incident response runbooks.
+- **Evidence-grounded explanations**: Explain retrieved findings and cite their record identifiers.
+- **Report drafting**: Prepare text for analyst review; this chat does not approve or certify a case.
 
 Select a quick prompt below or type your forensic query to begin querying Case **${activeCaseId}**.`
     }
@@ -285,14 +209,8 @@ Select a quick prompt below or type your forensic query to begin querying Case *
       }));
     }
 
-    // Contextual fallback techniques when findings are being analyzed
-    return [
-      { id: 'T1566.001', name: 'Spearphishing Attachment', count: 1 },
-      { id: 'T1059.005', name: 'VBA Macro Execution', count: 1 },
-      { id: 'T1071.001', name: 'Web C2 Protocols', count: 1 },
-      { id: 'T1053.005', name: 'Scheduled Task Persistence', count: 1 },
-      { id: 'T1204.002', name: 'User Execution: Malicious File', count: 1 }
-    ];
+    // Never display inferred techniques when no finding actually maps to one.
+    return [];
   }, [caseFindings]);
 
   // Submit Query
@@ -330,9 +248,9 @@ Select a quick prompt below or type your forensic query to begin querying Case *
       const res = await queryCase(activeCaseId, rawQuery);
       clearInterval(stepInterval);
 
-      let replyText = res.response;
+      let replyText = res?.response;
       if (!replyText || replyText.includes('[SYSTEM NOTICE: Local Ollama LLM service is offline') || replyText.includes('No evidence findings recorded')) {
-        replyText = generateGroundedForensicResponse(rawQuery, activeCaseId, activeCaseName, caseFindings, caseEvidence);
+        replyText = buildUnavailableResponse(activeCaseId, 'No grounded answer was returned by the backend for this query.');
       }
 
       const assistantMessage = {
@@ -348,7 +266,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
       clearInterval(stepInterval);
       console.error('Error querying assistant:', err);
 
-      const fallbackResponse = generateGroundedForensicResponse(rawQuery, activeCaseId, activeCaseName, caseFindings, caseEvidence);
+      const fallbackResponse = buildUnavailableResponse(activeCaseId, 'The backend query failed. No fallback forensic narrative was generated.');
 
       const assistantMessage = {
         id: (Date.now() + 1).toString(),
@@ -543,7 +461,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
             {data.claims && Array.isArray(data.claims) && data.claims.length > 0 && (
               <div>
                 <div style={{ fontSize: '11px', fontWeight: 700, color: '#10b981', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.5px' }}>
-                  Verified Forensic Claims & Citations
+                  Claims Returned by Backend
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {data.claims.map((c, cIdx) => (

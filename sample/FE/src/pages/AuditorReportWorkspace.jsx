@@ -299,7 +299,7 @@ No hash match, custody event, signature, MITRE mapping, compliance verdict, or f
   // Send artifact audit to chatbot
   const handleAuditArtifact = (artifact) => {
     const filename = artifact.filename || artifact.name || 'evidence_artifact';
-    const hash = artifact.sha256_hash || 'SHA-256 Checksum';
+    const hash = artifact.sha256_hash || 'not available';
     const prompt = `Audit cryptographic integrity and custody continuity for evidence file "${filename}" (SHA-256: ${hash}).`;
     handleSendQuery(prompt);
   };
@@ -327,9 +327,9 @@ No hash match, custody event, signature, MITRE mapping, compliance verdict, or f
       }));
       setCustomAlert({
         isOpen: true,
-        title: 'Report Certified',
-        message: `Case ${activeCaseId} has been cryptographically certified by ${user?.name || 'Auditor'}. Chain of custody and report findings are locked and attested.`,
-        type: 'success'
+        title: 'Review Marker Saved',
+        message: `A local review marker was saved for case ${activeCaseId}. This does not certify evidence integrity, lock the case, or create a cryptographic attestation.`,
+        type: 'info'
       });
     }
   };
@@ -341,22 +341,22 @@ No hash match, custody event, signature, MITRE mapping, compliance verdict, or f
 
   // Export Attestation to clipboard
   const handleExportAttestation = () => {
-    const attestation = `=== ARGUS FORENSIC AUDIT ATTESTATION ===
+    const attestation = `=== ARGUS AUDIT REVIEW NOTE (NOT A CRYPTOGRAPHIC ATTESTATION) ===
 Case ID: ${activeCaseId}
 Case Name: ${activeCaseName}
 Auditor: ${user?.name || 'Auditor'} (${user?.role || 'Lead Auditor'})
-Certification Status: ${isCertified ? 'CERTIFIED COMPLIANT' : 'REVIEW COMPLETED'}
+Local Review Marker: ${isCertified ? 'MARKED BY USER — NOT SERVER-VERIFIED' : 'NOT MARKED'}
 Timestamp: ${certificationTimestamp || new Date().toLocaleString()}
-Evidence Files Audited: ${evidenceFiles.length || 1}
-Triaged Findings Audited: ${findings.length || 5}
-Admissibility: ISO/IEC 27037 Verified
-Hash Ledger: SHA-256 Preserved
+Evidence Records Loaded: ${evidenceFiles.length}
+Finding Records Loaded: ${findings.length}
+Admissibility: NOT ASSESSED BY THIS LOCAL REVIEW MARKER
+Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
 ========================================`;
     navigator.clipboard.writeText(attestation);
     setCustomAlert({
       isOpen: true,
       title: 'Attestation Copied',
-      message: 'Official Auditor Attestation has been copied to your clipboard.',
+      message: 'Review note copied. It is explicitly not a cryptographic or legal attestation.',
       type: 'success'
     });
   };
@@ -1231,7 +1231,7 @@ Hash Ledger: SHA-256 Preserved
                     fontWeight: 600,
                     cursor: 'pointer'
                   }}
-                  title="Copy formatted audit attestation"
+                  title="Copy local review note (not a cryptographic attestation)"
                 >
                   Export Attestation
                 </button>

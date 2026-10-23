@@ -244,17 +244,46 @@ input.chatbot-input-field[type="text"]:focus {
   box-shadow: none !important;
 }
 
-/* ── APPLICATION SHELL GEOMETRY ── */
+/* ── APPLICATION SHELL & CANVASES WITH FORENSIC CYBER GRID ── */
+body,
 #app-shell { 
   display: flex; 
   min-height: 100vh; 
   width: 100vw; 
   background-color: var(--glass-dash-bg) !important; 
+  background-image: 
+    radial-gradient(circle at 12% -5%, rgba(255, 255, 255, 0.75) 0%, transparent 45%),
+    radial-gradient(circle at 88% 105%, rgba(255, 255, 255, 0.6) 0%, transparent 40%),
+    linear-gradient(rgba(15, 23, 42, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.08) 1px, transparent 1px) !important;
+  background-size: 
+    100% 100%,
+    100% 100%,
+    48px 48px,
+    48px 48px !important;
+  background-attachment: fixed !important;
   color: var(--glass-dash-text-main);
   position: relative;
   overflow-x: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+[data-theme="dark"] body,
+[data-theme="dark"] #app-shell {
+  background-color: var(--glass-dash-bg) !important;
+  background-image: 
+    radial-gradient(circle at 12% -5%, rgba(255, 255, 255, 0.035) 0%, transparent 45%),
+    radial-gradient(circle at 88% 105%, rgba(255, 255, 255, 0.025) 0%, transparent 40%),
+    linear-gradient(rgba(255, 255, 255, 0.065) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.065) 1px, transparent 1px) !important;
+  background-size: 
+    100% 100%,
+    100% 100%,
+    48px 48px,
+    48px 48px !important;
+  background-attachment: fixed !important;
+}
+
 
 /* ── MAIN CONTENT WORKSPACE ── */
 .main-content {

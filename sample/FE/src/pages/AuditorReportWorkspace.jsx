@@ -204,125 +204,26 @@ export default function AuditorReportWorkspace() {
         sender: 'assistant',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         text: `### 🛡️ AI Forensic Audit Copilot Ready
-Welcome, **${user?.name || roleTitle}**. I am grounded in deterministic evidence and findings for case **${caseId}** (${caseName || 'Active Case'}).
+Welcome, **${user?.name || roleTitle}**. I can help inspect records returned by ARGUS for case **${caseId}** (${caseName || 'Active Case'}). The backend must supply evidence for any audit conclusion.
 
 #### Active Audit Scope:
-- **Evidence Ledgers:** Cryptographic SHA-256 hashes loaded and verified.
+- **Evidence Ledgers:** Evidence metadata loaded where available; integrity status is shown only when returned by the verification service.
 - **Triaged Findings:** Grounded against multi-agent correlation telemetry.
-- **Compliance Status:** ISO/IEC 27037 & NIST SP 800-86 admissibility verification enabled.
+- **Compliance Status:** Review supporting records before making any compliance or admissibility determination.
 
 You can click any **"Verify with AI"** or **"Audit Artifact"** button in the report preview on the left, or use the quick audit actions below to cross-examine claims, verify integrity, or check MITRE techniques.`
       }
     ]);
   };
 
-  // Generate grounded audit response
-  const generateGroundedAuditResponse = (query, currentFindings, currentEvidence) => {
-    const lowerQ = query.toLowerCase();
-    const evNames = currentEvidence.map(e => e.filename || e.name).join(', ') || 'elms_archive_data (1).xlsx';
-    const primaryHash = currentEvidence[0]?.sha256_hash || '7d2a8b9f4e1c6b3a0d5f8e2c4b7a1f9e8d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a';
+  // Fail closed: never synthesize audit facts when the backend is unavailable.
+  const buildAuditUnavailableResponse = (caseId, reason = 'The case-query service did not return a usable response.') => `## Audit response unavailable
 
-    if (lowerQ.includes('hash') || lowerQ.includes('sha-256') || lowerQ.includes('sha256') || lowerQ.includes('integrity')) {
-      return `### 🔍 Cryptographic Evidence Integrity Audit
-**Case:** \`${activeCaseId}\` | **Standard:** ISO/IEC 27037 Digital Evidence Admissibility
+**Case:** ${caseId || 'Not selected'}
 
-#### Cryptographic Hash Verification:
-- **Artifact:** \`${evNames}\`
-- **Algorithm:** SHA-256
-- **Recorded Hash:** \`${primaryHash}\`
-- **Current Computed Checksum:** \`${primaryHash}\`
-- **Ledger Verification Status:** ✅ **EXACT MATCH (100% Integrity Verified)**
-- **HMAC Signature:** \`VERIFIED - BLOCKCHAIN NOTARIZED\`
+${reason}
 
-#### Chain of Custody Assessment:
-1. **Acquisition:** Bit-stream physical preservation verified.
-2. **Custody Continuity:** No hash drift or modification detected between ingest and correlation.
-3. **Court Admissibility:** Admissible under Federal Rules of Evidence Rule 902(14) (Certified Data from Electronic Devices).`;
-    }
-
-    if (lowerQ.includes('chain of custody') || lowerQ.includes('custody')) {
-      return `### 📋 Chain of Custody Audit Log
-**Case Reference:** \`${activeCaseId}\` | **Lead Investigator:** Sathwik (Analyst)
-
-#### Evidence Custody Lifecycle:
-| Timestamp | Action | Handler | Artifact / Hash | Verification |
-| :--- | :--- | :--- | :--- | :--- |
-| **2026-10-21 09:15:00 IST** | Evidence Upload | sathwik (Analyst) | \`${evNames}\` | SHA-256 Validated |
-| **2026-10-21 09:15:42 IST** | Agent 1 Extraction | Evidence Agent | Extracted Macro Payload | Telemetry Signed |
-| **2026-10-21 09:16:10 IST** | Agent 2 Correlation | Correlation Agent | 5 Triaged Findings | Graph Notarized |
-| **2026-10-21 14:30:00 IST** | Audit Review | ${user?.name || 'Auditor'} | Full Report Review | In Progress |
-
-**Audit Conclusion:** Chain of custody exhibits zero gaps. All artifact access events are cryptographically recorded in the immutable audit ledger.`;
-    }
-
-    if (lowerQ.includes('mitre') || lowerQ.includes('technique') || lowerQ.includes('t1566')) {
-      return `### 🎯 MITRE ATT&CK Kill-Chain Audit
-**Case:** \`${activeCaseId}\` | **Framework:** MITRE ATT&CK v14.1 Enterprise
-
-#### Mapped Techniques Cross-Examination:
-1. **T1566.001 - Spearphishing Attachment (Initial Access)**
-   - *Evidence Grounding:* Inbound email artifact containing \`${evNames}\`.
-   - *Audit Status:* **VERIFIED** — Malicious macro embedded in workbook archive.
-2. **T1204.002 - Malicious File Execution (Execution)**
-   - *Evidence Grounding:* Macro execution trigger recorded on endpoint WS-FIN-042.
-   - *Audit Status:* **VERIFIED** — Auto-open subroutine verified.
-3. **T1059.005 - Visual Basic for Applications (Execution)**
-   - *Evidence Grounding:* Obfuscated VBA script unpacking payload into memory.
-   - *Audit Status:* **VERIFIED** — Script signatures match known dropper variants.
-4. **T1053.005 - Scheduled Task Persistence (Persistence)**
-   - *Evidence Grounding:* Registry key RunOnce modification recorded in HKCU hive.
-   - *Audit Status:* **VERIFIED** — Persistence mechanism confirmed active.
-5. **T1071.001 - Web Protocols (Command and Control)**
-   - *Evidence Grounding:* Outbound HTTP POST telemetry to C2 IP 185.220.101.5.
-   - *Audit Status:* **VERIFIED** — Beaconing interval consistent with adversary C2.
-
-**Audit Conclusion:** All 5 MITRE techniques are backed by hard deterministic telemetry in the evidence files.`;
-    }
-
-    if (lowerQ.includes('finding') || lowerQ.includes('claim') || lowerQ.includes('contradiction')) {
-      return `### 🔎 Triaged Findings Cross-Examination Audit
-**Case:** \`${activeCaseId}\` | **Total Findings Audited:** ${currentFindings.length || 5}
-
-#### Consistency & Contradiction Analysis:
-- **Finding Corroboration:** High (Multi-Agent Agreement: 94.6%).
-- **Contradiction Rate:** 0.0% — No conflicting timestamps or conflicting IOC declarations detected across agents.
-- **Source Grounding:** 100% of claims are anchored to verified artifact chunks in \`${evNames}\`.
-- **Severity Evaluation:**
-  - Critical/High findings represent direct threat execution and C2 beaconing.
-  - Medium findings represent autostart registry persistence.
-
-**Recommendation for Auditor:** Findings meet the evidentiary standard for formal executive sign-off and regulatory disclosure.`;
-    }
-
-    if (lowerQ.includes('attestation') || lowerQ.includes('compliance') || lowerQ.includes('summary')) {
-      return `### 📜 Formal Forensic Audit Attestation Summary
-**Case Identifier:** \`${activeCaseId}\`
-**Auditor:** ${user?.name || 'Auditor'} (${user?.role || 'Lead Auditor'})
-**Date of Audit:** ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-
-#### Compliance Audit Checklist:
-- [x] **Chain of Custody Integrity:** ISO/IEC 27037 Compliant (SHA-256 match).
-- [x] **Forensic Grounding:** All 5 claims validated against bit-stream preserved evidence.
-- [x] **MITRE ATT&CK Attribution:** Corroborated with multi-agent telemetry.
-- [x] **Privileged Access Logs:** Analyst actions recorded in immutable audit logs.
-- [x] **AI Hallucination Guardrails:** DeBERTa-v3 semantic grounding gate passed.
-
-**Overall Audit Verdict:** **CERTIFIED & COMPLIANT**. The report is suitable for legal and executive disclosure.`;
-    }
-
-    // Default Fallback
-    return `### 🛡️ AI Forensic Audit Assessment
-**Query:** "${query}"
-**Case Reference:** \`${activeCaseId}\` | **Evidence Context:** \`${evNames}\`
-
-#### Audit Evaluation:
-- **Evidence Telemetry:** The investigation evidence has been subjected to deterministic parsing and multi-agent correlation.
-- **Finding Validity:** 5 distinct findings were recorded with an average confidence rating of 92.4%.
-- **Integrity Status:** Artifact SHA-256 checksums are intact and match ingest records.
-- **Admissibility:** Telemetry supports all conclusions presented in the Report Preview on the left.
-
-You can select a quick action above or click **"Verify Finding"** on any finding in the report to inspect specific claims.`;
-  };
+No hash match, custody event, signature, MITRE mapping, compliance verdict, or finding verification has been inferred by the UI. Retry after checking the backend. Formal verification must be based on persisted audit records and server-side checks.`;
 
   // Submit Chat Query
   const handleSendQuery = async (queryTextOverride = null) => {
@@ -352,7 +253,7 @@ You can select a quick action above or click **"Verify Finding"** on any finding
 
       let replyText = res?.response;
       if (!replyText || replyText.includes('[SYSTEM NOTICE: Local Ollama LLM service is offline') || replyText.includes('No evidence findings recorded')) {
-        replyText = generateGroundedAuditResponse(rawQuery, findings, evidenceFiles);
+        replyText = buildAuditUnavailableResponse(activeCaseId, 'No grounded audit answer was returned by the backend.');
       }
 
       const assistantMessage = {
@@ -365,9 +266,9 @@ You can select a quick action above or click **"Verify Finding"** on any finding
       setChatMessages(prev => [...prev, assistantMessage]);
     } catch (err) {
       clearInterval(stepInterval);
-      console.error('Audit query error, using grounded fallback:', err);
+      console.error('Audit query failed:', err);
 
-      const fallbackReply = generateGroundedAuditResponse(rawQuery, findings, evidenceFiles);
+      const fallbackReply = buildAuditUnavailableResponse(activeCaseId, 'The backend query failed. No audit verdict was generated.');
       const assistantMessage = {
         id: (Date.now() + 1).toString(),
         sender: 'assistant',
@@ -964,19 +865,12 @@ Hash Ledger: SHA-256 Preserved
                   </div>
                   <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    SHA-256 Validated
+                    {evidenceFiles.length > 0 ? 'Evidence metadata loaded' : 'No evidence records'}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {(evidenceFiles.length > 0 ? evidenceFiles : [
-                    { 
-                      filename: 'elms_archive_data (1).xlsx', 
-                      sha256_hash: '7d2a8b9f4e1c6b3a0d5f8e2c4b7a1f9e8d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a',
-                      file_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                      size: '48.2 KB'
-                    }
-                  ]).map((ev, idx) => (
+                  {evidenceFiles.map((ev, idx) => (
                     <div 
                       key={idx}
                       style={{
@@ -998,7 +892,7 @@ Hash Ledger: SHA-256 Preserved
                             {ev.filename || ev.name || 'Artifact File'}
                           </div>
                           <div style={{ fontSize: '11px', fontFamily: 'monospace', color: themeStyles.textMuted }}>
-                            SHA-256: {(ev.sha256_hash || '7d2a8b9f4e1c...verified').slice(0, 32)}...
+                            SHA-256: {ev.sha256_hash ? ev.sha256_hash.slice(0, 32) : 'Not available'}...
                           </div>
                         </div>
                       </div>

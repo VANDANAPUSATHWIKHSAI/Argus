@@ -88,16 +88,16 @@ function App() {
         <Route path="/upload.html" element={<Navigate to="/upload" replace />} />
         <Route path="/sanitized.html" element={<Navigate to="/sanitized" replace />} />
 
-        {/* Internal Design Exploration Suite (Restricted to authenticated staff) */}
-        <Route path="/templates" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TemplateHub /></ProtectedRoute>} />
-        <Route path="/templates/glass-dashboard" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><GlassDashboardTemplate /></ProtectedRoute>} />
-        <Route path="/templates/technical-minimal" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TechnicalMinimalTemplate /></ProtectedRoute>} />
-        <Route path="/templates/modern-workspace" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><ModernWorkspaceTemplate /></ProtectedRoute>} />
-        <Route path="/templates/technical-minimal-compact" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TechnicalMinimalCompactTemplate /></ProtectedRoute>} />
-        <Route path="/templates/technical-minimal-advanced" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TechnicalMinimalAdvancedTemplate /></ProtectedRoute>} />
-        <Route path="/templates/modern-workspace-detailed" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><ModernWorkspaceDetailedTemplate /></ProtectedRoute>} />
-        <Route path="/templates/modern-workspace-split" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><ModernWorkspaceSplitTemplate /></ProtectedRoute>} />
-        <Route path="/templates/v2-technical" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TechnicalWorkstationV2 /></ProtectedRoute>} />
+        {/* ARGUS Design Exploration Suite & Template Previews */}
+        <Route path="/templates" element={<TemplateHub />} />
+        <Route path="/templates/glass-dashboard" element={<GlassDashboardTemplate />} />
+        <Route path="/templates/technical-minimal" element={<TechnicalMinimalTemplate />} />
+        <Route path="/templates/modern-workspace" element={<ModernWorkspaceTemplate />} />
+        <Route path="/templates/technical-minimal-compact" element={<TechnicalMinimalCompactTemplate />} />
+        <Route path="/templates/technical-minimal-advanced" element={<TechnicalMinimalAdvancedTemplate />} />
+        <Route path="/templates/modern-workspace-detailed" element={<ModernWorkspaceDetailedTemplate />} />
+        <Route path="/templates/modern-workspace-split" element={<ModernWorkspaceSplitTemplate />} />
+        <Route path="/templates/v2-technical" element={<TechnicalWorkstationV2 />} />
       </Routes>
     </Router>
   );

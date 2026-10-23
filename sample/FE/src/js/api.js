@@ -1,54 +1,73 @@
-import { logout, isTokenExpired, getAuthToken } from './authSession';
+import { logout, isTokenExpired, getAuthToken, getAuthTenantId } from './authSession.js';
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
-export const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID || 'default';
+export const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) || 'http://127.0.0.1:8000';
+export const DEFAULT_TENANT_ID = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_TENANT_ID) || 'default';
+
+export function getActiveTenantId() {
+  return getAuthTenantId() || DEFAULT_TENANT_ID;
+}
 
 // Helper for authenticated requests
 export async function fetchWithAuth(url, options = {}) {
   const token = getAuthToken();
 
-  // Proactive check: if token is expired before making request, log out immediately
-  if (token && isTokenExpired(token)) {
-    logout('session_expired');
-    throw new Error('Session expired. Please log in again.');
+  // Proactive check: if token is missing or expired, fail closed
+  if (!token || isTokenExpired(token)) {
+    if (token) logout('session_expired');
+    throw new Error('Authentication required or session expired. Please log in.');
   }
 
+  const tenantId = getActiveTenantId();
   const headers = {
     'Accept': 'application/json',
-    'X-Tenant-ID': DEFAULT_TENANT_ID,
+    'X-Tenant-ID': tenantId,
+    'Authorization': `Bearer ${token}`,
     ...options.headers,
   };
-  
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
 
   // Only set Content-Type to application/json if it's not a FormData upload
-  if (!(options.body instanceof FormData)) {
+  if (!(options.body instanceof FormData) && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const response = await fetch(`${API_BASE_URL}${url}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${url}`, {
+      ...options,
+      headers,
+    });
+  } catch (netErr) {
+    throw new Error(`Network failure connecting to ARGUS backend: ${netErr.message || netErr}`);
+  }
 
   if (!response.ok) {
     let errorMsg = `HTTP Error ${response.status}`;
     try {
       const errData = await response.json();
       errorMsg = errData.detail || errorMsg;
-    } catch(e) {}
+    } catch(e) {
+      try {
+        const text = await response.text();
+        if (text) errorMsg = text.slice(0, 200);
+      } catch(_) {}
+    }
 
     // Global 401 Unauthorized interceptor: automatically wipe session and redirect to login
     if (response.status === 401) {
       logout('session_expired');
     }
 
-    throw new Error(errorMsg);
+    const err = new Error(errorMsg);
+    err.status = response.status;
+    throw err;
   }
 
-  return response.json();
+  // Handle empty responses (e.g. 204 No Content)
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+  return response.text();
 }
 
 export async function login(userid, password) {
@@ -136,27 +155,13 @@ export async function fetchActivity() {
   return fetchWithAuth('/cases/activity');
 }
 
-export async function fetchAuditorStats(limit = 50) {
-  const token = getAuthToken();
-  const headers = {
-    'Accept': 'application/json',
-    'X-Tenant-ID': DEFAULT_TENANT_ID,
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  const response = await fetch(`${API_BASE_URL}/cases/auditor-stats?limit=${limit}`, { headers });
-  if (!response.ok) {
-    const fallbackRes = await fetch(`${API_BASE_URL}/cases/auditor-stats?limit=${limit}`, {
-      headers: { 'Accept': 'application/json', 'X-Tenant-ID': DEFAULT_TENANT_ID }
-    });
-    if (fallbackRes.ok) return fallbackRes.json();
-  }
-  return response.json();
+export async function fetchEmployees() {
+  return fetchWithAuth('/auth/employees');
 }
 
-
-
+export async function fetchAuditorStats(limit = 50) {
+  return fetchWithAuth(`/cases/auditor-stats?limit=${limit}`);
+}
 
 export async function fetchCaseNotes(caseId) {
   return fetchWithAuth(`/cases/${caseId}/notes`);
@@ -200,27 +205,10 @@ export async function queryCase(caseId, queryText) {
   });
 }
 
-export async function fetchReport(caseId, format = 'html', allowUnreviewed = true) {
-  const token = getAuthToken();
-  const url = `${API_BASE_URL}/reports/${caseId}/report?format=${format}&allow_unreviewed=${allowUnreviewed}`;
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'X-Tenant-ID': DEFAULT_TENANT_ID,
-    }
-  });
-  if (!response.ok) {
-    let errorMsg = `HTTP Error ${response.status}`;
-    try {
-      const errData = await response.json();
-      errorMsg = errData.detail || errorMsg;
-    } catch(e) {}
-    throw new Error(errorMsg);
-  }
-  if (format === 'json') {
-    return response.json();
-  }
-  return response.text();
+export async function fetchReport(caseId, format = 'html', allowUnreviewed = false) {
+  const cleanFormat = encodeURIComponent(format || 'html');
+  const allowFlag = Boolean(allowUnreviewed);
+  return fetchWithAuth(`/reports/${encodeURIComponent(caseId)}/report?format=${cleanFormat}&allow_unreviewed=${allowFlag}`);
 }
 
 export async function closeCase(caseId) {

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { login as apiLogin } from '../js/api';
+import { getAuthUser } from '../js/authSession.js';
 
 const DEV_ACCOUNTS = [
   {
@@ -71,70 +71,26 @@ const DevRoleSwitcher = () => {
   const location = useLocation();
   const [isExpanded, setIsExpanded] = useState(false);
   const [loadingRole, setLoadingRole] = useState(null);
-  const [currentUser, setCurrentUser] = useState(null);
+  const currentUser = getAuthUser();
 
-  // Sync user state on change or storage events
-  useEffect(() => {
-    const syncUser = () => {
-      try {
-        const stored = localStorage.getItem('argus_user');
-        setCurrentUser(stored ? JSON.parse(stored) : null);
-      } catch (e) {
-        setCurrentUser(null);
-      }
-    };
-    syncUser();
-    window.addEventListener('storage', syncUser);
-    return () => window.removeEventListener('storage', syncUser);
-  }, [location.pathname]);
+  // Strictly isolate behind development environment and explicit opt-in flag.
+  // Never bundle or activate in production.
+  const isDevSwitcherEnabled = Boolean(
+    typeof import.meta !== 'undefined' &&
+    import.meta.env &&
+    import.meta.env.DEV &&
+    import.meta.env.VITE_ENABLE_DEV_SWITCHER === 'true'
+  );
+  if (!isDevSwitcherEnabled) {
+    return null;
+  }
 
-  const handleSwitchRole = async (account, targetPath = null) => {
+  const handleSwitchRole = (account, targetPath = null) => {
+    // Never fabricate dev tokens or try guessed passwords.
+    // Cleanly redirect to login page with selected role hint for real authentication.
     setLoadingRole(account.roleKey);
-    let loggedInUser = null;
-    let token = null;
-
-    // Try API login with candidate user IDs and passwords
-    const userIdsToTry = [account.userid, account.roleKey, account.label.toLowerCase().replace(/\s+/g, '_')];
-    const passwordsToTry = ['123', 'password123', 'password', 'sathwik', 'admin'];
-
-    for (const uid of userIdsToTry) {
-      for (const pwd of passwordsToTry) {
-        try {
-          const response = await apiLogin(uid, pwd);
-          if (response && response.token && response.user) {
-            token = response.token;
-            loggedInUser = response.user;
-            break;
-          }
-        } catch (e) {
-          // ignore error and try next
-        }
-      }
-      if (loggedInUser) break;
-    }
-
-    // Fallback for DevRoleSwitcher to guarantee seamless switching even if API is offline or unseeded
-    if (!loggedInUser || !token) {
-      token = 'dev_role_token_' + Date.now();
-      loggedInUser = {
-        id: account.userid,
-        name: account.name,
-        email: `${account.roleKey}@argus.local`,
-        role: account.roleKey
-      };
-    }
-
-    localStorage.setItem('argus_token', token);
-    localStorage.setItem('argus_user', JSON.stringify(loggedInUser));
-    setCurrentUser(loggedInUser);
-
-    const routeToNavigate = targetPath || account.defaultRoute;
-    navigate(routeToNavigate);
-
-    setTimeout(() => {
-      window.dispatchEvent(new Event('storage'));
-    }, 50);
-
+    const dest = targetPath || account.defaultRoute || '/dashboard';
+    navigate(`/login?role=${encodeURIComponent(account.roleKey)}&redirect=${encodeURIComponent(dest)}`);
     setLoadingRole(null);
   };
 
@@ -409,7 +365,7 @@ const DevRoleSwitcher = () => {
               textAlign: 'center'
             }}
           >
-            Password for all dev accounts: <code style={{ color: '#38bdf8' }}>123</code>
+            Development navigation helper. Real backend credentials required.
           </div>
         </div>
       )}

@@ -4,19 +4,27 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import ProfileModal from '../components/ProfileModal';
-import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { fetchWithAuth } from '../js/api';
 import { safeFormatDateTime, formatEvidenceId } from '../js/dateUtils';
+import { getActiveCaseId, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
 const CaseNotes = () => {
   const navigate = useNavigate();
-  const activeCaseId = localStorage.getItem('active_case_id');
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
 
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('argus_theme') || 'dark');
+
+  // Synchronize active case across tabs and components
+  useEffect(() => {
+    return subscribeToActiveCase(({ caseId }) => {
+      setActiveCaseId(caseId);
+    });
+  }, []);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -48,36 +56,29 @@ const CaseNotes = () => {
   const fetchNotes = async () => {
     if (!activeCaseId) return;
     try {
-      const res = await fetch(`${API_BASE_URL}/cases/${activeCaseId}/notes`, {
-        headers: {
-          'X-Tenant-ID': DEFAULT_TENANT_ID,
-          'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
-        }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const serverNotes = data.data || [];
-        const localNotes = JSON.parse(localStorage.getItem(`case_notes_${activeCaseId}`) || '[]');
-        const serverIds = new Set(serverNotes.map(n => n.noteId));
-        const combined = [...localNotes.filter(n => !serverIds.has(n.noteId)), ...serverNotes];
-        setNotes(combined);
-        localStorage.setItem(`seen_notes_${activeCaseId}`, combined.length);
-        
-        const latestUpdate = Math.max(0, ...combined.map(n => {
-          const d = new Date(n.updatedAt || n.createdAt);
-          return isNaN(d.getTime()) ? 0 : d.getTime();
-        }));
-        if (latestUpdate > 0) {
-          localStorage.setItem(`last_seen_update_${activeCaseId}`, latestUpdate);
-        }
-      } else {
-        const localNotes = JSON.parse(localStorage.getItem(`case_notes_${activeCaseId}`) || '[]');
-        if (localNotes.length > 0) setNotes(localNotes);
+      const data = await fetchWithAuth(`/cases/${activeCaseId}/notes`);
+      const serverNotes = (data && data.data) ? data.data : (Array.isArray(data) ? data : []);
+      const localNotes = JSON.parse(localStorage.getItem(`case_notes_${activeCaseId}`) || '[]');
+      const serverIds = new Set(serverNotes.map(n => n.noteId));
+      const unsyncedLocal = localNotes
+        .filter(n => !serverIds.has(n.noteId))
+        .map(n => ({ ...n, syncStatus: n.syncStatus || 'unsynced' }));
+      const combined = [...unsyncedLocal, ...serverNotes];
+      setNotes(combined);
+      localStorage.setItem(`seen_notes_${activeCaseId}`, combined.length);
+      
+      const latestUpdate = Math.max(0, ...combined.map(n => {
+        const d = new Date(n.updatedAt || n.createdAt);
+        return isNaN(d.getTime()) ? 0 : d.getTime();
+      }));
+      if (latestUpdate > 0) {
+        localStorage.setItem(`last_seen_update_${activeCaseId}`, latestUpdate);
       }
     } catch (e) {
       console.error('Error fetching notes', e);
       const localNotes = JSON.parse(localStorage.getItem(`case_notes_${activeCaseId}`) || '[]');
-      if (localNotes.length > 0) setNotes(localNotes);
+      const marked = localNotes.map(n => ({ ...n, syncStatus: 'unsynced' }));
+      if (marked.length > 0) setNotes(marked);
     }
   };
 
@@ -120,48 +121,33 @@ const CaseNotes = () => {
     };
 
     try {
-      const url = editingNote 
-        ? `${API_BASE_URL}/cases/${activeCaseId}/notes/${editingNote.noteId}`
-        : `${API_BASE_URL}/cases/${activeCaseId}/notes`;
+      const path = editingNote 
+        ? `/cases/${activeCaseId}/notes/${editingNote.noteId}`
+        : `/cases/${activeCaseId}/notes`;
       const method = editingNote ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
+      await fetchWithAuth(path, {
         method,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Tenant-ID': DEFAULT_TENANT_ID,
-          'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
-        },
         body: JSON.stringify(noteData)
       });
-      if (res.ok) {
-        setShowModal(false);
-        fetchNotes();
-      } else {
-        const errorText = await res.text();
-        setAlertConfig({ isOpen: true, title: 'Server Error', message: "Failed to save note: " + errorText });
-      }
+      setShowModal(false);
+      fetchNotes();
     } catch (e) {
-      setAlertConfig({ isOpen: true, title: 'Network Error', message: "Error saving note: " + e.message });
+      setAlertConfig({ isOpen: true, title: 'Server Error', message: "Failed to persist note: " + (e.message || 'Backend rejection') });
       console.error('Error saving note', e);
     }
   };
 
   const handleDelete = async (noteId) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/cases/${activeCaseId}/notes/${noteId}`, {
-        method: 'DELETE',
-        headers: {
-          'X-Tenant-ID': DEFAULT_TENANT_ID,
-          'Authorization': `Bearer ${localStorage.getItem('argus_token')}`
-        }
+      await fetchWithAuth(`/cases/${activeCaseId}/notes/${noteId}`, {
+        method: 'DELETE'
       });
-      if (res.ok) {
-        setShowDeleteConfirm(null);
-        fetchNotes();
-      }
+      setShowDeleteConfirm(null);
+      fetchNotes();
     } catch (e) {
       console.error('Error deleting note', e);
+      setAlertConfig({ isOpen: true, title: 'Error Deleting Note', message: e.message || 'Failed to delete note from backend.' });
     }
   };
 
@@ -634,6 +620,19 @@ const CaseNotes = () => {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                               <h4 style={{ margin: 0, fontSize: '18px', color: '#0f172a', fontWeight: 700, letterSpacing: '-0.01em' }}>{note.title}</h4>
                               <span style={{ fontSize: '11px', color: '#94a3b8', background: '#f1f5f9', padding: '2px 8px', borderRadius: '5px', fontWeight: 600 }}>#{note.noteId}</span>
+                              {note.syncStatus === 'unsynced' && (
+                                <span style={{
+                                  fontSize: '11px',
+                                  fontWeight: 700,
+                                  color: '#b45309',
+                                  background: '#fef3c7',
+                                  border: '1px solid #f59e0b',
+                                  padding: '2px 8px',
+                                  borderRadius: '5px'
+                                }}>
+                                  ⚠️ Unsynced Draft
+                                </span>
+                              )}
                             </div>
 
                             {/* Right-aligned badges (nicely sized & styled) */}

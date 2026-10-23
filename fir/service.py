@@ -42,7 +42,9 @@ class AnalystFindingService:
         Retrieve a single FIRFinding by finding_id, enforcing case and tenant isolation.
         """
         finding = self.fir_repo.findings.get(finding_id)
-        if finding and finding.case_id == case_id and finding.tenant_id == tenant_id:
+        if not finding:
+            finding = self.fir_repo._hydrate_single_from_postgres(finding_id, tenant_id)
+        if finding and finding.case_id == case_id and (finding.tenant_id == tenant_id or (not finding.tenant_id and tenant_id == "default")):
             return finding
         return None
 
@@ -76,7 +78,8 @@ class AnalystFindingService:
         case_id: str,
         status: ReviewStatus,
         reviewed_by: str,
-        tenant_id: str = "default"
+        tenant_id: str = "default",
+        force: bool = False
     ) -> FIRFinding:
         """
         Advance the review lifecycle status of a finding (ANALYST_CONFIRMED or ANALYST_REJECTED).
@@ -89,7 +92,9 @@ class AnalystFindingService:
             tenant_id=tenant_id,
             finding_id=finding_id,
             status=status,
-            reviewer_id=reviewed_by
+            reviewer_id=reviewed_by,
+            force=force,
+            case_id=case_id
         )
 
     def export_report(

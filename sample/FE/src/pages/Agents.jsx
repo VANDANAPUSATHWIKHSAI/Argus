@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
-import { fetchAgentResults, triggerAgentAnalysis, fetchCases, DEFAULT_TENANT_ID } from '../js/api';
+import { fetchAgentResults, triggerAgentAnalysis } from '../js/api';
 import { formatEvidenceId } from '../js/dateUtils';
+import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
 const AGENT_METADATA = {
@@ -144,9 +144,8 @@ const AGENT_METADATA = {
 };
 
 const Agents = () => {
-  const navigate = useNavigate();
-  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
-  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'Current Case');
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
+  const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
   const [agentData, setAgentData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [runningAgents, setRunningAgents] = useState(false);
@@ -155,45 +154,40 @@ const Agents = () => {
   const [claimsFilter, setClaimsFilter] = useState('all');
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
 
-  // Load active case details if unset
+  // Synchronize active case across tabs and components
   useEffect(() => {
-    const initCases = async () => {
-      try {
-        const res = await fetchCases();
-        const list = res.data || [];
-        if (!activeCaseId && list.length > 0) {
-          const first = list.find(c => c.status === 'open') || list[0];
-          setActiveCaseId(first.case_id);
-          setActiveCaseName(first.name || first.case_id);
-          localStorage.setItem('active_case_id', first.case_id);
-          localStorage.setItem('active_case_name', first.name || first.case_id);
-        } else if (activeCaseId && (!activeCaseName || activeCaseName === 'Current Case')) {
-          const found = list.find(c => c.case_id === activeCaseId);
-          if (found && found.name) {
-            setActiveCaseName(found.name);
-            localStorage.setItem('active_case_name', found.name);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load cases:', err);
+    return subscribeToActiveCase(({ caseId, caseName }) => {
+      setActiveCaseId(caseId);
+      setActiveCaseName(caseName || caseId);
+      setRunningAgents(false); // Cleanly terminate in-progress polling when case changes
+      if (!caseId) {
+        setAgentData(null);
+        setLoading(false);
       }
-    };
-    initCases();
-  }, [activeCaseId, activeCaseName]);
+    });
+  }, []);
 
-  // Fetch agent results
+  // Fetch agent results safely, ensuring responses for an old case cannot overwrite newly selected case
   const loadAgentResults = async (caseId) => {
-    if (!caseId) return;
+    if (!caseId) {
+      setAgentData(null);
+      setRunningAgents(false);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const data = await fetchAgentResults(caseId);
+      // Guard against race conditions: if active case changed while request was in flight, discard response
+      if (getActiveCaseId() !== caseId) return;
       setAgentData(data);
-      if (data.status === 'RUNNING') {
+      if (data && data.status === 'RUNNING') {
         setRunningAgents(true);
       } else {
         setRunningAgents(false);
       }
     } catch (err) {
+      if (getActiveCaseId() !== caseId) return;
       console.error('Failed to fetch agent results:', err);
       setCustomAlert({
         isOpen: true,
@@ -202,7 +196,9 @@ const Agents = () => {
         type: 'error'
       });
     } finally {
-      setLoading(false);
+      if (getActiveCaseId() === caseId) {
+        setLoading(false);
+      }
     }
   };
 
@@ -212,13 +208,23 @@ const Agents = () => {
     }
   }, [activeCaseId]);
 
-  // Polling when analysis is running
+  // Polling when analysis is running with bounded errors, visible user feedback, and overlap prevention
   useEffect(() => {
     let interval = null;
+    let consecutiveErrors = 0;
+    let isPolling = false; // Prevent overlapping polling cycles
+    const MAX_CONSECUTIVE_ERRORS = 5;
+
     if (runningAgents && activeCaseId) {
       interval = setInterval(async () => {
+        if (isPolling) return; // Skip cycle if previous request is still in-flight
+        isPolling = true;
         try {
           const data = await fetchAgentResults(activeCaseId);
+          // Discard if case changed or unmounted while in flight
+          if (getActiveCaseId() !== activeCaseId) return;
+
+          consecutiveErrors = 0;
           setAgentData(data);
           if (data.status !== 'RUNNING') {
             setRunningAgents(false);
@@ -246,7 +252,20 @@ const Agents = () => {
             }
           }
         } catch (e) {
-          console.error('Polling error:', e);
+          if (getActiveCaseId() !== activeCaseId) return;
+          consecutiveErrors += 1;
+          console.error(`Polling error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, e);
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            setRunningAgents(false);
+            setCustomAlert({
+              isOpen: true,
+              title: '📡 Backend Polling Paused',
+              message: `Lost connection to agent service after multiple attempts for Case ${activeCaseId}. Polling stopped to avoid unconstrained retries.`,
+              type: 'error'
+            });
+          }
+        } finally {
+          isPolling = false;
         }
       }, 3000);
     }
@@ -256,6 +275,7 @@ const Agents = () => {
   }, [runningAgents, activeCaseId]);
 
   const handleRunAnalysis = async () => {
+    if (runningAgents || loading) return; // Prevent duplicate execution
     if (!activeCaseId) {
       setCustomAlert({
         isOpen: true,
@@ -365,20 +385,20 @@ const Agents = () => {
           <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
               onClick={handleRunAnalysis}
-              disabled={runningAgents}
+              disabled={runningAgents || loading || !activeCaseId}
               style={{
-                background: runningAgents ? 'var(--border-strong)' : 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                background: (runningAgents || loading || !activeCaseId) ? 'var(--border-strong)' : 'linear-gradient(135deg, #3b82f6, #6366f1)',
                 color: '#fff',
                 border: 'none',
                 padding: '8px 18px',
                 borderRadius: 6,
                 fontSize: 12.5,
                 fontWeight: 700,
-                cursor: runningAgents ? 'not-allowed' : 'pointer',
+                cursor: (runningAgents || loading || !activeCaseId) ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                boxShadow: runningAgents ? 'none' : '0 4px 14px rgba(59, 130, 246, 0.35)'
+                boxShadow: (runningAgents || loading || !activeCaseId) ? 'none' : '0 4px 14px rgba(59, 130, 246, 0.35)'
               }}
             >
               {runningAgents ? (
@@ -542,7 +562,7 @@ const Agents = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'start' }}>
 
               {/* 7-AGENT SIDEBAR SELECTION */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div role="tablist" aria-label="Agent Pipeline Hierarchy" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
                   Agent Pipeline Hierarchy
                 </div>
@@ -552,7 +572,18 @@ const Agents = () => {
                   return (
                     <div
                       key={agent.id}
+                      id={`agent-tab-${agent.id}`}
+                      role="tab"
+                      tabIndex={0}
+                      aria-selected={isSelected}
+                      aria-controls={`agent-panel-${agent.id}`}
                       onClick={() => setSelectedAgentTab(agent.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedAgentTab(agent.id);
+                        }
+                      }}
                       style={{
                         background: isSelected ? agent.bg : 'var(--bg-card)',
                         border: `1px solid ${isSelected ? agent.color : 'var(--border-subtle)'}`,
@@ -598,15 +629,20 @@ const Agents = () => {
               </div>
 
               {/* SELECTED AGENT DEEP DIVE CARD */}
-              <div style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: 10,
-                padding: '24px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 20
-              }}>
+              <div 
+                role="tabpanel"
+                id={`agent-panel-${selectedAgentTab}`}
+                aria-labelledby={`agent-tab-${selectedAgentTab}`}
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: 10,
+                  padding: '24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 20
+                }}
+              >
                 {/* Agent Header Banner */}
                 <div style={{
                   display: 'flex',
@@ -743,7 +779,7 @@ const Agents = () => {
                           </thead>
                           <tbody>
                             {(currentAgentData.verification || agentData?.verification_results || []).length > 0 ? (
-                              (currentAgentData.verification || agentData?.verification_results).map((v, idx) => {
+                              (currentAgentData.verification || agentData?.verification_results || []).map((v, idx) => {
                                 const isEntailed = (v.verdict || v.status || '').toLowerCase().includes('entail') || v.verified === true;
                                 const isContradicted = (v.verdict || v.status || '').toLowerCase().includes('contradict');
                                 const badgeBg = isEntailed ? 'rgba(16,185,129,0.15)' : (isContradicted ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)');

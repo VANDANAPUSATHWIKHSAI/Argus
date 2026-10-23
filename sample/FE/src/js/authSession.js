@@ -26,25 +26,39 @@ export function parseJwt(token) {
 }
 
 /**
- * Check if the given token is expired
+ * Check if the given token is expired.
+ * Fails closed: any non-string, malformed, non-JWT token or missing expiration is treated as expired.
  */
 export function isTokenExpired(token) {
-  if (!token) return true;
+  if (!token || typeof token !== 'string') return true;
   const payload = parseJwt(token);
-  // Non-JWT tokens (e.g. dev mock tokens) are treated as non-expired
-  if (!payload || !payload.exp) return false;
+  // Fail closed: require valid JWT payload with numeric exp claim
+  if (!payload || typeof payload.exp !== 'number') return true;
   return Date.now() >= payload.exp * 1000 - TOKEN_BUFFER_MS;
 }
 
 /**
- * Get remaining milliseconds until token expires
+ * Get remaining milliseconds until token expires.
+ * Fails closed: returns 0 if token is missing or not a valid JWT.
  */
 export function getTokenRemainingMs(token) {
-  if (!token) return 0;
+  if (!token || typeof token !== 'string') return 0;
   const payload = parseJwt(token);
-  if (!payload || !payload.exp) return 60 * 60 * 1000; // Default 1 hr if dev token
+  if (!payload || typeof payload.exp !== 'number') return 0;
   const remaining = payload.exp * 1000 - Date.now();
   return remaining > 0 ? remaining : 0;
+}
+
+/**
+ * Get active user's tenant ID if authoritative from user object or stored tenant
+ */
+export function getAuthTenantId() {
+  try {
+    const user = getAuthUser();
+    return user?.tenant_id || user?.tenantId || (typeof localStorage !== 'undefined' ? localStorage.getItem('argus_tenant') : null) || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 /**
@@ -101,7 +115,7 @@ export function setAuthSession(token, user, keepActive = true) {
 }
 
 // Clean up temporary session tokens when tab/browser is closed if keepActive was false
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('beforeunload', () => {
     try {
       if (localStorage.getItem('argus_keep_active') === 'false') {
@@ -117,18 +131,31 @@ if (typeof window !== 'undefined') {
  */
 export function clearSession() {
   try {
-    localStorage.removeItem('argus_token');
-    localStorage.removeItem('argus_user');
-    localStorage.removeItem('active_case_id');
-    localStorage.removeItem('active_case_name');
-    localStorage.removeItem('argus_last_active');
-    sessionStorage.removeItem('argus_token');
-    sessionStorage.removeItem('argus_user');
-    window.dispatchEvent(new Event('argus_logout'));
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem('argus_token');
+      localStorage.removeItem('argus_user');
+      localStorage.removeItem('argus_tenant');
+      localStorage.removeItem('active_case_id');
+      localStorage.removeItem('active_case_name');
+      localStorage.removeItem('argus_last_active');
+    }
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.removeItem('argus_token');
+      sessionStorage.removeItem('argus_user');
+      sessionStorage.removeItem('argus_tenant');
+    }
+    if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+      try {
+        const ev = typeof CustomEvent === 'function' ? new CustomEvent('argus_logout') : { type: 'argus_logout' };
+        window.dispatchEvent(ev);
+      } catch (_) {}
+    }
   } catch (e) {
     console.error('Error clearing session:', e);
   }
 }
+
+export const clearAuthSession = clearSession;
 
 /**
  * Perform clean logout and redirect to login page
@@ -136,9 +163,11 @@ export function clearSession() {
  */
 export function logout(reason = null) {
   clearSession();
-  const currentPath = window.location.pathname;
-  if (currentPath === '/login') return;
+  if (typeof window !== 'undefined' && window.location) {
+    const currentPath = window.location.pathname || '';
+    if (currentPath === '/login') return;
 
-  const search = reason ? `?reason=${encodeURIComponent(reason)}` : '';
-  window.location.href = `/login${search}`;
+    const search = reason ? `?reason=${encodeURIComponent(reason)}` : '';
+    window.location.href = `/login${search}`;
+  }
 }

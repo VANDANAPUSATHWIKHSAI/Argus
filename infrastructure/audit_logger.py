@@ -115,6 +115,55 @@ class AuditChainVerificationError(Exception):
     """Raised when verify_chain() detects tampering or corruption."""
 
 
+from contextlib import contextmanager
+
+try:
+    from filelock import FileLock
+    HAS_FILELOCK = True
+except ImportError:
+    HAS_FILELOCK = False
+
+
+@contextmanager
+def interprocess_tenant_lock(tenant_id: str, timeout: float = 30.0):
+    """
+    Acquires an authoritative cross-process inter-process file lock for the given tenant.
+    Combined with in-process threading.RLock, this guarantees complete mutual exclusion
+    across separate OS processes and threads during audit read-hash-append cycles.
+    """
+    base_logs_dir = os.getenv("ARGUS_LOGS_DIR", "logs")
+    lock_dir = Path(base_logs_dir) / "audit"
+    lock_dir.mkdir(parents=True, exist_ok=True)
+    lock_file = lock_dir / f".{tenant_id}.lock"
+
+    if HAS_FILELOCK:
+        lock = FileLock(str(lock_file), timeout=timeout)
+        with lock:
+            yield
+    else:
+        # Fallback to standard library OS file locking (msvcrt on Windows, fcntl on Unix)
+        if os.name == "nt":
+            import msvcrt
+            fd = os.open(str(lock_file), os.O_CREAT | os.O_RDWR)
+            try:
+                msvcrt.locking(fd, msvcrt.LK_LOCK, 1)
+                yield
+            finally:
+                try:
+                    msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+                except Exception:
+                    pass
+                os.close(fd)
+        else:
+            import fcntl
+            with open(lock_file, "a") as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+
+
 def verify_chain(tenant_id: str) -> dict:
     """
     Re-reads every line of the audit log for *tenant_id* and verifies:
@@ -138,53 +187,56 @@ def verify_chain(tenant_id: str) -> dict:
         # An empty / non-existent log is vacuously valid.
         return {"ok": True, "entries_verified": 0, "tenant_id": tenant_id}
 
-    entries = []
-    try:
-        with log_file.open("r", encoding="utf-8") as fh:
-            for lineno, line in enumerate(fh, start=1):
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                try:
-                    entry = json.loads(stripped)
-                except json.JSONDecodeError as exc:
+    chain_state = _get_chain_state(tenant_id)
+    with interprocess_tenant_lock(tenant_id):
+        with chain_state.lock:
+            entries = []
+            try:
+                with log_file.open("r", encoding="utf-8") as fh:
+                    for lineno, line in enumerate(fh, start=1):
+                        stripped = line.strip()
+                        if not stripped:
+                            continue
+                        try:
+                            entry = json.loads(stripped)
+                        except json.JSONDecodeError as exc:
+                            raise AuditChainVerificationError(
+                                f"Line {lineno}: JSON decode error — {exc}"
+                            ) from exc
+                        entries.append((lineno, entry))
+            except AuditChainVerificationError:
+                raise
+            except Exception as exc:
+                raise AuditChainVerificationError(f"Could not read audit log: {exc}") from exc
+
+            expected_prev = "GENESIS"
+            for idx, (lineno, entry) in enumerate(entries):
+                # ── Check 1: prev_hash linkage ────────────────────────────────────
+                actual_prev = entry.get("prev_hash")
+                if actual_prev != expected_prev:
                     raise AuditChainVerificationError(
-                        f"Line {lineno}: JSON decode error — {exc}"
-                    ) from exc
-                entries.append((lineno, entry))
-    except AuditChainVerificationError:
-        raise
-    except Exception as exc:
-        raise AuditChainVerificationError(f"Could not read audit log: {exc}") from exc
+                        f"Line {lineno} (entry #{idx + 1}): prev_hash mismatch. "
+                        f"Expected '{expected_prev[:16]}…', got '{str(actual_prev)[:16]}…'. "
+                        f"Possible cause: entry deleted, inserted, or reordered."
+                    )
 
-    expected_prev = "GENESIS"
-    for idx, (lineno, entry) in enumerate(entries):
-        # ── Check 1: prev_hash linkage ────────────────────────────────────
-        actual_prev = entry.get("prev_hash")
-        if actual_prev != expected_prev:
-            raise AuditChainVerificationError(
-                f"Line {lineno} (entry #{idx + 1}): prev_hash mismatch. "
-                f"Expected '{expected_prev[:16]}…', got '{str(actual_prev)[:16]}…'. "
-                f"Possible cause: entry deleted, inserted, or reordered."
-            )
+                # ── Check 2: entry_hash correctness ───────────────────────────────
+                stored_hash = entry.get("entry_hash")
+                if not stored_hash:
+                    raise AuditChainVerificationError(
+                        f"Line {lineno} (entry #{idx + 1}): missing entry_hash field."
+                    )
+                recomputed = _compute_entry_hash(expected_prev, entry)
+                if recomputed != stored_hash:
+                    raise AuditChainVerificationError(
+                        f"Line {lineno} (entry #{idx + 1}): entry_hash mismatch — "
+                        f"stored='{stored_hash[:16]}…', recomputed='{recomputed[:16]}…'. "
+                        f"Entry contents may have been modified."
+                    )
 
-        # ── Check 2: entry_hash correctness ───────────────────────────────
-        stored_hash = entry.get("entry_hash")
-        if not stored_hash:
-            raise AuditChainVerificationError(
-                f"Line {lineno} (entry #{idx + 1}): missing entry_hash field."
-            )
-        recomputed = _compute_entry_hash(expected_prev, entry)
-        if recomputed != stored_hash:
-            raise AuditChainVerificationError(
-                f"Line {lineno} (entry #{idx + 1}): entry_hash mismatch — "
-                f"stored='{stored_hash[:16]}…', recomputed='{recomputed[:16]}…'. "
-                f"Entry contents may have been modified."
-            )
+                expected_prev = stored_hash
 
-        expected_prev = stored_hash
-
-    return {"ok": True, "entries_verified": len(entries), "tenant_id": tenant_id}
+            return {"ok": True, "entries_verified": len(entries), "tenant_id": tenant_id}
 
 
 # ── Logging machinery ─────────────────────────────────────────────────────────
@@ -214,15 +266,41 @@ class _ChainedJSONFormatter(logging.Formatter):
         if "tenant_id" not in entry:
             entry["tenant_id"] = self._tenant_id
 
-        with self._chain_state.lock:
-            prev_hash = self._chain_state.last_hash
-            entry["prev_hash"] = prev_hash
-            # entry_hash is computed over the entry EXCLUDING entry_hash itself
-            entry_hash = _compute_entry_hash(prev_hash, entry)
-            entry["entry_hash"] = entry_hash
-            self._chain_state.last_hash = entry_hash
+        # Multi-process continuity: read current last entry hash from file
+        # to chain cleanly from entries written by other application worker processes
+        file_last_hash = _read_last_entry_hash(self._tenant_id)
+        prev_hash = file_last_hash if file_last_hash != "GENESIS" or self._chain_state.last_hash == "GENESIS" else self._chain_state.last_hash
+        entry["prev_hash"] = prev_hash
+        # entry_hash is computed over the entry EXCLUDING entry_hash itself
+        entry_hash = _compute_entry_hash(prev_hash, entry)
+        entry["entry_hash"] = entry_hash
+        self._chain_state.last_hash = entry_hash
 
         return json.dumps(entry, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+class _CrossProcessAuditFileHandler(logging.FileHandler):
+    """
+    FileHandler that guarantees cross-process atomicity of the complete
+    read-previous-hash -> compute-hash -> append-to-file -> flush cycle.
+    """
+
+    def __init__(self, filename, tenant_id: str, chain_state: _TenantChainState, **kwargs):
+        super().__init__(str(filename), **kwargs)
+        self._tenant_id = tenant_id
+        self._chain_state = chain_state
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            with interprocess_tenant_lock(self._tenant_id):
+                with self._chain_state.lock:
+                    if self.stream is None:
+                        self.stream = self._open()
+                    msg = self.format(record)
+                    self.stream.write(msg + self.terminator)
+                    self.flush()
+        except Exception:
+            self.handleError(record)
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -254,7 +332,7 @@ def get_audit_logger(tenant_id: str) -> logging.Logger:
             log_dir.mkdir(parents=True, exist_ok=True)
             log_file = log_dir / f"{tenant_id}.jsonl"
 
-            handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
+            handler = _CrossProcessAuditFileHandler(log_file, tenant_id, chain_state, mode="a", encoding="utf-8")
             handler.setFormatter(_ChainedJSONFormatter(tenant_id, chain_state))
             logger.addHandler(handler)
             logger.propagate = False

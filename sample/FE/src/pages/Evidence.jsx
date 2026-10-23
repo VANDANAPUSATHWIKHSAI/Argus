@@ -8,6 +8,7 @@ import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import SearchableSelect from '../components/SearchableSelect';
 import { safeFormatDateOnly, formatEvidenceId } from '../js/dateUtils';
+import { getActiveCaseId, getActiveCaseName, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
 const Evidence = () => {
   const formatBytes = (bytes, decimals = 2) => {
@@ -46,6 +47,15 @@ const Evidence = () => {
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
   const navigate = useNavigate();
 
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
+
+  // Synchronize active case across tabs and components
+  useEffect(() => {
+    return subscribeToActiveCase(({ caseId }) => {
+      setActiveCaseId(caseId);
+    });
+  }, []);
+
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
   const isAdmin = currentUser?.role === 'admin';
@@ -56,20 +66,24 @@ const Evidence = () => {
   };
   
   useEffect(() => {
+    let isMounted = true;
     const loadEvidence = async () => {
       try {
-        let caseId = localStorage.getItem('active_case_id');
-        
-        if (!caseId) {
-          setEvidenceData([]);
-          setLoading(false);
+        setLoading(true);
+        if (!activeCaseId) {
+          if (isMounted) {
+            setEvidenceData([]);
+            setLoading(false);
+          }
           return;
         }
 
-        const rawData = await fetchEvidenceForCase(caseId);
+        const rawData = await fetchEvidenceForCase(activeCaseId);
+        if (!isMounted) return;
+
         const fetchedList = rawData.data || rawData || [];
         
-        const mappedData = fetchedList.map((item, index) => {
+        const mappedData = (Array.isArray(fetchedList) ? fetchedList : []).map((item, index) => {
           const f = (item.filename || '').toLowerCase();
           let type = 'File';
           if (f.endsWith('.ps1') || f.endsWith('.sh') || f.endsWith('.bat') || f.endsWith('.cmd') || f.endsWith('.py')) type = 'Script';
@@ -83,17 +97,28 @@ const Evidence = () => {
 
           const displayId = formatEvidenceId(item.evidence_id, index + 1);
 
+          // Preserve authentic backend processing status
           const rawStatus = (item.status || '').toLowerCase();
-          let normalizedStatus = 'Stored';
+          let normalizedStatus = 'Unknown';
           if (rawStatus.includes('fail') || rawStatus === 'error' || rawStatus === 'rejected' || Boolean(item.metadata?.error || item.error)) {
             normalizedStatus = 'Failed';
           } else if (rawStatus === 'processing' || rawStatus === 'uploaded' || rawStatus === 'sandboxed' || rawStatus === 'hashed' || rawStatus === 'metadata_extracted') {
             normalizedStatus = 'Processing';
-          } else if (rawStatus === 'stored' || rawStatus === 'analyzed' || rawStatus === 'ingested' || rawStatus === 'completed') {
+          } else if (rawStatus === 'queued' || rawStatus === 'pending') {
+            normalizedStatus = 'Queued';
+          } else if (rawStatus === 'completed' || rawStatus === 'analyzed') {
+            normalizedStatus = 'Analyzed';
+          } else if (rawStatus === 'stored' || rawStatus === 'ingested') {
             normalizedStatus = 'Stored';
           } else if (item.status) {
             normalizedStatus = item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase();
           }
+
+          // Authentic ingestion timestamp: never invent current date
+          const authenticTimestamp = item.upload_timestamp || item.created_at || item.metadata?.ingested_at || null;
+
+          // Authentic risk: only present authoritative backend score or Unassessed
+          const authenticRisk = item.risk || item.metadata?.risk || (normalizedStatus === 'Failed' ? 'High' : 'Unassessed');
 
           return {
             id: item.evidence_id,
@@ -105,21 +130,27 @@ const Evidence = () => {
             status: normalizedStatus,
             rawStatus: item.status,
             error: item.metadata?.error || item.error || null,
-            ingested_at: item.upload_timestamp || new Date().toISOString(),
-            risk: normalizedStatus === 'Failed' ? 'High' : 'Medium'
+            ingested_at: authenticTimestamp,
+            risk: authenticRisk
           };
         });
         
         setEvidenceData(mappedData);
       } catch (err) {
-        console.error("Failed to fetch evidence", err);
-        setCustomAlert({ isOpen: true, title: 'Error Fetching Data', message: err.message || String(err), type: 'warning' });
+        if (isMounted) {
+          console.error("Failed to fetch evidence", err);
+          setCustomAlert({ isOpen: true, title: 'Error Fetching Data', message: err.message || String(err), type: 'warning' });
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
+
     loadEvidence();
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [activeCaseId]);
 
   const ingestedCount = useMemo(() => {
     return evidenceData.filter(e => e.status === 'Stored').length;
@@ -174,21 +205,21 @@ const Evidence = () => {
   };
 
   const handleCloseCase = () => {
-    const activeCaseName = localStorage.getItem('active_case_name') || 'Current case';
-    const activeCaseId = localStorage.getItem('active_case_id');
-    if (!activeCaseId && !localStorage.getItem('active_case_name')) {
+    const activeCaseName = getActiveCaseName();
+    const activeCaseId = getActiveCaseId();
+    if (!activeCaseId && !activeCaseName) {
       setCustomAlert({ isOpen: true, title: 'Notice', message: "There is no active case currently open.", type: 'warning' });
       return;
     }
-    localStorage.removeItem('active_case_id');
-    localStorage.removeItem('active_case_name');
-    localStorage.removeItem('active_case_desc');
+    setActiveCase('', '');
+    try {
+      localStorage.removeItem('active_case_desc');
+    } catch (_e) {}
     setCustomAlert({
        isOpen: true,
        title: 'Success',
        message: `${activeCaseName} has been closed successfully.`,
-       type: 'success',
-       onClose: () => window.location.reload()
+       type: 'success'
     });
   };
 
@@ -300,7 +331,11 @@ const Evidence = () => {
       <div className="stats-grid evidence-stats" style={{flexShrink: '0', gridTemplateColumns: 'repeat(5, 1fr)'}}>
         <div 
           className="stat-card" 
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === ''}
           onClick={() => setStatusFilter('')} 
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(''); } }}
           title="Click to view all evidence items"
           style={{ cursor: 'pointer', transition: 'all 0.2s', border: statusFilter === '' ? '2px solid var(--blue)' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}
         >
@@ -315,7 +350,11 @@ const Evidence = () => {
         </div>
         <div 
           className="stat-card" 
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === 'Stored'}
           onClick={() => setStatusFilter(prev => prev === 'Stored' ? '' : 'Stored')} 
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(prev => prev === 'Stored' ? '' : 'Stored'); } }}
           title="Click to filter by Ingested"
           style={{ cursor: 'pointer', transition: 'all 0.2s', border: statusFilter === 'Stored' ? '2px solid var(--green, #10b981)' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}
         >
@@ -330,7 +369,11 @@ const Evidence = () => {
         </div>
         <div 
           className="stat-card" 
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === 'Processing'}
           onClick={() => setStatusFilter(prev => prev === 'Processing' ? '' : 'Processing')} 
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(prev => prev === 'Processing' ? '' : 'Processing'); } }}
           title="Click to filter by Processing"
           style={{ cursor: 'pointer', transition: 'all 0.2s', border: statusFilter === 'Processing' ? '2px solid var(--orange, #f59e0b)' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}
         >
@@ -345,7 +388,11 @@ const Evidence = () => {
         </div>
         <div 
           className="stat-card" 
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === 'Failed'}
           onClick={() => setStatusFilter(prev => prev === 'Failed' ? '' : 'Failed')} 
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(prev => prev === 'Failed' ? '' : 'Failed'); } }}
           title="Click to filter by Failed items"
           style={{ cursor: 'pointer', transition: 'all 0.2s', border: statusFilter === 'Failed' ? '2px solid var(--red, #ef4444)' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}
         >
@@ -501,7 +548,13 @@ const Evidence = () => {
                   ) : (
                     currentItems.map(item => (
                       <tr key={item.id} className={`ev-row ${selectedItem?.id === item.id ? 'selected' : ''}`} onClick={() => setSelectedItem(item)}>
-                        <td style={{padding: '16px 24px'}}><input type="checkbox" onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item selection is not yet implemented in this prototype.', type: 'info'}) }} /></td>
+                        <td style={{padding: '16px 24px'}}>
+                          <input 
+                            type="checkbox" 
+                            aria-label={`Select evidence item ${item.displayId || item.id}`}
+                            onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item selection is not yet implemented in this prototype.', type: 'info'}) }} 
+                          />
+                        </td>
                         <td style={{padding: '16px 12px'}}>
                           <span 
                             title={`Evidence ID: ${item.displayId || item.id}\nRaw ID: ${item.id}\nClick to copy`}
@@ -561,10 +614,14 @@ const Evidence = () => {
                         </td>
                         <td>{safeFormatDateOnly(item.ingested_at)}</td>
                         <td>
-                           <span style={{ color: item.risk === 'High' ? 'var(--red)' : item.risk === 'Medium' ? 'var(--orange)' : 'var(--text-muted)' }}>{item.risk || 'Low'}</span>
+                           <span style={{ color: item.risk === 'High' ? 'var(--red)' : item.risk === 'Medium' ? 'var(--orange)' : 'var(--text-muted)' }}>{item.risk || 'Unassessed'}</span>
                         </td>
                         <td style={{ textAlign: 'right', padding: '16px 24px' }}>
-                          <button onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item actions are not yet implemented in this prototype.', type: 'info'}) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+                          <button 
+                            aria-label={`Actions for evidence ${item.displayId || item.id}`}
+                            onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item actions are not yet implemented in this prototype.', type: 'info'}) }} 
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                          >
                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
                           </button>
                         </td>
@@ -585,6 +642,7 @@ const Evidence = () => {
               <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
                 <button 
                   className="btn-icon" 
+                  aria-label="Previous page"
                   onClick={() => paginate(currentPage - 1)} 
                   disabled={currentPage === 1}
                   style={{width: '32px', height: '32px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1}}
@@ -595,6 +653,7 @@ const Evidence = () => {
                   <button 
                     key={i + 1} 
                     className="btn-icon" 
+                    aria-label={`Page ${i + 1}`}
                     onClick={() => paginate(i + 1)}
                     style={{width: '32px', height: '32px', cursor: 'pointer', background: currentPage === i + 1 ? 'var(--blue)' : 'var(--bg-app)', color: currentPage === i + 1 ? '#fff' : 'var(--text-main)', borderColor: currentPage === i + 1 ? 'var(--blue)' : 'var(--border-strong)'}}
                   >
@@ -603,6 +662,7 @@ const Evidence = () => {
                 ))}
                 <button 
                   className="btn-icon" 
+                  aria-label="Next page"
                   onClick={() => paginate(currentPage + 1)} 
                   disabled={currentPage === totalPages}
                   style={{width: '32px', height: '32px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1}}

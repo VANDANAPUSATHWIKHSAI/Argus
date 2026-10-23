@@ -5,6 +5,7 @@ import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import { fetchFindings } from '../js/api';
 import { formatEvidenceId } from '../js/dateUtils';
+import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
 const SEVERITY_MAP = {
@@ -52,8 +53,15 @@ const ConfidenceBar = ({ value }) => {
 
 const Findings = () => {
   const navigate = useNavigate();
-  const activeCaseId = localStorage.getItem('active_case_id');
-  const activeCaseName = localStorage.getItem('active_case_name') || 'Current Case';
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
+  const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
+
+  useEffect(() => {
+    return subscribeToActiveCase(({ caseId, caseName }) => {
+      setActiveCaseId(caseId);
+      setActiveCaseName(caseName);
+    });
+  }, []);
 
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;

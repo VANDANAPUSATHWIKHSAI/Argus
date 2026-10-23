@@ -5,6 +5,7 @@ import NotificationMenu from '../components/NotificationMenu';
 import AlertModal from '../components/AlertModal';
 import { fetchFindings, fetchEvidenceForCase, createCaseNote } from '../js/api';
 import { safeFormatDateTime } from '../js/dateUtils';
+import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
 const SEVERITY_COLORS = {
@@ -18,17 +19,28 @@ const SEVERITY_COLORS = {
 const TimelineDetail = () => {
   const navigate = useNavigate();
 
+  const currentUserStr = localStorage.getItem('argus_user');
   let user = null;
   try {
-    user = JSON.parse(localStorage.getItem('argus_user'));
-  } catch (e) {}
+    user = currentUserStr ? JSON.parse(currentUserStr) : null;
+  } catch (_e) {}
 
-  if (user?.role === 'analyst') {
-    return <Navigate to="/dashboard" replace />;
-  }
+  useEffect(() => {
+    if (user?.role === 'analyst') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
-  const activeCaseId = localStorage.getItem('active_case_id');
-  const activeCaseName = localStorage.getItem('active_case_name') || 'Current Case';
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
+  const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
+
+  // Synchronize case changes across tabs and canonical events
+  useEffect(() => {
+    return subscribeToActiveCase(({ caseId, caseName }) => {
+      setActiveCaseId(caseId);
+      setActiveCaseName(caseName);
+    });
+  }, []);
 
   // Theme state
   const [theme, setTheme] = useState(
@@ -52,10 +64,12 @@ const TimelineDetail = () => {
 
   const showToast = (msg) => {
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
+    setTimeout(() => setToastMessage(null), 3500);
   };
 
   useEffect(() => {
+    let isCancelled = false;
+
     const loadTimeline = async () => {
       if (!activeCaseId) {
         setTimelineData([]);
@@ -71,6 +85,8 @@ const TimelineDetail = () => {
           fetchEvidenceForCase(activeCaseId)
         ]);
 
+        if (isCancelled) return;
+
         const findingsList = findingsRes.status === 'fulfilled' && findingsRes.value
           ? (Array.isArray(findingsRes.value) ? findingsRes.value : (findingsRes.value.data || []))
           : [];
@@ -81,53 +97,81 @@ const TimelineDetail = () => {
 
         const events = [];
 
-        // 1. Evidence intake anchors
+        // 1. Evidence intake anchors (authentic timestamps and honest hash verification state)
         evidenceList.forEach((ev, idx) => {
+          const rawDate = ev.created_at || ev.upload_timestamp;
+          const parsed = rawDate ? new Date(rawDate) : null;
+          const isValid = parsed && !isNaN(parsed.getTime());
+          const rawTs = isValid ? parsed.getTime() : null;
+          const timeDisplay = isValid ? safeFormatDateTime(rawDate) : 'Unknown Timestamp';
+          const hashText = ev.sha256_hash ? `${ev.sha256_hash.slice(0, 24)}... (Integrity unverified by server)` : 'Not provided (Unverified)';
+
           events.push({
             id: ev.evidence_id || `EV-${idx}`,
-            time: ev.created_at ? safeFormatDateTime(ev.created_at) : 'Evidence Ingestion',
-            rawTs: ev.created_at ? new Date(ev.created_at).getTime() : 1000,
+            time: timeDisplay,
+            rawTs: rawTs,
+            isDated: isValid,
             category: 'EVIDENCE INTAKE',
             severity: 'info',
             title: `Artifact Staged: ${ev.filename || 'Forensic Source'}`,
-            desc: `Evidence artifact ingested into repository. SHA-256 integrity hash: ${ev.sha256_hash ? ev.sha256_hash.slice(0, 24) + '...' : 'Verified'}. Cryptographic custody established.`,
+            desc: `Evidence artifact registered in case store. SHA-256: ${hashText}.`,
             source: 'Ingestion Pipeline',
             mitre: null,
-            details: `Status: ${(ev.status || 'Stored').toUpperCase()} | SHA-256: ${ev.sha256_hash || 'Verified'}`
+            details: `Status: ${(ev.status || 'Unknown').toUpperCase()} | SHA-256: ${ev.sha256_hash || 'Unverified'}`
           });
         });
 
-        // 2. Findings events
+        // 2. Findings events (no synthetic fallback timestamps)
         findingsList.forEach((f, idx) => {
-          const timeStr = f.timestamp ? safeFormatDateTime(f.timestamp) : `Event #${idx + 1}`;
-          const rawTs = f.timestamp ? new Date(String(f.timestamp).replace(/\s+/, 'T')).getTime() : (2000 + idx * 1000);
+          const rawDate = f.timestamp || f.created_at;
+          const parsed = rawDate ? new Date(String(rawDate).replace(/\s+/, 'T')) : null;
+          const isValid = parsed && !isNaN(parsed.getTime());
+          const rawTs = isValid ? parsed.getTime() : null;
+          const timeDisplay = isValid ? safeFormatDateTime(rawDate) : 'Unknown Timestamp';
+
           events.push({
             id: f.finding_id || `TL-${idx}`,
-            time: timeStr,
+            time: timeDisplay,
             rawTs: rawTs,
+            isDated: isValid,
             category: f.layer ? f.layer.toUpperCase() : 'FORENSIC FINDING',
             severity: (f.severity || 'medium').toLowerCase(),
             title: f.finding_id || `Finding #${idx + 1}`,
-            desc: f.sanitized_fact || f.fact,
+            desc: f.sanitized_fact || f.fact || 'Finding recorded without narrative description.',
             source: f.layer || 'FIR Repository',
             mitre: f.mitre_mapping || null,
             details: f.mitre_mapping ? `MITRE ATT&CK: ${f.mitre_mapping}` : `Ref: ${Array.isArray(f.evidence_reference) ? f.evidence_reference.join(', ') : f.evidence_reference || 'Telemetry'}`
           });
         });
 
-        // Sort chronologically ascending
-        events.sort((a, b) => a.rawTs - b.rawTs);
+        // Sort events chronologically strictly when valid timestamps exist; undated events sorted to end
+        events.sort((a, b) => {
+          if (a.rawTs !== null && b.rawTs !== null) {
+            return a.rawTs - b.rawTs;
+          }
+          if (a.rawTs !== null) return -1;
+          if (b.rawTs !== null) return 1;
+          return 0;
+        });
+
         setTimelineData(events);
       } catch (err) {
-        console.error('Error fetching timeline findings:', err);
-        setError(err.message || 'Failed to load timeline events for this case.');
-        setTimelineData([]);
+        if (!isCancelled) {
+          console.error('Error fetching timeline findings:', err);
+          setError(err.message || 'Failed to load timeline events for this case.');
+          setTimelineData([]);
+        }
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setLoading(false);
+        }
       }
     };
 
     loadTimeline();
+    return () => {
+      isCancelled = true;
+    };
   }, [activeCaseId]);
 
   // Action: Ask AI Assistant about this event
@@ -137,41 +181,60 @@ const TimelineDetail = () => {
     navigate('/chatbot');
   };
 
-  // Action: Save timeline event to Case Notes
+  // Action: Save timeline event to Case Notes (honestly reporting sync status)
   const handleSaveToNotes = async (event) => {
-    try {
-      const noteTitle = `Timeline Event: ${event.title}`;
-      const noteContent = `**Timestamp:** ${event.time}\n**Category:** ${event.category} (${event.severity.toUpperCase()})\n**Details:** ${event.desc}\n**Context:** ${event.details}`;
+    if (!activeCaseId) {
+      showToast('Error: No active case selected.');
+      return;
+    }
 
-      const savedNotesKey = `case_notes_${activeCaseId}`;
-      const localNotes = JSON.parse(localStorage.getItem(savedNotesKey) || '[]');
-      const newNote = {
-        id: `note-${Date.now()}`,
-        noteId: `note-${Date.now()}`,
+    const noteTitle = `Timeline Event: ${event.title}`;
+    const noteContent = `**Timestamp:** ${event.time}\n**Category:** ${event.category} (${event.severity.toUpperCase()})\n**Details:** ${event.desc}\n**Context:** ${event.details}`;
+    const savedNotesKey = `case_notes_${activeCaseId}`;
+    const localNotes = JSON.parse(localStorage.getItem(savedNotesKey) || '[]');
+    const noteId = `note-${Date.now()}`;
+
+    try {
+      await createCaseNote(activeCaseId, {
+        title: noteTitle,
+        content: noteContent,
+        type: 'finding',
+        priority: (event.severity === 'critical' || event.severity === 'high') ? 'HIGH' : 'NORMAL'
+      });
+
+      const syncedNote = {
+        id: noteId,
+        noteId: noteId,
         title: noteTitle,
         content: noteContent,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        author: 'Forensic Analyst',
+        author: user?.name || 'Forensic Analyst',
         type: 'finding',
-        priority: (event.severity === 'critical' || event.severity === 'high') ? 'HIGH' : 'NORMAL'
+        priority: (event.severity === 'critical' || event.severity === 'high') ? 'HIGH' : 'NORMAL',
+        isDraft: false,
+        syncStatus: 'synced'
       };
-      localStorage.setItem(savedNotesKey, JSON.stringify([newNote, ...localNotes]));
-
-      try {
-        await createCaseNote(activeCaseId, {
-          title: noteTitle,
-          content: noteContent,
-          type: 'finding',
-          priority: newNote.priority
-        });
-      } catch (e) {
-        console.warn('Backend sync note failed, cached locally:', e);
-      }
-
-      showToast('Event saved to Case Notes!');
+      localStorage.setItem(savedNotesKey, JSON.stringify([syncedNote, ...localNotes]));
+      showToast('Event saved to Case Notes (synced with backend)!');
     } catch (e) {
-      showToast('Error saving event note.');
+      // Backend sync failed: save locally as draft with explicit warning
+      const draftNote = {
+        id: noteId,
+        noteId: noteId,
+        title: noteTitle,
+        content: noteContent,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        author: user?.name || 'Forensic Analyst',
+        type: 'finding',
+        priority: (event.severity === 'critical' || event.severity === 'high') ? 'HIGH' : 'NORMAL',
+        isDraft: true,
+        syncStatus: 'unsynced',
+        syncError: e.message || 'Server rejected note creation'
+      };
+      localStorage.setItem(savedNotesKey, JSON.stringify([draftNote, ...localNotes]));
+      showToast(`Saved locally as draft (Failed to sync with backend: ${e.message || 'Error'})`);
     }
   };
 

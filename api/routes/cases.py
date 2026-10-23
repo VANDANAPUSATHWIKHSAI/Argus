@@ -21,6 +21,7 @@ from enum import Enum
 from infrastructure.repository.evidence_store import create_case_session, list_cases, list_evidence_by_case, close_case
 from fir.repository import FIRRepository
 from fir.service import AnalystFindingService
+from fir.schemas import ReviewStatus
 from sanitization.gateway import SanitizationGateway
 from api.routes.auth import get_current_user
 
@@ -1589,3 +1590,235 @@ async def run_case_agents(
         "case_id": clean_case_id,
         "message": f"Multi-agent forensic pipeline (Agents 1-7) initiated for Case '{clean_case_id}'."
     }
+
+
+# ── TASK A: Analyst Finding Review Endpoint ──────────────────────────────────
+REVIEW_AUTHORIZED_ROLES = {"senior_analyst", "admin", "supervisor"}
+OVERRIDE_AUTHORIZED_ROLES = {"senior_analyst", "admin", "supervisor"}
+
+class ReviewFindingRequest(BaseModel):
+    status: ReviewStatus
+    notes: Optional[str] = None
+    force: bool = False
+
+class ReviewFindingResponse(BaseModel):
+    status: str = "SUCCESS"
+    finding_id: str
+    case_id: str
+    tenant_id: str
+    review_status: ReviewStatus
+    reviewed_by: str
+    reviewed_at: str
+    finding: Dict[str, Any]
+    notes: Optional[str] = None
+
+@router.put("/{case_id}/findings/{finding_id}/review", response_model=ReviewFindingResponse)
+@router.post("/{case_id}/findings/{finding_id}/review", response_model=ReviewFindingResponse)
+async def review_finding_endpoint(
+    case_id: str,
+    finding_id: str,
+    req: ReviewFindingRequest,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    PUT /cases/{case_id}/findings/{finding_id}/review
+
+    Enforces:
+    1. Authenticated JWT caller via get_current_user.
+    2. Role authorization: restricted to senior_analyst, admin, and supervisor roles.
+    3. Strict tenant isolation: tenant derived from user claims / validated X-Tenant-ID header.
+    4. Reviewer identity derived from trusted authentication context (never client-supplied).
+    5. Case-finding consistency: finding must belong to both the target case and tenant.
+    6. Double-review prevention: cannot overwrite without force=True.
+    7. Override safety: force=True requires authorized override role and non-empty justification notes.
+       Hierarchical protection: senior_analyst cannot override decisions made by admin or supervisor.
+    8. Status validation: pending_review cannot be used as a review decision.
+    9. Durable audit persistence: rollback on audit write failure (never claim review without audit record).
+    """
+    # 1. Server-side role authorization check
+    user_role = current_user.get("role", "")
+    if user_role not in REVIEW_AUTHORIZED_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Role '{user_role}' is not authorized to review findings. Only senior_analyst and admin roles are permitted."
+        )
+
+    # 2. Derive trusted tenant context
+    from api.routes.evidence import authorize_tenant_access, sanitize_uuid
+    clean_tenant = authorize_tenant_access(current_user, x_tenant_id)
+    clean_case_id = sanitize_uuid(case_id)
+
+    # 3. Derive reviewer identity from trusted context
+    reviewer_id = current_user.get("id") or current_user.get("email") or current_user.get("username")
+    if not reviewer_id or not str(reviewer_id).strip():
+        raise HTTPException(status_code=401, detail="Authenticated context lacks a valid reviewer identity.")
+
+    # 4. Enforce valid review status transition
+    if req.status == ReviewStatus.PENDING_REVIEW:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot set review_status to 'pending_review'. Valid decisions are 'analyst_confirmed' or 'analyst_rejected'."
+        )
+
+    # 5. Resolve finding with strict case and tenant boundary
+    finding = _analyst_service.get_finding(finding_id, case_id=clean_case_id, tenant_id=clean_tenant)
+    target_case_id = clean_case_id
+    if not finding and case_id != clean_case_id:
+        finding = _analyst_service.get_finding(finding_id, case_id=case_id, tenant_id=clean_tenant)
+        if finding:
+            target_case_id = case_id
+
+    if not finding:
+        # Cross-case / cross-tenant / non-existent defense:
+        raw_finding = _fir_repo.findings.get(finding_id)
+        if raw_finding and raw_finding.case_id != target_case_id and (raw_finding.tenant_id == clean_tenant or (not raw_finding.tenant_id and clean_tenant == "default")):
+            raise HTTPException(
+                status_code=404,
+                detail=f"Finding '{finding_id}' does not belong to case '{case_id}'."
+            )
+        # For non-existent or other-tenant findings, fail closed with standard 404
+        raise HTTPException(
+            status_code=404,
+            detail=f"Finding '{finding_id}' not found for case '{case_id}' and tenant '{clean_tenant}'."
+        )
+
+    # 6. Override authorization and policy checks
+    if req.force:
+        if user_role not in OVERRIDE_AUTHORIZED_ROLES:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role '{user_role}' is not authorized to override existing review decisions."
+            )
+        if not req.notes or not str(req.notes).strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Review override (force=true) requires an explicit non-empty justification in notes."
+            )
+        if not finding.is_unreviewed and finding.reviewed_by in ("admin", "admin_root", "supervisor") and user_role == "senior_analyst":
+            raise HTTPException(
+                status_code=403,
+                detail="A senior analyst cannot override a review decision established by an administrator or supervisor."
+            )
+
+    # 7. Check double-review conflict without force
+    if not finding.is_unreviewed and not req.force:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Finding '{finding_id}' has already been reviewed ({finding.review_status.value} by {finding.reviewed_by}). Pass force=true to overwrite."
+        )
+
+    # Capture previous state before applying update for audit and rollback
+    prev_status = finding.review_status
+    prev_reviewer = finding.reviewed_by
+    prev_reviewed_at = finding.reviewed_at
+
+    # 8. Apply review via AnalystFindingService
+    try:
+        updated_finding = _analyst_service.mark_review(
+            finding_id=finding_id,
+            case_id=target_case_id,
+            status=req.status,
+            reviewed_by=str(reviewer_id),
+            tenant_id=clean_tenant,
+            force=req.force
+        )
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in mark_review for {finding_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal server error during finding review.")
+
+    # 9. Record append-only audit event (Mandatory Security Rule: Roll back if audit persistence fails)
+    from datetime import datetime, timezone
+    reviewed_at_iso = updated_finding.reviewed_at.isoformat() if updated_finding.reviewed_at else datetime.now(timezone.utc).isoformat()
+    try:
+        from infrastructure.audit_logger import get_audit_logger
+        audit_logger = get_audit_logger(clean_tenant)
+        outbox_id = getattr(updated_finding, "outbox_event_id", None)
+        audit_entry = {
+            "event": "finding_review_overridden" if req.force else "finding_reviewed",
+            "finding_id": finding_id,
+            "case_id": target_case_id,
+            "tenant_id": clean_tenant,
+            "actor": str(reviewer_id),
+            "actor_role": user_role,
+            "previous_status": prev_status.value if hasattr(prev_status, "value") else str(prev_status),
+            "previous_reviewer": prev_reviewer,
+            "previous_reviewed_at": prev_reviewed_at.isoformat() if prev_reviewed_at else None,
+            "new_status": req.status.value,
+            "decision": req.status.value,
+            "is_override": req.force,
+            "override_reason": req.notes if req.force else None,
+            "notes": req.notes,
+            "timestamp": reviewed_at_iso,
+            "outbox_event_id": outbox_id
+        }
+        audit_logger.info(audit_entry)
+
+        # Mark outbox record delivered in PostgreSQL
+        if outbox_id:
+            try:
+                from infrastructure.repository.evidence_store import _should_attempt_postgres
+                if _should_attempt_postgres():
+                    import psycopg2
+                    from config.settings import settings
+                    conn_ob = psycopg2.connect(
+                        host=settings.postgres_host,
+                        port=settings.postgres_port,
+                        database=settings.postgres_db,
+                        user=settings.postgres_user,
+                        password=settings.postgres_password,
+                        connect_timeout=2
+                    )
+                    cur_ob = conn_ob.cursor()
+                    cur_ob.execute(
+                        "UPDATE audit_log SET detail = detail || '{\"outbox_status\": \"delivered\"}'::jsonb WHERE detail->>'outbox_event_id' = %s;",
+                        (outbox_id,)
+                    )
+                    conn_ob.commit()
+                    conn_ob.close()
+            except Exception as e_ob:
+                logger.debug("Failed marking outbox delivered in DB: %s", e_ob)
+    except Exception as audit_err:
+        logger.critical(f"Audit log write failed for finding {finding_id}: {audit_err}. Rolling back review.", exc_info=True)
+        rollback_ok = _fir_repo.rollback_review(
+            tenant_id=clean_tenant,
+            finding_id=finding_id,
+            prev_status=prev_status,
+            prev_reviewer=prev_reviewer,
+            prev_reviewed_at=prev_reviewed_at,
+            case_id=target_case_id,
+            reason=f"audit_write_failed: {audit_err}"
+        )
+        if not rollback_ok:
+            logger.critical(
+                "UNRECONCILED_AUDIT_INCONSISTENCY: Finding %s in case %s (tenant %s) was committed to DB "
+                "but audit log write failed (%s) AND database rollback failed. State is inconsistent.",
+                finding_id, target_case_id, clean_tenant, audit_err
+            )
+            raise HTTPException(
+                status_code=500,
+                detail=f"CRITICAL: Durable audit persistence failed ({audit_err}) and automated rollback failed. Inconsistent state flagged for administrative reconciliation."
+            )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Durable audit persistence failure: review decision rolled back because audit record could not be written ({audit_err})."
+        )
+
+    return ReviewFindingResponse(
+        status="SUCCESS",
+        finding_id=updated_finding.finding_id,
+        case_id=updated_finding.case_id,
+        tenant_id=updated_finding.tenant_id,
+        review_status=updated_finding.review_status,
+        reviewed_by=updated_finding.reviewed_by or str(reviewer_id),
+        reviewed_at=reviewed_at_iso,
+        finding=updated_finding.model_dump(mode="json"),
+        notes=req.notes
+    )
+

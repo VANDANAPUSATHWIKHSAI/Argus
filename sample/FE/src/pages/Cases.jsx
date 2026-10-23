@@ -4,8 +4,9 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import ProfileModal from '../components/ProfileModal';
 import NotificationMenu from '../components/NotificationMenu';
-import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { fetchCases, fetchEmployees, fetchReport, closeCase } from '../js/api';
 import { safeFormatDateOnly } from '../js/dateUtils';
+import { getActiveCaseId, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
 const Cases = () => {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ const Cases = () => {
 
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
-  const activeCaseId = localStorage.getItem('active_case_id');
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
 
   useEffect(() => {
     setCurrentPage(1);
@@ -39,29 +40,17 @@ const Cases = () => {
   const handleViewReport = async (caseItem) => {
     try {
       setLoadingReportId(caseItem.case_id);
-      const token = localStorage.getItem('argus_token');
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': DEFAULT_TENANT_ID,
-      };
-      const res = await fetch(`${API_BASE_URL}/reports/${caseItem.case_id}/report?format=html&allow_unreviewed=true`, { headers });
-      if (!res.ok) {
-        let errMsg = `Report not found (${res.status})`;
-        try {
-          const errJson = await res.json();
-          errMsg = errJson.detail || errMsg;
-        } catch (e) {}
-        throw new Error(errMsg);
-      }
-      const html = await res.text();
-      const blob = new Blob([html], { type: 'text/html' });
+      // Fetch report adhering to backend review gating (allowUnreviewed = false)
+      const html = await fetchReport(caseItem.case_id, 'html', false);
+      const content = typeof html === 'string' ? html : JSON.stringify(html, null, 2);
+      const blob = new Blob([content], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       window.open(url, '_blank');
     } catch (err) {
       setCustomAlert({
         isOpen: true,
         title: 'Report Unavailable',
-        message: err.message || `No forensic report generated yet for case ${caseItem.name || caseItem.case_id}.`,
+        message: err.message || `No finalized forensic report available for case ${caseItem.name || caseItem.case_id}. Review findings must be completed before report finalization.`,
         type: 'warning'
       });
     } finally {
@@ -71,31 +60,21 @@ const Cases = () => {
 
   const fetchCasesData = async () => {
     try {
-      const token = localStorage.getItem('argus_token');
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'X-Tenant-ID': DEFAULT_TENANT_ID
-      };
-
       // 1. Fetch employees map
       let employeeMap = {};
-      const empRes = await fetch(`${API_BASE_URL}/auth/employees`, { headers });
-      if (empRes.ok) {
-        const empData = await empRes.json();
-        empData.forEach(emp => {
-          employeeMap[String(emp.id)] = emp;
-        });
+      try {
+        const empData = await fetchEmployees();
+        if (Array.isArray(empData)) {
+          empData.forEach(emp => {
+            employeeMap[String(emp.id)] = emp;
+          });
+        }
+      } catch (e) {
+        console.warn('Could not load employee names map:', e);
       }
 
       // 2. Fetch cases
-      const caseRes = await fetch(`${API_BASE_URL}/cases/`, { headers });
-      if (caseRes.status === 401 || caseRes.status === 403) {
-        navigate('/login');
-        return;
-      }
-      if (!caseRes.ok) throw new Error('Failed to fetch cases list');
-
-      const caseData = await caseRes.json();
+      const caseData = await fetchCases();
       const rawCases = caseData.data || [];
 
       // Enrich cases with employee names
@@ -109,6 +88,10 @@ const Cases = () => {
       setCases([...enriched].reverse());
     } catch (err) {
       console.error(err);
+      if (err.status === 401 || err.status === 403) {
+        navigate('/login');
+        return;
+      }
       setCustomAlert({ isOpen: true, title: 'Error', message: err.message, type: 'error' });
     } finally {
       setLoading(false);
@@ -117,11 +100,14 @@ const Cases = () => {
 
   useEffect(() => {
     fetchCasesData();
+    const unsubscribe = subscribeToActiveCase(({ caseId }) => {
+      setActiveCaseId(caseId);
+    });
+    return unsubscribe;
   }, []);
 
   const handleSetActiveCase = (caseItem) => {
-    localStorage.setItem('active_case_id', caseItem.case_id);
-    if (caseItem.name) localStorage.setItem('active_case_name', caseItem.name);
+    setActiveCase(caseItem.case_id, caseItem.name || '');
     setCustomAlert({
       isOpen: true,
       title: 'Active Case Selected',
@@ -133,31 +119,19 @@ const Cases = () => {
 
   const handleCloseCase = async (caseId, caseName) => {
     try {
-      const token = localStorage.getItem('argus_token');
-      const res = await fetch(`${API_BASE_URL}/cases/${caseId}/close`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': DEFAULT_TENANT_ID
-        }
-      });
-      if (res.ok) {
-        if (localStorage.getItem('active_case_id') === caseId) {
-          localStorage.removeItem('active_case_id');
-          localStorage.removeItem('active_case_name');
-        }
-        setCustomAlert({
-          isOpen: true,
-          title: 'Success',
-          message: `Case ${caseName || caseId} was closed successfully.`,
-          type: 'success'
-        });
-        fetchCasesData();
-      } else {
-        throw new Error('Failed to close case');
+      await closeCase(caseId);
+      if (activeCaseId === caseId) {
+        setActiveCase('', '');
       }
+      setCustomAlert({
+        isOpen: true,
+        title: 'Success',
+        message: `Case ${caseName || caseId} was closed successfully.`,
+        type: 'success'
+      });
+      fetchCasesData();
     } catch (err) {
-      setCustomAlert({ isOpen: true, title: 'Error', message: err.message, type: 'error' });
+      setCustomAlert({ isOpen: true, title: 'Error', message: err.message || 'Failed to close case', type: 'error' });
     }
   };
 

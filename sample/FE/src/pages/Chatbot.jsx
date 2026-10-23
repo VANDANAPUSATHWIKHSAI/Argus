@@ -936,6 +936,43 @@ Select a quick prompt below or type your forensic query to begin querying Case *
             </div>
           </header>
 
+          {/* Evidence context strip: counts reflect records returned by the API, not inferred coverage. */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            flexWrap: 'wrap',
+            padding: '10px 28px',
+            background: themeStyles.cardBg,
+            borderBottom: `1px solid ${themeStyles.topbarBorder}`,
+            fontSize: '11px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: themeStyles.textMuted }}>
+              <span style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                background: contextLoading ? '#f59e0b' : '#10b981',
+                display: 'inline-block'
+              }} />
+              <span>{contextLoading ? 'Loading case records…' : 'Case context loaded'}</span>
+              <span style={{ color: themeStyles.borderLight }}>•</span>
+              <span>{caseFindings.length} finding record{caseFindings.length === 1 ? '' : 's'}</span>
+              <span style={{ color: themeStyles.borderLight }}>•</span>
+              <span>{caseEvidence.length} evidence record{caseEvidence.length === 1 ? '' : 's'}</span>
+            </div>
+            <div style={{
+              color: themeStyles.textMuted,
+              background: isDark ? 'rgba(245, 158, 11, 0.10)' : '#fffbeb',
+              border: `1px solid ${isDark ? 'rgba(245, 158, 11, 0.25)' : '#fde68a'}`,
+              padding: '4px 9px',
+              borderRadius: '6px'
+            }}>
+              Evidence-grounded · No unsupported fallback claims
+            </div>
+          </div>
+
           {/* CHAT MESSAGES SCROLLER */}
           <div style={{
             flex: 1,

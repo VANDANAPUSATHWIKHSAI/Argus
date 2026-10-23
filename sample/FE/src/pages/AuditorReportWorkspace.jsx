@@ -739,6 +739,22 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
             boxSizing: 'border-box',
             background: isDark ? '#090d16' : '#f8fafc'
           }}>
+            <div role="status" style={{
+              marginBottom: '14px',
+              padding: '11px 14px',
+              borderRadius: '8px',
+              border: `1px solid ${isDark ? 'rgba(245, 158, 11, 0.35)' : '#fcd34d'}`,
+              background: isDark ? 'rgba(245, 158, 11, 0.10)' : '#fffbeb',
+              color: isDark ? '#fcd34d' : '#92400e',
+              fontSize: '12px',
+              lineHeight: 1.5
+            }}>
+              <strong>Preview only — not a certified forensic report.</strong>
+              {' '}Validate every narrative against case-linked backend records before export. Loaded records: {evidenceFiles.length} evidence, {findings.length} findings.
+              {evidenceFiles.length === 0 || findings.length === 0
+                ? ' One or more record sets are empty; do not treat the preview narrative as case evidence.'
+                : ''}
+            </div>
             {/* Report Header Card */}
             <div style={{
               background: themeStyles.paperBg,

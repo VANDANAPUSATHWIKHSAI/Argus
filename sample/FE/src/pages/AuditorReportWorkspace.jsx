@@ -261,7 +261,7 @@ No hash match, custody event, signature, MITRE mapping, compliance verdict, or f
         sender: 'assistant',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         text: replyText,
-        reasoningTrail: AUDIT_REASONING_STEPS
+        reasoningTrail: res?.response ? [] : undefined
       };
       setChatMessages(prev => [...prev, assistantMessage]);
     } catch (err) {
@@ -274,7 +274,6 @@ No hash match, custody event, signature, MITRE mapping, compliance verdict, or f
         sender: 'assistant',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         text: fallbackReply,
-        reasoningTrail: AUDIT_REASONING_STEPS
       };
       setChatMessages(prev => [...prev, assistantMessage]);
     } finally {

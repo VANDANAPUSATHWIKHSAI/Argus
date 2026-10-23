@@ -273,8 +273,8 @@ Select a quick prompt below or type your forensic query to begin querying Case *
         sender: 'assistant',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         text: fallbackResponse,
-        injection_flagged: false,
-        injection_score: 0.0,
+        injection_flagged: null,
+        injection_score: null,
         isOfflineFallback: true
       };
       setMessages(prev => [...prev, assistantMessage]);

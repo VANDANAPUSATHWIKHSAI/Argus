@@ -311,8 +311,8 @@ No hash match, custody event, signature, MITRE mapping, compliance verdict, or f
       localStorage.removeItem(`argus_audit_certified_${activeCaseId}`);
       setCustomAlert({
         isOpen: true,
-        title: 'Attestation Removed',
-        message: `Auditor certification for case ${activeCaseId} has been revoked.`,
+        title: 'Review Marker Removed',
+        message: `The local review marker for case ${activeCaseId} has been removed. No server-side certification state was changed.`,
         type: 'info'
       });
     } else {
@@ -354,7 +354,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
     navigator.clipboard.writeText(attestation);
     setCustomAlert({
       isOpen: true,
-      title: 'Attestation Copied',
+      title: 'Review Note Copied',
       message: 'Review note copied. It is explicitly not a cryptographic or legal attestation.',
       type: 'success'
     });
@@ -670,10 +670,10 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                 cursor: 'pointer',
                 transition: 'all 0.2s'
               }}
-              title={isAuditor ? "Toggle Auditor Certified Sign-Off" : "Toggle Analyst Report Verification"}
+              title="Save or remove a local review marker; this does not certify evidence or lock the case"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-              <span>{isCertified ? (isAuditor ? 'Audit Certified' : 'Report Verified') : (isAuditor ? 'Certify Report' : 'Verify & Sign-Off')}</span>
+              <span>{isCertified ? 'Review Marked' : 'Mark Review'}</span>
             </button>
 
             {/* Print / Export PDF */}
@@ -810,7 +810,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                     fontWeight: 700 
                   }}>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                    CRYPTOGRAPHICALLY CERTIFIED BY AUDITOR ({certificationTimestamp || 'Verified'})
+                    LOCAL REVIEW MARKER — NOT CRYPTOGRAPHICALLY CERTIFIED ({certificationTimestamp || 'timestamp unavailable'})
                   </div>
                 )}
               </div>
@@ -1129,10 +1129,10 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
               }}>
                 <div>
                   <div style={{ fontSize: '12px', fontWeight: 700, color: themeStyles.textMain }}>
-                    Lead Auditor: {user?.name || 'Sathwik'} ({user?.role?.toUpperCase() || 'AUDITOR'})
+                    Reviewer: {user?.name || 'Reviewer not identified'} ({user?.role?.toUpperCase() || 'ROLE UNAVAILABLE'})
                   </div>
                   <div style={{ fontSize: '11px', color: themeStyles.textMuted }}>
-                    Attestation: {isCertified ? 'ISO/IEC 27037 Certified Compliant' : 'Pending Formal Auditor Attestation'}
+                    Review status: {isCertified ? 'Marked locally; server verification required' : 'Not marked'}
                   </div>
                 </div>
 
@@ -1144,10 +1144,10 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                   textAlign: 'center'
                 }}>
                   <div style={{ fontSize: '11px', fontWeight: 800, color: isCertified ? '#10b981' : themeStyles.textMuted, letterSpacing: '0.05em' }}>
-                    {isCertified ? 'AUDIT CERTIFIED' : 'PENDING CERTIFICATION'}
+                    {isCertified ? 'REVIEW MARKED LOCALLY' : 'REVIEW NOT MARKED'}
                   </div>
                   <div style={{ fontSize: '10px', color: themeStyles.textMuted }}>
-                    {isCertified ? (certificationTimestamp || 'Verified') : 'Click "Certify Report"'}
+                    {isCertified ? (certificationTimestamp || 'timestamp unavailable') : 'Use Mark Review'}
                   </div>
                 </div>
               </div>

@@ -52,8 +52,25 @@ const ConfidenceBar = ({ value }) => {
 
 const Findings = () => {
   const navigate = useNavigate();
-  const activeCaseId = localStorage.getItem('active_case_id');
-  const activeCaseName = localStorage.getItem('active_case_name') || 'Current Case';
+  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
+  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'Current Case');
+
+  useEffect(() => {
+    const handleCaseSync = () => {
+      const storedId = localStorage.getItem('active_case_id');
+      const storedName = localStorage.getItem('active_case_name');
+      if (storedId && storedId !== activeCaseId) {
+        setActiveCaseId(storedId);
+        setActiveCaseName(storedName || storedId);
+      }
+    };
+    window.addEventListener('storage', handleCaseSync);
+    window.addEventListener('argus:caseChanged', handleCaseSync);
+    return () => {
+      window.removeEventListener('storage', handleCaseSync);
+      window.removeEventListener('argus:caseChanged', handleCaseSync);
+    };
+  }, [activeCaseId]);
 
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;

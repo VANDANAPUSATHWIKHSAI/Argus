@@ -69,7 +69,7 @@ export default function AuditorReportWorkspace() {
   const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'ARGUS_956');
   const [casesList, setCasesList] = useState([]);
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
-  const [loadingCaseData, setLoadingCaseData] = useState(false);
+  const [_loadingCaseData, setLoadingCaseData] = useState(false);
 
   // Case Data
   const [findings, setFindings] = useState([]);
@@ -125,6 +125,27 @@ export default function AuditorReportWorkspace() {
     loadCases();
   }, []);
 
+  // Initialize Welcome Message
+  const initAuditChatWelcome = (caseId, caseName) => {
+    const roleTitle = isAuditor ? 'Auditor' : 'Senior Analyst';
+    setChatMessages([
+      {
+        id: 'welcome-msg',
+        sender: 'assistant',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: `### 🛡️ AI Forensic Audit Copilot Ready
+Welcome, **${user?.name || roleTitle}**. I can help inspect records returned by ARGUS for case **${caseId}** (${caseName || 'Active Case'}). The backend must supply evidence for any audit conclusion.
+
+#### Active Audit Scope:
+- **Evidence Ledgers:** Evidence metadata loaded where available; integrity status is shown only when returned by the verification service.
+- **Triaged Findings:** Grounded against multi-agent correlation telemetry.
+- **Compliance Status:** Review supporting records before making any compliance or admissibility determination.
+
+You can click any **"Verify with AI"** or **"Audit Artifact"** button in the report preview on the left, or use the quick audit actions below to cross-examine claims, verify integrity, or check MITRE techniques.`
+      }
+    ]);
+  };
+
   // 2. Load case findings and evidence whenever activeCaseId changes
   useEffect(() => {
     if (!activeCaseId) return;
@@ -167,7 +188,7 @@ export default function AuditorReportWorkspace() {
             const parsed = JSON.parse(certData);
             setIsCertified(true);
             setCertificationTimestamp(parsed.timestamp);
-          } catch (e) {
+          } catch (_e) {
             setIsCertified(false);
           }
         } else {
@@ -188,33 +209,12 @@ export default function AuditorReportWorkspace() {
     loadData();
 
     return () => { isMounted = false; };
-  }, [activeCaseId]);
+  }, [activeCaseId, activeCaseName]);
 
   // Scroll chat to bottom on new messages
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages, chatLoading, reasoningStep]);
-
-  // Initialize Welcome Message
-  const initAuditChatWelcome = (caseId, caseName) => {
-    const roleTitle = isAuditor ? 'Auditor' : 'Senior Analyst';
-    setChatMessages([
-      {
-        id: 'welcome-msg',
-        sender: 'assistant',
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        text: `### 🛡️ AI Forensic Audit Copilot Ready
-Welcome, **${user?.name || roleTitle}**. I can help inspect records returned by ARGUS for case **${caseId}** (${caseName || 'Active Case'}). The backend must supply evidence for any audit conclusion.
-
-#### Active Audit Scope:
-- **Evidence Ledgers:** Evidence metadata loaded where available; integrity status is shown only when returned by the verification service.
-- **Triaged Findings:** Grounded against multi-agent correlation telemetry.
-- **Compliance Status:** Review supporting records before making any compliance or admissibility determination.
-
-You can click any **"Verify with AI"** or **"Audit Artifact"** button in the report preview on the left, or use the quick audit actions below to cross-examine claims, verify integrity, or check MITRE techniques.`
-      }
-    ]);
-  };
 
   // Fail closed: never synthesize audit facts when the backend is unavailable.
   const buildAuditUnavailableResponse = (caseId, reason = 'The case-query service did not return a usable response.') => `## Audit response unavailable
@@ -467,7 +467,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
             )}
           </div>
         );
-      } catch (e) {}
+      } catch (_e) {}
     }
 
     const lines = rawText.split('\n');
@@ -541,23 +541,29 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
     accentRed: '#ef4444'
   };
 
-  // Calculate Findings Metrics
-  const highSevCount = findings.filter(f => (f.severity || '').toLowerCase() === 'high' || (f.severity || '').toLowerCase() === 'critical').length || 3;
-  const medSevCount = findings.filter(f => (f.severity || '').toLowerCase() === 'medium').length || 2;
-  const lowSevCount = findings.filter(f => (f.severity || '').toLowerCase() === 'low').length || 0;
-  const evidenceCount = evidenceFiles.length || 1;
+  // Calculate Findings Metrics strictly from loaded case data (no fabricated fallbacks)
+  const highSevCount = findings.filter(f => (f.severity || '').toLowerCase() === 'high' || (f.severity || '').toLowerCase() === 'critical').length;
+  const medSevCount = findings.filter(f => (f.severity || '').toLowerCase() === 'medium').length;
+  const lowSevCount = findings.filter(f => (f.severity || '').toLowerCase() === 'low').length;
+  const evidenceCount = evidenceFiles.length;
 
-  // MITRE Techniques from findings
+  // MITRE Techniques dynamically derived from loaded case findings
   const observedTechniques = useMemo(() => {
-    const list = [
-      { id: 'T1566.001', name: 'Spearphishing Attachment', tactic: 'Initial Access' },
-      { id: 'T1204.002', name: 'Malicious File Execution', tactic: 'Execution' },
-      { id: 'T1059.005', name: 'VBA Macro Execution', tactic: 'Execution' },
-      { id: 'T1053.005', name: 'Scheduled Task Persistence', tactic: 'Persistence' },
-      { id: 'T1071.001', name: 'Web C2 Protocols', tactic: 'Command & Control' }
-    ];
+    const list = [];
+    const seen = new Set();
+    findings.forEach(f => {
+      const tid = f.mitre_mapping || f.mitre || (f.metadata && f.metadata.mitre_technique);
+      if (tid && !seen.has(tid)) {
+        seen.add(tid);
+        list.push({
+          id: tid,
+          name: MITRE_TECHNIQUE_NAMES[tid] || (f.layer ? `${f.layer} Technique` : 'Observed Technique'),
+          tactic: f.layer ? f.layer.toUpperCase() : 'Attribution'
+        });
+      }
+    });
     return list;
-  }, []);
+  }, [findings]);
 
   return (
     <div id="app-shell" style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden', background: themeStyles.appBg }}>
@@ -838,9 +844,15 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                     1. Executive Summary
                   </h2>
                 </div>
-                <p style={{ fontSize: '12.5px', color: themeStyles.paperText, lineHeight: '1.7', margin: 0, textAlign: 'justify', opacity: 0.9 }}>
-                  This forensic investigation report details the multi-agent telemetry and evidence analysis conducted for case <strong>{activeCaseId}</strong>. The analysis identified an unauthorized intrusion initiated via a targeted phishing delivery vector containing an obfuscated macro payload. The compromise led to memory process injection, registry autostart persistence, and outbound command-and-control beaconing. All artifacts have been preserved in compliance with ISO/IEC 27037 digital evidence custody standards.
-                </p>
+                {caseSummary?.description ? (
+                  <p style={{ fontSize: '12.5px', color: themeStyles.paperText, lineHeight: '1.7', margin: 0, textAlign: 'justify', opacity: 0.9 }}>
+                    {caseSummary.description}
+                  </p>
+                ) : (
+                  <p style={{ fontSize: '12px', color: themeStyles.paperMuted, fontStyle: 'italic', margin: 0, padding: '8px 12px', background: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', borderRadius: '6px' }}>
+                    No case narrative supplied by the backend for Case <strong>{activeCaseId}</strong>. Findings and evidence telemetry must be evaluated from authoritative records below.
+                  </p>
+                )}
               </div>
 
               {/* Section 2: Key Findings KPI Grid */}
@@ -943,93 +955,101 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                   <div style={{ borderLeft: '4px solid #ef4444', paddingLeft: '10px' }}>
                     <h2 style={{ fontSize: '15px', fontWeight: 700, color: themeStyles.textMain, margin: 0 }}>
-                      4. Triaged Forensic Findings ({findings.length || 5})
+                      4. Triaged Forensic Findings ({findings.length})
                     </h2>
                   </div>
                   <span style={{ fontSize: '11px', color: themeStyles.textMuted }}>
-                    Multi-Agent Corroborated
+                    {findings.length > 0 ? 'Multi-Agent Corroborated' : 'No Findings Loaded'}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {(findings.length > 0 ? findings : [
-                    { finding_id: 'F-001', sanitized_fact: 'Suspicious email attachment with spoofed sender and embedded dropper script.', severity: 'critical', confidence: 0.94, mitre_mapping: 'T1566.001' },
-                    { finding_id: 'F-002', sanitized_fact: 'Worksheet contains obfuscated VBA Macro executing hidden payload.', severity: 'high', confidence: 0.91, mitre_mapping: 'T1059.005' },
-                    { finding_id: 'F-003', sanitized_fact: 'Scheduled Task persistence registered in system registry hives.', severity: 'medium', confidence: 0.88, mitre_mapping: 'T1053.005' },
-                    { finding_id: 'F-004', sanitized_fact: 'Outbound HTTP communication with external command and control server.', severity: 'high', confidence: 0.89, mitre_mapping: 'T1071.001' },
-                    { finding_id: 'F-005', sanitized_fact: 'Malicious process execution triggered from user Downloads directory.', severity: 'medium', confidence: 0.86, mitre_mapping: 'T1204.002' }
-                  ]).map((finding, idx) => {
-                    const sev = (finding.severity || 'high').toLowerCase();
-                    const sevColor = sev === 'critical' || sev === 'high' ? '#ef4444' : (sev === 'medium' ? '#f97316' : '#10b981');
-                    const sevBg = sev === 'critical' || sev === 'high' ? (isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2') : (isDark ? 'rgba(249, 115, 22, 0.15)' : '#ffedd5');
+                  {findings.length > 0 ? (
+                    findings.map((finding, idx) => {
+                      const sev = (finding.severity || 'high').toLowerCase();
+                      const sevColor = sev === 'critical' || sev === 'high' ? '#ef4444' : (sev === 'medium' ? '#f97316' : '#10b981');
+                      const sevBg = sev === 'critical' || sev === 'high' ? (isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2') : (isDark ? 'rgba(249, 115, 22, 0.15)' : '#ffedd5');
 
-                    return (
-                      <div
-                        key={idx}
-                        style={{
-                          background: isDark ? '#141d2f' : '#f8fafc',
-                          border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`,
-                          borderRadius: '8px',
-                          padding: '10px 14px'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 700, color: themeStyles.textMain, fontFamily: 'monospace' }}>
-                              {finding.finding_id || `F-00${idx + 1}`}
-                            </span>
-                            <span style={{
-                              fontSize: '10px',
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              color: sevColor,
-                              background: sevBg
-                            }}>
-                              {sev}
-                            </span>
-                            {finding.mitre_mapping && (
+                      return (
+                        <div
+                          key={finding.finding_id || idx}
+                          style={{
+                            background: isDark ? '#141d2f' : '#f8fafc',
+                            border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`,
+                            borderRadius: '8px',
+                            padding: '10px 14px'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontSize: '11px', fontWeight: 700, color: themeStyles.textMain, fontFamily: 'monospace' }}>
+                                {finding.finding_id || `F-00${idx + 1}`}
+                              </span>
                               <span style={{
                                 fontSize: '10px',
-                                fontWeight: 600,
+                                fontWeight: 700,
+                                textTransform: 'uppercase',
                                 padding: '2px 6px',
                                 borderRadius: '4px',
-                                background: isDark ? 'rgba(234, 179, 8, 0.15)' : '#fef3c7',
-                                color: '#d97706'
+                                color: sevColor,
+                                background: sevBg
                               }}>
-                                {finding.mitre_mapping}
+                                {sev}
                               </span>
-                            )}
+                              {finding.mitre_mapping && (
+                                <span style={{
+                                  fontSize: '10px',
+                                  fontWeight: 600,
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  background: isDark ? 'rgba(234, 179, 8, 0.15)' : '#fef3c7',
+                                  color: '#d97706'
+                                }}>
+                                  {finding.mitre_mapping}
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyFinding(finding)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#3b82f6',
+                                fontSize: '11px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                padding: '2px 6px'
+                              }}
+                              title="Cross-examine this finding with AI Assistant"
+                            >
+                              Verify with AI &rarr;
+                            </button>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleVerifyFinding(finding)}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: '#3b82f6',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '2px 6px'
-                            }}
-                            title="Cross-examine this finding with AI Assistant"
-                          >
-                            Verify with AI &rarr;
-                          </button>
+                          <div style={{ fontSize: '12px', color: themeStyles.paperText, lineHeight: '1.5' }}>
+                            {finding.sanitized_fact || finding.fact || finding.claim}
+                          </div>
                         </div>
-
-                        <div style={{ fontSize: '12px', color: themeStyles.paperText, lineHeight: '1.5' }}>
-                          {finding.sanitized_fact || finding.fact || finding.claim}
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  ) : (
+                    <div style={{
+                      padding: '16px',
+                      textAlign: 'center',
+                      color: themeStyles.paperMuted,
+                      fontSize: '12px',
+                      background: isDark ? '#141d2f' : '#f8fafc',
+                      borderRadius: '8px',
+                      border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`
+                    }}>
+                      No forensic findings loaded for Case {activeCaseId}.
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1037,33 +1057,39 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
               <div style={{ marginBottom: '24px' }}>
                 <div style={{ borderLeft: '4px solid #eab308', paddingLeft: '10px', marginBottom: '8px' }}>
                   <h2 style={{ fontSize: '15px', fontWeight: 700, color: themeStyles.textMain, margin: 0 }}>
-                    5. MITRE ATT&CK Kill-Chain Mapping
+                    5. MITRE ATT&CK Kill-Chain Mapping ({observedTechniques.length})
                   </h2>
                 </div>
-                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                  {observedTechniques.map(tech => (
-                    <div
-                      key={tech.id}
-                      onClick={() => handleQuickAction(`Audit MITRE technique ${tech.id} (${tech.name}) observed in this case.`)}
-                      style={{
-                        background: isDark ? 'rgba(234, 179, 8, 0.12)' : '#fffbeb',
-                        border: `1px solid ${isDark ? 'rgba(234, 179, 8, 0.25)' : '#fde68a'}`,
-                        borderRadius: '6px',
-                        padding: '5px 10px',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px'
-                      }}
-                      title="Click to audit this technique"
-                    >
-                      <strong style={{ color: '#d97706' }}>{tech.id}</strong>
-                      <span style={{ color: themeStyles.paperText }}>{tech.name}</span>
-                      <span style={{ fontSize: '10px', color: themeStyles.textMuted }}>({tech.tactic})</span>
-                    </div>
-                  ))}
-                </div>
+                {observedTechniques.length > 0 ? (
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {observedTechniques.map(tech => (
+                      <div
+                        key={tech.id}
+                        onClick={() => handleQuickAction(`Audit MITRE technique ${tech.id} (${tech.name}) observed in this case.`)}
+                        style={{
+                          background: isDark ? 'rgba(234, 179, 8, 0.12)' : '#fffbeb',
+                          border: `1px solid ${isDark ? 'rgba(234, 179, 8, 0.25)' : '#fde68a'}`,
+                          borderRadius: '6px',
+                          padding: '5px 10px',
+                          fontSize: '11px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        title="Click to audit this technique"
+                      >
+                        <strong style={{ color: '#d97706' }}>{tech.id}</strong>
+                        <span style={{ color: themeStyles.paperText }}>{tech.name}</span>
+                        <span style={{ fontSize: '10px', color: themeStyles.textMuted }}>({tech.tactic})</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '12px', color: themeStyles.paperMuted, fontStyle: 'italic', padding: '6px 0' }}>
+                    No MITRE ATT&CK techniques identified in case findings.
+                  </div>
+                )}
               </div>
 
               {/* Section 6: Attack Sequence Timeline */}
@@ -1073,23 +1099,16 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                     6. Attack Reconstruction Sequence
                   </h2>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '12px', paddingLeft: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#f97316', marginTop: '5px' }}></div>
-                    <div><strong>Phase 1 (Initial Infiltration):</strong> Inbound archive \`elms_archive_data (1).xlsx\` delivered via phishing.</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ef4444', marginTop: '5px' }}></div>
-                    <div><strong>Phase 2 (Execution):</strong> User opened document, triggering Auto_Open VBA shellcode unpacking.</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#eab308', marginTop: '5px' }}></div>
-                    <div><strong>Phase 3 (Persistence):</strong> Scheduled job registered to execute unpacked payload on reboot.</div>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
-                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3b82f6', marginTop: '5px' }}></div>
-                    <div><strong>Phase 4 (C2 Beaconing):</strong> Outbound HTTP session initiated to adversary infrastructure.</div>
-                  </div>
+                <div style={{
+                  fontSize: '12px',
+                  color: themeStyles.paperMuted,
+                  fontStyle: 'italic',
+                  padding: '10px 14px',
+                  background: isDark ? '#141d2f' : '#f8fafc',
+                  borderRadius: '8px',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`
+                }}>
+                  Attack sequence reconstruction requires completed multi-agent analysis or timeline events. No synthetic sequence displayed.
                 </div>
               </div>
 
@@ -1100,22 +1119,16 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                     7. Forensic Impact Assessment
                   </h2>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px' }}>
-                  <div style={{ border: `1px solid ${themeStyles.paperBorder}`, borderRadius: '6px', padding: '8px 10px', background: isDark ? '#141d2f' : '#f8fafc' }}>
-                    <div style={{ fontSize: '10px', color: themeStyles.textMuted, fontWeight: 700 }}>CONFIDENTIALITY</div>
-                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#ef4444' }}>HIGH IMPACT</div>
-                    <div style={{ fontSize: '10.5px', color: themeStyles.textMuted }}>Financial and employee records staged</div>
-                  </div>
-                  <div style={{ border: `1px solid ${themeStyles.paperBorder}`, borderRadius: '6px', padding: '8px 10px', background: isDark ? '#141d2f' : '#f8fafc' }}>
-                    <div style={{ fontSize: '10px', color: themeStyles.textMuted, fontWeight: 700 }}>INTEGRITY</div>
-                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#f97316' }}>MODERATE IMPACT</div>
-                    <div style={{ fontSize: '10.5px', color: themeStyles.textMuted }}>System registry hives altered</div>
-                  </div>
-                  <div style={{ border: `1px solid ${themeStyles.paperBorder}`, borderRadius: '6px', padding: '8px 10px', background: isDark ? '#141d2f' : '#f8fafc' }}>
-                    <div style={{ fontSize: '10px', color: themeStyles.textMuted, fontWeight: 700 }}>AVAILABILITY</div>
-                    <div style={{ fontSize: '12px', fontWeight: 800, color: '#10b981' }}>LOW IMPACT</div>
-                    <div style={{ fontSize: '10.5px', color: themeStyles.textMuted }}>Host core services remained online</div>
-                  </div>
+                <div style={{
+                  fontSize: '12px',
+                  color: themeStyles.paperMuted,
+                  fontStyle: 'italic',
+                  padding: '10px 14px',
+                  background: isDark ? '#141d2f' : '#f8fafc',
+                  borderRadius: '8px',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`
+                }}>
+                  Formal forensic impact assessment requires completed analysis and analyst sign-off. Observed case telemetry: {highSevCount} High/Critical findings, {medSevCount} Medium findings, {lowSevCount} Low findings across {evidenceCount} evidence files.
                 </div>
               </div>
 
@@ -1126,12 +1139,17 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                     8. Recommendations & Remediation
                   </h2>
                 </div>
-                <ol style={{ fontSize: '12px', color: themeStyles.paperText, paddingLeft: '20px', margin: 0, lineHeight: '1.7' }}>
-                  <li>Isolate affected host endpoint <strong>WS-FIN-042</strong> and terminate rogue spawned processes.</li>
-                  <li>Block all outbound communication to identified C2 destination IP addresses at the border firewall.</li>
-                  <li>Remove malicious Scheduled Task persistence keys from HKCU and HKLM registry hives.</li>
-                  <li>Perform credential revocation and Kerberos ticket purging for affected user accounts.</li>
-                </ol>
+                <div style={{
+                  fontSize: '12px',
+                  color: themeStyles.paperMuted,
+                  fontStyle: 'italic',
+                  padding: '10px 14px',
+                  background: isDark ? '#141d2f' : '#f8fafc',
+                  borderRadius: '8px',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : '#e2e8f0'}`
+                }}>
+                  Remediation recommendations are pending completed analyst investigation and incident containment review.
+                </div>
               </div>
 
               {/* Section 9: Auditor Certification & Sign-off Stamp */}

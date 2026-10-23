@@ -17,11 +17,10 @@ import Notifications from './pages/Notifications';
 import Cases from './pages/Cases';
 import Agents from './pages/Agents';
 import Report from './pages/Report';
-import ProtectedRoute from './components/ProtectedRoute';// Global styles for the app (can also just import individual ones in components)
+import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
 import SessionManager from './components/SessionManager';
-import DevRoleSwitcher from './components/DevRoleSwitcher';
 import TemplateHub from './templates/TemplateHub';
 import TechnicalMinimalTemplate from './templates/TechnicalMinimalTemplate';
 import ModernWorkspaceTemplate from './templates/ModernWorkspaceTemplate';
@@ -57,43 +56,46 @@ function App() {
   return (
     <Router>
       <SessionManager />
-      <DevRoleSwitcher />
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/cases" element={<ProtectedRoute><Cases /></ProtectedRoute>} />
-        <Route path="/agents" element={<ProtectedRoute><Agents /></ProtectedRoute>} />
-        <Route path="/report" element={<ProtectedRoute><Report /></ProtectedRoute>} />
-        <Route path="/reports" element={<ProtectedRoute><Report /></ProtectedRoute>} />
-        <Route path="/employees" element={<ProtectedRoute><Employees /></ProtectedRoute>} />
-        <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
-        <Route path="/case-notes" element={<ProtectedRoute><CaseNotes /></ProtectedRoute>} />
-        <Route path="/chatbot" element={<ProtectedRoute><Chatbot /></ProtectedRoute>} />
-        <Route path="/findings" element={<ProtectedRoute><Findings /></ProtectedRoute>} />
-        <Route path="/timeline" element={<ProtectedRoute><TimelineDetail /></ProtectedRoute>} />
+        
+        {/* Role-governed Routes */}
+        <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Dashboard /></ProtectedRoute>} />
+        <Route path="/cases" element={<ProtectedRoute allowedRoles={['admin']}><Cases /></ProtectedRoute>} />
+        <Route path="/agents" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Agents /></ProtectedRoute>} />
+        <Route path="/report" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst', 'auditor']}><Report /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst', 'auditor']}><Report /></ProtectedRoute>} />
+        <Route path="/employees" element={<ProtectedRoute allowedRoles={['admin']}><Employees /></ProtectedRoute>} />
+        <Route path="/audit-logs" element={<ProtectedRoute allowedRoles={['admin']}><AuditLogs /></ProtectedRoute>} />
+        <Route path="/case-notes" element={<ProtectedRoute allowedRoles={['analyst', 'senior_analyst']}><CaseNotes /></ProtectedRoute>} />
+        <Route path="/chatbot" element={<ProtectedRoute allowedRoles={['analyst', 'senior_analyst']}><Chatbot /></ProtectedRoute>} />
+        <Route path="/findings" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst']}><Findings /></ProtectedRoute>} />
+        <Route path="/timeline" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst']}><TimelineDetail /></ProtectedRoute>} />
+        <Route path="/evidence" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Evidence /></ProtectedRoute>} />
+        <Route path="/upload" element={<ProtectedRoute allowedRoles={['admin', 'analyst']}><Upload /></ProtectedRoute>} />
+        <Route path="/sanitized" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Sanitized /></ProtectedRoute>} />
+        <Route path="/sanitized/:id" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><SanitizedDetail /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst', 'auditor']}><Settings /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst', 'auditor']}><Notifications /></ProtectedRoute>} />
+
+        {/* Legacy redirect aliases */}
         <Route path="/evidence-coverage" element={<Navigate to="/evidence" replace />} />
         <Route path="/index.html" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/evidence" element={<ProtectedRoute><Evidence /></ProtectedRoute>} />
         <Route path="/evidence.html" element={<Navigate to="/evidence" replace />} />
-        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         <Route path="/settings.html" element={<Navigate to="/settings" replace />} />
-        <Route path="/upload" element={<ProtectedRoute><Upload /></ProtectedRoute>} />
         <Route path="/upload.html" element={<Navigate to="/upload" replace />} />
-        <Route path="/sanitized" element={<ProtectedRoute><Sanitized /></ProtectedRoute>} />
-        <Route path="/sanitized/:id" element={<ProtectedRoute><SanitizedDetail /></ProtectedRoute>} />
         <Route path="/sanitized.html" element={<Navigate to="/sanitized" replace />} />
 
-        {/* ARGUS Approved-Direction Design Exploration Suite (6 Templates) */}
-        <Route path="/templates" element={<TemplateHub />} />
-        <Route path="/templates/technical-minimal" element={<TechnicalMinimalTemplate />} />
-        <Route path="/templates/modern-workspace" element={<ModernWorkspaceTemplate />} />
-        <Route path="/templates/technical-minimal-compact" element={<TechnicalMinimalCompactTemplate />} />
-        <Route path="/templates/technical-minimal-advanced" element={<TechnicalMinimalAdvancedTemplate />} />
-        <Route path="/templates/modern-workspace-detailed" element={<ModernWorkspaceDetailedTemplate />} />
-        <Route path="/templates/modern-workspace-split" element={<ModernWorkspaceSplitTemplate />} />
-        <Route path="/templates/v2-technical" element={<TechnicalWorkstationV2 />} />
+        {/* Internal Design Exploration Suite (Restricted to authenticated staff) */}
+        <Route path="/templates" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TemplateHub /></ProtectedRoute>} />
+        <Route path="/templates/technical-minimal" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TechnicalMinimalTemplate /></ProtectedRoute>} />
+        <Route path="/templates/modern-workspace" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><ModernWorkspaceTemplate /></ProtectedRoute>} />
+        <Route path="/templates/technical-minimal-compact" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TechnicalMinimalCompactTemplate /></ProtectedRoute>} />
+        <Route path="/templates/technical-minimal-advanced" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TechnicalMinimalAdvancedTemplate /></ProtectedRoute>} />
+        <Route path="/templates/modern-workspace-detailed" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><ModernWorkspaceDetailedTemplate /></ProtectedRoute>} />
+        <Route path="/templates/modern-workspace-split" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><ModernWorkspaceSplitTemplate /></ProtectedRoute>} />
+        <Route path="/templates/v2-technical" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TechnicalWorkstationV2 /></ProtectedRoute>} />
       </Routes>
     </Router>
   );

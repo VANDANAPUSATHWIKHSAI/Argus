@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
-import { fetchAgentResults, triggerAgentAnalysis, fetchCases, DEFAULT_TENANT_ID } from '../js/api';
+import { fetchAgentResults, triggerAgentAnalysis, fetchCases } from '../js/api';
 import { formatEvidenceId } from '../js/dateUtils';
 import '../css/style.css';
 
@@ -144,11 +143,10 @@ const AGENT_METADATA = {
 };
 
 const Agents = () => {
-  const navigate = useNavigate();
   const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
   const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || 'Current Case');
   const [agentData, setAgentData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [runningAgents, setRunningAgents] = useState(false);
   const [selectedAgentTab, setSelectedAgentTab] = useState('agent7'); // default to supervisor
   const [activeViewMode, setActiveViewMode] = useState('pipeline'); // 'pipeline' | 'claims' | 'raw_json'
@@ -206,19 +204,41 @@ const Agents = () => {
     }
   };
 
+  // Synchronize active case across tabs and components
+  useEffect(() => {
+    const handleCaseSync = () => {
+      const storedId = localStorage.getItem('active_case_id');
+      const storedName = localStorage.getItem('active_case_name');
+      if (storedId && storedId !== activeCaseId) {
+        setActiveCaseId(storedId);
+        setActiveCaseName(storedName || storedId);
+      }
+    };
+    window.addEventListener('storage', handleCaseSync);
+    window.addEventListener('argus:caseChanged', handleCaseSync);
+    return () => {
+      window.removeEventListener('storage', handleCaseSync);
+      window.removeEventListener('argus:caseChanged', handleCaseSync);
+    };
+  }, [activeCaseId]);
+
   useEffect(() => {
     if (activeCaseId) {
       loadAgentResults(activeCaseId);
     }
   }, [activeCaseId]);
 
-  // Polling when analysis is running
+  // Polling when analysis is running with bounded errors and visible user feedback
   useEffect(() => {
     let interval = null;
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 5;
+
     if (runningAgents && activeCaseId) {
       interval = setInterval(async () => {
         try {
           const data = await fetchAgentResults(activeCaseId);
+          consecutiveErrors = 0;
           setAgentData(data);
           if (data.status !== 'RUNNING') {
             setRunningAgents(false);
@@ -246,7 +266,17 @@ const Agents = () => {
             }
           }
         } catch (e) {
-          console.error('Polling error:', e);
+          consecutiveErrors += 1;
+          console.error(`Polling error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, e);
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            setRunningAgents(false);
+            setCustomAlert({
+              isOpen: true,
+              title: '📡 Backend Polling Paused',
+              message: `Lost connection to agent service after multiple attempts for Case ${activeCaseId}. Polling stopped to avoid unconstrained retries.`,
+              type: 'error'
+            });
+          }
         }
       }, 3000);
     }
@@ -256,6 +286,7 @@ const Agents = () => {
   }, [runningAgents, activeCaseId]);
 
   const handleRunAnalysis = async () => {
+    if (runningAgents) return; // Prevent duplicate execution
     if (!activeCaseId) {
       setCustomAlert({
         isOpen: true,
@@ -542,7 +573,7 @@ const Agents = () => {
             <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'start' }}>
 
               {/* 7-AGENT SIDEBAR SELECTION */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div role="tablist" aria-label="Agent Pipeline Hierarchy" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>
                   Agent Pipeline Hierarchy
                 </div>
@@ -552,7 +583,16 @@ const Agents = () => {
                   return (
                     <div
                       key={agent.id}
+                      role="tab"
+                      tabIndex={0}
+                      aria-selected={isSelected}
                       onClick={() => setSelectedAgentTab(agent.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setSelectedAgentTab(agent.id);
+                        }
+                      }}
                       style={{
                         background: isSelected ? agent.bg : 'var(--bg-card)',
                         border: `1px solid ${isSelected ? agent.color : 'var(--border-subtle)'}`,
@@ -743,7 +783,7 @@ const Agents = () => {
                           </thead>
                           <tbody>
                             {(currentAgentData.verification || agentData?.verification_results || []).length > 0 ? (
-                              (currentAgentData.verification || agentData?.verification_results).map((v, idx) => {
+                              (currentAgentData.verification || agentData?.verification_results || []).map((v, idx) => {
                                 const isEntailed = (v.verdict || v.status || '').toLowerCase().includes('entail') || v.verified === true;
                                 const isContradicted = (v.verdict || v.status || '').toLowerCase().includes('contradict');
                                 const badgeBg = isEntailed ? 'rgba(16,185,129,0.15)' : (isContradicted ? 'rgba(239,68,68,0.15)' : 'rgba(245,158,11,0.15)');

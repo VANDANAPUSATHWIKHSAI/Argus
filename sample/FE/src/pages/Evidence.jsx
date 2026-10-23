@@ -46,6 +46,21 @@ const Evidence = () => {
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
   const navigate = useNavigate();
 
+  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
+
+  // Synchronize active case across tabs and components
+  useEffect(() => {
+    const handleCaseSync = () => {
+      setActiveCaseId(localStorage.getItem('active_case_id') || '');
+    };
+    window.addEventListener('storage', handleCaseSync);
+    window.addEventListener('argus_case_change', handleCaseSync);
+    return () => {
+      window.removeEventListener('storage', handleCaseSync);
+      window.removeEventListener('argus_case_change', handleCaseSync);
+    };
+  }, []);
+
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
   const isAdmin = currentUser?.role === 'admin';
@@ -56,20 +71,24 @@ const Evidence = () => {
   };
   
   useEffect(() => {
+    let isMounted = true;
     const loadEvidence = async () => {
       try {
-        let caseId = localStorage.getItem('active_case_id');
-        
-        if (!caseId) {
-          setEvidenceData([]);
-          setLoading(false);
+        setLoading(true);
+        if (!activeCaseId) {
+          if (isMounted) {
+            setEvidenceData([]);
+            setLoading(false);
+          }
           return;
         }
 
-        const rawData = await fetchEvidenceForCase(caseId);
+        const rawData = await fetchEvidenceForCase(activeCaseId);
+        if (!isMounted) return;
+
         const fetchedList = rawData.data || rawData || [];
         
-        const mappedData = fetchedList.map((item, index) => {
+        const mappedData = (Array.isArray(fetchedList) ? fetchedList : []).map((item, index) => {
           const f = (item.filename || '').toLowerCase();
           let type = 'File';
           if (f.endsWith('.ps1') || f.endsWith('.sh') || f.endsWith('.bat') || f.endsWith('.cmd') || f.endsWith('.py')) type = 'Script';
@@ -83,17 +102,28 @@ const Evidence = () => {
 
           const displayId = formatEvidenceId(item.evidence_id, index + 1);
 
+          // Preserve authentic backend processing status
           const rawStatus = (item.status || '').toLowerCase();
-          let normalizedStatus = 'Stored';
+          let normalizedStatus = 'Unknown';
           if (rawStatus.includes('fail') || rawStatus === 'error' || rawStatus === 'rejected' || Boolean(item.metadata?.error || item.error)) {
             normalizedStatus = 'Failed';
           } else if (rawStatus === 'processing' || rawStatus === 'uploaded' || rawStatus === 'sandboxed' || rawStatus === 'hashed' || rawStatus === 'metadata_extracted') {
             normalizedStatus = 'Processing';
-          } else if (rawStatus === 'stored' || rawStatus === 'analyzed' || rawStatus === 'ingested' || rawStatus === 'completed') {
+          } else if (rawStatus === 'queued' || rawStatus === 'pending') {
+            normalizedStatus = 'Queued';
+          } else if (rawStatus === 'completed' || rawStatus === 'analyzed') {
+            normalizedStatus = 'Analyzed';
+          } else if (rawStatus === 'stored' || rawStatus === 'ingested') {
             normalizedStatus = 'Stored';
           } else if (item.status) {
             normalizedStatus = item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase();
           }
+
+          // Authentic ingestion timestamp: never invent current date
+          const authenticTimestamp = item.upload_timestamp || item.created_at || item.metadata?.ingested_at || null;
+
+          // Authentic risk: only present authoritative backend score or Unassessed
+          const authenticRisk = item.risk || item.metadata?.risk || (normalizedStatus === 'Failed' ? 'High' : 'Unassessed');
 
           return {
             id: item.evidence_id,
@@ -105,21 +135,27 @@ const Evidence = () => {
             status: normalizedStatus,
             rawStatus: item.status,
             error: item.metadata?.error || item.error || null,
-            ingested_at: item.upload_timestamp || new Date().toISOString(),
-            risk: normalizedStatus === 'Failed' ? 'High' : 'Medium'
+            ingested_at: authenticTimestamp,
+            risk: authenticRisk
           };
         });
         
         setEvidenceData(mappedData);
       } catch (err) {
-        console.error("Failed to fetch evidence", err);
-        setCustomAlert({ isOpen: true, title: 'Error Fetching Data', message: err.message || String(err), type: 'warning' });
+        if (isMounted) {
+          console.error("Failed to fetch evidence", err);
+          setCustomAlert({ isOpen: true, title: 'Error Fetching Data', message: err.message || String(err), type: 'warning' });
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     };
+
     loadEvidence();
-  }, []);
+    return () => {
+      isMounted = false;
+    };
+  }, [activeCaseId]);
 
   const ingestedCount = useMemo(() => {
     return evidenceData.filter(e => e.status === 'Stored').length;
@@ -300,7 +336,11 @@ const Evidence = () => {
       <div className="stats-grid evidence-stats" style={{flexShrink: '0', gridTemplateColumns: 'repeat(5, 1fr)'}}>
         <div 
           className="stat-card" 
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === ''}
           onClick={() => setStatusFilter('')} 
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(''); } }}
           title="Click to view all evidence items"
           style={{ cursor: 'pointer', transition: 'all 0.2s', border: statusFilter === '' ? '2px solid var(--blue)' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}
         >
@@ -315,7 +355,11 @@ const Evidence = () => {
         </div>
         <div 
           className="stat-card" 
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === 'Stored'}
           onClick={() => setStatusFilter(prev => prev === 'Stored' ? '' : 'Stored')} 
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(prev => prev === 'Stored' ? '' : 'Stored'); } }}
           title="Click to filter by Ingested"
           style={{ cursor: 'pointer', transition: 'all 0.2s', border: statusFilter === 'Stored' ? '2px solid var(--green, #10b981)' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}
         >
@@ -330,7 +374,11 @@ const Evidence = () => {
         </div>
         <div 
           className="stat-card" 
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === 'Processing'}
           onClick={() => setStatusFilter(prev => prev === 'Processing' ? '' : 'Processing')} 
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(prev => prev === 'Processing' ? '' : 'Processing'); } }}
           title="Click to filter by Processing"
           style={{ cursor: 'pointer', transition: 'all 0.2s', border: statusFilter === 'Processing' ? '2px solid var(--orange, #f59e0b)' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}
         >
@@ -345,7 +393,11 @@ const Evidence = () => {
         </div>
         <div 
           className="stat-card" 
+          role="button"
+          tabIndex={0}
+          aria-pressed={statusFilter === 'Failed'}
           onClick={() => setStatusFilter(prev => prev === 'Failed' ? '' : 'Failed')} 
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setStatusFilter(prev => prev === 'Failed' ? '' : 'Failed'); } }}
           title="Click to filter by Failed items"
           style={{ cursor: 'pointer', transition: 'all 0.2s', border: statusFilter === 'Failed' ? '2px solid var(--red, #ef4444)' : '1px solid var(--border-subtle)', borderRadius: 'var(--radius-lg)' }}
         >

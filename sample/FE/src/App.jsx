@@ -30,6 +30,7 @@ import TechnicalMinimalAdvancedTemplate from './templates/TechnicalMinimalAdvanc
 import ModernWorkspaceDetailedTemplate from './templates/ModernWorkspaceDetailedTemplate';
 import ModernWorkspaceSplitTemplate from './templates/ModernWorkspaceSplitTemplate';
 import TechnicalWorkstationV2 from './templates_v2/TechnicalWorkstationV2';
+import GlassDashboardTemplate from './templates/GlassDashboardTemplate';
 
 function App() {
   React.useEffect(() => {
@@ -87,6 +88,7 @@ function App() {
 
         {/* ARGUS Approved-Direction Design Exploration Suite (6 Templates) */}
         <Route path="/templates" element={<TemplateHub />} />
+        <Route path="/templates/glass-dashboard" element={<GlassDashboardTemplate />} />
         <Route path="/templates/technical-minimal" element={<TechnicalMinimalTemplate />} />
         <Route path="/templates/modern-workspace" element={<ModernWorkspaceTemplate />} />
         <Route path="/templates/technical-minimal-compact" element={<TechnicalMinimalCompactTemplate />} />

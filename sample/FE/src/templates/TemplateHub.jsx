@@ -6,6 +6,19 @@ import './templates.css';
 export default function TemplateHub() {
   const templates = [
     {
+      code: 'Glass UI',
+      name: 'Glass UI Dashboard (Frosted Glass)',
+      route: '/templates/glass-dashboard',
+      foundation: 'Approved Glass UI: Frosted Acrylic & Prismatic Glints',
+      tagline: 'A luxurious glassmorphism reimagining of the ARGUS dashboard with frosted acrylic cards, luminous accent glows, specular border rims, and dark/light switching.',
+      highlights: [
+        'Translucent frosted acrylic cards with backdrop-filter: blur(18px)',
+        'Glowing interactive stepper pipeline with animated progress gradient',
+        'Glass buttons, pills, chips, and neon micro-indicator dots',
+        'Dark obsidian & light daylight frosted glass modes with live theme toggle'
+      ]
+    },
+    {
       code: 'Template 1',
       name: 'Technical Minimal Refined+',
       route: '/templates/technical-minimal',

@@ -13,7 +13,7 @@ const VERIFIED_CARDS = [
     title: 'Artifact Ingestion',
     desc: 'Automated extraction across disk images, memory dumps, EVTX logs, and registry hives.',
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
         <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
         <line x1="12" y1="22.08" x2="12" y2="12" />
@@ -25,7 +25,7 @@ const VERIFIED_CARDS = [
     title: 'Cross Correlation',
     desc: 'Unified chronological reconstruction and cross-source threat indicator correlation.',
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
         <line x1="18" y1="20" x2="18" y2="10" />
         <line x1="12" y1="20" x2="12" y2="4" />
         <line x1="6" y1="20" x2="6" y2="14" />
@@ -37,7 +37,7 @@ const VERIFIED_CARDS = [
     title: 'Forensic Graph',
     desc: 'Interactive topological mapping of forensic entities, process trees, and IOC graphs.',
     icon: (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
         <circle cx="18" cy="5" r="3" />
         <circle cx="6" cy="12" r="3" />
         <circle cx="18" cy="19" r="3" />
@@ -72,7 +72,7 @@ const Login = () => {
 
   // Theme Management
   const [theme, setTheme] = useState(() => {
-    return document.documentElement.getAttribute('data-theme') || localStorage.getItem('argus_theme') || 'dark';
+    return document.documentElement.getAttribute('data-theme') || localStorage.getItem('argus_theme') || 'light';
   });
 
   const toggleTheme = () => {
@@ -98,40 +98,49 @@ const Login = () => {
     }
   }, [location.search]);
 
-  // Approved 3D-Projected Forensic Particle Network Globe Engine (750 Points)
+  // Ultra-Crisp 3D Forensic Particle Network Globe Engine (1200 Pinpoint Nodes)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const ctx = canvas.getContext('2d');
-    let width = (canvas.width = window.innerWidth);
-    let height = (canvas.height = window.innerHeight);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+
+    const updateCanvasDimensions = () => {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+    };
+    updateCanvasDimensions();
 
     const handleResize = () => {
-      width = canvas.width = window.innerWidth;
-      height = canvas.height = window.innerHeight;
+      updateCanvasDimensions();
     };
     window.addEventListener('resize', handleResize);
 
-    // Generate 3D sphere points (750 nodes for dense network)
-    const POINT_COUNT = 750;
-    const RADIUS = Math.min(width, height) * 0.38;
+    // 1,200 Uniform Fibonacci Spherical Lattice Points (crisp pinpoint distribution)
+    const POINT_COUNT = 1200;
     const points = [];
 
     for (let i = 0; i < POINT_COUNT; i++) {
       const phi = Math.acos(-1 + (2 * i) / POINT_COUNT);
       const theta = Math.sqrt(POINT_COUNT * Math.PI) * phi;
       points.push({
-        x: RADIUS * Math.cos(theta) * Math.sin(phi),
-        y: RADIUS * Math.sin(theta) * Math.sin(phi),
-        z: RADIUS * Math.cos(phi),
-        isThreat: i % 18 === 0,
-        pulse: Math.random() * Math.PI
+        nx: Math.cos(theta) * Math.sin(phi),
+        ny: Math.sin(theta) * Math.sin(phi),
+        nz: Math.cos(phi),
+        isThreat: i % 24 === 0,
+        pulse: Math.random() * Math.PI * 2
       });
     }
 
-    let rotX = 0.3;
-    let rotY = -0.5;
+    let rotX = 0.28;
+    let rotY = -0.45;
     let isDragging = false;
     let lastMouseX = 0;
     let lastMouseY = 0;
@@ -148,8 +157,8 @@ const Login = () => {
       if (!isDragging) return;
       const dx = e.clientX - lastMouseX;
       const dy = e.clientY - lastMouseY;
-      rotY += dx * 0.005;
-      rotX += dy * 0.005;
+      rotY += dx * 0.004;
+      rotX += dy * 0.004;
       lastMouseX = e.clientX;
       lastMouseY = e.clientY;
     };
@@ -163,18 +172,23 @@ const Login = () => {
     window.addEventListener('mouseup', handleMouseUp);
 
     function renderGlobe() {
+      ctx.save();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
       // Auto-rotation
       if (!isDragging) {
-        rotY += 0.0025;
-        rotX += 0.0005;
+        rotY += 0.0022;
+        rotX += 0.0004;
       }
 
-      // Center sphere on left side for desktop, centered for mobile
+      // Responsive center & generous prominent radius
       const isMobile = width <= 1080;
+      const RADIUS = Math.min(width, height) * (isMobile ? 0.40 : 0.45);
       const centerX = isMobile ? width * 0.5 : width * 0.33;
       const centerY = height * 0.52;
+
+      const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
 
       const cosX = Math.cos(rotX);
       const sinX = Math.sin(rotX);
@@ -182,19 +196,24 @@ const Login = () => {
       const sinY = Math.sin(rotY);
 
       const projected = [];
+      const fov = 850;
 
       for (let i = 0; i < points.length; i++) {
         const p = points[i];
-        p.pulse += 0.03;
+        p.pulse += 0.04;
+
+        // Scale normalized unit vector by dynamic RADIUS
+        const px = p.nx * RADIUS;
+        const py = p.ny * RADIUS;
+        const pz = p.nz * RADIUS;
 
         // Rotation Y & X
-        let x1 = p.x * cosY - p.z * sinY;
-        let z1 = p.z * cosY + p.x * sinY;
-        let y2 = p.y * cosX - z1 * sinX;
-        let z2 = z1 * cosX + p.y * sinX;
+        const x1 = px * cosY - pz * sinY;
+        const z1 = pz * cosY + px * sinY;
+        const y2 = py * cosX - z1 * sinX;
+        const z2 = z1 * cosX + py * sinX;
 
         // Perspective 3D to 2D
-        const fov = 800;
         const scale = fov / (fov + z2 + 100);
         const x2D = centerX + x1 * scale;
         const y2D = centerY + y2 * scale;
@@ -209,24 +228,35 @@ const Login = () => {
         });
       }
 
-      // Depth sorting
+      // Depth sorting (furthest back rendered first)
       projected.sort((a, b) => b.z - a.z);
 
-      const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
-      ctx.lineWidth = 0.65;
+      // Draw crisp network interconnect lines on visible hemisphere
+      ctx.lineWidth = 1;
+      const maxDist = 50;
 
-      // Draw dynamic interconnected network lines
       for (let i = 0; i < projected.length; i += 2) {
-        for (let j = i + 1; j < Math.min(i + 8, projected.length); j++) {
+        if (projected[i].z < -RADIUS * 0.15) continue;
+
+        for (let j = i + 1; j < Math.min(i + 6, projected.length); j++) {
           const p1 = projected[i];
           const p2 = projected[j];
+          if (p2.z < -RADIUS * 0.15) continue;
+
           const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
 
-          if (dist < 68 && (p1.z > -120 || p2.z > -120)) {
-            const alpha = Math.max(0, (1 - dist / 68) * 0.24);
-            ctx.strokeStyle = isDark
-              ? (p1.isThreat || p2.isThreat ? `rgba(239, 68, 68, ${alpha * 1.5})` : `rgba(56, 189, 248, ${alpha})`)
-              : (p1.isThreat || p2.isThreat ? `rgba(220, 38, 38, ${alpha * 1.5})` : `rgba(37, 99, 235, ${alpha * 0.85})`);
+          if (dist < maxDist) {
+            const lineAlpha = (1 - dist / maxDist) * 0.42;
+
+            if (p1.isThreat || p2.isThreat) {
+              ctx.strokeStyle = isDark
+                ? `rgba(239, 68, 68, ${lineAlpha * 1.5})`
+                : `rgba(220, 38, 38, ${lineAlpha * 1.5})`;
+            } else {
+              ctx.strokeStyle = isDark
+                ? `rgba(56, 189, 248, ${lineAlpha})`
+                : `rgba(37, 99, 235, ${lineAlpha})`;
+            }
 
             ctx.beginPath();
             ctx.moveTo(p1.x, p1.y);
@@ -236,33 +266,75 @@ const Login = () => {
         }
       }
 
-      // Draw nodes (blue particles & pulsing crimson threat nodes)
+      // Draw razor-sharp, solid pinpoint nodes with optical depth hierarchy
       for (let i = 0; i < projected.length; i++) {
         const p = projected[i];
-        if (p.z < -280) continue;
+        if (p.z < -RADIUS * 0.96) continue;
 
-        const size = (p.isThreat ? 3.2 : 2.0) * p.scale;
-        const alpha = Math.min(1, Math.max(0.18, (p.z + 320) / 640));
+        const baseRadius = p.isThreat ? 3.2 : (p.z > 0 ? 2.3 : 1.4);
+        const r = Math.max(0.9, baseRadius * p.scale);
 
         if (p.isThreat) {
-          const pulseSize = size * (1.2 + 0.5 * Math.sin(p.pulse));
-          ctx.fillStyle = isDark ? `rgba(239, 68, 68, ${alpha * 0.3})` : `rgba(220, 38, 38, ${alpha * 0.25})`;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, pulseSize * 2, 0, Math.PI * 2);
-          ctx.fill();
+          // Sharp tactical strobe rings (double concentric radar rings matching reference)
+          const ringProgress1 = (p.pulse % Math.PI) / Math.PI;
+          const ringRadius1 = r + ringProgress1 * 11;
+          const ringAlpha1 = (1 - ringProgress1) * 0.8;
 
-          ctx.fillStyle = isDark ? `rgba(239, 68, 68, ${alpha})` : `rgba(220, 38, 38, ${alpha})`;
+          const ringProgress2 = ((p.pulse + Math.PI * 0.45) % Math.PI) / Math.PI;
+          const ringRadius2 = r + ringProgress2 * 11;
+          const ringAlpha2 = (1 - ringProgress2) * 0.55;
+
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = isDark
+            ? `rgba(239, 68, 68, ${ringAlpha1})`
+            : `rgba(220, 38, 38, ${ringAlpha1})`;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, ringRadius1, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.strokeStyle = isDark
+            ? `rgba(239, 68, 68, ${ringAlpha2})`
+            : `rgba(220, 38, 38, ${ringAlpha2})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, ringRadius2, 0, Math.PI * 2);
+          ctx.stroke();
+
+          // Crisp solid threat core
+          ctx.fillStyle = isDark ? '#ff3b30' : '#dc2626';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
           ctx.fill();
         } else {
-          ctx.fillStyle = isDark ? `rgba(56, 189, 248, ${alpha})` : `rgba(37, 99, 235, ${alpha * 0.9})`;
+          // Sharp solid forensic pinpoint node (no fuzzy outer disc)
+          if (isDark) {
+            if (p.z > RADIUS * 0.35) {
+              ctx.fillStyle = '#ffffff'; // White glint highlight for nearest nodes
+            } else if (p.z > 0) {
+              ctx.fillStyle = '#38bdf8'; // Electric sky blue
+            } else if (p.z > -RADIUS * 0.45) {
+              ctx.fillStyle = '#0284c7'; // Vivid cerulean
+            } else {
+              ctx.fillStyle = '#1e40af'; // Deep sapphire for distant nodes
+            }
+          } else {
+            if (p.z > RADIUS * 0.35) {
+              ctx.fillStyle = '#1e3a8a'; // Deepest sharp navy
+            } else if (p.z > 0) {
+              ctx.fillStyle = '#2563eb'; // Royal cobalt
+            } else if (p.z > -RADIUS * 0.45) {
+              ctx.fillStyle = '#3b82f6';
+            } else {
+              ctx.fillStyle = '#93c5fd';
+            }
+          }
+
           ctx.beginPath();
-          ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
           ctx.fill();
         }
       }
 
+      ctx.restore();
       frameId = requestAnimationFrame(renderGlobe);
     }
 
@@ -392,13 +464,17 @@ const Login = () => {
     <div className="login-viewport-root">
       {/* 3D-Projected Forensic Canvas & Grid Backdrop */}
       <canvas ref={canvasRef} id="forensic-canvas" />
-      <div className="ambient-cyber-backdrop" />
+      <div className="ambient-cyber-backdrop">
+        <div className="glass-orb-top-left" />
+        <div className="glass-orb-bottom-right" />
+        <div className="globe-ambient-ring" />
+      </div>
 
       {/* Top Application Header */}
       <header className="top-telemetry-bar">
         <div className="brand-telemetry-left">
           <div className="brand-badge">
-            <ArgusLogo size={36} />
+            <ArgusLogo size={32} />
             <h1>ARGUS</h1>
           </div>
         </div>
@@ -445,7 +521,9 @@ const Login = () => {
         {/* Left Column: Project Overview & 3 Verified Capability Cards */}
         <section className="mission-showcase-column">
           <h2 className="mission-title">
-            Multi-Agent Forensic Investigation &amp; <span className="highlight-gradient">Evidence Synthesis</span>
+            Multi-Agent Forensic<br />
+            Investigation &amp; <span className="highlight-blue">Evidence</span><br />
+            <span className="highlight-blue">Synthesis</span>
           </h2>
 
           <p className="mission-desc">
@@ -473,7 +551,7 @@ const Login = () => {
             {/* Card Brand Header */}
             <div className="card-header-block">
               <div className="logo-halo-wrapper">
-                <ArgusLogo size={52} />
+                <ArgusLogo size={54} />
               </div>
               <h1 className="card-title-text">ARGUS</h1>
               <p className="card-subtitle-text">

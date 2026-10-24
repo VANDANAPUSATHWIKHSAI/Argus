@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../css/style.css';
-import { uploadEvidenceFile, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { uploadEvidenceFile, closeCase, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { getActiveCaseId, getActiveCaseName, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
 import Sidebar from '../components/Sidebar';
 import ProfileModal from '../components/ProfileModal';
@@ -26,12 +27,59 @@ const Upload = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
   const [casesList, setCasesList] = useState([]);
-  const [activeCaseId, setActiveCaseId] = useState(localStorage.getItem('active_case_id') || '');
-  const [activeCaseName, setActiveCaseName] = useState(localStorage.getItem('active_case_name') || '');
+  const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
+  const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
+  const [newCaseName, setNewCaseName] = useState('');
+  const [newCaseDesc, setNewCaseDesc] = useState('');
+  const [creatingCase, setCreatingCase] = useState(false);
 
   const closeAlert = () => {
     if (customAlert.onClose) customAlert.onClose();
     setCustomAlert(prev => ({ ...prev, isOpen: false, onClose: null }));
+  };
+
+  const handleCreateNewCase = async () => {
+    if (!newCaseName.trim()) {
+      setCustomAlert({ isOpen: true, title: 'Validation Error', message: 'Case name is required.', type: 'warning' });
+      return;
+    }
+    setCreatingCase(true);
+    try {
+      const token = localStorage.getItem('argus_token');
+      const res = await fetch(`${API_BASE_URL}/cases/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': DEFAULT_TENANT_ID
+        },
+        body: JSON.stringify({
+          name: newCaseName.trim(),
+          description: newCaseDesc.trim() || undefined,
+          analyst_id: currentUser?.id || 'analyst'
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || 'Failed to create case');
+      }
+      const data = await res.json();
+      const created = data.data || data;
+      const cId = created.case_id;
+      const cName = created.name || newCaseName.trim();
+      setActiveCase(cId, cName);
+      setActiveCaseId(cId);
+      setActiveCaseName(cName);
+      setCasesList(prev => [{ case_id: cId, name: cName, status: 'open' }, ...prev]);
+      setShowModal(false);
+      setNewCaseName('');
+      setNewCaseDesc('');
+      setCustomAlert({ isOpen: true, title: 'Case Created', message: `Case "${cName}" (${cId}) has been created and set as active.`, type: 'success' });
+    } catch (err) {
+      setCustomAlert({ isOpen: true, title: 'Creation Failed', message: err.message || 'Could not create case.', type: 'error' });
+    } finally {
+      setCreatingCase(false);
+    }
   };
 
   useEffect(() => {
@@ -49,17 +97,14 @@ const Upload = () => {
           const list = data.data || [];
           setCasesList(list);
 
-          const currentSavedId = localStorage.getItem('active_case_id');
+          const currentSavedId = getActiveCaseId();
           const foundSaved = list.find(c => c.case_id === currentSavedId);
-          if (foundSaved) {
+          if (foundSaved && (foundSaved.status === 'open' || foundSaved.status === 'in_progress')) {
             setActiveCaseId(foundSaved.case_id);
             setActiveCaseName(foundSaved.name || foundSaved.case_id);
-          } else if (list.length > 0) {
-            const openCase = list.find(c => c.status === 'open' || c.status === 'in_progress') || list[0];
-            setActiveCaseId(openCase.case_id);
-            setActiveCaseName(openCase.name || openCase.case_id);
-            localStorage.setItem('active_case_id', openCase.case_id);
-            localStorage.setItem('active_case_name', openCase.name || openCase.case_id);
+          } else {
+            setActiveCaseId('');
+            setActiveCaseName('');
           }
         }
       } catch (err) {
@@ -67,15 +112,25 @@ const Upload = () => {
       }
     };
     fetchCases();
+    const unsubscribe = subscribeToActiveCase(({ caseId, caseName }) => {
+      setActiveCaseId(caseId);
+      setActiveCaseName(caseName);
+    });
+    return unsubscribe;
   }, []);
 
   const handleSelectCase = (cId) => {
+    if (!cId) {
+      setActiveCase('', '');
+      setActiveCaseId('');
+      setActiveCaseName('');
+      return;
+    }
     const selected = casesList.find(c => c.case_id === cId);
     if (selected) {
+      setActiveCase(selected.case_id, selected.name || selected.case_id);
       setActiveCaseId(selected.case_id);
       setActiveCaseName(selected.name || selected.case_id);
-      localStorage.setItem('active_case_id', selected.case_id);
-      localStorage.setItem('active_case_name', selected.name || selected.case_id);
     }
   };
 
@@ -89,16 +144,21 @@ const Upload = () => {
     setShowModal(true);
   };
 
-  const handleCloseCase = () => {
-    const curName = localStorage.getItem('active_case_name') || 'Current case';
-    const curId = localStorage.getItem('active_case_id');
+  const handleCloseCase = async () => {
+    const curName = activeCaseName || getActiveCaseName() || 'Current case';
+    const curId = activeCaseId || getActiveCaseId();
     if (!curId && !localStorage.getItem('active_case_name')) {
       setCustomAlert({ isOpen: true, title: 'Notice', message: "There is no active case currently open.", type: 'warning' });
       return;
     }
-    localStorage.removeItem('active_case_id');
-    localStorage.removeItem('active_case_name');
-    localStorage.removeItem('active_case_desc');
+    try {
+      if (curId) {
+        await closeCase(curId);
+      }
+    } catch (e) {
+      console.error("Failed to close case:", e);
+    }
+    setActiveCase('', '');
     setActiveCaseId('');
     setActiveCaseName('');
     setCustomAlert({
@@ -118,6 +178,7 @@ const Upload = () => {
   };
 
   const addFiles = (files) => {
+    if (!files || files.length === 0) return;
     const newItems = files.map((f, i) => ({
       id: Date.now() + i,
       name: f.name,
@@ -127,6 +188,8 @@ const Upload = () => {
       file: f
     }));
     setQueue(prev => [...prev, ...newItems]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (folderInputRef.current) folderInputRef.current.value = '';
   };
 
   const formatSize = (bytes) => {
@@ -236,12 +299,12 @@ const Upload = () => {
               <span className="search-shortcut">⌘ K</span>
             </div>
             <div className="glass-topbar-right topbar-actions" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
-              {isAdmin && (
+              {activeCaseId && (
                 <button
                   type="button"
                   onClick={handleCloseCase}
                   className="btn btn-outline"
-                  style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                  style={{ border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444', background: 'rgba(239, 68, 68, 0.08)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                   Close Case
@@ -295,6 +358,31 @@ const Upload = () => {
                         {activeCaseName && <span style={{ fontSize: 13, color: 'var(--text-main)' }}> — {activeCaseName}</span>}
                       </div>
                     </div>
+                    {casesList.length > 0 && (
+                      <select
+                        id="upload-case-select"
+                        value={activeCaseId || ''}
+                        onChange={(e) => handleSelectCase(e.target.value)}
+                        style={{
+                          background: 'var(--bg-card)',
+                          color: 'var(--text-main)',
+                          border: '1px solid var(--border-subtle)',
+                          borderRadius: 20,
+                          padding: '4px 12px',
+                          fontSize: 13,
+                          fontWeight: 500,
+                          cursor: 'pointer',
+                          outline: 'none'
+                        }}
+                      >
+                        <option value="">-- Switch / Select Target Case --</option>
+                        {casesList.filter(c => c.status === 'open' || c.status === 'in_progress').map(c => (
+                          <option key={c.case_id} value={c.case_id}>
+                            {c.case_id} — {c.name || 'Unnamed'}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                     <div className="badge-danger">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
                       High Risk
@@ -506,8 +594,8 @@ const Upload = () => {
 
       {/* Create Case Modal */}
       {showModal && (
-        <div style={{ display: 'flex', position: 'fixed', inset: 0, background: 'transparent', zIndex: 100, alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', width: 480, boxShadow: '0 20px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', zIndex: 1000, alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', width: 480, maxWidth: '90vw', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)', border: '1px solid var(--border-subtle)', overflow: 'hidden' }}>
             <div style={{ padding: '24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ fontSize: 18, fontWeight: 600 }}>Create New Case</h2>
               <button className="btn-icon" onClick={() => setShowModal(false)}>
@@ -517,15 +605,11 @@ const Upload = () => {
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Case Name</label>
-                <input type="text" placeholder="e.g. Ransomware Incident - Alpha Corp" style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 14, outline: 'none', background: 'var(--bg-app)', color: 'var(--text-main)', boxSizing: 'border-box' }} />
+                <input type="text" value={newCaseName} onChange={e => setNewCaseName(e.target.value)} placeholder="e.g. Ransomware Incident - Alpha Corp" style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 14, outline: 'none', background: 'var(--bg-app)', color: 'var(--text-main)', boxSizing: 'border-box' }} />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Description</label>
-                <textarea rows={3} placeholder="Brief details about the investigation..." style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 14, outline: 'none', resize: 'none', background: 'var(--bg-app)', color: 'var(--text-main)', boxSizing: 'border-box' }} />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Assigned Analysts</label>
-                <input type="text" defaultValue="john.doe@company.com" style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 14, outline: 'none', background: 'var(--bg-app)', color: 'var(--text-main)', boxSizing: 'border-box' }} />
+                <textarea value={newCaseDesc} onChange={e => setNewCaseDesc(e.target.value)} rows={3} placeholder="Brief details about the investigation..." style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 14, outline: 'none', resize: 'none', background: 'var(--bg-app)', color: 'var(--text-main)', boxSizing: 'border-box' }} />
               </div>
               <div>
                 <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 6 }}>Initial Evidence (Optional)</label>
@@ -533,12 +617,14 @@ const Upload = () => {
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginBottom: 4 }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg><br />
                   Click to browse or drop files here
                 </div>
-                <input ref={modalFileInputRef} type="file" multiple style={{ display: 'none' }} />
+                <input ref={modalFileInputRef} type="file" multiple style={{ display: 'none' }} onChange={e => addFiles(Array.from(e.target.files))} />
               </div>
             </div>
             <div style={{ padding: '16px 24px', background: 'var(--bg-app)', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button className="btn btn-outline" onClick={() => setShowModal(false)} style={{ padding: '8px 16px' }}>Cancel</button>
-              <button className="btn btn-primary" onClick={() => setShowModal(false)} style={{ padding: '8px 16px' }}>Create Case</button>
+              <button className="btn btn-primary" disabled={creatingCase} onClick={handleCreateNewCase} style={{ padding: '8px 16px' }}>
+                {creatingCase ? 'Creating...' : 'Create Case'}
+              </button>
             </div>
           </div>
         </div>

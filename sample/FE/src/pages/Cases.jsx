@@ -357,6 +357,24 @@ const Cases = () => {
                               >
                                 {loadingReportId === c.case_id ? 'Loading...' : 'View Report'}
                               </button>
+                              {isOpen && (
+                                <button
+                                  onClick={() => handleCloseCase(c.case_id, c.name)}
+                                  style={{
+                                    background: 'rgba(239, 68, 68, 0.1)',
+                                    color: '#ef4444',
+                                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                  }}
+                                  title="Close this case"
+                                >
+                                  Close
+                                </button>
+                              )}
                               <button
                                 onClick={() => navigate(`/audit-logs?case_id=${c.case_id}`)}
                                 style={{

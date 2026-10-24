@@ -30,7 +30,8 @@ const ConfidenceBar = ({ value }) => {
 };
 
 import Sidebar from '../components/Sidebar';
-import { fetchFindings, API_BASE_URL } from '../js/api';
+import { fetchFindings, closeCase, API_BASE_URL } from '../js/api';
+import { getActiveCaseId, getActiveCaseName, setActiveCase } from '../js/caseEvents';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import ProfileModal from '../components/ProfileModal';
@@ -191,16 +192,21 @@ const Sanitized = () => {
     setShowModal(true);
   };
 
-  const handleCloseCase = () => {
-    const activeCaseName = localStorage.getItem('active_case_name') || 'Current case';
-    const activeCaseId = localStorage.getItem('active_case_id');
+  const handleCloseCase = async () => {
+    const activeCaseName = getActiveCaseName() || localStorage.getItem('active_case_name') || 'Current case';
+    const activeCaseId = getActiveCaseId() || localStorage.getItem('active_case_id');
     if (!activeCaseId && !localStorage.getItem('active_case_name')) {
       setCustomAlert({ isOpen: true, title: 'Notice', message: "There is no active case currently open.", type: 'warning' });
       return;
     }
-    localStorage.removeItem('active_case_id');
-    localStorage.removeItem('active_case_name');
-    localStorage.removeItem('active_case_desc');
+    try {
+      if (activeCaseId) {
+        await closeCase(activeCaseId);
+      }
+    } catch (e) {
+      console.error("Failed to close case:", e);
+    }
+    setActiveCase('', '');
     setCustomAlert({
        isOpen: true,
        title: 'Success',
@@ -236,12 +242,12 @@ const Sanitized = () => {
               <span className="search-shortcut">⌘ K</span>
             </div>
             <div className="glass-topbar-right topbar-actions" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
-              {isAdmin && (
+              {localStorage.getItem('active_case_id') && (
                 <button
                   type="button"
                   onClick={handleCloseCase}
                   className="btn btn-outline"
-                  style={{ border: '1px solid var(--border-strong)', color: 'var(--text-main)', background: 'var(--bg-card)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                  style={{ border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444', background: 'rgba(239, 68, 68, 0.08)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
                   Close Case

@@ -158,14 +158,18 @@ const AdminDashboard = () => {
         }
       });
       if (res.ok) {
+        const closedId = currentCase.case_id;
+        const closedName = currentCase.name || closedId;
         localStorage.removeItem('active_case_id');
         localStorage.removeItem('active_case_name');
         localStorage.removeItem('active_case_desc');
+        setCurrentCase(null);
+        setHasOpenCase(false);
         setRefreshTrigger(prev => prev + 1);
         setCustomAlert({
           isOpen: true,
           title: 'Success',
-          message: 'Case closed successfully.',
+          message: `Case ${closedId} (${closedName}) closed successfully.`,
           type: 'success',
           onClose: null
         });
@@ -234,13 +238,16 @@ const AdminDashboard = () => {
             const sorted = enriched.reverse();
             setAllCasesList(sorted);
             
-            // Prefer any open case as the current case
+            // Only keep active case if explicitly selected in localStorage and still open
             const activeId = localStorage.getItem('active_case_id');
-            let active = sorted.find(c => c.case_id === activeId && (c.status === 'open' || c.status === 'in_progress'));
-            if (!active) active = sorted.find(c => c.status === 'open' || c.status === 'in_progress');
+            const active = activeId ? sorted.find(c => c.case_id === activeId && (c.status === 'open' || c.status === 'in_progress')) : null;
+            if (!active && activeId) {
+              localStorage.removeItem('active_case_id');
+              localStorage.removeItem('active_case_name');
+              localStorage.removeItem('active_case_desc');
+            }
             setCurrentCase(active || null);
-
-            setHasOpenCase(sorted.some(c => c.status === 'open' || c.status === 'in_progress'));
+            setHasOpenCase(!!active);
           } else {
             setAllCasesList([]);
             setCurrentCase(null);
@@ -308,11 +315,11 @@ const AdminDashboard = () => {
           </div>
           <button
             onClick={() => {
-              if (hasOpenCase) {
+              if (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) {
                 setCustomAlert({
                   isOpen: true,
                   title: 'Notice',
-                  message: 'An active case is currently open. You cannot create a new case until the active case is closed.',
+                  message: `Active case "${currentCase.name || currentCase.case_id}" is currently open. Please close it before creating a new case.`,
                   type: 'warning'
                 });
               } else {
@@ -320,7 +327,7 @@ const AdminDashboard = () => {
               }
             }}
             className="btn-glass-primary"
-            style={{ cursor: hasOpenCase ? 'not-allowed' : 'pointer', opacity: hasOpenCase ? 0.6 : 1 }}
+            style={{ cursor: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 'not-allowed' : 'pointer', opacity: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 0.6 : 1 }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Create Case

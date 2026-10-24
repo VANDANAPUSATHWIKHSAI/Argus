@@ -34,11 +34,20 @@ celery_app.conf.update(
 )
 
 
-def is_celery_broker_available(timeout_sec: float = 0.2) -> bool:
+_celery_available_cache = None
+_celery_available_cache_time = 0.0
+
+def is_celery_broker_available(timeout_sec: float = 0.5) -> bool:
     """
-    Check if the Redis broker is reachable.
+    Check if the Redis broker is reachable AND at least one Celery worker is actively running.
     Used by FastAPI to choose between Celery async dispatch and thread pool fallback.
     """
+    import time
+    global _celery_available_cache, _celery_available_cache_time
+    now = time.time()
+    if _celery_available_cache is not None and (now - _celery_available_cache_time < 5.0):
+        return _celery_available_cache
+
     try:
         import redis
         host = getattr(settings, "redis_host", "127.0.0.1")
@@ -51,7 +60,19 @@ def is_celery_broker_available(timeout_sec: float = 0.2) -> bool:
             socket_timeout=timeout_sec,
             socket_connect_timeout=timeout_sec
         )
-        return bool(r.ping())
+        if not r.ping():
+            _celery_available_cache = False
+            _celery_available_cache_time = now
+            return False
+
+        # Verify active Celery worker is responding
+        workers = celery_app.control.ping(timeout=timeout_sec)
+        is_ready = bool(workers and len(workers) > 0)
+        _celery_available_cache = is_ready
+        _celery_available_cache_time = now
+        return is_ready
     except Exception as e:
-        logger.debug(f"Celery Redis broker check: offline or unreachable ({e})")
+        logger.debug(f"Celery check: offline or unreachable ({e})")
+        _celery_available_cache = False
+        _celery_available_cache_time = now
         return False

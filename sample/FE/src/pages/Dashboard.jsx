@@ -53,24 +53,10 @@ const Dashboard = () => {
       const caseList = res.data || [];
       setCases(caseList);
 
-      if (isAdmin) {
-        // Admin sees all — sync active case to first open case
-        const globalActive = caseList.find(c => c.status === 'open');
-        if (globalActive) {
-          localStorage.setItem('active_case_id', globalActive.case_id);
-          if (globalActive.name) localStorage.setItem('active_case_name', globalActive.name);
-        } else {
-          localStorage.removeItem('active_case_id');
-          localStorage.removeItem('active_case_name');
-          localStorage.removeItem('active_case_desc');
-        }
-      } else {
-        // Analyst — only activate the case assigned to them
-        const myCase = caseList.find(c => c.status === 'open' && c.assigned_to_you);
-        if (myCase) {
-          localStorage.setItem('active_case_id', myCase.case_id);
-          if (myCase.name) localStorage.setItem('active_case_name', myCase.name);
-        } else {
+      const storedActiveId = localStorage.getItem('active_case_id');
+      if (storedActiveId) {
+        const stillOpen = caseList.find(c => c.case_id === storedActiveId && (c.status === 'open' || c.status === 'in_progress'));
+        if (!stillOpen) {
           localStorage.removeItem('active_case_id');
           localStorage.removeItem('active_case_name');
           localStorage.removeItem('active_case_desc');
@@ -307,6 +293,34 @@ const Dashboard = () => {
                     </div>
                   )}
 
+                  {localStorage.getItem('active_case_id') && (
+                    <button
+                      id="btn-topbar-close-case"
+                      className="btn btn-secondary"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 14px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        color: '#ef4444',
+                        borderColor: 'rgba(239, 68, 68, 0.4)',
+                        background: 'rgba(239, 68, 68, 0.08)',
+                        cursor: 'pointer'
+                      }}
+                      onClick={handleCloseCase}
+                      title="Close Active Case"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                      </svg>
+                      Close Case
+                    </button>
+                  )}
+
                   {/* Theme Toggle */}
                   <button className="glass-icon-btn icon-btn" onClick={toggleTheme} title="Toggle Theme">
                     {theme === 'dark' ? (
@@ -414,6 +428,34 @@ const Dashboard = () => {
                         </div>
                       </div>
 
+                      <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <button
+                          id="btn-header-close-case"
+                          className="btn btn-secondary"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            color: '#ef4444',
+                            borderColor: 'rgba(239, 68, 68, 0.4)',
+                            background: 'rgba(239, 68, 68, 0.08)',
+                            cursor: 'pointer',
+                            padding: '8px 16px',
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            borderRadius: '6px'
+                          }}
+                          onClick={handleCloseCase}
+                          title="Close Active Case"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                          </svg>
+                          Close Case
+                        </button>
+                      </div>
                     </div>
 
                     {/* Stats Grid */}

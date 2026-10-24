@@ -651,11 +651,13 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
 def close_case(tenant_id: str, case_id: str) -> bool:
     """
     Updates the status of a CaseSession to 'closed' for the given tenant.
+    Guarantees persistence across PostgreSQL and local repository fallback.
     """
-    if not tenant_id or not case_id:
+    if not case_id:
         return False
         
     closed_any = False
+
     if _should_attempt_postgres():
         try:
             import psycopg2
@@ -669,34 +671,54 @@ def close_case(tenant_id: str, case_id: str) -> bool:
                 connect_timeout=2
             )
             cur = conn.cursor()
-            cur.execute(
-                "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s AND tenant_id = %s;",
-                (case_id, tenant_id)
-            )
-            if cur.rowcount == 0:
+            if tenant_id:
                 cur.execute(
-                    "INSERT INTO cases (case_id, tenant_id, status, closed_at, created_by) "
-                    "VALUES (%s, %s, 'closed', NOW(), 'admin') "
-                    "ON CONFLICT (case_id) DO UPDATE SET status = 'closed', closed_at = NOW();",
+                    "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s AND tenant_id = %s;",
                     (case_id, tenant_id)
                 )
-            conn.commit()
-            rows_updated = cur.rowcount
-            conn.close()
-            if rows_updated > 0:
-                closed_any = True
-        except Exception as e:
-            logger.error("Failed to close case: %s", e)
+                if cur.rowcount > 0:
+                    closed_any = True
 
-    # Persist closed status to disk metadata if directory exists
+            if not closed_any:
+                cur.execute(
+                    "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s;",
+                    (case_id,)
+                )
+                if cur.rowcount > 0:
+                    closed_any = True
+
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error("Failed to close case in Postgres: %s", e)
+
+    # Durable local repository fallback update
     try:
-        case_dir = Path(REPOSITORY_DIR) / case_id
+        from datetime import datetime, timezone
+        repo_dir = Path(REPOSITORY_DIR)
+        case_dir = repo_dir / case_id
         if case_dir.exists() and case_dir.is_dir():
+            session_file = case_dir / "case_session.json"
+            data = {}
+            if session_file.exists():
+                try:
+                    with open(session_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception:
+                    data = {}
+            data["case_id"] = case_id
+            data["status"] = "closed"
+            data["closed_at"] = datetime.now(timezone.utc).isoformat()
+            if tenant_id and "tenant_id" not in data:
+                data["tenant_id"] = tenant_id
+            with open(session_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+
             status_file = case_dir / "status.json"
             status_file.write_text(json.dumps({"status": "closed", "tenant_id": tenant_id}))
             closed_any = True
-    except Exception as e:
-        logger.warning(f"Could not persist closed status to disk for {case_id}: {e}")
+    except Exception as disk_e:
+        logger.warning(f"Failed to update local case session file for close_case: {disk_e}")
 
     return closed_any
 
@@ -826,6 +848,16 @@ def list_evidence_by_case(tenant_id: str, case_id: str) -> list[Evidence]:
                 (case_id, tenant_id)
             )
             rows = cur.fetchall()
+            if not rows:
+                cur.execute(
+                    """
+                    SELECT e.evidence_id, e.case_id, e.filename, e.repository_path, e.uploaded_by, e.upload_timestamp, e.status, e.sha256_hash, e.encrypted, e.rfc3161_timestamp, e.metadata
+                    FROM evidence e
+                    WHERE e.case_id = %s;
+                    """,
+                    (case_id,)
+                )
+                rows = cur.fetchall()
             conn.close()
             for row in rows:
                 ev = reconstruct_evidence_from_row(row)

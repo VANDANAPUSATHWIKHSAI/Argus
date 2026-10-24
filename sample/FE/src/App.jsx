@@ -79,7 +79,7 @@ function App() {
         <Route path="/findings" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst']}><Findings /></ProtectedRoute>} />
         <Route path="/timeline" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst']}><TimelineDetail /></ProtectedRoute>} />
         <Route path="/evidence" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Evidence /></ProtectedRoute>} />
-        <Route path="/upload" element={<ProtectedRoute allowedRoles={['admin', 'analyst']}><Upload /></ProtectedRoute>} />
+        <Route path="/upload" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Upload /></ProtectedRoute>} />
         <Route path="/sanitized" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Sanitized /></ProtectedRoute>} />
         <Route path="/sanitized/:id" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><SanitizedDetail /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst', 'auditor']}><Settings /></ProtectedRoute>} />

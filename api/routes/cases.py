@@ -539,9 +539,11 @@ async def close_case_endpoint(
     from api.routes.evidence import sanitize_uuid
     clean_case_id = sanitize_uuid(case_id)
     
-    # Custom db update to add closed_by
+    # Custom db update to add closed_by and resolve effective tenant
     from config.settings import settings
     import psycopg2
+    effective_tenant = x_tenant_id
+    db_updated = False
     try:
         conn = psycopg2.connect(
             host=settings.postgres_host, port=settings.postgres_port,
@@ -549,20 +551,35 @@ async def close_case_endpoint(
             password=settings.postgres_password, connect_timeout=2
         )
         cur = conn.cursor()
+        # Resolve real tenant from DB
+        cur.execute("SELECT tenant_id FROM cases WHERE case_id = %s", (clean_case_id,))
+        row = cur.fetchone()
+        if not row and clean_case_id != case_id:
+            cur.execute("SELECT tenant_id FROM cases WHERE case_id = %s", (case_id,))
+            row = cur.fetchone()
+            if row:
+                clean_case_id = case_id
+        if row and row[0]:
+            effective_tenant = row[0]
+
         cur.execute(
-            "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s WHERE case_id = %s AND tenant_id = %s;",
-            (current_user["id"], clean_case_id, x_tenant_id)
+            "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s WHERE case_id = %s;",
+            (str(current_user.get("id", current_user.get("name", "admin"))), clean_case_id)
         )
+        if cur.rowcount > 0:
+            db_updated = True
         conn.commit()
         conn.close()
     except Exception as e:
         print(f"[DB] Error closing case directly: {e}")
         
-    success = close_case(tenant_id=x_tenant_id, case_id=clean_case_id)
+    success = close_case(tenant_id=effective_tenant, case_id=clean_case_id)
     if not success and clean_case_id != case_id:
-        success = close_case(tenant_id=x_tenant_id, case_id=case_id)
+        success = close_case(tenant_id=effective_tenant, case_id=case_id)
+    if not success and effective_tenant != x_tenant_id:
+        success = close_case(tenant_id=x_tenant_id, case_id=clean_case_id)
     
-    if not success:
+    if not success and not db_updated:
         raise HTTPException(status_code=404, detail="Case not found or could not be closed.")
         
     return {"status": "SUCCESS", "message": f"Case {case_id} closed."}

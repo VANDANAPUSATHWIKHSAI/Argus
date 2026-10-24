@@ -465,6 +465,17 @@ async def upload_evidence(
     target_case_id = sanitize_uuid(raw_case_id)
     tenant_id = authorize_tenant_access(current_user, tenant_id)
 
+    # Check if case exists to resolve actual tenant
+    try:
+        from infrastructure.repository.evidence_store import get_case_session
+        existing_session = get_case_session(tenant_id, target_case_id)
+        if not existing_session:
+            existing_session = get_case_session("default", target_case_id)
+        if existing_session and existing_session.tenant_id:
+            tenant_id = existing_session.tenant_id
+    except Exception:
+        pass
+
     # Create or fetch case session
     uploader_name = current_user.get("name", uploaded_by)
     try:

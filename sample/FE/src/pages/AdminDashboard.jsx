@@ -104,14 +104,37 @@ const AdminDashboard = () => {
       localStorage.setItem('active_case_id', createdId);
       localStorage.setItem('active_case_name', newCaseName);
       
+      const assignedAnalyst = employees.find(emp => String(emp.id) === String(newCaseAnalyst));
+      const assignedSenior = employees.find(emp => String(emp.id) === String(newCaseSeniorAnalyst));
+
+      const newCaseObj = {
+        case_id: createdId,
+        name: newCaseName,
+        status: 'open',
+        analyst_id: newCaseAnalyst || null,
+        analyst_name: assignedAnalyst ? assignedAnalyst.name : newCaseAnalyst,
+        senior_analyst_id: newCaseSeniorAnalyst || null,
+        senior_analyst_name: assignedSenior ? assignedSenior.name : newCaseSeniorAnalyst,
+        created_at: new Date().toISOString()
+      };
+
+      setCurrentCase(newCaseObj);
+      setHasOpenCase(true);
+      setAllCasesList(prev => [newCaseObj, ...prev]);
+
       setShowCreateModal(false);
       setNewCaseName('');
       setNewCaseAnalyst('');
+      setNewCaseSeniorAnalyst('');
       setRefreshTrigger(prev => prev + 1);
+
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('argus:caseChanged', { detail: { caseId: createdId } }));
+
       setCustomAlert({
         isOpen: true,
         title: 'Success',
-        message: 'Case created and analyst assigned. You can assign a Senior Analyst later from the dashboard.',
+        message: `Case ${createdId} ("${newCaseName}") created successfully and analyst assigned.`,
         type: 'success',
         onClose: null
       });
@@ -241,15 +264,20 @@ const AdminDashboard = () => {
               senior_analyst_name: c.senior_analyst_id ? (employeeMap[String(c.senior_analyst_id)]?.name || c.senior_analyst_id) : null,
             }));
 
-            // Sort newest first (reverse for created_at ascending)
-            const sorted = enriched.reverse();
+            // Sort newest first by created_at timestamp
+            const sorted = [...enriched].sort((a, b) => {
+              const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+              const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+              return timeB - timeA;
+            });
             setAllCasesList(sorted);
             
             // Prefer selected active case; if none or closed, fallback to latest open case
             const activeId = localStorage.getItem('active_case_id');
             let active = activeId ? sorted.find(c => c.case_id === activeId && (c.status === 'open' || c.status === 'in_progress')) : null;
             if (!active) {
-              active = sorted.find(c => c.status === 'open' || c.status === 'in_progress');
+              active = sorted.find(c => (c.status === 'open' || c.status === 'in_progress') && c.case_id?.startsWith('ARGUS_')) ||
+                       sorted.find(c => c.status === 'open' || c.status === 'in_progress');
               if (active) {
                 localStorage.setItem('active_case_id', active.case_id);
                 if (active.name) localStorage.setItem('active_case_name', active.name);
@@ -260,8 +288,10 @@ const AdminDashboard = () => {
                 localStorage.removeItem('active_case_desc');
               }
             }
-            setCurrentCase(active || null);
-            setHasOpenCase(!!active);
+            if (active) {
+              setCurrentCase(active);
+              setHasOpenCase(true);
+            }
           } else {
             setAllCasesList([]);
             setCurrentCase(null);

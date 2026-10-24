@@ -54,12 +54,25 @@ const Dashboard = () => {
       setCases(caseList);
 
       const storedActiveId = localStorage.getItem('active_case_id');
+      let currentActiveId = storedActiveId;
       if (storedActiveId) {
         const stillOpen = caseList.find(c => c.case_id === storedActiveId && (c.status === 'open' || c.status === 'in_progress'));
         if (!stillOpen) {
           localStorage.removeItem('active_case_id');
           localStorage.removeItem('active_case_name');
           localStorage.removeItem('active_case_desc');
+          currentActiveId = null;
+        }
+      }
+
+      if (!currentActiveId && caseList.length > 0) {
+        const fallback = caseList.find(c => (c.status === 'open' || c.status === 'in_progress') && c.case_id?.startsWith('ARGUS_')) ||
+                         caseList.find(c => c.status === 'open' || c.status === 'in_progress');
+        if (fallback) {
+          localStorage.setItem('active_case_id', fallback.case_id);
+          if (fallback.name) localStorage.setItem('active_case_name', fallback.name);
+          if (fallback.description) localStorage.setItem('active_case_desc', fallback.description);
+          currentActiveId = fallback.case_id;
         }
       }
 

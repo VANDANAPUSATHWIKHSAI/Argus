@@ -299,7 +299,7 @@ const Upload = () => {
               <span className="search-shortcut">⌘ K</span>
             </div>
             <div className="glass-topbar-right topbar-actions" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
-              {activeCaseId && (
+              {isAdmin && activeCaseId && (
                 <button
                   type="button"
                   onClick={handleCloseCase}

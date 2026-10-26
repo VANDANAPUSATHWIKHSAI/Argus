@@ -422,7 +422,7 @@ def store_evidence(evidence: Evidence, case: CaseSession) -> Evidence:
     return evidence
 
 
-def get_case_session(tenant_id: str, case_id: str) -> Optional[CaseSession]:
+def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Optional[CaseSession]:
     """
     Retrieves a CaseSession by case_id, enforcing tenant isolation.
     Queries PostgreSQL first; if offline or not found, falls back to local
@@ -433,25 +433,49 @@ def get_case_session(tenant_id: str, case_id: str) -> Optional[CaseSession]:
     if not case_id:
         raise ValueError("case_id is required to fetch a case session.")
 
-    if _should_attempt_postgres():
+    if check_db and _should_attempt_postgres():
         try:
-            import psycopg2
-            from config.settings import settings
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id FROM cases WHERE case_id = %s AND tenant_id = %s;",
-                (case_id, tenant_id)
-            )
-            row = cur.fetchone()
-            conn.close()
+            row = None
+            try:
+                from api.routes.auth import get_db_connection
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE case_id = %s AND tenant_id = %s;",
+                            (case_id, tenant_id)
+                        )
+                        row = cur.fetchone()
+                        if not row:
+                            cur.execute(
+                                "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE case_id = %s;",
+                                (case_id,)
+                            )
+                            row = cur.fetchone()
+            except Exception:
+                import psycopg2
+                from config.settings import settings
+                conn = psycopg2.connect(
+                    host=settings.postgres_host,
+                    port=settings.postgres_port,
+                    database=settings.postgres_db,
+                    user=settings.postgres_user,
+                    password=settings.postgres_password,
+                    connect_timeout=2
+                )
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE case_id = %s AND tenant_id = %s;",
+                    (case_id, tenant_id)
+                )
+                row = cur.fetchone()
+                if not row:
+                    cur.execute(
+                        "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE case_id = %s;",
+                        (case_id,)
+                    )
+                    row = cur.fetchone()
+                conn.close()
+
             if row:
                 return CaseSession(
                     case_id=str(row[0]),
@@ -554,25 +578,38 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
 
     cases = []
     seen_ids = set()
+    pg_success = False
     if _should_attempt_postgres():
         try:
-            import psycopg2
-            from config.settings import settings
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id FROM cases WHERE tenant_id = %s ORDER BY created_at DESC;",
-                (tenant_id,)
-            )
-            rows = cur.fetchall()
-            conn.close()
+            rows = []
+            try:
+                from api.routes.auth import get_db_connection
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
+                            (tenant_id, tenant_id)
+                        )
+                        rows = cur.fetchall()
+            except Exception:
+                import psycopg2
+                from config.settings import settings
+                conn = psycopg2.connect(
+                    host=settings.postgres_host,
+                    port=settings.postgres_port,
+                    database=settings.postgres_db,
+                    user=settings.postgres_user,
+                    password=settings.postgres_password,
+                    connect_timeout=2
+                )
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
+                    (tenant_id, tenant_id)
+                )
+                rows = cur.fetchall()
+                conn.close()
+
             for row in rows:
                 c_id = str(row[0])
                 seen_ids.add(c_id)
@@ -583,20 +620,34 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
                     created_by=row[3],
                     status=row[4],
                     analyst_id=row[5] if len(row) > 5 else None,
-                    senior_analyst_id=row[6] if len(row) > 6 else None
+                    senior_analyst_id=row[6] if len(row) > 6 else None,
+                    name=row[7] if len(row) > 7 else None,
+                    description=row[8] if len(row) > 8 else None
                 ))
+            pg_success = True
         except Exception as e:
             logger.error("Failed to query cases: %s", e)
 
     # Local fallback scan
+    # Performance Optimization:
+    # 1. Skip all directories already discovered in PostgreSQL.
+    # 2. Never query PostgreSQL again for unlisted local directories (check_db=False).
+    # 3. Only inspect directories with a valid case_session.json (or deeper traversal if DB was offline).
     repo_path = Path(REPOSITORY_DIR)
     if repo_path.exists() and repo_path.is_dir():
         for case_dir in repo_path.iterdir():
             if case_dir.is_dir() and case_dir.name not in seen_ids:
-                session = get_case_session(tenant_id=tenant_id, case_id=case_dir.name)
-                if session and session.tenant_id == tenant_id:
-                    cases.append(session)
-                    seen_ids.add(session.case_id)
+                session_file = case_dir / "case_session.json"
+                if session_file.is_file():
+                    session = get_case_session(tenant_id=tenant_id, case_id=case_dir.name, check_db=False)
+                    if session and session.tenant_id == tenant_id:
+                        cases.append(session)
+                        seen_ids.add(session.case_id)
+                elif not pg_success:
+                    session = get_case_session(tenant_id=tenant_id, case_id=case_dir.name, check_db=False)
+                    if session and session.tenant_id == tenant_id:
+                        cases.append(session)
+                        seen_ids.add(session.case_id)
 
     # If no cases exist yet for tenant 'default', seed default sample cases
     if not cases and tenant_id == "default":

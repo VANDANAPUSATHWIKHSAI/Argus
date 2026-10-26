@@ -242,7 +242,7 @@ const Sanitized = () => {
               <span className="search-shortcut">⌘ K</span>
             </div>
             <div className="glass-topbar-right topbar-actions" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
-              {localStorage.getItem('active_case_id') && (
+              {isAdmin && localStorage.getItem('active_case_id') && (
                 <button
                   type="button"
                   onClick={handleCloseCase}

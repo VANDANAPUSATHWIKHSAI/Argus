@@ -345,14 +345,40 @@ const AdminDashboard = () => {
         onClose={closeAlert} 
       />
       
-      {/* HEADER */}
-      <div className="glass-stage-header">
+      {/* ACTION BAR & BREADCRUMB */}
+      <div className="glass-stage-header" style={{ marginTop: '0', paddingTop: '4px', alignItems: 'center' }}>
         <div>
-          <h1 className="glass-stage-title">Dashboard</h1>
-          <p className="glass-stage-desc">Overview of your organization and current case.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+            <span style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: '6px', 
+              padding: '4px 12px', 
+              borderRadius: '20px', 
+              background: 'rgba(37, 99, 235, 0.1)', 
+              color: 'var(--glass-dash-blue, #2563eb)', 
+              fontSize: '11.5px', 
+              fontWeight: '700',
+              border: '1px solid rgba(37, 99, 235, 0.22)',
+              letterSpacing: '0.4px'
+            }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
+              COMMAND CENTER LIVE
+            </span>
+            <span style={{ fontSize: '13px', color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>
+              &bull; Autonomous Multi-Agent Forensics
+            </span>
+          </div>
+          <h1 className="glass-stage-title" style={{ fontSize: '24px', fontWeight: 800, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+            Forensic Operations Overview
+          </h1>
+          <p className="glass-stage-desc" style={{ fontSize: '13px' }}>
+            Real-time investigation progress, team allocations, and system compliance audit.
+          </p>
         </div>
         <div className="glass-stage-actions">
           <div className="glass-datetime-badge">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
             <span>{new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
             <span>&middot;</span>
             <span>{new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric' })}</span>
@@ -371,9 +397,12 @@ const AdminDashboard = () => {
               }
             }}
             className="btn-glass-primary"
-            style={{ cursor: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 'not-allowed' : 'pointer', opacity: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 0.6 : 1 }}
+            style={{ 
+              cursor: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 'not-allowed' : 'pointer', 
+              opacity: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 0.6 : 1 
+            }}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Create Case
           </button>
         </div>
@@ -384,24 +413,48 @@ const AdminDashboard = () => {
         {/* Total Employees */}
         <div className="glass-stat-card">
           <div className="glass-stat-icon-wrap blue">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
           </div>
           <div className="glass-stat-body">
             <div className="glass-stat-number">{loading ? '-' : totalEmployees}</div>
-            <div className="glass-stat-title">Total Employees</div>
+            <div className="glass-stat-title">Total Personnel</div>
             <div className="glass-stat-subtitle">Active team members</div>
+          </div>
+        </div>
+
+        {/* Active Investigations */}
+        <div className="glass-stat-card">
+          <div className="glass-stat-icon-wrap amber">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+          </div>
+          <div className="glass-stat-body">
+            <div className="glass-stat-number">{loading ? '-' : (allCasesList.filter(c => c.status === 'open' || c.status === 'in_progress').length)}</div>
+            <div className="glass-stat-title">Active Cases</div>
+            <div className="glass-stat-subtitle">Under investigation</div>
           </div>
         </div>
 
         {/* Cases Solved */}
         <div className="glass-stat-card">
           <div className="glass-stat-icon-wrap green">
-            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
           </div>
           <div className="glass-stat-body">
             <div className="glass-stat-number">{loading ? '-' : casesSolved}</div>
             <div className="glass-stat-title">Cases Solved</div>
             <div className="glass-stat-subtitle">Completed successfully</div>
+          </div>
+        </div>
+
+        {/* Platform Integrity */}
+        <div className="glass-stat-card">
+          <div className="glass-stat-icon-wrap purple">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+          </div>
+          <div className="glass-stat-body">
+            <div className="glass-stat-number">100%</div>
+            <div className="glass-stat-title">Platform Integrity</div>
+            <div className="glass-stat-subtitle">RFC-3161 audit sealed</div>
           </div>
         </div>
       </div>

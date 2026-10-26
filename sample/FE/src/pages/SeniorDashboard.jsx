@@ -57,7 +57,7 @@ const SeniorDashboard = () => {
         let available = 0, partial = 0, missing = 0;
         evList.forEach(e => {
             const st = (e.status || '').toLowerCase();
-            if (st === 'completed' || st === 'processed' || st === 'analyzed') available++;
+            if (st === 'completed' || st === 'processed' || st === 'analyzed' || st === 'stored') available++;
             else if (st === 'processing' || st === 'pending' || st === 'uploaded') partial++;
             else missing++;
         });
@@ -112,7 +112,7 @@ const SeniorDashboard = () => {
         
         {/* Case Header */}
         <div className="panel-card" style={{ padding: '28px 32px', marginBottom: '24px', borderRadius: '22px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '16px' }}>
             <div>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
                 <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: 'var(--text-main)' }}>Case #{activeSummary?.case_id || 'ARG-2026-001'}</h1>
@@ -126,6 +126,72 @@ const SeniorDashboard = () => {
                   Analyst: <strong style={{ color: 'var(--text-main)' }}>{activeCaseDetails?.analyst_name || activeCaseDetails?.analyst_id || 'Unassigned'}</strong>
                 </span>
               </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button
+                onClick={() => navigate('/case-notes')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border-strong)',
+                  background: 'var(--glass-dash-surface-nested)',
+                  color: 'var(--text-main)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+                Case Notes
+              </button>
+
+              <button
+                onClick={() => navigate('/chatbot')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border-strong)',
+                  background: 'var(--glass-dash-surface-nested)',
+                  color: 'var(--text-main)',
+                  fontSize: '13px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                AI Assistant
+              </button>
+
+              <button
+                onClick={() => navigate('/report')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 18px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                Report Review
+              </button>
             </div>
           </div>
           
@@ -200,7 +266,7 @@ const SeniorDashboard = () => {
                 View All Findings
               </button>
               <button 
-                onClick={() => navigate('/agents')} 
+                onClick={() => navigate('/chatbot')} 
                 style={{ 
                   flex: 1, 
                   padding: '11px 18px', 
@@ -229,8 +295,8 @@ const SeniorDashboard = () => {
                   e.currentTarget.style.color = 'var(--glass-dash-blue, #60a5fa)';
                 }}
               >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect></svg>
-                Agent Swarm Intel
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                Consult AI Assistant
               </button>
             </div>
           </div>
@@ -245,8 +311,9 @@ const SeniorDashboard = () => {
                 <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b' }}></div> {evidenceStats.partial} Partial</span>
                 <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: 6 }}><div style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444' }}></div> {evidenceStats.missing} Missing</span>
               </div>
-              <button onClick={() => navigate('/evidence')} className="btn btn-outline" style={{ width: '100%', padding: '10px 16px', background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '9999px', fontWeight: 600, cursor: 'pointer', fontSize: '13px' }}>
-                View Evidence
+              <button onClick={() => navigate('/report')} className="btn btn-outline" style={{ width: '100%', padding: '10px 16px', background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', borderRadius: '9999px', fontWeight: 600, cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                Review in Report
               </button>
             </div>
 

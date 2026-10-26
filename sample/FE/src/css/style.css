@@ -318,6 +318,19 @@ body,
   gap: 24px;
 }
 
+/* ── TOP VIEWPORT MASK (Protects the 0-20px gap above floating topbar from scrolled content leak) ── */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: var(--bg-app);
+  z-index: 90;
+  pointer-events: none;
+}
+
 /* ── FLOATING TOPBAR CAPSULE (Centered Island) ── */
 .topbar {
   position: fixed !important;

@@ -261,6 +261,41 @@ const Dashboard = () => {
                   <p className="glass-welcome-sub">Manage people, cases, and ensure compliance.</p>
                 </div>
                 <div className="glass-topbar-right topbar-actions">
+                  <button
+                    id="btn-admin-topbar-create-case"
+                    className="btn btn-primary"
+                    onClick={() => {
+                      const activeId = localStorage.getItem('active_case_id');
+                      const activeName = localStorage.getItem('active_case_name');
+                      if (activeId && activeName && activeId !== '00000000-0000-0000-0000-000000000001') {
+                        setCustomAlert({
+                          isOpen: true,
+                          title: 'Notice',
+                          message: `Active case "${activeName}" is currently open. You cannot create a new case until the active case is closed.`,
+                          type: 'warning'
+                        });
+                        return;
+                      }
+                      setShowCreateModal(true);
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      padding: '7px 16px',
+                      fontSize: '13px',
+                      fontWeight: 600,
+                      borderRadius: '10px',
+                      background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                      color: '#ffffff',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    Create Case
+                  </button>
                   <button className="glass-icon-btn icon-btn" onClick={toggleTheme} title="Toggle Theme">
                     {theme === 'dark' ? (
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
@@ -306,33 +341,7 @@ const Dashboard = () => {
                     </div>
                   )}
 
-                  {localStorage.getItem('active_case_id') && (
-                    <button
-                      id="btn-topbar-close-case"
-                      className="btn btn-secondary"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        padding: '6px 14px',
-                        fontSize: '13px',
-                        fontWeight: 600,
-                        borderRadius: '6px',
-                        color: '#ef4444',
-                        borderColor: 'rgba(239, 68, 68, 0.4)',
-                        background: 'rgba(239, 68, 68, 0.08)',
-                        cursor: 'pointer'
-                      }}
-                      onClick={handleCloseCase}
-                      title="Close Active Case"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                      </svg>
-                      Close Case
-                    </button>
-                  )}
+
 
                   {/* Theme Toggle */}
                   <button className="glass-icon-btn icon-btn" onClick={toggleTheme} title="Toggle Theme">
@@ -441,34 +450,7 @@ const Dashboard = () => {
                         </div>
                       </div>
 
-                      <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <button
-                          id="btn-header-close-case"
-                          className="btn btn-secondary"
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '6px',
-                            color: '#ef4444',
-                            borderColor: 'rgba(239, 68, 68, 0.4)',
-                            background: 'rgba(239, 68, 68, 0.08)',
-                            cursor: 'pointer',
-                            padding: '8px 16px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            borderRadius: '6px'
-                          }}
-                          onClick={handleCloseCase}
-                          title="Close Active Case"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="15" y1="9" x2="9" y2="15"></line>
-                            <line x1="9" y1="9" x2="15" y2="15"></line>
-                          </svg>
-                          Close Case
-                        </button>
-                      </div>
+
                     </div>
 
                     {/* Stats Grid */}
@@ -517,6 +499,208 @@ const Dashboard = () => {
                         </div>
                         <div className="trend-badge trend-danger">↑ Risk</div>
                       </div>
+                    </div>
+
+                    {/* Case Evidence Vault & Ingested Files */}
+                    <div className="panel-card" style={{
+                      padding: '24px 28px',
+                      borderRadius: 16,
+                      background: 'var(--bg-card)',
+                      border: '1px solid var(--border-subtle)',
+                      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 16,
+                      flexShrink: 0
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <div style={{
+                            width: 40,
+                            height: 40,
+                            borderRadius: 10,
+                            background: 'rgba(59, 130, 246, 0.12)',
+                            color: 'var(--blue)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                          </div>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-main)' }}>Uploaded Case Evidence</h3>
+                              <span style={{
+                                fontSize: 11,
+                                fontWeight: 700,
+                                background: (activeSummary.evidence_files && activeSummary.evidence_files.length > 0) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.15)',
+                                color: (activeSummary.evidence_files && activeSummary.evidence_files.length > 0) ? '#10b981' : 'var(--text-muted)',
+                                padding: '2px 8px',
+                                borderRadius: 999
+                              }}>
+                                {activeSummary.evidence_files ? activeSummary.evidence_files.length : 0} {activeSummary.evidence_files?.length === 1 ? 'file' : 'files'}
+                              </span>
+                            </div>
+                            <p style={{ margin: '2px 0 0 0', fontSize: 12.5, color: 'var(--text-muted)' }}>
+                              Cryptographically validated evidence artifacts currently attached to Case {activeSummary.case_id}.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                          <Link
+                            to="/upload"
+                            style={{
+                              padding: '8px 16px',
+                              borderRadius: 8,
+                              background: 'var(--blue)',
+                              color: '#fff',
+                              fontSize: 12.5,
+                              fontWeight: 600,
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6
+                            }}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            Upload More Evidence
+                          </Link>
+                          <Link
+                            to="/evidence"
+                            style={{
+                              padding: '8px 14px',
+                              borderRadius: 8,
+                              background: 'var(--bg-app)',
+                              border: '1px solid var(--border-strong)',
+                              color: 'var(--text-main)',
+                              fontSize: 12.5,
+                              fontWeight: 600,
+                              textDecoration: 'none',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6
+                            }}
+                          >
+                            View Evidence Vault &rsaquo;
+                          </Link>
+                        </div>
+                      </div>
+
+                      {activeSummary.evidence_files && activeSummary.evidence_files.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                          {activeSummary.evidence_files.map((ev, idx) => {
+                            const isStored = (ev.status || '').toLowerCase() === 'stored' || (ev.status || '').toLowerCase() === 'completed';
+                            const isFailed = (ev.status || '').toLowerCase() === 'failed' || (ev.status || '').toLowerCase() === 'error';
+                            return (
+                              <div
+                                key={ev.evidence_id || idx}
+                                style={{
+                                  display: 'flex',
+                                  justifyContent: 'space-between',
+                                  alignItems: 'center',
+                                  padding: '12px 18px',
+                                  borderRadius: 12,
+                                  background: 'var(--bg-app)',
+                                  border: '1px solid var(--border-subtle)',
+                                  flexWrap: 'wrap',
+                                  gap: 12
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 240 }}>
+                                  <div style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: 8,
+                                    background: 'rgba(59, 130, 246, 0.1)',
+                                    color: 'var(--blue)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                  }}>
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--text-main)', wordBreak: 'break-all' }}>
+                                      {ev.filename}
+                                    </div>
+                                    <div style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+                                      SHA256: {ev.sha256_hash ? `${ev.sha256_hash.slice(0, 16)}...` : 'N/A'}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                                  <div style={{ textAlign: 'right' }}>
+                                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                                      {ev.parsed_artifact_count || 0} artifacts extracted
+                                    </div>
+                                  </div>
+
+                                  <span style={{
+                                    fontSize: 11.5,
+                                    fontWeight: 700,
+                                    padding: '4px 10px',
+                                    borderRadius: 999,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    background: isStored
+                                      ? 'rgba(16, 185, 129, 0.12)'
+                                      : isFailed
+                                      ? 'rgba(239, 68, 68, 0.12)'
+                                      : 'rgba(245, 158, 11, 0.15)',
+                                    color: isStored
+                                      ? '#10b981'
+                                      : isFailed
+                                      ? '#ef4444'
+                                      : '#f59e0b',
+                                    border: isStored
+                                      ? '1px solid rgba(16, 185, 129, 0.3)'
+                                      : isFailed
+                                      ? '1px solid rgba(239, 68, 68, 0.3)'
+                                      : '1px solid rgba(245, 158, 11, 0.3)'
+                                  }}>
+                                    <span style={{
+                                      width: 6,
+                                      height: 6,
+                                      borderRadius: '50%',
+                                      background: isStored ? '#10b981' : isFailed ? '#ef4444' : '#f59e0b'
+                                    }} />
+                                    {isStored ? 'Ingested / Ready' : isFailed ? 'Failed' : 'Analyzing...'}
+                                  </span>
+
+                                  <Link
+                                    to="/evidence"
+                                    style={{
+                                      color: 'var(--blue)',
+                                      fontSize: 12.5,
+                                      fontWeight: 600,
+                                      textDecoration: 'none'
+                                    }}
+                                  >
+                                    Inspect &rsaquo;
+                                  </Link>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div style={{
+                          padding: '24px',
+                          textAlign: 'center',
+                          background: 'var(--bg-app)',
+                          borderRadius: 10,
+                          border: '1px dashed var(--border-strong)',
+                          color: 'var(--text-muted)',
+                          fontSize: 13
+                        }}>
+                          No evidence files attached to this case yet. Click &quot;Upload More Evidence&quot; above to ingest digital artifacts.
+                        </div>
+                      )}
                     </div>
 
                     {/* ARGUS Multi-Agent Swarm Intelligence Card */}

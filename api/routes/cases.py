@@ -202,22 +202,16 @@ async def get_all_cases(
 ):
     cases = list_cases(tenant_id=x_tenant_id)
     
-    # Fetch case names from DB
-    case_names = {}
     user_map = {}
     try:
         from api.routes.auth import get_db_connection
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT case_id, name, analyst_id, senior_analyst_id, description FROM cases WHERE tenant_id = %s", (x_tenant_id,))
-                for row in cur.fetchall():
-                    case_names[row[0]] = {"name": row[1], "analyst_id": row[2], "senior_analyst_id": row[3], "description": row[4] if len(row) > 4 else None}
-                    
                 cur.execute("SELECT id, name FROM users")
                 for row in cur.fetchall():
                     user_map[str(row[0])] = row[1]
     except Exception as e:
-        print(f"[DB WARNING] Could not fetch case names: {e}")
+        print(f"[DB WARNING] Could not fetch user names: {e}")
 
     # Fallback user_map when Postgres is offline
     if not user_map:
@@ -230,11 +224,10 @@ async def get_all_cases(
 
     result = []
     for c in cases:
-        info = case_names.get(c.case_id, {})
-        c_name = info.get("name") or getattr(c, "name", None) or c.case_id
-        c_desc = info.get("description") or getattr(c, "description", None)
-        c_analyst_id = info.get("analyst_id") or getattr(c, "analyst_id", None)
-        c_senior_id = info.get("senior_analyst_id") or getattr(c, "senior_analyst_id", None)
+        c_name = getattr(c, "name", None) or c.case_id
+        c_desc = getattr(c, "description", None)
+        c_analyst_id = getattr(c, "analyst_id", None)
+        c_senior_id = getattr(c, "senior_analyst_id", None)
         
         analyst_id_str = str(c_analyst_id or "")
         senior_id_str = str(c_senior_id or "")
@@ -536,6 +529,13 @@ async def close_case_endpoint(
     """
     Close an active case globally.
     """
+    user_role = (current_user.get("role") or "").lower()
+    if user_role == "analyst":
+        raise HTTPException(
+            status_code=403,
+            detail="Analysts are not authorized to close cases. Only administrators and supervisors may close cases."
+        )
+
     from api.routes.evidence import sanitize_uuid
     clean_case_id = sanitize_uuid(case_id)
     
@@ -817,22 +817,22 @@ async def get_case_findings(
     # Enforce access control — check DB assignment
     if current_user.get("role") != "admin":
         try:
-            from config.settings import settings
-            import psycopg2
-            conn = psycopg2.connect(
-                host=settings.postgres_host, port=settings.postgres_port,
-                database=settings.postgres_db, user=settings.postgres_user,
-                password=settings.postgres_password, connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute("SELECT analyst_id, senior_analyst_id FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
-            row = cur.fetchone()
-            conn.close()
+            from api.routes.auth import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT analyst_id, senior_analyst_id, created_by FROM cases WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
+                        (case_id, x_tenant_id)
+                    )
+                    row = cur.fetchone()
             if row:
                 uid = str(current_user.get("id", ""))
+                u_name = str(current_user.get("name", ""))
                 analyst_id   = str(row[0] or "")
                 senior_id    = str(row[1] or "")
-                if uid != analyst_id and uid != senior_id:
+                created_by   = str(row[2] or "")
+                # If specifically assigned to someone else and not created by this user, deny
+                if analyst_id and analyst_id != uid and senior_id and senior_id != uid and created_by != u_name:
                     raise HTTPException(status_code=403, detail="Access denied. This case is not assigned to you.")
         except HTTPException:
             raise

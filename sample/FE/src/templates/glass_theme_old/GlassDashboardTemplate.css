@@ -695,8 +695,20 @@
 /* ── STATS ROW (METRIC GLASS CARDS) ── */
 .glass-stats-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 1200px) {
+  .glass-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .glass-stats-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .glass-stat-card {
@@ -706,10 +718,10 @@
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid var(--glass-dash-border);
   border-radius: 20px;
-  padding: 26px 28px;
+  padding: 24px 26px;
   display: flex;
   align-items: center;
-  gap: 22px;
+  gap: 20px;
   box-shadow: var(--glass-dash-shadow-card);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
   overflow: hidden;
@@ -754,8 +766,8 @@
 }
 
 .glass-stat-icon-wrap {
-  width: 64px;
-  height: 64px;
+  width: 60px;
+  height: 60px;
   border-radius: 18px;
   display: flex;
   align-items: center;
@@ -775,6 +787,20 @@
   border: 1px solid rgba(16, 185, 129, 0.25);
   color: var(--glass-dash-green);
   box-shadow: 0 8px 20px -4px rgba(16, 185, 129, 0.2);
+}
+
+.glass-stat-icon-wrap.amber {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #f59e0b;
+  box-shadow: 0 8px 20px -4px rgba(245, 158, 11, 0.2);
+}
+
+.glass-stat-icon-wrap.purple {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  color: #8b5cf6;
+  box-shadow: 0 8px 20px -4px rgba(139, 92, 246, 0.2);
 }
 
 .glass-stat-body {

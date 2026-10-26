@@ -637,7 +637,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
             </div>
             <div>
               <div style={{ fontSize: '15px', fontWeight: 800, color: 'var(--glass-dash-text-main)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span>{isAuditor ? 'Auditor Forensic Workspace' : 'Analyst Forensic Workspace'}</span>
+                <span>{user?.role === 'senior_analyst' ? 'Senior Analyst Report Review' : isAuditor ? 'Auditor Forensic Workspace' : 'Analyst Forensic Workspace'}</span>
                 <span style={{ 
                   fontSize: '11px', 
                   padding: '2px 10px', 
@@ -649,11 +649,13 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                   fontWeight: 700,
                   border: `1px solid ${isAuditor ? 'var(--glass-dash-green-border)' : 'var(--glass-dash-blue-border)'}`
                 }}>
-                  {isAuditor ? 'Independent Review Mode' : 'Lead Analyst Mode'}
+                  {user?.role === 'senior_analyst' ? 'Report Review Mode' : isAuditor ? 'Independent Review Mode' : 'Lead Analyst Mode'}
                 </span>
               </div>
               <div style={{ fontSize: '11.5px', color: 'var(--glass-dash-text-muted)' }}>
-                {isAuditor 
+                {user?.role === 'senior_analyst'
+                  ? 'Side-by-side Report Review & Grounded AI Assistant'
+                  : isAuditor 
                   ? 'Side-by-side Live Report Preview & Grounded AI Audit Assistant' 
                   : 'Side-by-side Live Forensic Report & Grounded AI Assistant'}
               </div>

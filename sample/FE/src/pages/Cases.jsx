@@ -171,7 +171,6 @@ const Cases = () => {
   });
 
   const totalCount = cases.length;
-  const openCount = cases.filter(c => c.status === 'open' || c.status === 'in_progress').length;
   const closedCount = cases.filter(c => c.status === 'closed' || c.status === 'completed' || c.status === 'archived').length;
 
   return (
@@ -246,7 +245,7 @@ const Cases = () => {
           </div>
 
           {/* STAT CARDS */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '20px' }}>
             <div className="stat-card" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
               <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--glass-dash-blue-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--glass-dash-blue)' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
@@ -254,16 +253,6 @@ const Cases = () => {
               <div>
                 <div style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--glass-dash-text-main)' }}>{loading ? '-' : totalCount}</div>
                 <div style={{ fontSize: '13px', color: 'var(--glass-dash-text-muted)' }}>Total Cases</div>
-              </div>
-            </div>
-
-            <div className="stat-card" style={{ padding: '24px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--glass-dash-green-soft)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--glass-dash-green)' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-              </div>
-              <div>
-                <div style={{ fontSize: '26px', fontWeight: 'bold', color: 'var(--glass-dash-text-main)' }}>{loading ? '-' : openCount}</div>
-                <div style={{ fontSize: '13px', color: 'var(--glass-dash-text-muted)' }}>Open Cases</div>
               </div>
             </div>
 

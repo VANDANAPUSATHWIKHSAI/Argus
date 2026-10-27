@@ -1095,7 +1095,11 @@ HTML_REPORT_TEMPLATE = """<!DOCTYPE html>
         <div style="display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
             <span class="badge badge-amber">External TI Lookup: PARTIAL / OFFLINE FALLBACK (External API unreachable/air-gapped)</span>
             <span class="badge badge-cyan">Deterministic ARGUS Network Detections: {{ defanged_iocs|length }} Indicators</span>
-            <span class="badge badge-emerald">Campaign Similarity Engine (Agent 5b): SUCCESS (87% Match)</span>
+            {% if similar_cases %}
+            <span class="badge badge-emerald">Campaign Similarity Engine (Agent 5b): MATCH FOUND ({{ similar_cases[0].similarity_pct }}% Match)</span>
+            {% else %}
+            <span class="badge badge-amber">Campaign Similarity Engine (Agent 5b): ZERO MATCHES (Vector Repository Unseeded / 0 Cases Stored)</span>
+            {% endif %}
         </div>
 
         <table>
@@ -1126,9 +1130,10 @@ HTML_REPORT_TEMPLATE = """<!DOCTYPE html>
     <section class="section">
         <div class="section-header">
             <h2>10. Similar Historical Cases (Agent 5b)</h2>
-            <span class="section-tag">Qdrant Vector Retrieval</span>
+            <span class="section-tag">{% if similar_cases %}{{ similar_cases|length }} Matched Cases{% else %}0 Matched Cases{% endif %}</span>
         </div>
 
+        {% if similar_cases %}
         <table>
             <thead>
                 <tr>
@@ -1149,6 +1154,17 @@ HTML_REPORT_TEMPLATE = """<!DOCTYPE html>
                 {% endfor %}
             </tbody>
         </table>
+        {% else %}
+        <div style="background: rgba(245, 158, 11, 0.06); border: 1px solid rgba(245, 158, 11, 0.25); border-left: 4px solid var(--amber-500); padding: 14px 18px; border-radius: 4px; margin-top: 10px;">
+            <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; color: var(--amber-400); margin-bottom: 6px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                <span>No Historical Case Correlations Available (0 Approved Cases in Vector DB)</span>
+            </div>
+            <p style="margin: 0; font-size: 13px; color: var(--slate-300); line-height: 1.5;">
+                Agent 5b queried the enterprise vector database (Qdrant instance at <code>http://localhost:6333</code>), but the <code>validated_cases</code> collection currently contains 0 approved historical cases. No cosine similarity candidates or multi-vector historical playbooks could be retrieved for correlation. Historical case matching will automatically activate when validated past incident reports are archived into the vector repository.
+            </p>
+        </div>
+        {% endif %}
     </section>
 
     <!-- 11. PRIMARY INVESTIGATIVE FINDINGS -->
@@ -1713,7 +1729,7 @@ class ReportGenerator:
         supervisor_verification = self._build_supervisor_verification(findings_clusters, db_agent_data)
 
         # 17. Agent Swarm Panels (Deep-Dive) - Canonical Investigation State
-        agent_panels = self._build_agent_panels(db_agent_data, findings_clusters, impact, reconstruction_stages, unconfirmed_stages)
+        agent_panels = self._build_agent_panels(db_agent_data, findings_clusters, impact, reconstruction_stages, unconfirmed_stages, similar_cases=similar_cases)
 
         return {
             "case_id": case_id,
@@ -2204,20 +2220,29 @@ class ReportGenerator:
         return iocs
 
     def _build_similar_cases(self, db_data: dict) -> List[dict]:
-        return [
-            {
-                "case_id": "CASE-2026-088",
-                "similarity_pct": 87,
-                "why_similar": "Identical HTTP beacon interval (15s), high-entropy DGA resolution, matching MITRE T1071.001.",
-                "why_different": "Historical case contained full Sysmon EVTX logs confirming powershell.exe as injection parent.",
-            },
-            {
-                "case_id": "CASE-2026-042",
-                "similarity_pct": 74,
-                "why_similar": "Targeted communication with .cfd top-level domain infrastructure.",
-                "why_different": "Attacker deployed ransomware payload 4 hours post-beaconing; current case shows zero encryption.",
-            }
-        ]
+        outputs = db_data.get("agent_outputs", {}) if isinstance(db_data, dict) else {}
+        agent5b = outputs.get("agent5b") or outputs.get("agent5b_campaign_similarity") or outputs.get("agent_5b") or {}
+        flags = agent5b.get("flags") or {} if isinstance(agent5b, dict) else {}
+
+        cases = []
+        raw_cases = flags.get("retrieved_cases") or flags.get("similar_cases") or []
+        for c in raw_cases:
+            if isinstance(c, dict) and c.get("case_id"):
+                pct = c.get("similarity_score", c.get("similarity_pct", 0))
+                try:
+                    pct_val = float(pct)
+                    pct_int = int(round(pct_val * 100)) if pct_val <= 1.0 else int(round(pct_val))
+                except Exception:
+                    pct_int = 0
+                cases.append({
+                    "case_id": str(c.get("case_id")),
+                    "similarity_pct": pct_int,
+                    "why_similar": str(c.get("why_similar", "Behavioral pattern alignment.")),
+                    "why_different": str(c.get("why_different", "Historical divergence in endpoint execution.")),
+                })
+
+        # Return empty list if no genuine approved historical cases were retrieved
+        return cases
 
     def _build_action_checklist(self, clusters: List[dict], defanged_iocs: List[dict]) -> dict:
         return {
@@ -2330,7 +2355,7 @@ class ReportGenerator:
             },
         ]
 
-    def _build_agent_panels(self, db_data: dict, clusters: List[dict], impact: dict, reconstruction: List[dict], unconfirmed_stages: Optional[List[dict]] = None) -> dict:
+    def _build_agent_panels(self, db_data: dict, clusters: List[dict], impact: dict, reconstruction: List[dict], unconfirmed_stages: Optional[List[dict]] = None, similar_cases: Optional[List[dict]] = None) -> dict:
         outputs = db_data.get("agent_outputs", {})
 
         def _fmt(obj: Any) -> str:
@@ -2419,11 +2444,12 @@ class ReportGenerator:
                 "attribution": "Commodity disposable C2 infrastructure (QakBot / Lumma-like cadence)"
             },
             "agent5b_campaign_similarity": {
-                "status": "SUCCESS",
-                "vector_db": "Qdrant",
-                "top_match_case": "CASE-2026-088",
-                "similarity_score": 0.87,
-                "similarity_rationale": "Identical HTTP beacon interval (15s), high-entropy DGA resolution, matching MITRE T1071.001."
+                "status": "SUCCESS" if similar_cases else "ZERO_MATCHES",
+                "vector_db": "Qdrant (localhost:6333)",
+                "indexed_cases_count": len(similar_cases) if similar_cases else 0,
+                "top_match_case": similar_cases[0].get("case_id") if similar_cases else None,
+                "similarity_score": round(similar_cases[0].get("similarity_pct", 0) / 100.0, 2) if similar_cases else 0.0,
+                "similarity_rationale": similar_cases[0].get("why_similar", "") if similar_cases else "Validated Case Repository contains 0 approved cases; no cosine similarity candidates available."
             }
         }
 

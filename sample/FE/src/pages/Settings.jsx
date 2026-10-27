@@ -83,7 +83,12 @@ const Settings = () => {
             <p className="glass-welcome-sub">Manage your account preferences and security credentials</p>
           </div>
           <div className="glass-topbar-right topbar-actions">
-            <div className="glass-profile-pill user-profile">
+            <div 
+              className="glass-profile-pill user-profile" 
+              onClick={() => navigate('/profile')} 
+              style={{ cursor: 'pointer' }}
+              title="View My Profile"
+            >
               <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'U'}</div>
               <span className="glass-profile-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'User'}</span>
             </div>
@@ -92,6 +97,51 @@ const Settings = () => {
 
         <div className="dashboard-scroll">
           <div style={{ maxWidth: 760, margin: '0 auto', width: '100%' }}>
+            {/* Quick Profile Link Card */}
+            <div 
+              style={{ 
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 41, 59, 0.4) 100%)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 16,
+                padding: '16px 20px',
+                marginBottom: 20,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--blue, #3b82f6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main, #f8fafc)' }}>
+                    Personnel Profile & Security Clearance
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted, #94a3b8)' }}>
+                    Manage personal details, contact number, and view your verified capabilities.
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => navigate('/profile')}
+                style={{
+                  background: 'var(--blue, #3b82f6)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Open My Profile →
+              </button>
+            </div>
+
             {/* Settings Content Card - Change Password */}
             <div className="panel-card" style={{ padding: 36, borderRadius: 22 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--glass-dash-border-subtle)' }}>

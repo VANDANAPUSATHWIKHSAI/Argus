@@ -24,6 +24,7 @@ from fir.service import AnalystFindingService
 from fir.schemas import ReviewStatus
 from sanitization.gateway import SanitizationGateway
 from api.routes.auth import get_current_user
+from api.case_lock import case_lock_manager
 
 logger = logging.getLogger(__name__)
 
@@ -68,6 +69,7 @@ class CaseSummaryResponse(BaseModel):
     investigation_progress: InvestigationProgress
     latest_timestamp: Optional[str] = None
     evidence_files: list[Dict[str, Any]] = Field(default_factory=list)
+    lock: Optional[Dict[str, Any]] = None
 
 class CreateCaseRequest(BaseModel):
     name: str
@@ -202,22 +204,16 @@ async def get_all_cases(
 ):
     cases = list_cases(tenant_id=x_tenant_id)
     
-    # Fetch case names from DB
-    case_names = {}
     user_map = {}
     try:
         from api.routes.auth import get_db_connection
         with get_db_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT case_id, name, analyst_id, senior_analyst_id, description FROM cases WHERE tenant_id = %s", (x_tenant_id,))
-                for row in cur.fetchall():
-                    case_names[row[0]] = {"name": row[1], "analyst_id": row[2], "senior_analyst_id": row[3], "description": row[4] if len(row) > 4 else None}
-                    
                 cur.execute("SELECT id, name FROM users")
                 for row in cur.fetchall():
                     user_map[str(row[0])] = row[1]
     except Exception as e:
-        print(f"[DB WARNING] Could not fetch case names: {e}")
+        print(f"[DB WARNING] Could not fetch user names: {e}")
 
     # Fallback user_map when Postgres is offline
     if not user_map:
@@ -230,11 +226,10 @@ async def get_all_cases(
 
     result = []
     for c in cases:
-        info = case_names.get(c.case_id, {})
-        c_name = info.get("name") or getattr(c, "name", None) or c.case_id
-        c_desc = info.get("description") or getattr(c, "description", None)
-        c_analyst_id = info.get("analyst_id") or getattr(c, "analyst_id", None)
-        c_senior_id = info.get("senior_analyst_id") or getattr(c, "senior_analyst_id", None)
+        c_name = getattr(c, "name", None) or c.case_id
+        c_desc = getattr(c, "description", None)
+        c_analyst_id = getattr(c, "analyst_id", None)
+        c_senior_id = getattr(c, "senior_analyst_id", None)
         
         analyst_id_str = str(c_analyst_id or "")
         senior_id_str = str(c_senior_id or "")
@@ -243,6 +238,9 @@ async def get_all_cases(
         analyst_name = user_map.get(analyst_id_str, analyst_id_str)
         senior_name = user_map.get(senior_id_str, senior_id_str)
         
+        lock = case_lock_manager.get_lock(c.case_id)
+        lock_info = lock.to_dict(user_id) if lock else None
+
         result.append({
             "case_id": c.case_id,
             "created_by": c.created_by,
@@ -255,6 +253,7 @@ async def get_all_cases(
             "senior_analyst_id": c_senior_id,
             "senior_analyst_name": senior_name,
             "assigned_to_you": assigned,
+            "lock": lock_info,
         })
 
     return {"status": "SUCCESS", "data": result}
@@ -536,8 +535,28 @@ async def close_case_endpoint(
     """
     Close an active case globally.
     """
+    user_role = (current_user.get("role") or "").lower()
+    if user_role == "analyst":
+        raise HTTPException(
+            status_code=403,
+            detail="Analysts are not authorized to close cases. Only administrators and supervisors may close cases."
+        )
+
     from api.routes.evidence import sanitize_uuid
     clean_case_id = sanitize_uuid(case_id)
+
+    # Enforce case lock
+    user_id = str(current_user.get("id", ""))
+    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+        case_id=clean_case_id,
+        user_id=user_id,
+        is_admin=user_role == "admin"
+    )
+    if not is_allowed and lock:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Cannot close case: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+        )
     
     # Custom db update to add closed_by and resolve effective tenant
     from config.settings import settings
@@ -637,6 +656,170 @@ async def assign_senior_analyst(
     except Exception as e:
         logger.error(f"Failed to assign senior analyst: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/locks/active", response_model=Dict[str, Any])
+async def get_all_active_case_locks(
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Retrieve all currently active case locks in the workspace.
+    """
+    return {
+        "status": "SUCCESS",
+        "locks": case_lock_manager.get_all_active_locks()
+    }
+
+
+@router.post("/{case_id}/lock", response_model=Dict[str, Any])
+async def acquire_or_refresh_case_lock(
+    case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Acquire or refresh an exclusive investigation lock on a case.
+    If the case is already locked by another analyst:
+      - Denies write lock
+      - Returns read_only=True and details of the current lock holder
+    """
+    user_id = str(current_user.get("id", ""))
+    user_name = current_user.get("name") or current_user.get("userid") or "Analyst"
+    user_email = current_user.get("email")
+
+    granted, lock, status_code = case_lock_manager.acquire_or_refresh(
+        case_id=case_id,
+        user_id=user_id,
+        user_name=user_name,
+        user_email=user_email
+    )
+
+    lock_dict = lock.to_dict(user_id)
+    if granted:
+        message = (
+            "Case lock acquired. You have exclusive investigation and modification rights."
+            if status_code == "ACQUIRED"
+            else "Case lock refreshed."
+        )
+    else:
+        message = (
+            f"Case '{case_id}' is currently being investigated by analyst '{lock.locked_by_user_name}'. "
+            f"You have been granted Read-Only access."
+        )
+
+    return {
+        "status": "SUCCESS" if granted else "LOCKED_BY_OTHER",
+        "lock_status": status_code,
+        "is_locked": True,
+        "is_owner": granted,
+        "read_only": not granted,
+        "message": message,
+        "lock": lock_dict
+    }
+
+
+@router.get("/{case_id}/lock", response_model=Dict[str, Any])
+async def get_case_lock_status(
+    case_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Check current lock status for a specific case.
+    """
+    user_id = str(current_user.get("id", ""))
+    lock = case_lock_manager.get_lock(case_id)
+    if not lock:
+        return {
+            "status": "UNLOCKED",
+            "is_locked": False,
+            "is_owner": False,
+            "read_only": False,
+            "message": "Case is currently not locked by any analyst.",
+            "lock": None
+        }
+
+    is_owner = (lock.locked_by_user_id == user_id)
+    return {
+        "status": "LOCKED" if not is_owner else "OWNED",
+        "is_locked": True,
+        "is_owner": is_owner,
+        "read_only": not is_owner,
+        "message": (
+            "You hold the active investigation lock."
+            if is_owner
+            else f"Case is currently locked by analyst '{lock.locked_by_user_name}'."
+        ),
+        "lock": lock.to_dict(user_id)
+    }
+
+
+@router.post("/{case_id}/heartbeat", response_model=Dict[str, Any])
+async def case_lock_heartbeat(
+    case_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Heartbeat to extend TTL of an active case lock.
+    """
+    user_id = str(current_user.get("id", ""))
+    success, lock, code = case_lock_manager.heartbeat(case_id=case_id, user_id=user_id)
+    if not success:
+        if code == "NOT_OWNER":
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cannot heartbeat case lock: active lock is held by '{lock.locked_by_user_name if lock else 'another user'}'."
+            )
+        else:
+            # Lock might have expired; try to re-acquire
+            user_name = current_user.get("name") or current_user.get("userid") or "Analyst"
+            granted, new_lock, acquire_code = case_lock_manager.acquire_or_refresh(
+                case_id=case_id,
+                user_id=user_id,
+                user_name=user_name,
+                user_email=current_user.get("email")
+            )
+            return {
+                "status": "SUCCESS" if granted else "LOCKED_BY_OTHER",
+                "lock_status": acquire_code,
+                "is_locked": True,
+                "is_owner": granted,
+                "read_only": not granted,
+                "lock": new_lock.to_dict(user_id)
+            }
+
+    return {
+        "status": "SUCCESS",
+        "lock_status": "HEARTBEAT_ACK",
+        "is_locked": True,
+        "is_owner": True,
+        "read_only": False,
+        "lock": lock.to_dict(user_id) if lock else None
+    }
+
+
+@router.post("/{case_id}/unlock", response_model=Dict[str, Any])
+@router.delete("/{case_id}/lock", response_model=Dict[str, Any])
+async def release_case_lock(
+    case_id: str,
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Release case lock when an analyst finishes investigating, switches cases, or logs out.
+    """
+    user_id = str(current_user.get("id", ""))
+    is_admin = current_user.get("role") == "admin"
+    released, reason = case_lock_manager.release(case_id=case_id, user_id=user_id, is_admin=is_admin)
+
+    if not released:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot unlock case: You are not the owner of this lock."
+        )
+
+    return {
+        "status": "SUCCESS",
+        "message": f"Lock for case '{case_id}' released successfully ({reason})."
+    }
 
 
 @router.get("/{case_id}", response_model=CaseSummaryResponse)
@@ -779,9 +962,12 @@ async def get_case(
                 case_name = row[0]
             if len(row) > 1 and row[1]:
                 case_desc = row[1]
-        conn.close()
     except Exception as e:
         logger.warning(f"Could not fetch case name for summary: {e}")
+
+    user_id = str(current_user.get("id", ""))
+    case_lock = case_lock_manager.get_lock(case_id)
+    lock_dict = case_lock.to_dict(user_id) if case_lock else None
 
     return CaseSummaryResponse(
         case_id=case_id,
@@ -797,8 +983,8 @@ async def get_case(
         source_artifact_count=len(source_artifacts),
         investigation_progress=progress,
         latest_timestamp=latest_ts,
-        evidence_files=formatted_evidence
-
+        evidence_files=formatted_evidence,
+        lock=lock_dict
     )
 
 @router.get("/{case_id}/findings")
@@ -817,22 +1003,22 @@ async def get_case_findings(
     # Enforce access control — check DB assignment
     if current_user.get("role") != "admin":
         try:
-            from config.settings import settings
-            import psycopg2
-            conn = psycopg2.connect(
-                host=settings.postgres_host, port=settings.postgres_port,
-                database=settings.postgres_db, user=settings.postgres_user,
-                password=settings.postgres_password, connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute("SELECT analyst_id, senior_analyst_id FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
-            row = cur.fetchone()
-            conn.close()
+            from api.routes.auth import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT analyst_id, senior_analyst_id, created_by FROM cases WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
+                        (case_id, x_tenant_id)
+                    )
+                    row = cur.fetchone()
             if row:
                 uid = str(current_user.get("id", ""))
+                u_name = str(current_user.get("name", ""))
                 analyst_id   = str(row[0] or "")
                 senior_id    = str(row[1] or "")
-                if uid != analyst_id and uid != senior_id:
+                created_by   = str(row[2] or "")
+                # If specifically assigned to someone else and not created by this user, deny
+                if analyst_id and analyst_id != uid and senior_id and senior_id != uid and created_by != u_name:
                     raise HTTPException(status_code=403, detail="Access denied. This case is not assigned to you.")
         except HTTPException:
             raise
@@ -932,6 +1118,18 @@ async def create_case_note(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
+    user_id = str(current_user.get("id", ""))
+    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+        case_id=case_id,
+        user_id=user_id,
+        is_admin=current_user.get("role") == "admin"
+    )
+    if not is_allowed and lock:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Cannot add case note: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+        )
+
     from config.settings import settings
     import psycopg2
     import uuid
@@ -964,6 +1162,18 @@ async def update_case_note(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
+    user_id = str(current_user.get("id", ""))
+    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+        case_id=case_id,
+        user_id=user_id,
+        is_admin=current_user.get("role") == "admin"
+    )
+    if not is_allowed and lock:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Cannot update case note: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+        )
+
     from config.settings import settings
     import psycopg2
     try:
@@ -994,6 +1204,17 @@ async def delete_case_note(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
+    user_id = str(current_user.get("id", ""))
+    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+        case_id=case_id,
+        user_id=user_id,
+        is_admin=current_user.get("role") == "admin"
+    )
+    if not is_allowed and lock:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Cannot delete case note: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+        )
     from config.settings import settings
     import psycopg2
     try:
@@ -1392,6 +1613,19 @@ async def run_case_agents(
     from pathlib import Path
 
     clean_case_id = sanitize_uuid(case_id)
+
+    # Enforce case lock: another analyst cannot run agents if case is locked by someone else
+    user_id = str(current_user.get("id", ""))
+    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+        case_id=clean_case_id,
+        user_id=user_id,
+        is_admin=current_user.get("role") == "admin"
+    )
+    if not is_allowed and lock:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Cannot run multi-agent analysis: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+        )
 
     # 1. Enforce Case Existence for this Tenant
     evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)

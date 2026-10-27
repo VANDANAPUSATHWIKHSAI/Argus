@@ -476,6 +476,21 @@ async def upload_evidence(
     except Exception:
         pass
 
+    # Enforce case lock
+    if target_case_id:
+        from api.case_lock import case_lock_manager
+        user_id = str(current_user.get("id", ""))
+        is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+            case_id=target_case_id,
+            user_id=user_id,
+            is_admin=current_user.get("role") == "admin"
+        )
+        if not is_allowed and lock:
+            raise HTTPException(
+                status_code=423,
+                detail=f"Cannot upload evidence: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+            )
+
     # Create or fetch case session
     uploader_name = current_user.get("name", uploaded_by)
     try:

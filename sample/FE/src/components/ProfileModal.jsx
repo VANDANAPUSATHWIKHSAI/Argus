@@ -1,20 +1,101 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { fetchCurrentUserProfile, updateCurrentUserProfile } from '../js/api';
+import { getAuthUser } from '../js/authSession';
 
 const ProfileModal = ({ isOpen, onClose }) => {
-  const [name, setName] = useState('Analyst');
-  const [email, setEmail] = useState('analyst@agency.gov');
+  const navigate = useNavigate();
+  const [user, setUser] = useState(() => getAuthUser() || {});
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [role, setRole] = useState('Analyst');
+  const [clearance, setClearance] = useState('Level 3 - Evidence Ingestion');
+  const [badgeId, setBadgeId] = useState('');
+  
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const initialUser = getAuthUser() || {};
+    setUser(initialUser);
+    setName(initialUser.name || '');
+    setEmail(initialUser.email || '');
+    setPhone(initialUser.phone || '');
+    setRole(initialUser.role || 'analyst');
+
+    fetchCurrentUserProfile()
+      .then((data) => {
+        if (data) {
+          setUser(data);
+          setName(data.name || '');
+          setEmail(data.email || '');
+          setPhone(data.phone || '');
+          setRole(data.role || 'analyst');
+          setClearance(data.clearance_level || '');
+          setBadgeId(data.badge_id || '');
+        }
+      })
+      .catch((err) => {
+        console.error('Could not load profile in modal:', err);
+      });
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    setSaved(true);
-    setTimeout(() => {
-      setSaved(false);
-      onClose();
-    }, 1200);
+    setErrorMsg('');
+    if (!name.trim()) {
+      setErrorMsg('Name cannot be empty');
+      return;
+    }
+    if (!email.trim()) {
+      setErrorMsg('Email cannot be empty');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const updated = await updateCurrentUserProfile({
+        name: name.trim(),
+        email: email.trim(),
+        phone: phone.trim()
+      });
+
+      setUser(updated);
+      setSaved(true);
+
+      // Sync across app
+      const stored = getAuthUser() || {};
+      const updatedUser = {
+        ...stored,
+        name: updated.name,
+        email: updated.email,
+        phone: updated.phone
+      };
+      localStorage.setItem('argus_user', JSON.stringify(updatedUser));
+      window.dispatchEvent(new CustomEvent('argus:userChanged', { detail: updatedUser }));
+
+      setTimeout(() => {
+        setSaved(false);
+        onClose();
+      }, 1000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to save changes');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  const roleTitle = user?.title || (
+    user?.role === 'admin' ? 'System Administrator' :
+    user?.role === 'senior_analyst' ? 'Senior Forensic Reviewer' :
+    user?.role === 'auditor' ? 'Compliance Auditor' :
+    'Digital Forensics Investigator'
+  );
 
   return (
     <div
@@ -24,7 +105,9 @@ const ProfileModal = ({ isOpen, onClose }) => {
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'transparent',
+        background: 'rgba(0, 0, 0, 0.7)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -37,10 +120,10 @@ const ProfileModal = ({ isOpen, onClose }) => {
         style={{
           background: 'var(--bg-card, #121826)',
           border: '1px solid var(--border-strong, #1e293b)',
-          borderRadius: 16,
+          borderRadius: 20,
           width: '100%',
-          maxWidth: 480,
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.5)',
+          maxWidth: 520,
+          boxShadow: '0 24px 48px rgba(0, 0, 0, 0.6), 0 0 24px rgba(59, 130, 246, 0.15)',
           overflow: 'hidden',
           animation: 'fadeInScale 0.2s ease-out',
         }}
@@ -54,31 +137,34 @@ const ProfileModal = ({ isOpen, onClose }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
+            background: 'linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, transparent 100%)'
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
             <div
               style={{
-                width: 38,
-                height: 38,
+                width: 44,
+                height: 44,
                 borderRadius: '50%',
-                background: 'var(--blue)',
+                background: 'linear-gradient(135deg, var(--blue, #3b82f6) 0%, #1d4ed8 100%)',
                 color: '#ffffff',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                fontWeight: 700,
+                fontWeight: 800,
                 fontSize: 18,
+                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)',
+                textTransform: 'uppercase'
               }}
             >
-              A
+              {name ? name.charAt(0) : 'U'}
             </div>
             <div>
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--text-main, #f8fafc)' }}>
-                Profile Settings
+                {name || 'Investigator Profile'}
               </h3>
               <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted, #cbd5e1)' }}>
-                Account details & role verification
+                {roleTitle} • ID: {user?.id || '—'}
               </p>
             </div>
           </div>
@@ -124,12 +210,29 @@ const ProfileModal = ({ isOpen, onClose }) => {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path d="M20 6L9 17l-5-5"></path>
               </svg>
-              Profile settings saved!
+              Profile details successfully saved!
+            </div>
+          )}
+
+          {errorMsg && (
+            <div
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid rgba(239, 68, 68, 0.4)',
+                color: '#f87171',
+                padding: '10px 14px',
+                borderRadius: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                marginBottom: 20,
+              }}
+            >
+              {errorMsg}
             </div>
           )}
 
           {/* Name */}
-          <div style={{ marginBottom: 18 }}>
+          <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted, #cbd5e1)', marginBottom: 6 }}>
               Full Name
             </label>
@@ -153,9 +256,9 @@ const ProfileModal = ({ isOpen, onClose }) => {
           </div>
 
           {/* Email Address */}
-          <div style={{ marginBottom: 18 }}>
+          <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted, #cbd5e1)', marginBottom: 6 }}>
-              Email Address
+              Official Email Address
             </label>
             <input
               type="email"
@@ -176,34 +279,79 @@ const ProfileModal = ({ isOpen, onClose }) => {
             />
           </div>
 
-          {/* Role */}
-          <div style={{ marginBottom: 18 }}>
+          {/* Phone */}
+          <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted, #cbd5e1)', marginBottom: 6 }}>
-              Role
+              Phone Contact
             </label>
             <input
-              type="text"
-              value="Digital Forensics Investigator - Level 5"
-              disabled
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="+1-555-0100"
               style={{
                 width: '100%',
                 padding: '10px 14px',
                 borderRadius: 8,
                 border: '1px solid var(--border-strong, #334155)',
-                background: 'rgba(30, 41, 59, 0.5)',
-                color: 'var(--text-dim, #94a3b8)',
+                background: 'var(--bg-app, #0f1423)',
+                color: 'var(--text-main, #f8fafc)',
                 fontSize: 14,
-                cursor: 'not-allowed',
+                outline: 'none',
                 boxSizing: 'border-box',
               }}
             />
           </div>
 
-          {/* Status */}
-          <div style={{ marginBottom: 24 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted, #cbd5e1)', marginBottom: 6 }}>
-              Status
-            </label>
+          {/* Role & Clearance */}
+          <div style={{ marginBottom: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted, #cbd5e1)', marginBottom: 6 }}>
+                Assigned Role
+              </label>
+              <input
+                type="text"
+                value={user?.role ? user.role.replace('_', ' ') : 'Analyst'}
+                disabled
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border-strong, #334155)',
+                  background: 'rgba(30, 41, 59, 0.4)',
+                  color: 'var(--text-dim, #94a3b8)',
+                  fontSize: 13,
+                  textTransform: 'capitalize',
+                  boxSizing: 'border-box',
+                  cursor: 'not-allowed'
+                }}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-muted, #cbd5e1)', marginBottom: 6 }}>
+                Commission Date
+              </label>
+              <input
+                type="text"
+                value={user?.doj || '2025-01-15'}
+                disabled
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border-strong, #334155)',
+                  background: 'rgba(30, 41, 59, 0.4)',
+                  color: 'var(--text-dim, #94a3b8)',
+                  fontSize: 13,
+                  boxSizing: 'border-box',
+                  cursor: 'not-allowed'
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Status & Badge */}
+          <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div
               style={{
                 display: 'inline-flex',
@@ -219,8 +367,29 @@ const ProfileModal = ({ isOpen, onClose }) => {
               }}
             >
               <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981' }} />
-              Active
+              Active Clearance
             </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                navigate('/profile');
+              }}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#60a5fa',
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+            >
+              View Full Profile Page →
+            </button>
           </div>
 
           {/* Actions */}
@@ -243,6 +412,7 @@ const ProfileModal = ({ isOpen, onClose }) => {
             </button>
             <button
               type="submit"
+              disabled={loading}
               style={{
                 padding: '10px 22px',
                 borderRadius: 8,
@@ -251,10 +421,11 @@ const ProfileModal = ({ isOpen, onClose }) => {
                 color: '#ffffff',
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.7 : 1
               }}
             >
-              Save Changes
+              {loading ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

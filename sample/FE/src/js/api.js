@@ -125,6 +125,17 @@ export async function updatePassword(currentPassword, newPassword) {
   });
 }
 
+export async function fetchCurrentUserProfile() {
+  return fetchWithAuth('/auth/me');
+}
+
+export async function updateCurrentUserProfile(profileData) {
+  return fetchWithAuth('/auth/me', {
+    method: 'PUT',
+    body: JSON.stringify(profileData),
+  });
+}
+
 export async function requestPasswordResetOtp(userid) {
   const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
     method: 'POST',
@@ -225,5 +236,31 @@ export async function triggerAgentAnalysis(caseId) {
   return fetchWithAuth(`/cases/${caseId}/run-agents`, {
     method: 'POST',
   });
+}
+
+export async function acquireCaseLock(caseId) {
+  return fetchWithAuth(`/cases/${encodeURIComponent(caseId)}/lock`, {
+    method: 'POST',
+  });
+}
+
+export async function fetchCaseLock(caseId) {
+  return fetchWithAuth(`/cases/${encodeURIComponent(caseId)}/lock`);
+}
+
+export async function releaseCaseLock(caseId) {
+  return fetchWithAuth(`/cases/${encodeURIComponent(caseId)}/lock`, {
+    method: 'DELETE',
+  });
+}
+
+export async function sendCaseLockHeartbeat(caseId) {
+  return fetchWithAuth(`/cases/${encodeURIComponent(caseId)}/heartbeat`, {
+    method: 'POST',
+  });
+}
+
+export async function fetchAllActiveLocks() {
+  return fetchWithAuth('/cases/locks/active');
 }
 

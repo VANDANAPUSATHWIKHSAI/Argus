@@ -506,42 +506,6 @@ const Login = () => {
         navigate('/dashboard');
       }
     } catch (err) {
-      if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.DEV) {
-        const devMap = {
-          'admin': { id: '2', name: 'System Administrator', role: 'admin' },
-          '2': { id: '2', name: 'System Administrator', role: 'admin' },
-          'analyst': { id: '4', name: 'sathwik (Analyst)', role: 'analyst' },
-          '4': { id: '4', name: 'sathwik (Analyst)', role: 'analyst' },
-          'senior_analyst': { id: '6', name: 'Senior Analyst 6', role: 'senior_analyst' },
-          '6': { id: '6', name: 'Senior Analyst 6', role: 'senior_analyst' },
-          'auditor': { id: '12', name: 'Auditor 12', role: 'auditor' },
-          '12': { id: '12', name: 'Auditor 12', role: 'auditor' }
-        };
-        const matched = devMap[userid.trim().toLowerCase()];
-        if (matched) {
-          const expSec = Math.floor(Date.now() / 1000) + 7 * 86400;
-          const h = btoa(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-          const p = btoa(JSON.stringify({ sub: matched.id, role: matched.role, exp: expSec })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-          const devToken = `${h}.${p}.dev_sig`;
-          const devUser = {
-            id: matched.id,
-            name: matched.name,
-            email: `${matched.role}@argus.local`,
-            role: matched.role,
-            tenant_id: 'default'
-          };
-          setAuthSession(devToken, devUser, keepActive);
-          if (keepActive) {
-            localStorage.setItem('argus_remembered_userid', userid.trim());
-          }
-          if (devUser.role === 'auditor') {
-            navigate('/report');
-          } else {
-            navigate('/dashboard');
-          }
-          return;
-        }
-      }
       setError(err.message || 'Authentication failed. Please verify credentials.');
       setIsLoggingIn(false);
     }

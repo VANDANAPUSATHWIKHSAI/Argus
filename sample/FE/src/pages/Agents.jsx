@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
+import CaseLockBanner from '../components/CaseLockBanner';
 import { fetchAgentResults, triggerAgentAnalysis, fetchCases } from '../js/api';
 import { formatEvidenceId } from '../js/dateUtils';
-import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase } from '../js/caseEvents';
+import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase, setActiveCase } from '../js/caseEvents';
+import { syncCaseLock, subscribeToCaseLock } from '../js/caseLockService';
 import '../css/style.css';
 
 const AGENT_METADATA = {
@@ -143,7 +146,75 @@ const AGENT_METADATA = {
   }
 };
 
+const AGENT_WORKFLOW_META = {
+  agent1: {
+    stageNumber: 1,
+    stageCode: '01',
+    roleLabel: 'Evidence Ingestion & Triage',
+    inputs: 'Raw forensic artifacts & logs (PCAP, EVTX, RAM)',
+    outputs: 'Normalized timeline, verified claims & trust score',
+    nextAgent: 'Agent 02 (Evidence Correlation)'
+  },
+  agent2: {
+    stageNumber: 2,
+    stageCode: '02',
+    roleLabel: 'Graph Topology & Clustering',
+    inputs: 'Normalized evidence items from Agent 01',
+    outputs: 'Neo4j GDS WCC graph clusters & entity links',
+    nextAgent: 'Agent 03 (Attack Reconstruction)'
+  },
+  agent3: {
+    stageNumber: 3,
+    stageCode: '03',
+    roleLabel: 'Kill-Chain Scoping & ATT&CK',
+    inputs: 'Correlated entity clusters from Agent 02',
+    outputs: 'MITRE ATT&CK progression & infection entry point',
+    nextAgent: 'Agent 04 (Malware Behaviour)'
+  },
+  agent4: {
+    stageNumber: 4,
+    stageCode: '04',
+    roleLabel: 'Malware Behavioral Profiling',
+    inputs: 'Extracted binaries & suspicious execution paths',
+    outputs: 'YARA/Sigma signatures & novel threat scores',
+    nextAgent: 'Agents 05a & 05b (Threat Intel & Vector RAG)'
+  },
+  agent5a: {
+    stageNumber: 5,
+    stageCode: '05a',
+    roleLabel: 'Threat Intelligence Feeds',
+    inputs: 'IOC hashes, domains, IPs & CVE indicators',
+    outputs: 'TAXII 2.1 threat actor & campaign enrichment',
+    nextAgent: 'Agent 06 (Impact Assessment)'
+  },
+  agent5b: {
+    stageNumber: 5,
+    stageCode: '05b',
+    roleLabel: 'Historical Vector RAG',
+    inputs: 'Extracted TTPs & behavioral feature vectors',
+    outputs: 'Qdrant vector similarity & campaign attribution',
+    nextAgent: 'Agent 06 (Impact Assessment)'
+  },
+  agent6: {
+    stageNumber: 6,
+    stageCode: '06',
+    roleLabel: 'CVSS Impact & Remediation',
+    inputs: 'Attributed attack paths & affected asset lists',
+    outputs: 'CVSS v3.1 base score, ISS index & recovery playbook',
+    nextAgent: 'Agent 07 (Supervisor & NLI Gate)'
+  },
+  agent7: {
+    stageNumber: 7,
+    stageCode: '07',
+    roleLabel: 'Supervisor Synthesis & NLI Gate',
+    inputs: 'All accumulated claims & findings (Agents 01–06)',
+    outputs: 'Executive incident synthesis & DeBERTa NLI verification',
+    nextAgent: 'Final Executive FIR Report'
+  }
+};
+
 const Agents = () => {
+  const navigate = useNavigate();
   const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
   const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
   const [agentData, setAgentData] = useState(null);
@@ -156,6 +227,9 @@ const Agents = () => {
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('argus_theme') || 'dark');
   const [caseDetails, setCaseDetails] = useState(null);
+  const [availableCases, setAvailableCases] = useState([]);
+  const [showCaseSelector, setShowCaseSelector] = useState(false);
+  const [caseLock, setCaseLock] = useState(null);
 
   const currentUser = (() => {
     try {
@@ -183,6 +257,23 @@ const Agents = () => {
         setCaseDetails(null);
         setLoading(false);
       }
+    });
+  }, []);
+
+  // Synchronize case locking: ensure single active investigator and read-only mode for others
+  useEffect(() => {
+    if (activeCaseId) {
+      syncCaseLock(activeCaseId).then(lock => {
+        setCaseLock(lock);
+      });
+    } else {
+      setCaseLock(null);
+    }
+  }, [activeCaseId]);
+
+  useEffect(() => {
+    return subscribeToCaseLock((updatedLock) => {
+      setCaseLock(updatedLock);
     });
   }, []);
 
@@ -222,13 +313,19 @@ const Agents = () => {
   };
 
   useEffect(() => {
-    if (activeCaseId) {
-      loadAgentResults(activeCaseId);
-      fetchCases().then(res => {
-        const list = res.data || [];
+    fetchCases().then(res => {
+      const list = res.data || (Array.isArray(res) ? res : []);
+      setAvailableCases(list);
+      if (activeCaseId) {
         const match = list.find(c => String(c.case_id) === String(activeCaseId) || String(c.id) === String(activeCaseId));
         if (match) setCaseDetails(match);
-      }).catch(() => {});
+      }
+    }).catch(() => {});
+  }, [activeCaseId]);
+
+  useEffect(() => {
+    if (activeCaseId) {
+      loadAgentResults(activeCaseId);
     } else {
       setCaseDetails(null);
     }
@@ -312,6 +409,16 @@ const Agents = () => {
       return;
     }
 
+    if (caseLock?.readOnly) {
+      setCustomAlert({
+        isOpen: true,
+        title: '🔒 Case Locked (Read-Only Mode)',
+        message: `Cannot launch multi-agent analysis. Case is currently being investigated by analyst ${caseLock.lockedBy?.name || 'another user'}. You have Read-Only access.`,
+        type: 'warning'
+      });
+      return;
+    }
+
     setRunningAgents(true);
     try {
       const res = await triggerAgentAnalysis(activeCaseId);
@@ -342,19 +449,197 @@ const Agents = () => {
   const currentAgent = AGENT_METADATA[selectedAgentTab] || AGENT_METADATA.agent7;
   const currentAgentData = agentData?.[selectedAgentTab] || {};
 
-  // Status helper
-  const getAgentStatusBadge = (agentId) => {
+  // Swarm execution telemetry calculations
+  const agentOrder = ['agent1', 'agent2', 'agent3', 'agent4', 'agent5a', 'agent5b', 'agent6', 'agent7'];
+  const totalAgents = agentOrder.length;
+
+  let completedCount = 0;
+  let runningCount = 0;
+  let failedCount = 0;
+  let activeRunningAgent = null;
+
+  agentOrder.forEach(key => {
+    const st = (stageStatuses[key] || '').toUpperCase();
+    if (st === 'COMPLETED' || st === 'SUCCESS') {
+      completedCount += 1;
+    } else if (st === 'RUNNING' || st === 'PROCESSING') {
+      runningCount += 1;
+      if (!activeRunningAgent) activeRunningAgent = AGENT_METADATA[key];
+    } else if (st === 'FAILED') {
+      failedCount += 1;
+    }
+  });
+
+  let progressPercentage = 0;
+  if (agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS' || completedCount === totalAgents) {
+    progressPercentage = 100;
+  } else if (runningAgents || runningCount > 0) {
+    progressPercentage = Math.max(12, Math.round(((completedCount + 0.5) / totalAgents) * 100));
+  } else if (completedCount > 0) {
+    progressPercentage = Math.round((completedCount / totalAgents) * 100);
+  }
+
+  // Enhanced Status Pill with high-visibility icon & crystal glass style
+  const renderStatusPill = (agentId) => {
     const st = (stageStatuses[agentId] || 'PENDING').toUpperCase();
     if (st === 'COMPLETED' || st === 'SUCCESS') {
-      return <span style={{ background: '#10b981', color: '#090d16', padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800 }}>READY</span>;
+      return (
+        <span className="swarm-badge-pill swarm-badge-ready" title="Execution Completed & Verified">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>READY</span>
+        </span>
+      );
     }
     if (st === 'RUNNING' || st === 'PROCESSING') {
-      return <span style={{ background: '#38bdf8', color: '#090d16', padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800 }}>RUNNING</span>;
+      return (
+        <span className="swarm-badge-pill swarm-badge-running" title="Reasoning Engine In-Flight">
+          <span className="swarm-radar-dot"></span>
+          <span>RUNNING</span>
+        </span>
+      );
     }
     if (st === 'FAILED') {
-      return <span style={{ background: '#ef4444', color: '#ffffff', padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 800 }}>FAILED</span>;
+      return (
+        <span className="swarm-badge-pill swarm-badge-failed" title="Execution Failed">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          <span>FAILED</span>
+        </span>
+      );
     }
-    return <span style={{ background: 'var(--border-strong)', color: 'var(--text-muted)', padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700 }}>PENDING</span>;
+    return (
+      <span className="swarm-badge-pill swarm-badge-pending" title="Awaiting upstream pipeline execution">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>PENDING</span>
+      </span>
+    );
+  };
+
+  // Status helper (for test & sidebar backwards compatibility)
+  const getAgentStatusBadge = (agentId) => {
+    return renderStatusPill(agentId);
+  };
+
+  // Stage node renderer in workflow pipeline
+  const renderStageNode = (agentId) => {
+    const agent = AGENT_METADATA[agentId];
+    if (!agent) return null;
+    const isSelected = selectedAgentTab === agentId;
+    const st = (stageStatuses[agentId] || 'PENDING').toUpperCase();
+    const isCompleted = st === 'COMPLETED' || st === 'SUCCESS';
+    const isRunning = st === 'RUNNING' || st === 'PROCESSING';
+    const isFailed = st === 'FAILED';
+
+    let statusClass = 'status-pending';
+    if (isCompleted) statusClass = 'status-completed';
+    else if (isRunning) statusClass = 'status-running';
+    else if (isFailed) statusClass = 'status-failed';
+
+    return (
+      <div
+        key={agentId}
+        className={`swarm-stage-node ${isSelected ? 'is-active-tab' : ''} ${statusClass}`}
+        onClick={() => setSelectedAgentTab(agentId)}
+        title={`Stage ${agent.number}: ${agent.name} - Click to inspect live telemetry`}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setSelectedAgentTab(agentId);
+          }
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{
+            fontSize: 10,
+            fontWeight: 900,
+            color: agent.color,
+            background: agent.bg,
+            border: `1px solid ${agent.border}`,
+            padding: '1px 6px',
+            borderRadius: 6
+          }}>
+            {agent.number}
+          </span>
+          {renderStatusPill(agentId)}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ color: agent.color, flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+            {agent.icon}
+          </div>
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, color: 'var(--text-main)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+              {agent.name}
+            </div>
+            <div style={{ fontSize: 9.5, color: 'var(--text-muted)', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+              {agent.badge}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Split node renderer for parallel stages 05a / 05b
+  const renderSplitNode = (agentId) => {
+    const agent = AGENT_METADATA[agentId];
+    if (!agent) return null;
+    const isSelected = selectedAgentTab === agentId;
+    const st = (stageStatuses[agentId] || 'PENDING').toUpperCase();
+    const isCompleted = st === 'COMPLETED' || st === 'SUCCESS';
+    const isRunning = st === 'RUNNING' || st === 'PROCESSING';
+
+    return (
+      <div
+        key={agentId}
+        className={`swarm-split-node ${isSelected ? 'is-active-tab' : ''}`}
+        style={{
+          borderLeft: `3px solid ${agent.color}`,
+          background: isSelected ? 'var(--glass-dash-surface-nested)' : 'var(--glass-dash-surface)'
+        }}
+        onClick={() => setSelectedAgentTab(agentId)}
+        title={`Stage ${agent.number}: ${agent.name} - Click to inspect live telemetry`}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setSelectedAgentTab(agentId);
+          }
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden' }}>
+          <span style={{ fontSize: 9.5, fontWeight: 900, color: agent.color }}>{agent.number}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {agent.name}
+          </span>
+        </div>
+        <div>
+          {renderStatusPill(agentId)}
+        </div>
+      </div>
+    );
+  };
+
+  // Flow connector arrow renderer
+  const renderConnector = (fromAgentId, toAgentId) => {
+    const fromStatus = (stageStatuses[fromAgentId] || 'PENDING').toUpperCase();
+    const toStatus = (stageStatuses[toAgentId] || 'PENDING').toUpperCase();
+    const isPassed = fromStatus === 'COMPLETED' || fromStatus === 'SUCCESS';
+    const isActive = toStatus === 'RUNNING' || toStatus === 'PROCESSING';
+
+    let connClass = 'swarm-flow-connector';
+    if (isActive) connClass += ' is-active';
+    else if (isPassed) connClass += ' is-passed';
+
+    return (
+      <div className={connClass} title={`Data flow: ${fromAgentId} ➔ ${toAgentId}`}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </div>
+    );
   };
 
   const claimsList = agentData?.claims || [];
@@ -401,23 +686,81 @@ const Agents = () => {
               </p>
             </div>
 
-            {/* Active Case Badge */}
-            <div style={{
-              background: 'var(--glass-dash-surface-nested)',
-              border: '1px solid var(--glass-dash-border-subtle)',
-              padding: '5px 14px',
-              borderRadius: '9999px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginLeft: '4px'
-            }}>
-              <span style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Active Case:</span>
-              <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--glass-dash-text-main)' }}>
-                {activeCaseId ? `${caseDetails?.name || activeCaseName} (${activeCaseId})` : 'No Active Case'}
-              </span>
-            </div>
+            {/* Active Case Badge with Dropdown Switcher */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setShowCaseSelector(!showCaseSelector)}
+                style={{
+                  background: 'var(--glass-dash-surface-nested)',
+                  border: '1px solid var(--glass-dash-border-subtle)',
+                  padding: '5px 14px',
+                  borderRadius: '9999px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginLeft: '4px',
+                  cursor: 'pointer',
+                  color: 'inherit'
+                }}
+                title="Click to switch active investigation case"
+              >
+                <span style={{ fontSize: '11px', color: 'var(--glass-dash-blue)', textTransform: 'uppercase', fontWeight: 800 }}>Active Case:</span>
+                <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--glass-dash-text-main)' }}>
+                  {activeCaseId ? `${caseDetails?.name || activeCaseName} (${activeCaseId})` : 'Select Case ▾'}
+                </span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+
+              {showCaseSelector && (
+                <>
+                  <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                    onClick={() => setShowCaseSelector(false)}
+                  />
+                  <div className="swarm-case-select-dropdown" style={{ zIndex: 100 }}>
+                    <div style={{ padding: '6px 8px', fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                      Switch Active Investigation
+                    </div>
+                  {availableCases.length > 0 ? (
+                    availableCases.map((c) => {
+                      const cid = c.case_id || c.id;
+                      const isCur = String(cid) === String(activeCaseId);
+                      return (
+                        <div
+                          key={cid}
+                          className={`swarm-case-item ${isCur ? 'is-selected' : ''}`}
+                          onClick={() => {
+                            setActiveCase(cid, c.name);
+                            setShowCaseSelector(false);
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 12.5, fontWeight: 700, color: isCur ? 'var(--blue)' : 'var(--text-main)' }}>
+                              {c.name || 'Unnamed Case'}
+                            </span>
+                            <span style={{ fontSize: 10.5, fontFamily: 'monospace', color: 'var(--text-muted)' }}>
+                              {cid}
+                            </span>
+                          </div>
+                          {c.description && (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {c.description}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div style={{ padding: '12px', textAlign: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+                      No cases found in workspace.
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
+        </div>
 
           <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <button
@@ -428,12 +771,13 @@ const Agents = () => {
                 fontSize: '12.5px',
                 padding: '7px 16px',
                 borderRadius: '10px',
-                cursor: (runningAgents || loading || !activeCaseId) ? 'not-allowed' : 'pointer',
-                opacity: (runningAgents || loading || !activeCaseId) ? 0.6 : 1,
+                cursor: (runningAgents || loading || !activeCaseId || caseLock?.readOnly) ? 'not-allowed' : 'pointer',
+                opacity: (runningAgents || loading || !activeCaseId || caseLock?.readOnly) ? 0.6 : 1,
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px'
               }}
+              title={caseLock?.readOnly ? `Read-Only: Case is locked by ${caseLock.lockedBy?.name || 'another analyst'}` : 'Launch multi-agent analysis'}
             >
               {runningAgents ? (
                 <>
@@ -443,7 +787,7 @@ const Agents = () => {
               ) : (
                 <>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-                  <span>Run Multi-Agent Analysis</span>
+                  <span>{caseLock?.readOnly ? 'Read-Only Mode' : 'Run Multi-Agent Analysis'}</span>
                 </>
               )}
             </button>
@@ -470,6 +814,10 @@ const Agents = () => {
                     <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'Investigator'}</div>
                     <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
                   </div>
+                  <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/profile'); setShowUserDropdown(false); }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    My Profile
+                  </button>
                 </div>
               )}
             </div>
@@ -478,8 +826,11 @@ const Agents = () => {
 
         {/* WORKSPACE CONTENT */}
         <div className="dashboard-scroll">
+          {/* Case Lock Warning Banner */}
+          <CaseLockBanner lockState={caseLock} caseId={activeCaseId} onLockRefreshed={setCaseLock} />
+
           {/* Active Case Details Header Card */}
-          {activeCaseId && (
+          {activeCaseId ? (
             <div className="header-card" style={{ flexShrink: 0, padding: '24px 28px', borderRadius: '18px' }}>
               <div className="header-info-wrap" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '20px' }}>
                 <div className="header-id">
@@ -512,90 +863,267 @@ const Agents = () => {
                 </div>
               </div>
             </div>
+          ) : (
+            /* Prompt to select a case when none is active */
+            <div className="header-card" style={{ flexShrink: 0, padding: '24px 28px', borderRadius: '18px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 800 }}>
+                      CASE SELECTION REQUIRED
+                    </span>
+                    <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
+                      Select an Active Investigation Case
+                    </h2>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 640 }}>
+                    Choose an active forensic case to run or view the autonomous multi-agent reasoning swarm, threat intelligence correlation, and DeBERTa verification matrix.
+                  </p>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  {availableCases.length > 0 ? (
+                    <select
+                      style={{
+                        background: 'var(--glass-dash-surface-nested)',
+                        border: '1px solid var(--glass-dash-blue-border)',
+                        color: 'var(--text-main)',
+                        padding: '8px 14px',
+                        borderRadius: 10,
+                        fontSize: 12.5,
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                      onChange={(e) => {
+                        const selected = availableCases.find(c => String(c.case_id || c.id) === e.target.value);
+                        if (selected) {
+                          setActiveCase(selected.case_id || selected.id, selected.name);
+                        }
+                      }}
+                      defaultValue=""
+                    >
+                      <option value="" disabled>Choose a Case to Load...</option>
+                      {availableCases.map(c => (
+                        <option key={c.case_id || c.id} value={c.case_id || c.id}>
+                          {c.name} ({c.case_id || c.id})
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <button className="btn-primary" onClick={() => navigate('/cases')}>
+                      Browse Cases
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
           )}
 
-          {/* SWARM SUMMARY HEADER */}
-          <div className="panel-card" style={{
-            padding: '24px 28px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: 16
-          }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
-                  Autonomous Forensic Reasoning Swarm
-                </h1>
-                <span style={{
-                  background: (agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS') ? 'rgba(16, 185, 129, 0.15)' :
-                              agentData?.status === 'PARTIAL_SUCCESS' ? 'rgba(245, 158, 11, 0.15)' :
-                              (agentData?.status === 'FAILED' || agentData?.status === 'ERROR') ? 'rgba(239, 68, 68, 0.15)' :
-                              'rgba(59, 130, 246, 0.15)',
-                  color: (agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS') ? '#10b981' :
-                         agentData?.status === 'PARTIAL_SUCCESS' ? '#f59e0b' :
-                         (agentData?.status === 'FAILED' || agentData?.status === 'ERROR') ? '#ef4444' :
-                         'var(--blue)',
-                  border: `1px solid ${(agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS') ? '#10b981' :
-                                      agentData?.status === 'PARTIAL_SUCCESS' ? '#f59e0b' :
-                                      (agentData?.status === 'FAILED' || agentData?.status === 'ERROR') ? '#ef4444' :
-                                      'var(--blue)'}`,
-                  padding: '2px 10px',
-                  borderRadius: 20,
-                  fontSize: 11,
-                  fontWeight: 800
-                }}>
-                  {agentData?.status || 'READY'}
-                </span>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  Case ID: <strong>{activeCaseId}</strong>
-                </span>
-              </div>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', maxWidth: 780 }}>
-                Seven specialized AI agents continuously correlate artifact lineage, reconstruct MITRE ATT&CK kill-chains, profile novel malware behaviors, query vector threat intelligence, and gate forensic claims through DeBERTa-v3 NLI verification.
-              </p>
-              {agentData?.agent_errors && (
-                <div style={{
-                  background: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  borderRadius: 6,
-                  padding: '8px 12px',
-                  marginTop: 10,
-                  fontSize: 12,
-                  color: '#ef4444',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8
-                }}>
-                  <span style={{ fontWeight: 800 }}>ANALYSIS NOTICE:</span>
-                  <span>{typeof agentData.agent_errors === 'string' ? agentData.agent_errors : JSON.stringify(agentData.agent_errors)}</span>
+          {/* MASTER AUTONOMOUS FORENSIC REASONING SWARM & WORKFLOW CONSOLE */}
+          <div className="swarm-workflow-card" style={{ marginBottom: 18 }}>
+            {/* Top Row: Title, Status, Description & Live Telemetry Metrics */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+              gap: 16,
+              marginBottom: 16
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                  <span style={{
+                    background: 'var(--glass-dash-blue-soft)',
+                    color: 'var(--glass-dash-blue)',
+                    border: '1px solid var(--glass-dash-blue-border)',
+                    padding: '2.5px 8.5px',
+                    borderRadius: 6,
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    letterSpacing: '0.06em'
+                  }}>
+                    SWARM PIPELINE DAG
+                  </span>
+                  <h1 style={{ fontSize: 19, fontWeight: 800, margin: 0, color: 'var(--text-main)' }}>
+                    Autonomous Forensic Reasoning Swarm
+                  </h1>
+                  <span style={{
+                    background: (agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS') ? 'rgba(16, 185, 129, 0.16)' :
+                                agentData?.status === 'PARTIAL_SUCCESS' ? 'rgba(245, 158, 11, 0.16)' :
+                                (agentData?.status === 'FAILED' || agentData?.status === 'ERROR') ? 'rgba(239, 68, 68, 0.16)' :
+                                'rgba(59, 130, 246, 0.16)',
+                    color: (agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS') ? '#10b981' :
+                           agentData?.status === 'PARTIAL_SUCCESS' ? '#f59e0b' :
+                           (agentData?.status === 'FAILED' || agentData?.status === 'ERROR') ? '#ef4444' :
+                           'var(--blue)',
+                    border: `1px solid ${(agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS') ? '#10b981' :
+                                        agentData?.status === 'PARTIAL_SUCCESS' ? '#f59e0b' :
+                                        (agentData?.status === 'FAILED' || agentData?.status === 'ERROR') ? '#ef4444' :
+                                        'var(--blue)'}`,
+                    padding: '2.5px 10px',
+                    borderRadius: 20,
+                    fontSize: 10.5,
+                    fontWeight: 800
+                  }}>
+                    {agentData?.status || 'READY'}
+                  </span>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                    Case: <strong>{activeCaseId || 'None Selected'}</strong>
+                  </span>
                 </div>
-              )}
+                <p style={{ margin: 0, fontSize: 12.5, color: 'var(--text-muted)', maxWidth: 760 }}>
+                  Seven specialized AI agents continuously correlate artifact lineage, reconstruct MITRE ATT&amp;CK kill-chains, profile novel malware behaviors, query vector threat intelligence, and gate forensic claims through DeBERTa-v3 NLI verification.
+                </p>
+                {agentData?.agent_errors && (
+                  <div style={{
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: 6,
+                    padding: '6px 12px',
+                    marginTop: 8,
+                    fontSize: 12,
+                    color: '#ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8
+                  }}>
+                    <span style={{ fontWeight: 800 }}>ANALYSIS NOTICE:</span>
+                    <span>{typeof agentData.agent_errors === 'string' ? agentData.agent_errors : JSON.stringify(agentData.agent_errors)}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Quick Telemetry Capsule */}
+              <div style={{
+                display: 'flex',
+                gap: 14,
+                alignItems: 'center',
+                background: 'var(--glass-dash-surface)',
+                border: '1px solid var(--glass-dash-border-subtle)',
+                padding: '8px 18px',
+                borderRadius: 14
+              }}>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800 }}>Review Gate</div>
+                  <div style={{ fontSize: 12.5, fontWeight: 800, color: agentData?.review_level === 'ROUTINE_ANALYST_REVIEW' ? '#10b981' : '#f59e0b', marginTop: 1 }}>
+                    {agentData?.review_level || 'ROUTINE REVIEW'}
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 26, background: 'var(--border-strong)' }}></div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800 }}>FIR Findings</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--blue)', marginTop: 1 }}>
+                    {agentData?.findings_count ?? 0}
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 26, background: 'var(--border-strong)' }}></div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800 }}>Claims</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: '#10b981', marginTop: 1 }}>
+                    {claimsList.length}
+                  </div>
+                </div>
+                <div style={{ width: 1, height: 26, background: 'var(--border-strong)' }}></div>
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 800 }}>Progress</div>
+                  <div style={{ fontSize: 15, fontWeight: 900, color: progressPercentage === 100 ? '#10b981' : 'var(--blue)', marginTop: 1 }}>
+                    {progressPercentage}%
+                  </div>
+                </div>
+              </div>
             </div>
 
-            {/* Quick Metrics */}
-            <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Review Gate</div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: agentData?.review_level === 'ROUTINE_ANALYST_REVIEW' ? '#10b981' : '#f59e0b' }}>
-                  {agentData?.review_level || 'ROUTINE REVIEW'}
+            {/* Swarm Execution Progress Bar & Frontier Callout */}
+            <div style={{ marginBottom: 16 }}>
+              <div className="swarm-progress-bar-wrap">
+                <div
+                  className={`swarm-progress-bar-fill ${runningAgents ? 'is-running' : ''}`}
+                  style={{
+                    width: `${progressPercentage}%`,
+                    background: progressPercentage === 100
+                      ? 'linear-gradient(90deg, #10b981, #059669)'
+                      : failedCount > 0
+                      ? 'linear-gradient(90deg, #3b82f6, #ef4444)'
+                      : 'linear-gradient(90deg, #3b82f6 0%, #06b6d4 40%, #10b981 100%)'
+                  }}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, fontSize: 11.5 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontWeight: 800, color: 'var(--text-muted)' }}>STATUS:</span>
+                  {runningAgents ? (
+                    <span style={{ color: '#0284c7', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className="swarm-radar-dot"></span>
+                      {activeRunningAgent ? `Reasoning In-Flight: Agent ${activeRunningAgent.number} (${activeRunningAgent.name})` : 'Swarm Reasoning In-Flight...'}
+                    </span>
+                  ) : progressPercentage === 100 ? (
+                    <span style={{ color: '#10b981', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+                      All 8 Agents Completed &amp; Verified
+                    </span>
+                  ) : failedCount > 0 ? (
+                    <span style={{ color: '#ef4444', fontWeight: 800 }}>
+                      Pipeline Degraded ({failedCount} Failed)
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>
+                      Idle &amp; Ready for Execution ({completedCount} / {totalAgents} Agents Ready)
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                  Inspecting: <strong style={{ color: currentAgent.color }}>Agent {currentAgent.number} ({currentAgent.name})</strong>
                 </div>
               </div>
-              <div style={{ width: 1, height: 32, background: 'var(--border-strong)' }}></div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>FIR Findings</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--blue)' }}>
-                  {agentData?.findings_count ?? 0}
+            </div>
+
+            {/* VISUAL WORKFLOW PIPELINE FLOWCHART */}
+            <div className="swarm-pipeline-flow">
+              {/* Stage 01: Evidence Intelligence */}
+              {renderStageNode('agent1')}
+
+              {/* Flow Connector */}
+              {renderConnector('agent1', 'agent2')}
+
+              {/* Stage 02: Evidence Correlation */}
+              {renderStageNode('agent2')}
+
+              {/* Flow Connector */}
+              {renderConnector('agent2', 'agent3')}
+
+              {/* Stage 03: Attack Reconstruction */}
+              {renderStageNode('agent3')}
+
+              {/* Flow Connector */}
+              {renderConnector('agent3', 'agent4')}
+
+              {/* Stage 04: Malware Behaviour */}
+              {renderStageNode('agent4')}
+
+              {/* Flow Connector into Fork */}
+              {renderConnector('agent4', 'agent5a')}
+
+              {/* Stage 05: Parallel Dual Branches (05a Threat Intel & 05b Vector RAG) */}
+              <div className="swarm-split-stage">
+                <div style={{ fontSize: 9.5, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', textAlign: 'center', marginBottom: 2 }}>
+                  Stage 05 (Parallel)
                 </div>
+                {renderSplitNode('agent5a')}
+                {renderSplitNode('agent5b')}
               </div>
-              <div style={{ width: 1, height: 32, background: 'var(--border-strong)' }}></div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Verified Claims</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#10b981' }}>
-                  {claimsList.length}
-                </div>
-              </div>
+
+              {/* Flow Connector from Fork */}
+              {renderConnector('agent5a', 'agent6')}
+
+              {/* Stage 06: Impact Assessment */}
+              {renderStageNode('agent6')}
+
+              {/* Flow Connector */}
+              {renderConnector('agent6', 'agent7')}
+
+              {/* Stage 07: Supervisor & NLI Gate */}
+              {renderStageNode('agent7')}
             </div>
           </div>
 
@@ -737,6 +1265,31 @@ const Agents = () => {
                   gap: 20
                 }}
               >
+                {/* Workflow Step Context Breadcrumb */}
+                <div className="swarm-breadcrumb-banner">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{
+                      background: currentAgent.bg,
+                      color: currentAgent.color,
+                      fontWeight: 900,
+                      fontSize: 11,
+                      padding: '2px 8px',
+                      borderRadius: 6
+                    }}>
+                      STAGE {currentAgent.number} OF 07
+                    </span>
+                    <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                      {AGENT_WORKFLOW_META[selectedAgentTab]?.roleLabel || currentAgent.name}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--text-muted)', fontSize: 11.5 }}>
+                    <span><strong>Inputs:</strong> {AGENT_WORKFLOW_META[selectedAgentTab]?.inputs || 'Case Artifacts'}</span>
+                    <span>➔</span>
+                    <span><strong>Outputs to:</strong> {AGENT_WORKFLOW_META[selectedAgentTab]?.nextAgent || 'Supervisor'}</span>
+                  </div>
+                </div>
+
                 {/* Agent Header Banner */}
                 <div style={{
                   display: 'flex',

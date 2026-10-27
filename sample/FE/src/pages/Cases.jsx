@@ -108,16 +108,35 @@ const Cases = () => {
 
   const handleSetActiveCase = (caseItem) => {
     setActiveCase(caseItem.case_id, caseItem.name || '');
-    setCustomAlert({
-      isOpen: true,
-      title: 'Active Case Selected',
-      message: `Case ${caseItem.case_id} (${caseItem.name || 'Unnamed'}) is now selected as your active case.`,
-      type: 'success'
-    });
+    if (caseItem.lock && caseItem.lock.is_locked && caseItem.lock.read_only) {
+      setCustomAlert({
+        isOpen: true,
+        title: '🔒 Case In Use — Read-Only Mode',
+        message: `Case ${caseItem.case_id} (${caseItem.name || 'Unnamed'}) is currently being investigated by analyst ${caseItem.lock.locked_by?.name || 'another user'}. You have been granted Read-Only access.`,
+        type: 'warning'
+      });
+    } else {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Active Case Selected',
+        message: `Case ${caseItem.case_id} (${caseItem.name || 'Unnamed'}) is now selected as your active case.`,
+        type: 'success'
+      });
+    }
     fetchCasesData();
   };
 
   const handleCloseCase = async (caseId, caseName) => {
+    const targetCase = cases.find(c => c.case_id === caseId);
+    if (targetCase?.lock?.is_locked && targetCase?.lock?.read_only) {
+      setCustomAlert({
+        isOpen: true,
+        title: '🔒 Case Locked — Read-Only',
+        message: `Cannot close case: Case is currently locked by analyst ${targetCase.lock.locked_by?.name || 'another user'}. You have Read-Only access.`,
+        type: 'warning'
+      });
+      return;
+    }
     try {
       await closeCase(caseId);
       if (activeCaseId === caseId) {
@@ -200,9 +219,10 @@ const Cases = () => {
                     <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
                   </div>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setShowUserDropdown(false); setShowProfileModal(true); }}
+                    onClick={(e) => { e.stopPropagation(); setShowUserDropdown(false); navigate('/profile'); }}
                     className="user-dropdown-item"
                   >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     My Profile
                   </button>
                 </div>
@@ -302,11 +322,30 @@ const Cases = () => {
                           }}
                         >
                           <td style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-main)', fontSize: '14px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                               <span>{c.case_id}</span>
                               {isActive && (
                                 <span style={{ background: '#3b82f6', color: '#fff', fontSize: '10px', padding: '2px 6px', borderRadius: '10px', fontWeight: 700 }}>
                                   ACTIVE
+                                </span>
+                              )}
+                              {c.lock && c.lock.is_locked && (
+                                <span
+                                  style={{
+                                    background: c.lock.read_only ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                                    color: c.lock.read_only ? '#f59e0b' : '#3b82f6',
+                                    border: `1px solid ${c.lock.read_only ? 'rgba(245, 158, 11, 0.35)' : 'rgba(59, 130, 246, 0.35)'}`,
+                                    fontSize: '10px',
+                                    padding: '2px 7px',
+                                    borderRadius: '10px',
+                                    fontWeight: 700,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: '4px'
+                                  }}
+                                  title={c.lock.read_only ? `Locked by analyst ${c.lock.locked_by?.name || 'another analyst'}. Read-only access.` : 'Locked by you'}
+                                >
+                                  🔒 {c.lock.read_only ? `In Use (${c.lock.locked_by?.name || 'Analyst'})` : 'Your Lock'}
                                 </span>
                               )}
                             </div>
@@ -340,7 +379,25 @@ const Cases = () => {
                             </span>
                           </td>
                           <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                              {!isActive && isOpen && (
+                                <button
+                                  onClick={() => handleSetActiveCase(c)}
+                                  style={{
+                                    background: c.lock?.is_locked && c.lock?.read_only ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+                                    color: c.lock?.is_locked && c.lock?.read_only ? '#f59e0b' : '#10b981',
+                                    border: `1px solid ${c.lock?.is_locked && c.lock?.read_only ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.35)'}`,
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                  }}
+                                  title={c.lock?.is_locked && c.lock?.read_only ? 'Open case in read-only mode' : 'Select as active investigation case'}
+                                >
+                                  {c.lock?.is_locked && c.lock?.read_only ? 'Investigate (Read-Only)' : 'Set Active'}
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleViewReport(c)}
                                 disabled={loadingReportId === c.case_id}

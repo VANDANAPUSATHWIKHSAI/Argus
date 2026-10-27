@@ -4,9 +4,11 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import ProfileModal from '../components/ProfileModal';
+import CaseLockBanner from '../components/CaseLockBanner';
 import { fetchWithAuth } from '../js/api';
 import { safeFormatDateTime, formatEvidenceId } from '../js/dateUtils';
 import { getActiveCaseId, subscribeToActiveCase } from '../js/caseEvents';
+import { syncCaseLock, subscribeToCaseLock } from '../js/caseLockService';
 import '../css/style.css';
 
 const CaseNotes = () => {
@@ -18,13 +20,29 @@ const CaseNotes = () => {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('argus_theme') || 'dark');
+  const [caseLock, setCaseLock] = useState(null);
 
   // Synchronize active case across tabs and components
   useEffect(() => {
-    return subscribeToActiveCase(({ caseId }) => {
+    if (activeCaseId) {
+      syncCaseLock(activeCaseId).then(setCaseLock);
+    } else {
+      setCaseLock(null);
+    }
+    const unsubLock = subscribeToCaseLock(setCaseLock);
+    const unsubCase = subscribeToActiveCase(({ caseId }) => {
       setActiveCaseId(caseId);
+      if (caseId) {
+        syncCaseLock(caseId).then(setCaseLock);
+      } else {
+        setCaseLock(null);
+      }
     });
-  }, []);
+    return () => {
+      unsubLock();
+      unsubCase();
+    };
+  }, [activeCaseId]);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -107,6 +125,14 @@ const CaseNotes = () => {
   }, [activeCaseId]);
 
   const handleSave = async () => {
+    if (caseLock?.readOnly) {
+      setAlertConfig({
+        isOpen: true,
+        title: '🔒 Case Locked — Read-Only Mode',
+        message: `Cannot save note. Case ${activeCaseId} is currently locked by analyst ${caseLock.lockedBy?.name || 'another user'}. You have Read-Only access.`
+      });
+      return;
+    }
     if (!title || !content) {
       setAlertConfig({ isOpen: true, title: 'Validation Error', message: 'Note Title and Content are required!' });
       return;
@@ -139,6 +165,14 @@ const CaseNotes = () => {
   };
 
   const handleDelete = async (noteId) => {
+    if (caseLock?.readOnly) {
+      setAlertConfig({
+        isOpen: true,
+        title: '🔒 Case Locked — Read-Only Mode',
+        message: `Cannot delete note. Case ${activeCaseId} is currently locked by analyst ${caseLock.lockedBy?.name || 'another user'}. You have Read-Only access.`
+      });
+      return;
+    }
     try {
       await fetchWithAuth(`/cases/${activeCaseId}/notes/${noteId}`, {
         method: 'DELETE'
@@ -152,6 +186,14 @@ const CaseNotes = () => {
   };
 
   const openNewNote = () => {
+    if (caseLock?.readOnly) {
+      setAlertConfig({
+        isOpen: true,
+        title: '🔒 Case Locked — Read-Only Mode',
+        message: `Cannot create notes. Case ${activeCaseId} is currently locked by analyst ${caseLock.lockedBy?.name || 'another user'}. You have Read-Only access.`
+      });
+      return;
+    }
     setEditingNote(null);
     setTitle('');
     setContent('');
@@ -163,6 +205,14 @@ const CaseNotes = () => {
   };
 
   const openEditNote = (note) => {
+    if (caseLock?.readOnly) {
+      setAlertConfig({
+        isOpen: true,
+        title: '🔒 Case Locked — Read-Only Mode',
+        message: `Cannot edit notes. Case ${activeCaseId} is currently locked by analyst ${caseLock.lockedBy?.name || 'another user'}. You have Read-Only access.`
+      });
+      return;
+    }
     setEditingNote(note);
     setTitle(note.title);
     setContent(note.content);
@@ -294,9 +344,10 @@ const CaseNotes = () => {
                     <div style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)' }}>{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
                   </div>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setShowUserDropdown(false); setShowProfileModal(true); }}
-                    style={{ width: '100%', padding: '8px 16px', background: 'transparent', border: 'none', color: 'var(--glass-dash-text-main)', textAlign: 'left', cursor: 'pointer', fontSize: '13px' }}
+                    onClick={(e) => { e.stopPropagation(); setShowUserDropdown(false); navigate('/profile'); }}
+                    style={{ width: '100%', padding: '8px 16px', background: 'transparent', border: 'none', color: 'var(--glass-dash-text-main)', textAlign: 'left', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '8px' }}
                   >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     My Profile
                   </button>
                 </div>
@@ -325,6 +376,7 @@ const CaseNotes = () => {
                       <div style={{ width: '6px', height: '6px', background: '#10b981', borderRadius: '50%' }}></div>
                       Active
                     </div>
+                    {caseLock?.readOnly && <CaseLockBanner compact lockState={caseLock} />}
                   </div>
                 ) : (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--glass-dash-surface-nested)', color: 'var(--glass-dash-text-muted)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600 }}>
@@ -341,28 +393,33 @@ const CaseNotes = () => {
               <button 
                 onClick={openNewNote} 
                 style={{ 
-                  background: 'linear-gradient(135deg, #3b82f6, #1d4ed8)', 
-                  border: 'none', 
+                  background: caseLock?.readOnly ? 'rgba(245, 158, 11, 0.2)' : 'linear-gradient(135deg, #3b82f6, #1d4ed8)', 
+                  border: caseLock?.readOnly ? '1px solid rgba(245, 158, 11, 0.4)' : 'none', 
                   padding: '10px 22px', 
                   borderRadius: '9999px', 
-                  color: '#fff', 
-                  cursor: 'pointer', 
+                  color: caseLock?.readOnly ? '#f59e0b' : '#fff', 
+                  cursor: caseLock?.readOnly ? 'not-allowed' : 'pointer', 
+                  opacity: caseLock?.readOnly ? 0.75 : 1,
                   display: 'flex', 
                   alignItems: 'center', 
                   gap: '8px', 
                   fontSize: '13px', 
                   fontWeight: 600,
-                  boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)',
+                  boxShadow: caseLock?.readOnly ? 'none' : '0 4px 14px rgba(59, 130, 246, 0.4)',
                   transition: 'all 0.15s ease'
                 }}
+                title={caseLock?.readOnly ? `Read-Only: Case is locked by ${caseLock.lockedBy?.name || 'another analyst'}` : 'New Note'}
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                New Note
+                {caseLock?.readOnly ? 'Read-Only Mode' : 'New Note'}
               </button>
             )}
           </div>
             
-            {/* Stats Cards */}
+          {/* Case Lock Banner for Active Case */}
+          <CaseLockBanner lockState={caseLock} caseId={activeCaseId} onLockRefreshed={setCaseLock} />
+
+          {/* Stats Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '20px' }}>
               <div 
                 className="stat-card panel-card"
@@ -742,11 +799,48 @@ const CaseNotes = () => {
                         </div>
                         
                         <div style={{ display: 'flex', gap: '12px' }}>
-                          <button onClick={() => openEditNote(note)} style={{ background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--glass-dash-border)', color: 'var(--glass-dash-blue)', padding: '8px 22px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', transition: 'all 0.15s ease', boxShadow: 'var(--glass-dash-shadow)' }}>
+                          <button
+                            onClick={() => openEditNote(note)}
+                            title={caseLock?.readOnly ? `Read-only mode: Editing disabled (Locked by ${caseLock.lockedBy?.name || 'analyst'})` : 'Edit Note'}
+                            style={{
+                              background: 'var(--glass-dash-surface-nested)',
+                              border: '1px solid var(--glass-dash-border)',
+                              color: caseLock?.readOnly ? 'var(--text-muted)' : 'var(--glass-dash-blue)',
+                              padding: '8px 22px',
+                              borderRadius: '9999px',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '7px',
+                              cursor: caseLock?.readOnly ? 'not-allowed' : 'pointer',
+                              opacity: caseLock?.readOnly ? 0.7 : 1,
+                              transition: 'all 0.15s ease',
+                              boxShadow: 'var(--glass-dash-shadow)'
+                            }}
+                          >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                             Edit
                           </button>
-                          <button onClick={() => setShowDeleteConfirm(note.noteId)} style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#ef4444', padding: '8px 22px', borderRadius: '9999px', fontSize: '13px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '7px', cursor: 'pointer', transition: 'all 0.15s ease' }}>
+                          <button
+                            onClick={() => setShowDeleteConfirm(note.noteId)}
+                            title={caseLock?.readOnly ? `Read-only mode: Deletion disabled (Locked by ${caseLock.lockedBy?.name || 'analyst'})` : 'Delete Note'}
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.3)',
+                              color: '#ef4444',
+                              padding: '8px 22px',
+                              borderRadius: '9999px',
+                              fontSize: '13px',
+                              fontWeight: 600,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '7px',
+                              cursor: caseLock?.readOnly ? 'not-allowed' : 'pointer',
+                              opacity: caseLock?.readOnly ? 0.7 : 1,
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                             Delete
                           </button>

@@ -17,6 +17,7 @@ import Notifications from './pages/Notifications';
 import Cases from './pages/Cases';
 import Agents from './pages/Agents';
 import Report from './pages/Report';
+import Profile from './pages/Profile';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
@@ -69,7 +70,7 @@ function App() {
         {/* Role-governed Routes */}
         <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Dashboard /></ProtectedRoute>} />
         <Route path="/cases" element={<ProtectedRoute allowedRoles={['admin']}><Cases /></ProtectedRoute>} />
-        <Route path="/agents" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Agents /></ProtectedRoute>} />
+        <Route path="/agents" element={<ProtectedRoute allowedRoles={['analyst', 'senior_analyst']}><Agents /></ProtectedRoute>} />
         <Route path="/report" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst', 'auditor']}><Report /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst', 'auditor']}><Report /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute allowedRoles={['admin']}><Employees /></ProtectedRoute>} />
@@ -84,8 +85,10 @@ function App() {
         <Route path="/sanitized/:id" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><SanitizedDetail /></ProtectedRoute>} />
         <Route path="/settings" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst', 'auditor']}><Settings /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst', 'auditor']}><Notifications /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst', 'auditor']}><Profile /></ProtectedRoute>} />
 
         {/* Legacy redirect aliases */}
+        <Route path="/profile.html" element={<Navigate to="/profile" replace />} />
         <Route path="/evidence-coverage" element={<Navigate to="/evidence" replace />} />
         <Route path="/index.html" element={<Navigate to="/dashboard" replace />} />
         <Route path="/evidence.html" element={<Navigate to="/evidence" replace />} />

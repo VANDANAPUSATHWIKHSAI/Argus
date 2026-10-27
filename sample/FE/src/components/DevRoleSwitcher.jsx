@@ -14,7 +14,6 @@ const DEV_ACCOUNTS = [
       { name: 'Dashboard', path: '/dashboard' },
       { name: 'Previous Cases', path: '/cases' },
       { name: 'Employees', path: '/employees' },
-      { name: 'Agents Swarm', path: '/agents' },
       { name: 'Forensic Report', path: '/report' },
       { name: 'Audit Logs', path: '/audit-logs' },
       { name: 'Settings', path: '/settings' },

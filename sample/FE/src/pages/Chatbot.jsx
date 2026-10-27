@@ -46,7 +46,11 @@ ARGUS has not generated a forensic conclusion for this request. Check the case s
 // Helper to construct a standalone HTML report package if needed
 function generateHtmlFromReportData(reportData) {
   const caseId = reportData?.case_id || 'UNKNOWN';
-  const genAt = reportData?.generated_at ? new Date(reportData.generated_at).toUTCString() : new Date().toUTCString();
+  const genAt = reportData?.generated_at 
+    ? (String(reportData.generated_at).includes('IST') 
+        ? String(reportData.generated_at) 
+        : new Date(reportData.generated_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST') 
+    : new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST';
   const findings = Array.isArray(reportData?.findings) ? reportData.findings : [];
   const evidence = Array.isArray(reportData?.evidence_files) ? reportData.evidence_files : [];
   const timeline = Array.isArray(reportData?.timeline) ? reportData.timeline : [];
@@ -125,7 +129,7 @@ function generateHtmlFromReportData(reportData) {
             </table>`}
         </div>
         <div class="section">
-            <p class="disclaimer"><strong>LEGAL DISCLAIMER &amp; CHAIN OF CUSTODY NOTICE:</strong> This document contains automated and analyst-verified forensic insights compiled by the ARGUS Multi-Agent Digital Forensics Platform. All evidence hashes and telemetry records are cryptographically stamped.</p>
+            <p class="disclaimer"><strong>LEGAL DISCLAIMER &amp; CHAIN OF CUSTODY NOTICE:</strong> This document contains automated and analyst-verified forensic insights compiled by the ARGUS Multi-Agent Digital Forensics Platform. All evidence hashes and telemetry records are cryptographically stamped. Timestamps: Indian Standard Time (IST / UTC+05:30).</p>
         </div>
     </div>
 </body>
@@ -150,7 +154,11 @@ function CaseReportCard({
   if (!reportData) return null;
 
   const caseId = reportData.case_id || 'Case';
-  const genAt = reportData.generated_at ? new Date(reportData.generated_at).toLocaleString() : new Date().toLocaleString();
+  const genAt = reportData.generated_at 
+    ? (String(reportData.generated_at).includes('IST') 
+        ? String(reportData.generated_at) 
+        : new Date(reportData.generated_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST') 
+    : new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST';
   const findings = Array.isArray(reportData.findings) ? reportData.findings : [];
   const evidence = Array.isArray(reportData.evidence_files) ? reportData.evidence_files : [];
   const timeline = Array.isArray(reportData.timeline) ? reportData.timeline : [];

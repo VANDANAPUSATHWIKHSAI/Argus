@@ -131,18 +131,22 @@ class ArgusGraphRenderer {
         }
       });
 
-      // Link finding to evidence if reference matches
-      if (f.evidence_reference) {
-        const targetEvNodeId = evidenceMap.get(f.evidence_reference.toLowerCase());
-        if (targetEvNodeId) {
-          edges.push({
-            source: fId,
-            target: targetEvNodeId,
-            label: 'derived from',
-            color: 'var(--blue)'
-          });
+      const evRefs = Array.isArray(f.evidence_reference)
+        ? f.evidence_reference
+        : (f.evidence_reference ? [f.evidence_reference] : []);
+      evRefs.forEach(ref => {
+        if (typeof ref === 'string') {
+          const targetEvNodeId = evidenceMap.get(ref.toLowerCase());
+          if (targetEvNodeId) {
+            edges.push({
+              source: fId,
+              target: targetEvNodeId,
+              label: 'derived from',
+              color: 'var(--blue)'
+            });
+          }
         }
-      }
+      });
 
       // Link findings sequentially if multiple findings exist to construct execution chain
       if (idx > 0) {

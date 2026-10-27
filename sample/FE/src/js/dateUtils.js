@@ -17,18 +17,23 @@ export function safeFormatDate(rawDate, options = {}) {
     }
 
     const d = new Date(str);
+    if (typeof rawDate === 'string' && rawDate.includes('IST')) {
+      return rawDate;
+    }
+
     if (isNaN(d.getTime())) {
       return options.fallback || String(rawDate);
     }
 
-    const locale = options.locale || 'en-US';
+    const locale = options.locale || 'en-IN';
+    const tzOptions = { timeZone: 'Asia/Kolkata', ...options.opts };
 
     if (options.timeOnly) {
-      return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', ...options.opts });
+      return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit', ...tzOptions }) + ' IST';
     }
 
     if (options.dateOnly) {
-      return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric', ...options.opts });
+      return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric', ...tzOptions });
     }
 
     return d.toLocaleString(locale, {
@@ -37,8 +42,9 @@ export function safeFormatDate(rawDate, options = {}) {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-      ...options.opts
-    });
+      second: '2-digit',
+      ...tzOptions
+    }) + ' IST';
   } catch (e) {
     return options.fallback || '-';
   }

@@ -428,17 +428,22 @@ function findingsToNodesAndEdges(findings, nodes, edges, evidenceMap) {
       }
     });
 
-    if (f.evidence_reference) {
-      const targetEvNodeId = evidenceMap.get(f.evidence_reference.toLowerCase());
-      if (targetEvNodeId) {
-        edges.push({
-          source: fId,
-          target: targetEvNodeId,
-          label: 'derived from',
-          color: 'var(--blue)'
-        });
+    const evRefs = Array.isArray(f.evidence_reference)
+      ? f.evidence_reference
+      : (f.evidence_reference ? [f.evidence_reference] : []);
+    evRefs.forEach(ref => {
+      if (typeof ref === 'string') {
+        const targetEvNodeId = evidenceMap.get(ref.toLowerCase());
+        if (targetEvNodeId) {
+          edges.push({
+            source: fId,
+            target: targetEvNodeId,
+            label: 'derived from',
+            color: 'var(--blue)'
+          });
+        }
       }
-    }
+    });
 
     if (idx > 0) {
       const prevFId = findings[idx - 1].finding_id || findings[idx - 1].id || `f-${idx - 1}`;

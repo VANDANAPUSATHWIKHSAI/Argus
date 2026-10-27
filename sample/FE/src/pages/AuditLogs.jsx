@@ -268,25 +268,15 @@ const uniqueUsers = Array.from(
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <select
-                  value={filterUser}
-                  onChange={e => setFilterUser(e.target.value)}
-                  style={{
-                    padding: '7px 12px',
-                    borderRadius: '8px',
-                    background: 'var(--bg-app)',
-                    border: '1px solid var(--border-subtle)',
-                    color: 'var(--text-main)',
-                    fontSize: '12.5px',
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    outline: 'none'
-                  }}
-                >
-                  {userOptions.map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
+                <div style={{ minWidth: 160 }}>
+                  <SearchableSelect
+                    value={filterUser}
+                    onChange={setFilterUser}
+                    options={userOptions}
+                    placeholder="All Users"
+                    size="small"
+                  />
+                </div>
 
                 {(searchTerm || filterUser) && (
                   <button

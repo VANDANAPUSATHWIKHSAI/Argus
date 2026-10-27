@@ -624,20 +624,32 @@ const Evidence = () => {
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Original Source Host</label>
-                      <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: 'var(--bg-input)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', fontSize: '13px', outline: 'none' }}>
-                        <option value="">All Hosts</option>
-                        {Array.from(new Set(evidenceData.map(e => e.source))).filter(Boolean).map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
+                      <SearchableSelect 
+                        value={sourceFilter} 
+                        onChange={setSourceFilter}
+                        placeholder="All Hosts"
+                        size="small"
+                        options={[
+                          { value: '', label: 'All Hosts' },
+                          ...Array.from(new Set(evidenceData.map(e => e.source))).filter(Boolean).map(s => ({ value: s, label: s }))
+                        ]}
+                      />
                     </div>
 
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Risk Level</label>
-                      <select value={riskFilter} onChange={e => setRiskFilter(e.target.value)} style={{ padding: '8px', borderRadius: '6px', background: 'var(--bg-input)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', fontSize: '13px', outline: 'none' }}>
-                        <option value="">Any Risk</option>
-                        <option value="High">High</option>
-                        <option value="Medium">Medium</option>
-                        <option value="Low">Low</option>
-                      </select>
+                      <SearchableSelect 
+                        value={riskFilter} 
+                        onChange={setRiskFilter}
+                        noSearch
+                        size="small"
+                        options={[
+                          { value: '', label: 'Any Risk' },
+                          { value: 'High', label: 'High' },
+                          { value: 'Medium', label: 'Medium' },
+                          { value: 'Low', label: 'Low' }
+                        ]}
+                      />
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>

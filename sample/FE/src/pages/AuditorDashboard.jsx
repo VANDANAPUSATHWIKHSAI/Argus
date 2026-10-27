@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchAuditorStats, fetchFindings, fetchCases } from '../js/api';
 import { setActiveCase } from '../js/caseEvents';
+import SearchableSelect from '../components/SearchableSelect';
 
 export default function AuditorDashboard() {
   const navigate = useNavigate();
@@ -281,27 +282,35 @@ export default function AuditorDashboard() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <select 
-              value={caseLimit} 
-              onChange={(e) => setCaseLimit(Number(e.target.value))}
-              style={{ padding: '7px 14px', borderRadius: '12px', border: '1px solid var(--glass-dash-border-subtle)', fontSize: '13px', color: 'var(--glass-dash-text-main)', backgroundColor: 'var(--glass-dash-surface-nested)', cursor: 'pointer', outline: 'none', fontWeight: 500 }}
-            >
-              <option value={8}>Recent 8 Cases</option>
-              <option value={12}>Recent 12 Cases</option>
-              <option value={20}>All Past Cases</option>
-            </select>
+            <div style={{ minWidth: 160 }}>
+              <SearchableSelect 
+                value={caseLimit} 
+                onChange={(val) => setCaseLimit(Number(val))}
+                noSearch
+                size="small"
+                options={[
+                  { value: 8, label: 'Recent 8 Cases' },
+                  { value: 12, label: 'Recent 12 Cases' },
+                  { value: 20, label: 'All Past Cases' }
+                ]}
+              />
+            </div>
 
-            <select 
-              value={severityFilter} 
-              onChange={(e) => setSeverityFilter(e.target.value)}
-              style={{ padding: '7px 14px', borderRadius: '12px', border: '1px solid var(--glass-dash-border-subtle)', fontSize: '13px', color: 'var(--glass-dash-text-main)', backgroundColor: 'var(--glass-dash-surface-nested)', cursor: 'pointer', outline: 'none', fontWeight: 500 }}
-            >
-              <option value="ALL">All Severities</option>
-              <option value="CRITICAL">Critical Severity Only</option>
-              <option value="HIGH">High Severity Only</option>
-              <option value="MEDIUM">Medium Severity Only</option>
-              <option value="LOW">Low Severity Only</option>
-            </select>
+            <div style={{ minWidth: 180 }}>
+              <SearchableSelect 
+                value={severityFilter} 
+                onChange={setSeverityFilter}
+                noSearch
+                size="small"
+                options={[
+                  { value: 'ALL', label: 'All Severities' },
+                  { value: 'CRITICAL', label: 'Critical Severity Only' },
+                  { value: 'HIGH', label: 'High Severity Only' },
+                  { value: 'MEDIUM', label: 'Medium Severity Only' },
+                  { value: 'LOW', label: 'Low Severity Only' }
+                ]}
+              />
+            </div>
           </div>
         </div>
 

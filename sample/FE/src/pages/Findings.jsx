@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
+import SearchableSelect from '../components/SearchableSelect';
 import { fetchFindings } from '../js/api';
 import { formatEvidenceId } from '../js/dateUtils';
 import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase } from '../js/caseEvents';
@@ -207,34 +208,42 @@ const Findings = () => {
           </div>
 
           {/* FILTERS */}
-          <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 16, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)' }}>Severity:</label>
-              <select 
-                value={severityFilter} 
-                onChange={(e) => setSeverityFilter(e.target.value)}
-                style={{ background: 'var(--glass-dash-surface-nested)', color: 'var(--glass-dash-text-main)', border: '1px solid var(--glass-dash-border-subtle)', padding: '6px 14px', borderRadius: '12px', fontSize: '13px', cursor: 'pointer', outline: 'none' }}
-              >
-                <option value="all">All Severities</option>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
+              <div style={{ minWidth: '150px' }}>
+                <SearchableSelect 
+                  value={severityFilter} 
+                  onChange={setSeverityFilter}
+                  noSearch
+                  size="small"
+                  options={[
+                    { value: 'all', label: 'All Severities' },
+                    { value: 'critical', label: 'Critical' },
+                    { value: 'high', label: 'High' },
+                    { value: 'medium', label: 'Medium' },
+                    { value: 'low', label: 'Low' }
+                  ]}
+                />
+              </div>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <label style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-muted)' }}>Review Status:</label>
-              <select 
-                value={statusFilter} 
-                onChange={(e) => setStatusFilter(e.target.value)}
-                style={{ background: 'var(--glass-dash-surface-nested)', color: 'var(--glass-dash-text-main)', border: '1px solid var(--glass-dash-border-subtle)', padding: '6px 14px', borderRadius: '12px', fontSize: '13px', cursor: 'pointer', outline: 'none' }}
-              >
-                <option value="all">All Statuses</option>
-                <option value="pending_review">Pending Review</option>
-                <option value="analyst_confirmed">Analyst Confirmed</option>
-                <option value="analyst_rejected">Analyst Rejected</option>
-              </select>
+              <div style={{ minWidth: '180px' }}>
+                <SearchableSelect 
+                  value={statusFilter} 
+                  onChange={setStatusFilter}
+                  noSearch
+                  size="small"
+                  options={[
+                    { value: 'all', label: 'All Statuses' },
+                    { value: 'pending_review', label: 'Pending Review' },
+                    { value: 'analyst_confirmed', label: 'Analyst Confirmed' },
+                    { value: 'analyst_rejected', label: 'Analyst Rejected' }
+                  ]}
+                />
+              </div>
             </div>
           </div>
 

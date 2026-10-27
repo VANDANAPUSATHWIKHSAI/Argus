@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import '../css/style.css';
+import SearchableSelect from '../components/SearchableSelect';
 import { safeFormatDateTime, formatEvidenceId } from '../js/dateUtils';
 
 const SEVERITY_MAP = {
@@ -349,10 +350,18 @@ const Sanitized = () => {
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                       <input type="text" placeholder="Search sanitized facts..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} />
                     </div>
-                    <select value={typeFilter} onChange={e => { setTypeFilter(e.target.value); setPage(1); }} style={{ padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 13, fontWeight: 500, color: 'var(--text-main)', background: 'var(--bg-card)', outline: 'none', minWidth: 140, cursor: 'pointer' }}>
-                      <option value="all">All Layers</option>
-                      {layers.map(l => <option key={l} value={l.toLowerCase()}>{l}</option>)}
-                    </select>
+                    <div style={{ minWidth: 150 }}>
+                      <SearchableSelect 
+                        value={typeFilter} 
+                        onChange={(val) => { setTypeFilter(val); setPage(1); }} 
+                        noSearch
+                        size="small"
+                        options={[
+                          { value: 'all', label: 'All Layers' },
+                          ...layers.map(l => ({ value: l.toLowerCase(), label: l }))
+                        ]}
+                      />
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                     {/* View Mode Toggle */}

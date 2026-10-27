@@ -211,10 +211,108 @@ const uniqueUsers = Array.from(
             </div>
           </div>
 
-          <div className="panel-card" style={{ overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--glass-dash-border-subtle)', background: 'var(--glass-dash-surface-nested)' }}>
+          <div className="panel-card" style={{ overflow: 'hidden', borderRadius: '16px', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)' }}>
+            {/* Table Toolbar & Filters */}
+            <div style={{
+              padding: '16px 24px',
+              borderBottom: '1px solid var(--border-subtle)',
+              background: 'var(--bg-card)',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, minWidth: '240px', maxWidth: '440px' }}>
+                <div style={{ position: 'relative', width: '100%', display: 'flex', alignItems: 'center' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ position: 'absolute', left: '12px', color: 'var(--text-muted)', pointerEvents: 'none' }}>
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={e => setSearchTerm(e.target.value)}
+                    placeholder="Search action, resource, or actor..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px 8px 36px',
+                      borderRadius: '8px',
+                      background: 'var(--bg-app)',
+                      border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-main)',
+                      fontSize: '13px',
+                      outline: 'none'
+                    }}
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      style={{
+                        position: 'absolute',
+                        right: '8px',
+                        background: 'none',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      title="Clear search"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <select
+                  value={filterUser}
+                  onChange={e => setFilterUser(e.target.value)}
+                  style={{
+                    padding: '7px 12px',
+                    borderRadius: '8px',
+                    background: 'var(--bg-app)',
+                    border: '1px solid var(--border-subtle)',
+                    color: 'var(--text-main)',
+                    fontSize: '12.5px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    outline: 'none'
+                  }}
+                >
+                  {userOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+
+                {(searchTerm || filterUser) && (
+                  <button
+                    onClick={clearFilters}
+                    style={{
+                      padding: '7px 12px',
+                      borderRadius: '8px',
+                      background: 'transparent',
+                      border: '1px solid var(--border-subtle)',
+                      color: 'var(--text-muted)',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Table */}
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--glass-dash-surface-nested, var(--bg-surface))' }}>
                     <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Timestamp</th>
                     <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>User</th>
                     <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-muted)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Action</th>
@@ -225,7 +323,13 @@ const uniqueUsers = Array.from(
                 </thead>
                 <tbody>
                   {currentLogs.length > 0 ? currentLogs.map((log) => (
-                    <tr key={log.id} onClick={() => setSelectedLog(log)} style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'background 0.2s' }} onMouseOver={e => e.currentTarget.style.background='var(--bg-surface)'} onMouseOut={e => e.currentTarget.style.background='transparent'}>
+                    <tr
+                      key={log.id}
+                      onClick={() => setSelectedLog(log)}
+                      style={{ borderBottom: '1px solid var(--border-subtle)', cursor: 'pointer', transition: 'background 0.15s ease' }}
+                      onMouseOver={e => e.currentTarget.style.background='var(--bg-surface)'}
+                      onMouseOut={e => e.currentTarget.style.background='transparent'}
+                    >
                       <td style={{ padding: '16px 24px', whiteSpace: 'nowrap', fontSize: '13px', color: 'var(--text-main)' }}>{log.timestamp}</td>
                       <td style={{ padding: '16px 24px', fontWeight: 500, color: 'var(--text-main)' }}>{log.user.name}</td>
                       <td style={{ padding: '16px 24px' }}>
@@ -248,20 +352,126 @@ const uniqueUsers = Array.from(
               </table>
             </div>
 
-            <div className="audit-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', color: 'var(--text-muted)', fontSize: '13px' }}>
-                <span>Showing {filteredLogs.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} to {Math.min(currentPage * itemsPerPage, filteredLogs.length)} of {filteredLogs.length} events</span>
-                <select value={itemsPerPage} onChange={e => {setItemsPerPage(Number(e.target.value)); setCurrentPage(1);}} style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '4px 8px', borderRadius: '4px' }}>
-                  <option value={25}>25 per page</option>
-                  <option value={50}>50 per page</option>
-                  <option value={100}>100 per page</option>
-                </select>
+            {/* Pagination Footer — INSIDE panel-card */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '14px 24px',
+              borderTop: '1px solid var(--border-subtle)',
+              background: 'var(--glass-dash-surface-nested, var(--bg-surface))',
+              flexWrap: 'wrap',
+              gap: '12px'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                <span>
+                  Showing <strong style={{ color: 'var(--text-main)' }}>{filteredLogs.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0}</strong> to <strong style={{ color: 'var(--text-main)' }}>{Math.min(currentPage * itemsPerPage, filteredLogs.length)}</strong> of <strong style={{ color: 'var(--text-main)' }}>{filteredLogs.length}</strong> events
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Show:</span>
+                  <select
+                    value={itemsPerPage}
+                    onChange={e => { setItemsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                    style={{
+                      background: 'var(--bg-card, #ffffff)',
+                      border: '1px solid var(--border-subtle, #cbd5e1)',
+                      color: 'var(--text-main)',
+                      padding: '4px 8px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      outline: 'none'
+                    }}
+                  >
+                    <option value={10}>10 per page</option>
+                    <option value={25}>25 per page</option>
+                    <option value={50}>50 per page</option>
+                    <option value={100}>100 per page</option>
+                  </select>
+                </div>
               </div>
-              <div className="pagination" style={{ display: 'flex', gap: '4px' }}>
-                <button className="btn-page" style={{ width: 'auto', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }} onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} disabled={currentPage === 1}>Previous</button>
-                <button className="btn-page" style={{ width: 'auto', background: 'var(--bg-app)', border: '1px solid var(--border-strong)', color: 'var(--text-main)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', opacity: currentPage === totalPages || totalPages === 0 ? 0.5 : 1 }} onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} disabled={currentPage === totalPages || totalPages === 0}>Next</button>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: 'var(--bg-card, #ffffff)',
+                    border: '1px solid var(--border-subtle, #e2e8f0)',
+                    color: 'var(--text-main)',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                    opacity: currentPage === 1 ? 0.45 : 1,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6" /></svg>
+                  Previous
+                </button>
+
+                {totalPages > 1 ? (
+                  Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setCurrentPage(p)}
+                      style={{
+                        minWidth: '30px',
+                        height: '30px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderRadius: '6px',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        background: p === currentPage ? 'var(--blue, #2563eb)' : 'var(--bg-card, #ffffff)',
+                        color: p === currentPage ? '#ffffff' : 'var(--text-main)',
+                        border: p === currentPage ? '1px solid var(--blue, #2563eb)' : '1px solid var(--border-subtle, #e2e8f0)',
+                        boxShadow: p === currentPage ? '0 2px 6px rgba(37, 99, 235, 0.3)' : 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {p}
+                    </button>
+                  ))
+                ) : (
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', padding: '0 6px' }}>
+                    Page 1 of 1
+                  </span>
+                )}
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage >= totalPages || totalPages === 0}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: 'var(--bg-card, #ffffff)',
+                    border: '1px solid var(--border-subtle, #e2e8f0)',
+                    color: 'var(--text-main)',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: (currentPage >= totalPages || totalPages === 0) ? 'not-allowed' : 'pointer',
+                    opacity: (currentPage >= totalPages || totalPages === 0) ? 0.45 : 1,
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  Next
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6" /></svg>
+                </button>
               </div>
             </div>
+          </div>
           </div>
       </main>
 

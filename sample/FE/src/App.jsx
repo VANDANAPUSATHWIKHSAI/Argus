@@ -70,7 +70,7 @@ function App() {
         {/* Role-governed Routes */}
         <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Dashboard /></ProtectedRoute>} />
         <Route path="/cases" element={<ProtectedRoute allowedRoles={['admin']}><Cases /></ProtectedRoute>} />
-        <Route path="/agents" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Agents /></ProtectedRoute>} />
+        <Route path="/agents" element={<ProtectedRoute allowedRoles={['analyst', 'senior_analyst']}><Agents /></ProtectedRoute>} />
         <Route path="/report" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst', 'auditor']}><Report /></ProtectedRoute>} />
         <Route path="/reports" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst', 'auditor']}><Report /></ProtectedRoute>} />
         <Route path="/employees" element={<ProtectedRoute allowedRoles={['admin']}><Employees /></ProtectedRoute>} />

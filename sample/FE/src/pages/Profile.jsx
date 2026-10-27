@@ -509,13 +509,6 @@ const Profile = () => {
                 Personal Credentials
               </button>
 
-              <button
-                onClick={() => setActiveTab('permissions')}
-                className={`glass-profile-tab-btn ${activeTab === 'permissions' ? 'active' : ''}`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>
-                Clearance & Capabilities
-              </button>
 
               <button
                 onClick={() => setActiveTab('security')}
@@ -777,91 +770,6 @@ const Profile = () => {
               </div>
             )}
 
-            {/* ── TAB 2: CLEARANCE & PERMISSIONS ── */}
-            {activeTab === 'permissions' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24 }}>
-                <div className="glass-profile-section-card">
-                  <h3 className="glass-profile-heading" style={{ marginBottom: 16 }}>
-                    Security Clearance Level
-                  </h3>
-                  <div style={{
-                    background: 'var(--glass-dash-blue-soft, rgba(59, 130, 246, 0.12))',
-                    border: '1px solid var(--glass-dash-blue-border, rgba(59, 130, 246, 0.35))',
-                    padding: 20,
-                    borderRadius: 16,
-                    marginBottom: 20
-                  }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--glass-dash-blue)', letterSpacing: '0.05em', textTransform: 'uppercase', marginBottom: 6 }}>
-                      Classification Rating
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--glass-dash-text-main)', marginBottom: 8 }}>
-                      {clearanceLabel}
-                    </div>
-                    <p style={{ margin: 0, fontSize: 13, color: 'var(--glass-dash-text-muted)', lineHeight: 1.5 }}>
-                      Authorized to review and manage forensic artifacts according to assigned jurisdictional role and ISO/IEC 27037 standards.
-                    </p>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    <div className="glass-profile-row">
-                      <span className="glass-profile-label">Badge Code</span>
-                      <span className="glass-profile-val" style={{ color: 'var(--glass-dash-blue)', fontFamily: 'monospace' }}>{badgeId}</span>
-                    </div>
-                    <div className="glass-profile-row">
-                      <span className="glass-profile-label">Forensic Swarm Status</span>
-                      <span className="glass-profile-val" style={{ color: 'var(--glass-dash-green)' }}>Available & Operational</span>
-                    </div>
-                    <div className="glass-profile-row">
-                      <span className="glass-profile-label">Audit Trail Logging</span>
-                      <span className="glass-profile-val" style={{ color: 'var(--glass-dash-blue)' }}>Strict Forensics Telemetry</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="glass-profile-section-card">
-                  <h3 className="glass-profile-heading" style={{ marginBottom: 16 }}>
-                    Authorized Capabilities Matrix
-                  </h3>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {(profile?.permissions || [
-                      'Artifact Lineage & Timeline Inspection',
-                      'Forensic Memory & Network Parser Analysis',
-                      'Case Notes & Collaborative Audit Logs',
-                      'AI Investigation Assistant Interaction'
-                    ]).map((perm, idx) => (
-                      <div
-                        key={idx}
-                        className="glass-profile-nested-box"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          padding: '10px 14px'
-                        }}
-                      >
-                        <div style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: '50%',
-                          background: 'var(--glass-dash-green-soft, rgba(16, 185, 129, 0.2))',
-                          color: 'var(--glass-dash-green, #10b981)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0
-                        }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12" /></svg>
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--glass-dash-text-main)' }}>
-                          {perm}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* ── TAB 3: SECURITY & PASSWORD MANAGEMENT ── */}
             {activeTab === 'security' && (

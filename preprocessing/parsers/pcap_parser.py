@@ -145,12 +145,13 @@ class PcapParser:
             logger.info("Zeek unavailable — running Scapy fallback to extract network connections, DNS, and HTTP artifacts for %s", src.name)
             try:
                 scapy_arts = self._parse_with_scapy(src, evidence_id)
-                # Deduplicate by raw_data representation
-                existing_keys = {str(a.raw_data) for a in artifacts}
+                # Deduplicate by raw_fields representation
+                existing_keys = {str(getattr(a, "raw_fields", {})) for a in artifacts}
                 for sa in scapy_arts:
-                    if str(sa.raw_data) not in existing_keys:
+                    sa_key = str(getattr(sa, "raw_fields", {}))
+                    if sa_key not in existing_keys:
                         artifacts.append(sa)
-                        existing_keys.add(str(sa.raw_data))
+                        existing_keys.add(sa_key)
             except Exception as scapy_e:
                 logger.error("Scapy fallback failed: %s", scapy_e)
 
@@ -166,127 +167,153 @@ class PcapParser:
     def _parse_with_scapy(self, pcap_path: Path, evidence_id: str) -> list[Artifact]:
         """Extract network artifacts using Scapy — no Zeek/Suricata needed."""
         try:
-            from scapy.all import rdpcap, IP, TCP, UDP, DNS, DNSQR, Raw
+            from scapy.utils import PcapReader
+            from scapy.layers.inet import IP, TCP, UDP
+            from scapy.layers.dns import DNS, DNSQR
+            from scapy.packet import Raw
             import warnings
             warnings.filterwarnings("ignore")
         except ImportError:
-            logger.warning("Scapy not installed — pip install scapy")
-            return []
+            try:
+                from scapy.all import PcapReader, IP, TCP, UDP, DNS, DNSQR, Raw
+                import warnings
+                warnings.filterwarnings("ignore")
+            except ImportError:
+                logger.warning("Scapy not installed — pip install scapy")
+                return []
 
         artifacts: list[Artifact] = []
         connections: dict = {}   # (src_ip, dst_ip, dport, proto) -> first_ts
+        pkt_count = 0
 
         try:
-            packets = rdpcap(str(pcap_path))
+            pcap_reader = PcapReader(str(pcap_path))
         except Exception as e:
-            logger.error("Scapy rdpcap failed: %s", e)
+            logger.error("Scapy PcapReader failed: %s", e)
             return []
 
-        logger.info("Scapy loaded %d packets from %s", len(packets), pcap_path.name)
+        logger.info("Scapy streaming packets from %s", pcap_path.name)
 
-        for pkt in packets:
-            try:
-                ts = float(pkt.time)
-                dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-                ts_str = dt.isoformat()
+        try:
+            for pkt in pcap_reader:
+                pkt_count += 1
+                try:
+                    ts = float(pkt.time)
+                    dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+                    ts_str = dt.isoformat()
 
-                if not pkt.haslayer(IP):
-                    continue
+                    if not pkt.haslayer(IP):
+                        continue
 
-                ip = pkt[IP]
-                src_ip = ip.src
-                dst_ip = ip.dst
-                proto = "tcp" if pkt.haslayer(TCP) else ("udp" if pkt.haslayer(UDP) else ip.proto)
-                dport = 0
-                sport = 0
+                    ip = pkt[IP]
+                    src_ip = str(ip.src)
+                    dst_ip = str(ip.dst)
+                    proto = "tcp" if pkt.haslayer(TCP) else ("udp" if pkt.haslayer(UDP) else str(ip.proto))
+                    dport = 0
+                    sport = 0
 
-                if pkt.haslayer(TCP):
-                    dport = pkt[TCP].dport
-                    sport = pkt[TCP].sport
-                elif pkt.haslayer(UDP):
-                    dport = pkt[UDP].dport
-                    sport = pkt[UDP].sport
+                    if pkt.haslayer(TCP):
+                        dport = int(pkt[TCP].dport)
+                        sport = int(pkt[TCP].sport)
+                    elif pkt.haslayer(UDP):
+                        dport = int(pkt[UDP].dport)
+                        sport = int(pkt[UDP].sport)
 
-                # ── DNS queries ──────────────────────────────────────────────
-                if pkt.haslayer(DNS) and pkt.haslayer(DNSQR):
-                    dns = pkt[DNS]
-                    if dns.qr == 0:  # query (not response)
-                        for i in range(dns.qdcount):
-                            try:
-                                qname = dns.qd.qname.decode("utf-8", errors="replace").rstrip(".")
-                                qtype = dns.qd.qtype
-                                qtype_str = {1: "A", 28: "AAAA", 5: "CNAME", 15: "MX", 16: "TXT", 33: "SRV"}.get(qtype, str(qtype))
+                    # ── DNS queries ──────────────────────────────────────────────
+                    if pkt.haslayer(DNS) and pkt.haslayer(DNSQR):
+                        dns = pkt[DNS]
+                        if getattr(dns, "qr", 0) == 0:  # query (not response)
+                            qdcount = getattr(dns, "qdcount", 1) or 1
+                            for i in range(qdcount):
+                                try:
+                                    qd = dns.qd if i == 0 else getattr(dns, f"qd{i}", dns.qd)
+                                    if qd is None:
+                                        continue
+                                    qname = qd.qname.decode("utf-8", errors="replace").rstrip(".") if hasattr(qd, "qname") else ""
+                                    if not qname:
+                                        continue
+                                    qtype = getattr(qd, "qtype", 1)
+                                    qtype_str = {1: "A", 28: "AAAA", 5: "CNAME", 15: "MX", 16: "TXT", 33: "SRV"}.get(qtype, str(qtype))
+                                    artifacts.append(Artifact(
+                                        evidence_id=evidence_id,
+                                        source_tool="zeek",
+                                        artifact_type="dns_query",
+                                        timestamp=dt,
+                                        raw_fields={"query": qname, "qtype": qtype_str, "src_ip": src_ip, "dns_server": dst_ip},
+                                        normalized_fields=NormalizedFields(
+                                            src_ip=src_ip,
+                                            dst_ip=dst_ip,
+                                            domain=qname,
+                                            host=dst_ip,
+                                        )
+                                    ))
+                                except Exception as dns_err:
+                                    logger.debug("DNS parse error on packet: %s", dns_err)
+                        continue
+
+                    # ── HTTP (port 80, 8080, 8000, 8888 TCP) ─────────────────────────
+                    if pkt.haslayer(TCP) and dport in (80, 8080, 8000, 8888) and pkt.haslayer(Raw):
+                        try:
+                            payload = pkt[Raw].load.decode("utf-8", errors="replace")
+                            if payload.startswith(("GET ", "POST ", "PUT ", "DELETE ", "HEAD ", "OPTIONS ")):
+                                first_line = payload.split("\r\n")[0]
+                                parts = first_line.split(" ", 2)
+                                method = parts[0]
+                                path = parts[1] if len(parts) > 1 else "/"
+                                host = ""
+                                for line in payload.split("\r\n")[1:]:
+                                    if line.lower().startswith("host:"):
+                                        host = line.split(":", 1)[1].strip()
+                                        break
+                                url = f"http://{host}{path}" if host else path
                                 artifacts.append(Artifact(
                                     evidence_id=evidence_id,
-                                    artifact_type="dns_query",
+                                    source_tool="zeek",
+                                    artifact_type="http_request",
                                     timestamp=dt,
-                                    raw_data={"query": qname, "qtype": qtype_str, "src_ip": src_ip, "dns_server": dst_ip},
+                                    raw_fields={"method": method, "path": path, "host": host, "src_ip": src_ip, "dst_ip": dst_ip, "dst_port": dport},
                                     normalized_fields=NormalizedFields(
-                                        src_ip=src_ip, dst_ip=dst_ip,
-                                        timestamp=dt, hostname=qname,
-                                        protocol="udp", event_type="dns_query"
+                                        src_ip=src_ip,
+                                        dst_ip=dst_ip,
+                                        dst_port=dport,
+                                        url=url,
+                                        host=host or dst_ip,
                                     )
                                 ))
-                            except Exception:
-                                pass
+                        except Exception as http_err:
+                            logger.debug("HTTP parse error on packet: %s", http_err)
+                        continue
+
+                    # ── Network connections (unique 4-tuple, sampled) ────────────
+                    conn_key = (src_ip, dst_ip, dport, str(proto))
+                    if conn_key not in connections:
+                        connections[conn_key] = ts_str
+                        artifacts.append(Artifact(
+                            evidence_id=evidence_id,
+                            source_tool="zeek",
+                            artifact_type="network_connection",
+                            timestamp=dt,
+                            raw_fields={
+                                "src_ip": src_ip, "dst_ip": dst_ip,
+                                "src_port": sport, "dst_port": dport,
+                                "protocol": str(proto), "first_seen": ts_str
+                            },
+                            normalized_fields=NormalizedFields(
+                                src_ip=src_ip,
+                                dst_ip=dst_ip,
+                                src_port=sport,
+                                dst_port=dport,
+                            )
+                        ))
+
+                except Exception:
                     continue
-
-                # ── HTTP (port 80 TCP) ───────────────────────────────────────
-                if pkt.haslayer(TCP) and dport in (80, 8080, 8000, 8888) and pkt.haslayer(Raw):
-                    try:
-                        payload = pkt[Raw].load.decode("utf-8", errors="replace")
-                        if payload.startswith(("GET ", "POST ", "PUT ", "DELETE ", "HEAD ", "OPTIONS ")):
-                            first_line = payload.split("\r\n")[0]
-                            method, path_raw = first_line.split(" ", 1)
-                            path = path_raw.split(" ")[0]
-                            # Extract Host header if present
-                            host = ""
-                            for line in payload.split("\r\n")[1:]:
-                                if line.lower().startswith("host:"):
-                                    host = line.split(":", 1)[1].strip()
-                                    break
-                            artifacts.append(Artifact(
-                                evidence_id=evidence_id,
-                                artifact_type="http_request",
-                                timestamp=dt,
-                                raw_data={"method": method, "path": path, "host": host, "src_ip": src_ip, "dst_ip": dst_ip, "dst_port": dport},
-                                normalized_fields=NormalizedFields(
-                                    src_ip=src_ip, dst_ip=dst_ip, dst_port=dport,
-                                    timestamp=dt, hostname=host or dst_ip,
-                                    protocol="tcp", event_type="http_request"
-                                )
-                            ))
-                    except Exception:
-                        pass
-                    continue
-
-                # ── Network connections (unique 4-tuple, sampled) ────────────
-                conn_key = (src_ip, dst_ip, dport, str(proto))
-                if conn_key not in connections:
-                    connections[conn_key] = ts_str
-                    artifacts.append(Artifact(
-                        evidence_id=evidence_id,
-                        artifact_type="network_connection",
-                        timestamp=dt,
-                        raw_data={
-                            "src_ip": src_ip, "dst_ip": dst_ip,
-                            "src_port": sport, "dst_port": dport,
-                            "protocol": str(proto), "first_seen": ts_str
-                        },
-                        normalized_fields=NormalizedFields(
-                            src_ip=src_ip, dst_ip=dst_ip,
-                            src_port=sport, dst_port=dport,
-                            timestamp=dt, protocol=str(proto),
-                            event_type="network_connection"
-                        )
-                    ))
-
-            except Exception:
-                continue
+        finally:
+            pcap_reader.close()
 
         logger.info(
-            "Scapy fallback: %d artifacts extracted from %s",
-            len(artifacts), pcap_path.name
+            "Scapy fallback: processed %d packets, extracted %d artifacts from %s",
+            pkt_count, len(artifacts), pcap_path.name
         )
         return artifacts
 

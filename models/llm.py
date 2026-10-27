@@ -576,9 +576,10 @@ class OllamaWrapper:
         }
         if system_prompt:
             payload["system"] = system_prompt
-        timeout = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", str(self.timeout)))
+        conn_timeout = float(os.getenv("OLLAMA_CONNECT_TIMEOUT", "2.0"))
+        read_timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "15.0"))
         try:
-            r = requests.post(url, json=payload, timeout=timeout)
+            r = requests.post(url, json=payload, timeout=(conn_timeout, read_timeout))
             if r.status_code == 200:
                 return r.json().get("response", "")
             else:

@@ -116,4 +116,51 @@ class HTTPAnalyzer:
                     }
                 ))
 
+        # Also group by (user_agent, dst_host) to catch C2 with dynamic/rotating URI paths
+        import re
+        host_flows: Dict[Tuple[str, str], List[Tuple[datetime, str, str]]] = defaultdict(list)
+        for artifact in artifacts:
+            norm = artifact.normalized_fields
+            raw = artifact.raw_fields or {}
+            user_agent = raw.get("user_agent") or raw.get("user_agent_header") or norm.registry_value or "UNKNOWN_UA"
+            uri_path = norm.url or raw.get("uri") or raw.get("path") or "/"
+            dst_host = raw.get("host") or norm.host or norm.domain or norm.dst_ip or "UNKNOWN_DST"
+            ts = artifact.timestamp or datetime.now(timezone.utc)
+            host_flows[(str(user_agent), str(dst_host))].append((ts, artifact.artifact_id, str(uri_path)))
+
+        for (ua, dst), events in host_flows.items():
+            if len(events) >= 3 and dst != "UNKNOWN_DST":
+                sorted_events = sorted(events, key=lambda x: x[0])
+                first_art_id = sorted_events[0][1]
+                paths = [e[2] for e in sorted_events]
+                has_long_token = any(re.search(r'[a-f0-9]{32,}|&[0-9a-f]{16,}', p, re.I) for p in paths)
+                sample_p = list(dict.fromkeys(paths))[:2]
+
+                # Check if this destination is already reported in exact beaconing
+                already_reported = any(f.metadata.get("destination") == dst for f in findings)
+                if not already_reported:
+                    fact_msg = (
+                        f"Repeated HTTP C2 communication observed: {len(sorted_events)} requests to '{dst}' "
+                        f"{'(with encoded session tokens in query parameters)' if has_long_token else ''}."
+                    )
+                    findings.append(Finding(
+                        case_id=case_id,
+                        fact=fact_msg,
+                        confidence=0.88,
+                        severity="high" if has_long_token else "medium",
+                        mitre_mapping="T1071.001",
+                        timestamp=sorted_events[0][0],
+                        evidence_reference=fcr_ref or first_art_id,
+                        source_artifact_id=first_art_id,
+                        layer="network.http_analyzer",
+                        metadata={
+                            "user_agent": ua,
+                            "destination": dst,
+                            "observation_count": len(sorted_events),
+                            "sample_paths": sample_p,
+                            "has_encoded_token": has_long_token,
+                            "artifact_id": first_art_id
+                        }
+                    ))
+
         return findings

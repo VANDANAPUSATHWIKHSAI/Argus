@@ -10,6 +10,7 @@ import {
   fetchEvidenceForCase, 
   createCaseNote,
   createReviewNote, 
+  fetchReport,
   API_BASE_URL, 
   DEFAULT_TENANT_ID 
 } from '../js/api';
@@ -41,6 +42,766 @@ const buildUnavailableResponse = (caseId, reason = 'The case-query service did n
 ${reason}
 
 ARGUS has not generated a forensic conclusion for this request. Check the case selection, API connection, and backend logs, then retry. Any claim about evidence, hashes, malware behavior, MITRE techniques, or chain of custody must come from retrieved case records—not a UI fallback.`; 
+
+// Helper to construct a standalone HTML report package if needed
+function generateHtmlFromReportData(reportData) {
+  const caseId = reportData?.case_id || 'UNKNOWN';
+  const genAt = reportData?.generated_at ? new Date(reportData.generated_at).toUTCString() : new Date().toUTCString();
+  const findings = Array.isArray(reportData?.findings) ? reportData.findings : [];
+  const evidence = Array.isArray(reportData?.evidence_files) ? reportData.evidence_files : [];
+  const timeline = Array.isArray(reportData?.timeline) ? reportData.timeline : [];
+  const summary = reportData?.executive_summary || `Legal-grade forensic case report for ${caseId}. Includes ${evidence.length} evidence file(s) and ${findings.length} finding(s).`;
+  
+  const critCount = findings.filter(f => (f.severity || '').toLowerCase() === 'critical').length;
+  const highCount = findings.filter(f => (f.severity || '').toLowerCase() === 'high').length;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARGUS Forensic Report - ${caseId}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #0b0f19; color: #f8fafc; margin: 0; padding: 24px; line-height: 1.5; }
+        .container { max-width: 1200px; margin: 0 auto; background: #111827; border-radius: 16px; border: 1px solid #1f2937; box-shadow: 0 10px 30px rgba(0,0,0,0.5); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #ffffff; padding: 32px; border-bottom: 1px solid #1f2937; }
+        .header h1 { margin: 0 0 8px 0; font-size: 26px; color: #38bdf8; }
+        .header .meta { display: flex; gap: 24px; font-size: 13px; color: #94a3b8; flex-wrap: wrap; }
+        .section { padding: 28px 32px; border-bottom: 1px solid #1f2937; }
+        .section h2 { margin-top: 0; font-size: 18px; color: #38bdf8; border-bottom: 2px solid #1f2937; padding-bottom: 8px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 16px; text-align: center; }
+        .stat-card .value { font-size: 28px; font-weight: 700; color: #38bdf8; }
+        .stat-card .label { font-size: 12px; color: #94a3b8; text-transform: uppercase; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+        th, td { padding: 12px 14px; text-align: left; border-bottom: 1px solid #1f2937; }
+        th { background: #1e293b; color: #94a3b8; font-weight: 600; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .badge-critical { background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid #ef4444; }
+        .badge-high { background: rgba(249, 115, 22, 0.2); color: #f97316; border: 1px solid #f97316; }
+        .badge-medium { background: rgba(234, 179, 8, 0.2); color: #eab308; border: 1px solid #eab308; }
+        .badge-low { background: rgba(59, 130, 246, 0.2); color: #3b82f6; border: 1px solid #3b82f6; }
+        .hash-code { font-family: Consolas, monospace; font-size: 11px; color: #38bdf8; background: #0b0f19; padding: 2px 6px; border-radius: 4px; }
+        .disclaimer { font-size: 11px; color: #64748b; margin-top: 24px; line-height: 1.6; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ARGUS Digital Forensic Report</h1>
+            <div class="meta">
+                <div>Case ID: <strong>${caseId}</strong></div>
+                <div>Generated: <strong>${genAt}</strong></div>
+                <div>Classification: <strong>OFFICIAL // FORENSIC CONFIDENTIAL</strong></div>
+            </div>
+        </div>
+        <div class="section">
+            <h2>Executive Summary</h2>
+            <div class="stats-grid">
+                <div class="stat-card"><div class="value">${findings.length}</div><div class="label">Total Findings</div></div>
+                <div class="stat-card"><div class="value" style="color:#ef4444">${critCount}</div><div class="label">Critical Findings</div></div>
+                <div class="stat-card"><div class="value" style="color:#10b981">${evidence.length}</div><div class="label">Evidence Artifacts</div></div>
+                <div class="stat-card"><div class="value" style="color:#f59e0b">${timeline.length}</div><div class="label">Timeline Events</div></div>
+            </div>
+            <p style="font-size: 14px; line-height: 1.6; color: #e2e8f0;">${summary}</p>
+        </div>
+        <div class="section">
+            <h2>Evidence Files & Cryptographic Hashes</h2>
+            ${evidence.length === 0 ? '<p style="color:#94a3b8;font-style:italic">No evidence files recorded.</p>' : `
+            <table>
+                <thead><tr><th>Filename</th><th>Status</th><th>SHA-256 Hash</th></tr></thead>
+                <tbody>${evidence.map(e => `<tr><td><strong>${e.filename || 'Evidence File'}</strong></td><td><span class="badge" style="background:rgba(16,185,129,0.2);color:#10b981">${e.status || 'stored'}</span></td><td><span class="hash-code">${e.sha256_hash || 'Pending'}</span></td></tr>`).join('')}</tbody>
+            </table>`}
+        </div>
+        <div class="section">
+            <h2>Triaged Forensic Findings</h2>
+            ${findings.length === 0 ? '<p style="color:#94a3b8;font-style:italic">No anomalous findings triaged yet.</p>' : `
+            <table>
+                <thead><tr><th>Severity</th><th>Finding / Observation</th><th>MITRE Technique</th><th>Source</th></tr></thead>
+                <tbody>${findings.map(f => {
+                  const s = (f.severity || 'medium').toLowerCase();
+                  return `<tr><td><span class="badge badge-${s}">${f.severity || 'Medium'}</span></td><td>${f.sanitized_fact || f.fact || 'Observed telemetry'}</td><td><span style="color:#38bdf8;font-weight:600">${f.mitre_mapping || f.mitre_technique || 'N/A'}</span></td><td>${f.source_tool || 'ARGUS Engine'}</td></tr>`;
+                }).join('')}</tbody>
+            </table>`}
+        </div>
+        <div class="section">
+            <p class="disclaimer"><strong>LEGAL DISCLAIMER &amp; CHAIN OF CUSTODY NOTICE:</strong> This document contains automated and analyst-verified forensic insights compiled by the ARGUS Multi-Agent Digital Forensics Platform. All evidence hashes and telemetry records are cryptographically stamped.</p>
+        </div>
+    </div>
+</body>
+</html>`;
+}
+
+// Interactive In-Chat Case Forensic Report Card Component
+function CaseReportCard({ 
+  reportData, 
+  reportHtml, 
+  isDark, 
+  themeStyles, 
+  onPreviewHtml, 
+  onDownloadHtml, 
+  onDownloadJson, 
+  onDownloadPdf, 
+  onSaveToNotes, 
+  showToast 
+}) {
+  const [activeTab, setActiveTab] = useState('findings'); // 'findings' | 'evidence' | 'timeline' | 'mitre'
+  
+  if (!reportData) return null;
+
+  const caseId = reportData.case_id || 'Case';
+  const genAt = reportData.generated_at ? new Date(reportData.generated_at).toLocaleString() : new Date().toLocaleString();
+  const findings = Array.isArray(reportData.findings) ? reportData.findings : [];
+  const evidence = Array.isArray(reportData.evidence_files) ? reportData.evidence_files : [];
+  const timeline = Array.isArray(reportData.timeline) ? reportData.timeline : [];
+  
+  const critCount = findings.filter(f => (f.severity || '').toLowerCase() === 'critical').length;
+  const highCount = findings.filter(f => (f.severity || '').toLowerCase() === 'high').length;
+
+  // Extract unique MITRE techniques
+  const mitreMap = new Map();
+  findings.forEach(f => {
+    const raw = f.mitre_mapping || f.mitre_technique || (f.sanitized_context && f.sanitized_context.mitre_mapping);
+    if (raw) {
+      const match = raw.match(/T\d{4}(?:\.\d{3})?/i);
+      const techId = match ? match[0].toUpperCase() : raw;
+      const count = mitreMap.get(techId) || 0;
+      mitreMap.set(techId, count + 1);
+    }
+  });
+  if (Array.isArray(reportData.mitre_techniques)) {
+    reportData.mitre_techniques.forEach(t => {
+      const id = typeof t === 'string' ? t : (t.id || t.technique_id);
+      if (id && !mitreMap.has(id)) mitreMap.set(id, 1);
+    });
+  }
+  const mitreList = Array.from(mitreMap.entries()).map(([id, count]) => ({
+    id,
+    name: MITRE_TECHNIQUE_NAMES[id] || 'Adversary Technique',
+    count
+  }));
+
+  const execSummary = reportData.executive_summary || (
+    findings.length > 0
+      ? `Forensic investigation package compiled for Case ${caseId}. Triaged ${findings.length} finding(s) with ${critCount + highCount} prioritized critical/high-severity indicator(s) across ${evidence.length} ingested evidence file(s).`
+      : `Forensic case baseline compiled for Case ${caseId}. Contains ${evidence.length} cataloged evidence artifact(s). No anomalous threat indicators identified at current triage stage.`
+  );
+
+  const effectiveHtml = reportHtml || generateHtmlFromReportData(reportData);
+
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '16px',
+      background: isDark ? 'linear-gradient(145deg, #0d1322 0%, #151d30 100%)' : '#ffffff',
+      border: `1px solid ${isDark ? 'rgba(56, 189, 248, 0.35)' : 'rgba(37, 99, 235, 0.25)'}`,
+      borderRadius: '20px',
+      padding: '24px',
+      boxShadow: isDark 
+        ? '0 12px 32px rgba(0, 0, 0, 0.45), 0 0 16px rgba(56, 189, 248, 0.1)' 
+        : '0 12px 32px rgba(37, 99, 235, 0.08)',
+      width: '100%'
+    }}>
+      {/* Header Banner */}
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        flexWrap: 'wrap',
+        gap: '12px',
+        borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
+        paddingBottom: '16px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{
+            width: '42px',
+            height: '42px',
+            borderRadius: '12px',
+            background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ffffff',
+            boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+            flexShrink: 0
+          }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{
+                fontSize: '11px',
+                fontWeight: 800,
+                color: '#38bdf8',
+                letterSpacing: '1px',
+                textTransform: 'uppercase'
+              }}>
+                ARGUS Forensic Report
+              </span>
+              <span style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#10b981',
+                padding: '1px 8px',
+                borderRadius: '9999px',
+                border: '1px solid rgba(16, 185, 129, 0.3)'
+              }}>
+                LEGAL-GRADE DRAFT
+              </span>
+            </div>
+            <div style={{ fontSize: '17px', fontWeight: 800, color: isDark ? '#f8fafc' : '#0f172a', marginTop: '2px' }}>
+              Case: {caseId}
+            </div>
+            <div style={{ fontSize: '11.5px', color: themeStyles.textMuted }}>
+              Compiled: {genAt} • Tenant: {reportData.tenant_id || 'default'}
+            </div>
+          </div>
+        </div>
+
+        {/* Top Quick Actions */}
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => onPreviewHtml(effectiveHtml)}
+            className="btn-primary"
+            style={{ padding: '6px 14px', fontSize: '12px', gap: '6px' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span>Preview Full Report</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Metrics Row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+        gap: '10px'
+      }}>
+        <div style={{
+          background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+          border: `1px solid ${themeStyles.border}`,
+          borderRadius: '12px',
+          padding: '12px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: findings.length > 0 ? (critCount > 0 ? '#ef4444' : '#38bdf8') : themeStyles.textMain }}>
+            {findings.length}
+          </div>
+          <div style={{ fontSize: '10.5px', color: themeStyles.textMuted, fontWeight: 600, textTransform: 'uppercase' }}>
+            Triaged Findings
+          </div>
+          {(critCount > 0 || highCount > 0) && (
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '4px', marginTop: '4px' }}>
+              {critCount > 0 && <span style={{ fontSize: '9px', color: '#ef4444', fontWeight: 700 }}>{critCount} Crit</span>}
+              {highCount > 0 && <span style={{ fontSize: '9px', color: '#f97316', fontWeight: 700 }}>{highCount} High</span>}
+            </div>
+          )}
+        </div>
+
+        <div style={{
+          background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+          border: `1px solid ${themeStyles.border}`,
+          borderRadius: '12px',
+          padding: '12px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: '#10b981' }}>
+            {evidence.length}
+          </div>
+          <div style={{ fontSize: '10.5px', color: themeStyles.textMuted, fontWeight: 600, textTransform: 'uppercase' }}>
+            Evidence Files
+          </div>
+        </div>
+
+        <div style={{
+          background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+          border: `1px solid ${themeStyles.border}`,
+          borderRadius: '12px',
+          padding: '12px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: '#f59e0b' }}>
+            {timeline.length}
+          </div>
+          <div style={{ fontSize: '10.5px', color: themeStyles.textMuted, fontWeight: 600, textTransform: 'uppercase' }}>
+            Timeline Events
+          </div>
+        </div>
+
+        <div style={{
+          background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)',
+          border: `1px solid ${themeStyles.border}`,
+          borderRadius: '12px',
+          padding: '12px',
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: '20px', fontWeight: 800, color: '#a78bfa' }}>
+            {mitreList.length}
+          </div>
+          <div style={{ fontSize: '10.5px', color: themeStyles.textMuted, fontWeight: 600, textTransform: 'uppercase' }}>
+            MITRE ATT&CK
+          </div>
+        </div>
+      </div>
+
+      {/* Executive Summary Box */}
+      <div style={{
+        background: isDark ? 'rgba(56, 189, 248, 0.05)' : 'rgba(37, 99, 235, 0.04)',
+        border: `1px solid ${isDark ? 'rgba(56, 189, 248, 0.2)' : 'rgba(37, 99, 235, 0.15)'}`,
+        borderLeft: '4px solid #38bdf8',
+        borderRadius: '12px',
+        padding: '14px 16px'
+      }}>
+        <div style={{ fontSize: '11px', fontWeight: 800, color: '#38bdf8', textTransform: 'uppercase', marginBottom: '6px', letterSpacing: '0.5px' }}>
+          Executive Forensic Assessment
+        </div>
+        <div style={{ fontSize: '13px', lineHeight: '1.6', color: isDark ? '#e2e8f0' : '#1e293b' }}>
+          {execSummary}
+        </div>
+      </div>
+
+      {/* Tab Selectors */}
+      <div style={{
+        display: 'flex',
+        gap: '6px',
+        borderBottom: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
+        paddingBottom: '8px',
+        overflowX: 'auto'
+      }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('findings')}
+          className="btn-outline"
+          style={{
+            padding: '6px 14px',
+            fontSize: '12px',
+            fontWeight: 600,
+            background: activeTab === 'findings' ? 'var(--glass-dash-blue-soft)' : 'transparent',
+            color: activeTab === 'findings' ? 'var(--glass-dash-blue)' : themeStyles.textMuted,
+            borderColor: activeTab === 'findings' ? 'var(--glass-dash-blue-border)' : 'transparent'
+          }}
+        >
+          🔍 Findings ({findings.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('evidence')}
+          className="btn-outline"
+          style={{
+            padding: '6px 14px',
+            fontSize: '12px',
+            fontWeight: 600,
+            background: activeTab === 'evidence' ? 'var(--glass-dash-blue-soft)' : 'transparent',
+            color: activeTab === 'evidence' ? 'var(--glass-dash-blue)' : themeStyles.textMuted,
+            borderColor: activeTab === 'evidence' ? 'var(--glass-dash-blue-border)' : 'transparent'
+          }}
+        >
+          📁 Evidence Files ({evidence.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('timeline')}
+          className="btn-outline"
+          style={{
+            padding: '6px 14px',
+            fontSize: '12px',
+            fontWeight: 600,
+            background: activeTab === 'timeline' ? 'var(--glass-dash-blue-soft)' : 'transparent',
+            color: activeTab === 'timeline' ? 'var(--glass-dash-blue)' : themeStyles.textMuted,
+            borderColor: activeTab === 'timeline' ? 'var(--glass-dash-blue-border)' : 'transparent'
+          }}
+        >
+          ⏱️ Timeline ({timeline.length})
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('mitre')}
+          className="btn-outline"
+          style={{
+            padding: '6px 14px',
+            fontSize: '12px',
+            fontWeight: 600,
+            background: activeTab === 'mitre' ? 'var(--glass-dash-blue-soft)' : 'transparent',
+            color: activeTab === 'mitre' ? 'var(--glass-dash-blue)' : themeStyles.textMuted,
+            borderColor: activeTab === 'mitre' ? 'var(--glass-dash-blue-border)' : 'transparent'
+          }}
+        >
+          🛡️ MITRE Matrix ({mitreList.length})
+        </button>
+      </div>
+
+      {/* Tab Panels */}
+      <div style={{ minHeight: '120px' }}>
+        {/* TAB 1: Findings */}
+        {activeTab === 'findings' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {findings.length === 0 ? (
+              <div style={{
+                padding: '24px',
+                textAlign: 'center',
+                color: themeStyles.textMuted,
+                fontSize: '12.5px',
+                background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                borderRadius: '12px',
+                border: `1px dashed ${themeStyles.border}`
+              }}>
+                No anomalous findings triaged yet for this case. Evidence files cataloged below are available for agent correlation.
+              </div>
+            ) : (
+              findings.map((f, idx) => {
+                const sev = (f.severity || 'medium').toLowerCase();
+                const isCrit = sev === 'critical' || sev === 'high';
+                return (
+                  <div key={idx} style={{
+                    padding: '12px 14px',
+                    borderRadius: '10px',
+                    background: isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)',
+                    border: `1px solid ${themeStyles.border}`,
+                    borderLeft: `4px solid ${isCrit ? (sev === 'critical' ? '#ef4444' : '#f97316') : '#3b82f6'}`
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span style={{
+                          fontSize: '10px',
+                          fontWeight: 800,
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          background: sev === 'critical' ? 'rgba(239, 68, 68, 0.2)' : sev === 'high' ? 'rgba(249, 115, 22, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                          color: sev === 'critical' ? '#ef4444' : sev === 'high' ? '#f97316' : '#3b82f6',
+                          textTransform: 'uppercase'
+                        }}>
+                          {f.severity || 'Medium'}
+                        </span>
+                        <span style={{ fontSize: '11px', color: themeStyles.textMuted }}>
+                          {f.finding_id || `#${idx + 1}`}
+                        </span>
+                      </div>
+                      {f.source_tool && (
+                        <span style={{ fontSize: '10.5px', color: themeStyles.textMuted }}>
+                          Source: <strong style={{ color: themeStyles.textMain }}>{f.source_tool}</strong>
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '13px', lineHeight: '1.5', color: themeStyles.textMain }}>
+                      {f.sanitized_fact || f.fact || 'Observed telemetry event'}
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '8px', flexWrap: 'wrap', fontSize: '11px' }}>
+                      {(f.mitre_mapping || f.mitre_technique) && (
+                        <span style={{
+                          background: isDark ? 'rgba(56, 189, 248, 0.15)' : 'rgba(37, 99, 235, 0.1)',
+                          color: '#38bdf8',
+                          padding: '2px 8px',
+                          borderRadius: '6px',
+                          fontWeight: 600
+                        }}>
+                          MITRE: {f.mitre_mapping || f.mitre_technique}
+                        </span>
+                      )}
+                      {f.confidence !== undefined && (
+                        <span style={{ color: '#10b981', fontWeight: 600 }}>
+                          Confidence: {(f.confidence * 100).toFixed(0)}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: Evidence Files */}
+        {activeTab === 'evidence' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {evidence.length === 0 ? (
+              <div style={{
+                padding: '24px',
+                textAlign: 'center',
+                color: themeStyles.textMuted,
+                fontSize: '12.5px',
+                background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                borderRadius: '12px',
+                border: `1px dashed ${themeStyles.border}`
+              }}>
+                No evidence artifacts uploaded for this case yet.
+              </div>
+            ) : (
+              evidence.map((ev, idx) => (
+                <div key={idx} style={{
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  background: isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)',
+                  border: `1px solid ${themeStyles.border}`,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '14px' }}>📄</span>
+                      <strong style={{ fontSize: '13px', color: themeStyles.textMain }}>{ev.filename || 'Evidence File'}</strong>
+                    </div>
+                    <span style={{
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#10b981',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      textTransform: 'uppercase'
+                    }}>
+                      {ev.status || 'stored'}
+                    </span>
+                  </div>
+                  {ev.sha256_hash && (
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      background: isDark ? '#0b0f19' : '#f1f5f9',
+                      padding: '6px 10px',
+                      borderRadius: '6px',
+                      marginTop: '4px'
+                    }}>
+                      <div style={{ fontSize: '11px', fontFamily: 'Consolas, monospace', color: '#38bdf8', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        SHA-256: {ev.sha256_hash}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(ev.sha256_hash);
+                          showToast('Hash copied to clipboard!');
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#38bdf8',
+                          cursor: 'pointer',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          flexShrink: 0,
+                          marginLeft: '8px'
+                        }}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: Timeline */}
+        {activeTab === 'timeline' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {timeline.length === 0 ? (
+              <div style={{
+                padding: '24px',
+                textAlign: 'center',
+                color: themeStyles.textMuted,
+                fontSize: '12.5px',
+                background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                borderRadius: '12px',
+                border: `1px dashed ${themeStyles.border}`
+              }}>
+                No chronological attack timeline events recorded yet.
+              </div>
+            ) : (
+              timeline.map((t, idx) => (
+                <div key={idx} style={{
+                  padding: '10px 14px',
+                  borderRadius: '10px',
+                  background: isDark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)',
+                  border: `1px solid ${themeStyles.border}`,
+                  display: 'flex',
+                  gap: '12px',
+                  alignItems: 'baseline'
+                }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: '#f59e0b',
+                    flexShrink: 0
+                  }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                      <span style={{ fontSize: '11.5px', fontWeight: 700, color: '#38bdf8' }}>
+                        {t.timestamp || 'Chronological Event'}
+                      </span>
+                      {t.event_type && (
+                        <span style={{
+                          fontSize: '10px',
+                          background: 'rgba(245, 158, 11, 0.15)',
+                          color: '#f59e0b',
+                          padding: '1px 6px',
+                          borderRadius: '4px',
+                          fontWeight: 600
+                        }}>
+                          {t.event_type}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '12.5px', color: themeStyles.textMain }}>{t.summary}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: MITRE ATT&CK */}
+        {activeTab === 'mitre' && (
+          <div>
+            {mitreList.length === 0 ? (
+              <div style={{
+                padding: '24px',
+                textAlign: 'center',
+                color: themeStyles.textMuted,
+                fontSize: '12.5px',
+                background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)',
+                borderRadius: '12px',
+                border: `1px dashed ${themeStyles.border}`
+              }}>
+                No MITRE ATT&CK techniques mapped to current case findings.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '8px' }}>
+                {mitreList.map(t => (
+                  <div key={t.id} style={{
+                    padding: '10px 12px',
+                    borderRadius: '8px',
+                    background: isDark ? 'rgba(56, 189, 248, 0.08)' : 'rgba(37, 99, 235, 0.06)',
+                    border: `1px solid ${isDark ? 'rgba(56, 189, 248, 0.2)' : 'rgba(37, 99, 235, 0.2)'}`,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <strong style={{ fontSize: '12px', color: '#38bdf8' }}>{t.id}</strong>
+                      {t.count > 1 && (
+                        <span style={{
+                          background: '#38bdf8',
+                          color: '#0f172a',
+                          fontSize: '9px',
+                          padding: '1px 5px',
+                          borderRadius: '9999px',
+                          fontWeight: 700
+                        }}>
+                          {t.count}x
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: '11px', color: themeStyles.textMain }}>{t.name}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Action Footer Bar */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '8px',
+        borderTop: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.08)'}`,
+        paddingTop: '16px'
+      }}>
+        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => onPreviewHtml(effectiveHtml)}
+            className="btn-primary"
+            style={{ padding: '6px 14px', fontSize: '12px', gap: '6px' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+            <span>Preview HTML</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onDownloadHtml(reportData, effectiveHtml)}
+            className="btn-outline"
+            style={{ padding: '6px 14px', fontSize: '12px', gap: '6px' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Download HTML</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onDownloadJson(reportData)}
+            className="btn-outline"
+            style={{ padding: '6px 14px', fontSize: '12px', gap: '6px' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="16 18 22 12 16 6"></polyline>
+              <polyline points="8 6 2 12 8 18"></polyline>
+            </svg>
+            <span>Download JSON</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onDownloadPdf(reportData, effectiveHtml)}
+            className="btn-outline"
+            style={{ padding: '6px 14px', fontSize: '12px', gap: '6px' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+            </svg>
+            <span>Download PDF</span>
+          </button>
+        </div>
+
+        <div>
+          <button
+            type="button"
+            onClick={() => onSaveToNotes(`[FORENSIC REPORT SUMMARY - ${caseId}]\n${execSummary}\nFindings: ${findings.length} | Evidence: ${evidence.length}`)}
+            className="btn-outline"
+            style={{ padding: '6px 14px', fontSize: '12px', gap: '6px' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+              <polyline points="17 21 17 13 7 13 7 21"></polyline>
+              <polyline points="7 3 7 8 15 8"></polyline>
+            </svg>
+            <span>Pin to Case Notes</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Chatbot() {
   const navigate = useNavigate();
@@ -109,6 +870,9 @@ Select a quick prompt below or type your forensic query to begin querying Case *
   const [loading, setLoading] = useState(false);
   const [reasoningStep, setReasoningStep] = useState(0);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
+  const [generatingReport, setGeneratingReport] = useState(false);
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [activeModalReportHtml, setActiveModalReportHtml] = useState('');
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -213,6 +977,202 @@ Select a quick prompt below or type your forensic query to begin querying Case *
     return [];
   }, [caseFindings]);
 
+  // Detect if query is requesting case report generation
+  const isReportRequest = (q) => {
+    if (!q) return false;
+    const s = q.trim().toLowerCase();
+    return s === 'generate report' ||
+      s === 'case report' ||
+      s === 'show report' ||
+      s === 'report' ||
+      s === 'create report' ||
+      s === 'view report' ||
+      s === 'fetch report' ||
+      s.includes('generate report') ||
+      s.includes('generate case report') ||
+      s.includes('show case report') ||
+      s.includes('view case report') ||
+      s.includes('forensic report');
+  };
+
+  // Download HTML report package
+  const handleDownloadHtml = (reportData, reportHtml) => {
+    const caseId = reportData?.case_id || activeCaseId;
+    const content = reportHtml || generateHtmlFromReportData(reportData);
+    const blob = new Blob([content], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ARGUS_Forensic_Report_${caseId}_${Date.now()}.html`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('HTML Report downloaded');
+  };
+
+  // Download JSON report package
+  const handleDownloadJson = (reportData) => {
+    const caseId = reportData?.case_id || activeCaseId;
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `ARGUS_Forensic_Report_${caseId}_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('JSON Report downloaded');
+  };
+
+  // Download PDF report package
+  const handleDownloadPdf = async (reportData, reportHtml) => {
+    const caseId = reportData?.case_id || activeCaseId;
+    try {
+      const token = localStorage.getItem('argus_token');
+      const tenantId = localStorage.getItem('argus_tenant_id') || 'default';
+      const res = await fetch(`${API_BASE_URL}/reports/${encodeURIComponent(caseId)}/report?format=pdf&allow_unreviewed=true`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': tenantId
+        }
+      });
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ARGUS_Forensic_Report_${caseId}_${Date.now()}.pdf`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('PDF Report downloaded');
+        return;
+      }
+    } catch (err) {
+      console.warn('PDF download fallback to print:', err);
+    }
+    
+    // Fallback: Open print dialog
+    const content = reportHtml || generateHtmlFromReportData(reportData);
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(content);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => printWindow.print(), 400);
+    }
+  };
+
+  // Primary Forensic Report Generator for AI Assistant
+  const handleGenerateReport = async (customPrompt = null) => {
+    if (!activeCaseId) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'No Active Case',
+        message: 'Please select an active investigation case before generating a report.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    if (generatingReport || loading) return;
+
+    setGeneratingReport(true);
+    const userPrompt = customPrompt || `Generate comprehensive Case Forensic Report for Case ${activeCaseId}`;
+    
+    // Push user message
+    const userMessage = {
+      id: Date.now().toString(),
+      sender: 'user',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      text: userPrompt
+    };
+    setMessages(prev => [...prev, userMessage]);
+    setInputQuery('');
+
+    // Spinner reasoning indicator
+    setLoading(true);
+    setReasoningStep(0);
+    const stepInterval = setInterval(() => {
+      setReasoningStep(prev => (prev + 1) % REASONING_STEPS.length);
+    }, 1200);
+
+    try {
+      // Fetch both JSON structured report data and HTML package
+      const [jsonRes, htmlRes] = await Promise.allSettled([
+        fetchReport(activeCaseId, 'json', true),
+        fetchReport(activeCaseId, 'html', true)
+      ]);
+
+      clearInterval(stepInterval);
+
+      let reportData = null;
+      if (jsonRes.status === 'fulfilled' && jsonRes.value) {
+        reportData = typeof jsonRes.value === 'string' ? JSON.parse(jsonRes.value) : jsonRes.value;
+      }
+
+      let reportHtml = '';
+      if (htmlRes.status === 'fulfilled' && htmlRes.value) {
+        reportHtml = typeof htmlRes.value === 'string' ? htmlRes.value : JSON.stringify(htmlRes.value);
+      }
+
+      // If backend returned 404 or case is not yet persisted with evidence
+      if (!reportData) {
+        reportData = {
+          case_id: activeCaseId,
+          tenant_id: DEFAULT_TENANT_ID || 'default',
+          generated_at: new Date().toISOString(),
+          findings: caseFindings || [],
+          evidence_files: caseEvidence || [],
+          timeline: [],
+          executive_summary: `Initial case status report for ${activeCaseId}. Currently contains ${(caseEvidence || []).length} evidence file(s) and ${(caseFindings || []).length} triaged finding(s).`
+        };
+      }
+
+      if (!reportHtml) {
+        reportHtml = generateHtmlFromReportData(reportData);
+      }
+
+      const assistantMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'assistant',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: `Official Forensic Investigation Report compiled for Case **${activeCaseId}**.`,
+        isReport: true,
+        reportData: reportData,
+        reportHtml: reportHtml
+      };
+
+      setMessages(prev => [...prev, assistantMessage]);
+      showToast('Case Forensic Report generated successfully!');
+    } catch (err) {
+      clearInterval(stepInterval);
+      console.error('Error generating report:', err);
+      const fallbackReport = {
+        case_id: activeCaseId,
+        tenant_id: 'default',
+        generated_at: new Date().toISOString(),
+        findings: caseFindings || [],
+        evidence_files: caseEvidence || [],
+        timeline: [],
+        executive_summary: `Forensic report draft for Case ${activeCaseId}. Includes ${caseEvidence.length} evidence artifact(s) and ${caseFindings.length} finding(s) cataloged in case context.`
+      };
+      const assistantMessage = {
+        id: (Date.now() + 1).toString(),
+        sender: 'assistant',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        text: `Forensic Investigation Report for Case **${activeCaseId}**.`,
+        isReport: true,
+        reportData: fallbackReport,
+        reportHtml: generateHtmlFromReportData(fallbackReport)
+      };
+      setMessages(prev => [...prev, assistantMessage]);
+      showToast('Report generated from case context.');
+    } finally {
+      clearInterval(stepInterval);
+      setLoading(false);
+      setGeneratingReport(false);
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  };
+
   // Submit Query
   const handleSendQuery = async (queryTextOverride = null) => {
     const rawQuery = (queryTextOverride || inputQuery).trim();
@@ -225,6 +1185,12 @@ Select a quick prompt below or type your forensic query to begin querying Case *
         message: 'Please select an active investigation case before querying the Assistant.',
         type: 'warning'
       });
+      return;
+    }
+
+    // Intercept report requests to render official case forensic report
+    if (isReportRequest(rawQuery)) {
+      handleGenerateReport(rawQuery);
       return;
     }
 
@@ -376,6 +1342,13 @@ Select a quick prompt below or type your forensic query to begin querying Case *
       }
     } catch (e) {}
 
+    // If user is an analyst, generate report directly in assistant view
+    if (currentUser?.role === 'analyst') {
+      showToast('Compiling Forensic Report in AI Assistant...');
+      handleGenerateReport(`Generate updated Case Forensic Report for ${activeCaseId}`);
+      return;
+    }
+
     localStorage.setItem('argus_report_insight', cleanText);
     showToast('Redirecting to Report Builder...');
     setTimeout(() => {
@@ -427,6 +1400,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
   // Suggested prompt pills
   const SUGGESTED_PROMPTS = [
+    { label: '📑 Generate Case Report', query: 'generate report' },
     { label: '🔍 Summarize Findings', query: 'Provide an executive summary of all critical and high-severity findings for this case.' },
     { label: '🛡️ MITRE ATT&CK Mapping', query: 'Map all observed attacker behaviors, persistence mechanisms, and evasion techniques to MITRE ATT&CK IDs.' },
     { label: '⚠️ High-Risk IOCs', query: 'List all extracted Indicators of Compromise (hashes, suspicious IPs, domains, and registry keys).' },
@@ -775,6 +1749,36 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
         {/* Topbar Controls */}
         <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Generate Report Button */}
+          <button
+            type="button"
+            onClick={() => handleGenerateReport()}
+            disabled={generatingReport}
+            title="Generate Case Forensic Report"
+            className="btn-primary"
+            style={{
+              padding: '6px 14px',
+              fontSize: '12px',
+              gap: '6px',
+              background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
+              borderColor: 'rgba(124, 58, 237, 0.5)',
+              boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)'
+            }}
+          >
+            {generatingReport ? (
+              <div className="spinner" style={{ width: '13px', height: '13px', borderWidth: '2px', borderColor: '#ffffff', borderTopColor: 'transparent' }} />
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            )}
+            <span>{generatingReport ? 'Generating Report...' : 'Generate Report'}</span>
+          </button>
+
           {/* Drawer Toggle */}
           <button
             type="button"
@@ -1029,24 +2033,42 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
                     {/* Bubble Content */}
                     <div style={{
-                      padding: '24px 28px',
+                      padding: msg.isReport ? '0' : '24px 28px',
                       borderRadius: '24px',
-                      background: isUser ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.35) 0%, rgba(29, 78, 216, 0.2) 100%)' : 'var(--glass-dash-surface-gradient)',
-                      backdropFilter: 'blur(28px) saturate(190%)',
-                      WebkitBackdropFilter: 'blur(28px) saturate(190%)',
-                      border: `1px solid ${isUser ? 'rgba(59, 130, 246, 0.45)' : 'var(--glass-dash-border)'}`,
-                      boxShadow: isUser ? '0 8px 24px rgba(37, 99, 235, 0.25)' : 'var(--glass-dash-shadow-card)',
+                      background: msg.isReport ? 'transparent' : (isUser ? 'linear-gradient(135deg, rgba(37, 99, 235, 0.35) 0%, rgba(29, 78, 216, 0.2) 100%)' : 'var(--glass-dash-surface-gradient)'),
+                      backdropFilter: msg.isReport ? 'none' : 'blur(28px) saturate(190%)',
+                      WebkitBackdropFilter: msg.isReport ? 'none' : 'blur(28px) saturate(190%)',
+                      border: msg.isReport ? 'none' : `1px solid ${isUser ? 'rgba(59, 130, 246, 0.45)' : 'var(--glass-dash-border)'}`,
+                      boxShadow: msg.isReport ? 'none' : (isUser ? '0 8px 24px rgba(37, 99, 235, 0.25)' : 'var(--glass-dash-shadow-card)'),
                       color: isUser ? '#ffffff' : 'var(--glass-dash-text-main)',
                       fontSize: '13.5px',
                       lineHeight: '1.65',
                       wordBreak: 'break-word',
                       width: '100%'
                     }}>
-                      {renderFormattedText(msg.text)}
+                      {msg.isReport ? (
+                        <CaseReportCard
+                          reportData={msg.reportData}
+                          reportHtml={msg.reportHtml}
+                          isDark={isDark}
+                          themeStyles={themeStyles}
+                          onPreviewHtml={(html) => {
+                            setActiveModalReportHtml(html);
+                            setReportModalOpen(true);
+                          }}
+                          onDownloadHtml={handleDownloadHtml}
+                          onDownloadJson={handleDownloadJson}
+                          onDownloadPdf={handleDownloadPdf}
+                          onSaveToNotes={handleSaveToNotes}
+                          showToast={showToast}
+                        />
+                      ) : (
+                        renderFormattedText(msg.text)
+                      )}
                     </div>
 
                     {/* Action Bar */}
-                    {!isUser && (
+                    {!isUser && !msg.isReport && (
                       <div style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -1358,6 +2380,72 @@ Select a quick prompt below or type your forensic query to begin querying Case *
               </div>
             </div>
 
+            {/* Case Forensic Report Card in Drawer */}
+            <div style={{
+              background: themeStyles.cardBg,
+              border: `1px solid ${themeStyles.border}`,
+              borderRadius: '18px',
+              padding: '14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--glass-dash-blue)" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                  </svg>
+                  <span style={{ fontSize: '11px', fontWeight: 700, color: themeStyles.textMain, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    Forensic Case Report
+                  </span>
+                </div>
+                <span style={{
+                  fontSize: '10px',
+                  color: '#10b981',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  padding: '2px 8px',
+                  borderRadius: '8px',
+                  fontWeight: 700
+                }}>
+                  READY
+                </span>
+              </div>
+              <p style={{ margin: 0, fontSize: '11px', color: themeStyles.textMuted, lineHeight: '1.4' }}>
+                Generate legal-grade case forensic report package directly in this assistant.
+              </p>
+              <button
+                type="button"
+                onClick={() => handleGenerateReport()}
+                disabled={generatingReport}
+                className="btn-primary"
+                style={{
+                  padding: '8px 12px',
+                  fontSize: '11.5px',
+                  fontWeight: 600,
+                  gap: '6px',
+                  justifyContent: 'center',
+                  borderRadius: '12px'
+                }}
+              >
+                {generatingReport ? (
+                  <>
+                    <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', borderColor: '#ffffff', borderTopColor: 'transparent' }} />
+                    <span>Compiling Report...</span>
+                  </>
+                ) : (
+                  <>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                    </svg>
+                    <span>Generate Case Report</span>
+                  </>
+                )}
+              </button>
+            </div>
+
             {/* Evidence Artifacts Quick-Query */}
             <div>
               <div style={{ fontSize: '11px', fontWeight: 700, color: themeStyles.textMuted, textTransform: 'uppercase', marginBottom: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1574,6 +2662,136 @@ Select a quick prompt below or type your forensic query to begin querying Case *
           </aside>
         )}
       </main>
+
+      {/* Full HTML Report Package Preview Modal */}
+      {reportModalOpen && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 99999,
+          background: 'rgba(0, 0, 0, 0.78)',
+          backdropFilter: 'blur(10px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '24px'
+        }}>
+          <div style={{
+            width: '95vw',
+            maxWidth: '1240px',
+            height: '90vh',
+            background: isDark ? '#0f172a' : '#ffffff',
+            borderRadius: '24px',
+            border: `1px solid ${isDark ? '#334155' : '#cbd5e1'}`,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.65)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden'
+          }}>
+            {/* Modal Top Header */}
+            <div style={{
+              padding: '16px 24px',
+              borderBottom: `1px solid ${isDark ? '#1e293b' : '#e2e8f0'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: isDark ? '#1e293b' : '#f8fafc'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #2563eb, #7c3aed)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff'
+                }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontWeight: 800, fontSize: '15px', color: isDark ? '#f8fafc' : '#0f172a' }}>
+                    ARGUS Legal-Grade Forensic Report
+                  </div>
+                  <div style={{ fontSize: '12px', color: isDark ? '#94a3b8' : '#64748b' }}>
+                    Case: <strong style={{ color: '#38bdf8' }}>{activeCaseId}</strong> • Official Case Artifact Package
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const frame = document.getElementById('argus-report-iframe');
+                    if (frame && frame.contentWindow) {
+                      frame.contentWindow.print();
+                    }
+                  }}
+                  className="btn-outline"
+                  style={{ padding: '6px 14px', fontSize: '12px', gap: '6px' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="6 9 6 2 18 2 18 9"></polyline>
+                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                    <rect x="6" y="14" width="12" height="8"></rect>
+                  </svg>
+                  <span>Print Report</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleDownloadHtml({ case_id: activeCaseId }, activeModalReportHtml)}
+                  className="btn-primary"
+                  style={{ padding: '6px 14px', fontSize: '12px', gap: '6px' }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                  </svg>
+                  <span>Download HTML</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReportModalOpen(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: isDark ? '#94a3b8' : '#64748b',
+                    cursor: 'pointer',
+                    fontSize: '18px',
+                    padding: '6px 10px',
+                    borderRadius: '8px'
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body with embedded iframe */}
+            <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
+              <iframe
+                id="argus-report-iframe"
+                title="Case Forensic Report"
+                srcDoc={activeModalReportHtml}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  border: 'none',
+                  background: '#ffffff'
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -86,19 +86,25 @@ class DNSAnalyzer:
 
             entropy = calculate_shannon_entropy(subdomain_label)
 
-            # 1. DGA / High-Entropy Subdomain Check
-            if entropy >= self.entropy_threshold and len(subdomain_label) >= self.label_length_threshold:
+            # 1. DGA / High-Entropy Subdomain / Suspicious TLD Check
+            import re
+            suspicious_tlds = (".cfd", ".top", ".xyz", ".club", ".buzz", ".monster", ".cyou", ".work", ".stream", ".cc", ".tk")
+            is_suspicious_tld = any(query_domain.lower().endswith(tld) for tld in suspicious_tlds)
+            is_dga_num = bool(re.search(r'[a-z]{4,}\d{3,}\.(com|net|org)', query_domain.lower()))
+            is_high_entropy = (entropy >= self.entropy_threshold and len(subdomain_label) >= self.label_length_threshold)
+
+            if is_high_entropy or is_suspicious_tld or is_dga_num:
+                reason = "High-entropy subdomain" if is_high_entropy else ("Suspicious top-level domain (.cfd/.top/etc.)" if is_suspicious_tld else "Algorithmic DGA name pattern")
                 fact_msg = (
-                    f"High-entropy subdomain label with repeated DNS queries: "
-                    f"entropy={entropy:.2f} (threshold >= {self.entropy_threshold}), "
-                    f"label_length={len(subdomain_label)}, domain='{query_domain}'"
+                    f"{reason} observed in DNS query: domain='{query_domain}' "
+                    f"(label='{subdomain_label}', entropy={entropy:.2f})."
                 )
                 ts = artifact.timestamp or datetime.now(timezone.utc)
                 findings.append(Finding(
                     case_id=case_id,
                     fact=fact_msg,
-                    confidence=0.85,
-                    severity="high" if entropy > 4.2 else "medium",
+                    confidence=0.88,
+                    severity="high" if (is_suspicious_tld or is_dga_num or entropy > 4.2) else "medium",
                     mitre_mapping="T1568.002",
                     timestamp=ts,
                     evidence_reference=fcr_ref or artifact.artifact_id,
@@ -109,6 +115,8 @@ class DNSAnalyzer:
                         "entropy": entropy,
                         "subdomain_label": subdomain_label,
                         "artifact_id": artifact.artifact_id,
+                        "is_suspicious_tld": is_suspicious_tld,
+                        "is_dga_num": is_dga_num,
                     }
                 ))
 

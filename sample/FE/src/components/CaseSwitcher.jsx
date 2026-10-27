@@ -114,19 +114,18 @@ const CaseSwitcher = ({
             ? '0 0 0 2px var(--glass-dash-blue-soft, rgba(37, 99, 235, 0.25))'
             : 'none',
           transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-          maxWidth: '260px',
+          maxWidth: '440px',
+          minWidth: 'fit-content',
           whiteSpace: 'nowrap',
           ...buttonStyle
         }}
       >
         <span
           style={{
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '6px'
+            gap: '6px',
+            minWidth: 0
           }}
         >
           {activeCase ? (
@@ -135,13 +134,23 @@ const CaseSwitcher = ({
                 style={{
                   fontFamily: 'var(--glass-dash-mono, monospace)',
                   fontWeight: 700,
-                  color: 'var(--glass-dash-blue, #3b82f6)'
+                  color: 'var(--glass-dash-blue, #3b82f6)',
+                  flexShrink: 0
                 }}
               >
                 {activeCase.case_id}
               </span>
-              <span style={{ color: 'var(--text-muted, #94a3b8)' }}>—</span>
-              <span style={{ color: 'var(--text-main, #f8fafc)' }}>
+              <span style={{ color: 'var(--text-muted, #94a3b8)', flexShrink: 0 }}>—</span>
+              <span
+                style={{
+                  color: 'var(--text-main, #f8fafc)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '280px'
+                }}
+                title={activeCase.name || activeCase.case_id}
+              >
                 {activeCase.name || 'Unnamed'}
               </span>
             </>
@@ -174,8 +183,10 @@ const CaseSwitcher = ({
           style={{
             position: 'absolute',
             top: 'calc(100% + 8px)',
-            [align === 'left' ? 'left' : 'right']: 0,
-            width: '320px',
+            [align === 'right' ? 'right' : 'left']: 0,
+            minWidth: '100%',
+            width: 'max-content',
+            maxWidth: '380px',
             maxHeight: '400px',
             background: 'var(--glass-dash-surface-gradient, var(--bg-card-modal, #181a20))',
             backdropFilter: 'blur(32px) saturate(200%)',

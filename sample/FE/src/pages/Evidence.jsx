@@ -329,7 +329,7 @@ const Evidence = () => {
             activeCaseId={activeCaseId}
             onSelectCase={handleSelectCase}
             placeholder="-- Switch Case --"
-            align="right"
+            align="left"
           />
         )}
         <button

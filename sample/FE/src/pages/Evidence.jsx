@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import '../css/style.css';
 import '../css/evidence.css';
-import { fetchEvidenceForCase, closeCase, fetchCases } from '../js/api';
+import { fetchEvidenceForCase, closeCase, fetchCases, deleteEvidence } from '../js/api';
 import { Link, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
@@ -99,95 +99,124 @@ const Evidence = () => {
 
   const closeAlert = () => {
     if (customAlert.onClose) customAlert.onClose();
-    setCustomAlert(prev => ({ ...prev, isOpen: false, onClose: null }));
+    setCustomAlert(prev => ({ ...prev, isOpen: false, onClose: null, onConfirm: null }));
   };
-  
-  useEffect(() => {
-    let isMounted = true;
-    const loadEvidence = async () => {
-      try {
-        setLoading(true);
-        if (!activeCaseId) {
-          if (isMounted) {
-            setEvidenceData([]);
-            setLoading(false);
-          }
-          return;
-        }
 
-        const rawData = await fetchEvidenceForCase(activeCaseId);
-        if (!isMounted) return;
-
-        const fetchedList = rawData.data || rawData || [];
-        
-        const mappedData = (Array.isArray(fetchedList) ? fetchedList : []).map((item, index) => {
-          const f = (item.filename || '').toLowerCase();
-          let type = 'File';
-          if (f.endsWith('.ps1') || f.endsWith('.sh') || f.endsWith('.bat') || f.endsWith('.cmd') || f.endsWith('.py')) type = 'Script';
-          else if (f.endsWith('.zip') || f.endsWith('.tar') || f.endsWith('.gz') || f.endsWith('.rar') || f.endsWith('.7z')) type = 'Archive';
-          else if (f.endsWith('.evtx')) type = 'EVTX';
-          else if (f.endsWith('.log') || f.endsWith('.txt') || f.endsWith('.syslog') || f.endsWith('.csv')) type = 'Log';
-          else if (f.endsWith('.pcap') || f.endsWith('.pcapng') || f.endsWith('.cap')) type = 'PCAP';
-          else if (f.includes('ntuser') || f.includes('sam') || f.includes('system') || f.includes('software') || f.endsWith('.dat') || f.endsWith('.hiv')) type = 'Registry';
-          else if (f.endsWith('.e01') || f.endsWith('.raw') || f.endsWith('.img') || f.endsWith('.dd') || f.endsWith('.vmdk') || f.endsWith('.vhd')) type = 'Disk Image';
-          else if (f.endsWith('.mem') || f.endsWith('.dmp') || f.endsWith('.bin')) type = 'Memory';
-
-          const displayId = formatEvidenceId(item.evidence_id, index + 1);
-
-          // Preserve authentic backend processing status
-          const rawStatus = (item.status || '').toLowerCase();
-          let normalizedStatus = 'Unknown';
-          if (rawStatus.includes('fail') || rawStatus === 'error' || rawStatus === 'rejected' || Boolean(item.metadata?.error || item.error)) {
-            normalizedStatus = 'Failed';
-          } else if (rawStatus === 'processing' || rawStatus === 'uploaded' || rawStatus === 'sandboxed' || rawStatus === 'hashed' || rawStatus === 'metadata_extracted') {
-            normalizedStatus = 'Processing';
-          } else if (rawStatus === 'queued' || rawStatus === 'pending') {
-            normalizedStatus = 'Queued';
-          } else if (rawStatus === 'completed' || rawStatus === 'analyzed') {
-            normalizedStatus = 'Analyzed';
-          } else if (rawStatus === 'stored' || rawStatus === 'ingested') {
-            normalizedStatus = 'Stored';
-          } else if (item.status) {
-            normalizedStatus = item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase();
-          }
-
-          // Authentic ingestion timestamp: never invent current date
-          const authenticTimestamp = item.upload_timestamp || item.created_at || item.metadata?.ingested_at || null;
-
-          // Authentic risk: only present authoritative backend score or Unassessed
-          const authenticRisk = item.risk || item.metadata?.risk || (normalizedStatus === 'Failed' ? 'High' : 'Unassessed');
-
-          return {
-            id: item.evidence_id,
-            displayId: displayId,
-            name: item.filename,
-            type: type,
-            source: item.metadata?.host_id || item.uploaded_by || 'Unknown',
-            size: item.metadata?.size_bytes || 0,
-            status: normalizedStatus,
-            rawStatus: item.status,
-            error: item.metadata?.error || item.error || null,
-            ingested_at: authenticTimestamp,
-            risk: authenticRisk
-          };
-        });
-        
-        setEvidenceData(mappedData);
-      } catch (err) {
-        if (isMounted) {
-          console.error("Failed to fetch evidence", err);
-          setCustomAlert({ isOpen: true, title: 'Error Fetching Data', message: err.message || String(err), type: 'warning' });
-        }
-      } finally {
-        if (isMounted) setLoading(false);
+  const loadEvidence = useCallback(async () => {
+    try {
+      setLoading(true);
+      if (!activeCaseId) {
+        setEvidenceData([]);
+        setLoading(false);
+        return;
       }
-    };
 
-    loadEvidence();
-    return () => {
-      isMounted = false;
-    };
+      const rawData = await fetchEvidenceForCase(activeCaseId);
+      const fetchedList = rawData.data || rawData || [];
+      
+      const mappedData = (Array.isArray(fetchedList) ? fetchedList : []).map((item, index) => {
+        const f = (item.filename || '').toLowerCase();
+        let type = 'File';
+        if (f.endsWith('.ps1') || f.endsWith('.sh') || f.endsWith('.bat') || f.endsWith('.cmd') || f.endsWith('.py')) type = 'Script';
+        else if (f.endsWith('.zip') || f.endsWith('.tar') || f.endsWith('.gz') || f.endsWith('.rar') || f.endsWith('.7z')) type = 'Archive';
+        else if (f.endsWith('.evtx')) type = 'EVTX';
+        else if (f.endsWith('.log') || f.endsWith('.txt') || f.endsWith('.syslog') || f.endsWith('.csv')) type = 'Log';
+        else if (f.endsWith('.pcap') || f.endsWith('.pcapng') || f.endsWith('.cap')) type = 'PCAP';
+        else if (f.includes('ntuser') || f.includes('sam') || f.includes('system') || f.includes('software') || f.endsWith('.dat') || f.endsWith('.hiv')) type = 'Registry';
+        else if (f.endsWith('.e01') || f.endsWith('.raw') || f.endsWith('.img') || f.endsWith('.dd') || f.endsWith('.vmdk') || f.endsWith('.vhd')) type = 'Disk Image';
+        else if (f.endsWith('.mem') || f.endsWith('.dmp') || f.endsWith('.bin')) type = 'Memory';
+
+        const displayId = formatEvidenceId(item.evidence_id, index + 1);
+
+        // Preserve authentic backend processing status
+        const rawStatus = (item.status || '').toLowerCase();
+        let normalizedStatus = 'Unknown';
+        if (rawStatus.includes('fail') || rawStatus === 'error' || rawStatus === 'rejected' || Boolean(item.metadata?.error || item.error)) {
+          normalizedStatus = 'Failed';
+        } else if (rawStatus === 'processing' || rawStatus === 'uploaded' || rawStatus === 'sandboxed' || rawStatus === 'hashed' || rawStatus === 'metadata_extracted') {
+          normalizedStatus = 'Processing';
+        } else if (rawStatus === 'queued' || rawStatus === 'pending') {
+          normalizedStatus = 'Queued';
+        } else if (rawStatus === 'completed' || rawStatus === 'analyzed') {
+          normalizedStatus = 'Analyzed';
+        } else if (rawStatus === 'stored' || rawStatus === 'ingested') {
+          normalizedStatus = 'Stored';
+        } else if (item.status) {
+          normalizedStatus = item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase();
+        }
+
+        // Authentic ingestion timestamp: never invent current date
+        const authenticTimestamp = item.upload_timestamp || item.created_at || item.metadata?.ingested_at || null;
+
+        // Authentic risk: only present authoritative backend score or Unassessed
+        const authenticRisk = item.risk || item.metadata?.risk || (normalizedStatus === 'Failed' ? 'High' : 'Unassessed');
+
+        return {
+          id: item.evidence_id,
+          displayId: displayId,
+          name: item.filename,
+          type: type,
+          source: item.metadata?.host_id || item.uploaded_by || 'Unknown',
+          size: item.metadata?.size_bytes || 0,
+          status: normalizedStatus,
+          rawStatus: item.status,
+          error: item.metadata?.error || item.error || null,
+          ingested_at: authenticTimestamp,
+          risk: authenticRisk
+        };
+      });
+      
+      setEvidenceData(mappedData);
+    } catch (err) {
+      console.error("Failed to fetch evidence", err);
+      setCustomAlert({ isOpen: true, title: 'Error Fetching Data', message: err.message || String(err), type: 'warning' });
+    } finally {
+      setLoading(false);
+    }
   }, [activeCaseId]);
+
+  useEffect(() => {
+    loadEvidence();
+  }, [loadEvidence]);
+
+  const handleDeleteEvidence = (item) => {
+    if (!item) return;
+    setCustomAlert({
+      isOpen: true,
+      title: 'Remove Evidence',
+      message: `Are you sure you want to remove "${item.name}" (${item.displayId || item.id})? This will permanently delete the artifact and its associated logs from the repository.`,
+      type: 'danger',
+      confirmText: 'Delete Evidence',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        try {
+          setCustomAlert(prev => ({ ...prev, isOpen: false, onConfirm: null }));
+          setLoading(true);
+          await deleteEvidence(item.id, activeCaseId);
+          if (selectedItem?.id === item.id) {
+            setSelectedItem(null);
+          }
+          await loadEvidence();
+          setCustomAlert({
+            isOpen: true,
+            title: 'Evidence Removed',
+            message: `Evidence "${item.name}" has been successfully removed.`,
+            type: 'success'
+          });
+        } catch (err) {
+          console.error('Failed to remove evidence:', err);
+          setCustomAlert({
+            isOpen: true,
+            title: 'Removal Failed',
+            message: err.message || 'Failed to remove evidence artifact.',
+            type: 'error'
+          });
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
 
   const ingestedCount = useMemo(() => {
     return evidenceData.filter(e => e.status === 'Stored').length;
@@ -741,13 +770,53 @@ const Evidence = () => {
                            <span style={{ color: item.risk === 'High' ? 'var(--red)' : item.risk === 'Medium' ? 'var(--orange)' : 'var(--text-muted)' }}>{item.risk || 'Unassessed'}</span>
                         </td>
                         <td style={{ textAlign: 'right', padding: '16px 24px' }}>
-                          <button 
-                            aria-label={`Actions for evidence ${item.displayId || item.id}`}
-                            onClick={(e) => { e.stopPropagation(); setCustomAlert({isOpen: true, title: 'Coming Soon', message: 'Item actions are not yet implemented in this prototype.', type: 'info'}) }} 
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
-                          >
-                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="1"></circle><circle cx="19" cy="12" r="1"></circle><circle cx="5" cy="12" r="1"></circle></svg>
-                          </button>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
+                            <button 
+                              type="button"
+                              aria-label={`View details for ${item.displayId || item.id}`}
+                              title="View Details"
+                              onClick={(e) => { e.stopPropagation(); setSelectedItem(item); }} 
+                              style={{ 
+                                background: 'none', 
+                                border: '1px solid var(--border-subtle, #e2e8f0)', 
+                                borderRadius: '6px', 
+                                padding: '6px', 
+                                cursor: 'pointer', 
+                                color: 'var(--text-muted)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseOver={(e) => { e.currentTarget.style.color = 'var(--blue)'; e.currentTarget.style.borderColor = 'var(--blue)'; }}
+                              onMouseOut={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-subtle, #e2e8f0)'; }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                            </button>
+                            <button 
+                              type="button"
+                              className="btn-remove-evidence"
+                              aria-label={`Remove evidence ${item.displayId || item.id}`}
+                              title="Remove Evidence"
+                              onClick={(e) => { e.stopPropagation(); handleDeleteEvidence(item); }} 
+                              style={{ 
+                                background: 'none', 
+                                border: '1px solid var(--border-subtle, #e2e8f0)', 
+                                borderRadius: '6px', 
+                                padding: '6px', 
+                                cursor: 'pointer', 
+                                color: 'var(--text-muted)',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                transition: 'all 0.15s ease'
+                              }}
+                              onMouseOver={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.borderColor = '#ef4444'; e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'; }}
+                              onMouseOut={(e) => { e.currentTarget.style.color = 'var(--text-muted)'; e.currentTarget.style.borderColor = 'var(--border-subtle, #e2e8f0)'; e.currentTarget.style.background = 'none'; }}
+                            >
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -867,23 +936,51 @@ const Evidence = () => {
                 )}
               </div>
 
-              <div style={{ padding: '16px 24px', background: 'var(--bg-app)', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <div style={{ padding: '16px 24px', background: 'var(--bg-app)', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <button 
-                  className="btn btn-outline" 
-                  onClick={() => setSelectedItem(null)}
-                  style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer' }}
-                >
-                  Close
-                </button>
-                <button 
-                  className="btn btn-primary" 
-                  onClick={() => {
-                    navigate('/sanitized');
+                  type="button"
+                  className="btn"
+                  onClick={() => handleDeleteEvidence(selectedItem)}
+                  style={{ 
+                    padding: '8px 16px', 
+                    borderRadius: 'var(--radius-md)', 
+                    fontSize: 13, 
+                    fontWeight: 500,
+                    cursor: 'pointer', 
+                    background: 'rgba(239, 68, 68, 0.08)', 
+                    color: '#ef4444', 
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    transition: 'all 0.2s ease'
                   }}
-                  style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer', background: 'var(--blue)', color: '#fff', border: 'none' }}
+                  onMouseOver={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'; e.currentTarget.style.color = '#ef4444'; }}
                 >
-                  View Sanitized Output →
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                  Remove Evidence
                 </button>
+                <div style={{ display: 'flex', gap: 12 }}>
+                  <button 
+                    type="button"
+                    className="btn btn-outline" 
+                    onClick={() => setSelectedItem(null)}
+                    style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer' }}
+                  >
+                    Close
+                  </button>
+                  <button 
+                    type="button"
+                    className="btn btn-primary" 
+                    onClick={() => {
+                      navigate('/sanitized');
+                    }}
+                    style={{ padding: '8px 18px', borderRadius: 'var(--radius-md)', fontSize: 13, cursor: 'pointer', background: 'var(--blue)', color: '#fff', border: 'none' }}
+                  >
+                    View Sanitized Output →
+                  </button>
+                </div>
               </div>
             </div>
           </div>

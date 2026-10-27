@@ -118,6 +118,13 @@ export async function uploadEvidenceFile(file, caseId) {
   });
 }
 
+export async function deleteEvidence(evidenceId, caseId) {
+  const query = caseId ? `?case_id=${encodeURIComponent(caseId)}` : '';
+  return fetchWithAuth(`/evidence/${encodeURIComponent(evidenceId)}${query}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function updatePassword(currentPassword, newPassword) {
   return fetchWithAuth('/auth/update-password', {
     method: 'POST',

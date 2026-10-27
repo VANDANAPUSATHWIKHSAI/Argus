@@ -1011,3 +1011,181 @@ def reconstruct_evidence_from_row(row: tuple) -> Optional[Evidence]:
     except Exception as e:
         logger.error("Failed to reconstruct evidence from row: %s", e)
         return None
+
+
+def delete_evidence(
+    tenant_id: str,
+    evidence_id: str,
+    case_id: Optional[str] = None,
+    actor: str = "analyst"
+) -> bool:
+    """
+    Deletes an evidence artifact and its associated logs/records.
+    Enforces tenant boundaries.
+    Cleans up PostgreSQL records (custody_log, fir_findings, evidence, unlinks case_notes),
+    removes local storage files (original, encrypted, metadata),
+    and deletes objects from MinIO if configured.
+    Records an audit log entry for defensibility.
+    """
+    if not tenant_id:
+        raise ValueError("tenant_id is required to delete evidence.")
+    if not evidence_id:
+        raise ValueError("evidence_id is required to delete evidence.")
+
+    deleted = False
+    resolved_case_id = case_id
+    filename = "unknown"
+
+    # 1. Authoritative check and deletion in PostgreSQL if available
+    if _should_attempt_postgres():
+        try:
+            import psycopg2
+            from config.settings import settings
+            conn = psycopg2.connect(
+                host=settings.postgres_host,
+                port=settings.postgres_port,
+                database=settings.postgres_db,
+                user=settings.postgres_user,
+                password=settings.postgres_password,
+                connect_timeout=2
+            )
+            cur = conn.cursor()
+
+            # Locate the evidence and verify tenant isolation
+            cur.execute(
+                """
+                SELECT e.evidence_id, e.case_id, e.filename, c.tenant_id
+                FROM evidence e
+                LEFT JOIN cases c ON e.case_id = c.case_id
+                WHERE e.evidence_id = %s;
+                """,
+                (evidence_id,)
+            )
+            row = cur.fetchone()
+            if row:
+                ev_id, ev_case_id, ev_filename, ev_tenant_id = row
+                # Enforce tenant isolation if tenant is specified and not admin wildcard
+                if ev_tenant_id and tenant_id not in ("default", "dev-team") and ev_tenant_id != tenant_id:
+                    conn.close()
+                    logger.warning(f"Tenant isolation mismatch for evidence {evidence_id}: {ev_tenant_id} != {tenant_id}")
+                    return False
+
+                resolved_case_id = ev_case_id or resolved_case_id
+                filename = ev_filename or filename
+
+                # 1. Unlink any case notes referencing this evidence
+                try:
+                    cur.execute(
+                        "UPDATE case_notes SET related_evidence_id = NULL WHERE related_evidence_id = %s;",
+                        (evidence_id,)
+                    )
+                except Exception as cn_err:
+                    logger.debug(f"case_notes unlink skipped or table absent: {cn_err}")
+
+                # 2. Delete custody log entries for this evidence
+                try:
+                    cur.execute(
+                        "DELETE FROM custody_log WHERE evidence_id = %s;",
+                        (evidence_id,)
+                    )
+                except Exception as cl_err:
+                    logger.debug(f"custody_log delete skipped: {cl_err}")
+
+                # 3. Delete fir_findings referencing this evidence
+                try:
+                    cur.execute(
+                        "DELETE FROM fir_findings WHERE evidence_id = %s;",
+                        (evidence_id,)
+                    )
+                except Exception as ff_err:
+                    logger.debug(f"fir_findings delete skipped: {ff_err}")
+
+                # 4. Record audit log entry before deleting evidence
+                try:
+                    cur.execute(
+                        """
+                        INSERT INTO audit_log (case_id, evidence_id, tenant_id, event, actor, timestamp, detail)
+                        VALUES (%s, %s, %s, %s, %s, NOW(), %s);
+                        """,
+                        (
+                            resolved_case_id,
+                            evidence_id,
+                            tenant_id,
+                            "evidence_deleted",
+                            actor,
+                            json.dumps({"filename": filename, "deleted_by": actor, "evidence_id": evidence_id})
+                        )
+                    )
+                except Exception as log_err:
+                    logger.warning(f"Failed to record deletion audit log in postgres: {log_err}")
+
+                # 5. Delete from evidence table
+                cur.execute(
+                    "DELETE FROM evidence WHERE evidence_id = %s;",
+                    (evidence_id,)
+                )
+                conn.commit()
+                deleted = True
+            conn.close()
+        except Exception as e:
+            logger.error(f"Postgres delete_evidence failed: {e}")
+
+    # 2. Remove local filesystem artifacts
+    try:
+        repo_base = Path(REPOSITORY_DIR)
+        target_dirs = []
+        if resolved_case_id:
+            target_dirs.append(repo_base / resolved_case_id / evidence_id)
+        if repo_base.exists() and repo_base.is_dir():
+            for c_dir in repo_base.iterdir():
+                if c_dir.is_dir():
+                    candidate = c_dir / evidence_id
+                    if candidate.exists() and candidate not in target_dirs:
+                        target_dirs.append(candidate)
+
+        for d in target_dirs:
+            if d.exists() and d.is_dir():
+                shutil.rmtree(d, ignore_errors=True)
+                deleted = True
+    except Exception as fs_err:
+        logger.warning(f"Filesystem evidence directory removal notice: {fs_err}")
+
+    # 3. Remove MinIO objects if configured
+    if _should_attempt_minio() and resolved_case_id:
+        try:
+            from minio import Minio
+            from config.settings import settings
+            raw_bucket = getattr(settings, "minio_bucket_raw_evidence", "argus-raw-evidence")
+            enc_bucket = getattr(settings, "minio_bucket_encrypted", "argus-encrypted-evidence")
+            client = Minio(
+                settings.minio_endpoint,
+                access_key=settings.minio_access_key,
+                secret_key=settings.minio_secret_key,
+                secure=settings.minio_secure
+            )
+            prefix = f"{tenant_id}/{resolved_case_id}/{evidence_id}/"
+            for b in [raw_bucket, enc_bucket]:
+                if client.bucket_exists(b):
+                    for obj in client.list_objects(b, prefix=prefix, recursive=True):
+                        client.remove_object(b, obj.object_name)
+        except Exception as minio_e:
+            logger.warning(f"MinIO evidence removal notice: {minio_e}")
+
+    # 4. Tenant structured audit file logger
+    try:
+        from infrastructure.audit_logger import get_audit_logger
+        from datetime import datetime, timezone
+        tenant_logger = get_audit_logger(tenant_id)
+        tenant_logger.info({
+            "event": "evidence_deleted",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "case_id": resolved_case_id,
+            "evidence_id": evidence_id,
+            "actor": actor,
+            "filename": filename
+        })
+    except Exception as log_e:
+        logger.warning(f"Structured audit logger notice: {log_e}")
+
+    return deleted
+

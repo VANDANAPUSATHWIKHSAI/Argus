@@ -29,7 +29,7 @@ from api.routes.auth import get_current_user
 from pydantic import BaseModel, Field
 
 from infrastructure.schemas import Evidence, CaseSession, CustodyLogEntry
-from infrastructure.repository.evidence_store import create_case_session, store_evidence, list_evidence_by_case, get_evidence, REPOSITORY_DIR
+from infrastructure.repository.evidence_store import create_case_session, store_evidence, list_evidence_by_case, get_evidence, delete_evidence, REPOSITORY_DIR
 from preprocessing.router import ParserRouter
 from preprocessing.artifact_extractor.extractor import ArtifactExtractor
 from preprocessing.fcr_engine.engine import FCREngine
@@ -759,6 +759,47 @@ async def get_evidence_by_case(
     except Exception as e:
         logger.error(f"Error fetching evidence for case {case_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/{evidence_id}")
+async def remove_evidence(
+    evidence_id: str,
+    case_id: Optional[str] = Query(None),
+    tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Remove an evidence artifact from a case and storage repository.
+    Enforces tenant boundaries and cleans up associated custody logs and findings.
+    """
+    try:
+        tenant_id = authorize_tenant_access(current_user, tenant_id)
+        uploader_name = current_user.get("name") or current_user.get("email") or "analyst"
+
+        with _jobs_lock:
+            _evidence_jobs.pop(evidence_id, None)
+
+        success = delete_evidence(
+            tenant_id=tenant_id,
+            evidence_id=evidence_id,
+            case_id=case_id,
+            actor=uploader_name
+        )
+
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Evidence artifact '{evidence_id}' not found or could not be removed.")
+
+        return {
+            "status": "SUCCESS",
+            "message": f"Evidence artifact '{evidence_id}' removed successfully.",
+            "evidence_id": evidence_id,
+            "case_id": case_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error removing evidence {evidence_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove evidence: {str(e)}")
 
 
 # ── TASK B: Server-side SHA-256 Evidence Integrity Verification ─────────────

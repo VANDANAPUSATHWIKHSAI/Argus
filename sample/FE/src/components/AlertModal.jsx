@@ -1,12 +1,22 @@
 import React from 'react';
 
-const AlertModal = ({ isOpen, title, message, type = 'warning', onClose }) => {
+const AlertModal = ({ 
+  isOpen, 
+  title, 
+  message, 
+  type = 'warning', 
+  onClose,
+  onConfirm,
+  confirmText,
+  cancelText = 'Cancel'
+}) => {
   if (!isOpen) return null;
 
   const config = {
     warning: {
       bg: 'var(--orange-light, #ffedd5)',
       color: 'var(--orange, #ea580c)',
+      btnBg: 'var(--orange, #ea580c)',
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
@@ -15,9 +25,35 @@ const AlertModal = ({ isOpen, title, message, type = 'warning', onClose }) => {
         </svg>
       )
     },
+    danger: {
+      bg: 'var(--red-light, #fee2e2)',
+      color: 'var(--red, #ef4444)',
+      btnBg: 'var(--red, #ef4444)',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="3 6 5 6 21 6"></polyline>
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          <line x1="10" y1="11" x2="10" y2="17"></line>
+          <line x1="14" y1="11" x2="14" y2="17"></line>
+        </svg>
+      )
+    },
+    error: {
+      bg: 'var(--red-light, #fee2e2)',
+      color: 'var(--red, #ef4444)',
+      btnBg: 'var(--red, #ef4444)',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg>
+      )
+    },
     info: {
       bg: 'var(--blue-light, #dbeafe)',
       color: 'var(--blue, #2563eb)',
+      btnBg: 'var(--blue, #2563eb)',
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="12" cy="12" r="10"></circle>
@@ -29,6 +65,7 @@ const AlertModal = ({ isOpen, title, message, type = 'warning', onClose }) => {
     success: {
       bg: 'var(--green-light, #d1fae5)',
       color: 'var(--green, #059669)',
+      btnBg: 'var(--green, #059669)',
       icon: (
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
@@ -39,13 +76,15 @@ const AlertModal = ({ isOpen, title, message, type = 'warning', onClose }) => {
   };
 
   const currentConfig = config[type] || config.warning;
+  const resolvedConfirmText = confirmText || (onConfirm ? 'Confirm' : 'Acknowledge');
 
   return (
     <div style={{
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
       backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 9999,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      animation: 'fadeIn 0.2s ease'
+      animation: 'fadeIn 0.2s ease',
+      backdropFilter: 'blur(3px)'
     }}>
       <style>{`
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -55,9 +94,9 @@ const AlertModal = ({ isOpen, title, message, type = 'warning', onClose }) => {
         background: 'var(--bg-card)', 
         padding: '24px', 
         borderRadius: '12px', 
-        width: '400px', 
+        width: '420px', 
         maxWidth: '90%',
-        boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
         border: '1px solid var(--border-subtle)',
         animation: 'slideUp 0.3s ease'
       }}>
@@ -81,11 +120,29 @@ const AlertModal = ({ isOpen, title, message, type = 'warning', onClose }) => {
           {message}
         </p>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+          {onConfirm && (
+            <button 
+              onClick={onClose}
+              style={{
+                background: 'transparent',
+                color: 'var(--text-muted)',
+                border: '1px solid var(--border-strong)',
+                padding: '8px 18px',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: 500,
+                fontSize: '14px',
+                transition: 'all 0.2s'
+              }}
+            >
+              {cancelText}
+            </button>
+          )}
           <button 
-            onClick={onClose}
+            onClick={onConfirm || onClose}
             style={{
-              background: 'var(--blue)', 
+              background: currentConfig.btnBg || 'var(--blue)', 
               color: '#fff', 
               border: 'none', 
               padding: '8px 24px', 
@@ -93,12 +150,12 @@ const AlertModal = ({ isOpen, title, message, type = 'warning', onClose }) => {
               cursor: 'pointer',
               fontWeight: 500,
               fontSize: '14px',
-              transition: 'background 0.2s'
+              transition: 'opacity 0.2s'
             }}
-            onMouseOver={(e) => e.currentTarget.style.background = 'var(--blue-dark, #1d4ed8)'}
-            onMouseOut={(e) => e.currentTarget.style.background = 'var(--blue)'}
+            onMouseOver={(e) => e.currentTarget.style.opacity = '0.9'}
+            onMouseOut={(e) => e.currentTarget.style.opacity = '1'}
           >
-            Acknowledge
+            {resolvedConfirmText}
           </button>
         </div>
       </div>
@@ -107,3 +164,4 @@ const AlertModal = ({ isOpen, title, message, type = 'warning', onClose }) => {
 };
 
 export default AlertModal;
+

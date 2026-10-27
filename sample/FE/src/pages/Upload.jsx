@@ -10,6 +10,7 @@ import ProfileModal from '../components/ProfileModal';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import CaseLockBanner from '../components/CaseLockBanner';
+import CaseSwitcher from '../components/CaseSwitcher';
 
 const Upload = () => {
   const navigate = useNavigate();
@@ -409,29 +410,14 @@ const Upload = () => {
                       </div>
                     </div>
                     {casesList.length > 0 && (
-                      <select
+                      <CaseSwitcher
                         id="upload-case-select"
-                        value={activeCaseId || ''}
-                        onChange={(e) => handleSelectCase(e.target.value)}
-                        style={{
-                          background: 'var(--bg-card)',
-                          color: 'var(--text-main)',
-                          border: '1px solid var(--border-subtle)',
-                          borderRadius: 20,
-                          padding: '4px 12px',
-                          fontSize: 13,
-                          fontWeight: 500,
-                          cursor: 'pointer',
-                          outline: 'none'
-                        }}
-                      >
-                        <option value="">-- Switch / Select Target Case --</option>
-                        {casesList.filter(c => c.status === 'open' || c.status === 'in_progress').map(c => (
-                          <option key={c.case_id} value={c.case_id}>
-                            {c.case_id} — {c.name || 'Unnamed'}
-                          </option>
-                        ))}
-                      </select>
+                        cases={casesList.filter(c => c.status === 'open' || c.status === 'in_progress')}
+                        activeCaseId={activeCaseId}
+                        onSelectCase={handleSelectCase}
+                        placeholder="-- Switch / Select Target Case --"
+                        align="left"
+                      />
                     )}
                     <div className="badge-danger">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>

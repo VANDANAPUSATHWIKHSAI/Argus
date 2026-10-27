@@ -7,6 +7,7 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import SearchableSelect from '../components/SearchableSelect';
+import CaseSwitcher from '../components/CaseSwitcher';
 import { safeFormatDateOnly, formatEvidenceId } from '../js/dateUtils';
 import { getActiveCaseId, getActiveCaseName, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
@@ -322,29 +323,14 @@ const Evidence = () => {
       </div>
       <div className="glass-topbar-right topbar-actions">
         {casesList.length > 0 && (
-          <select
+          <CaseSwitcher
             id="evidence-topbar-case-select"
-            value={activeCaseId || ''}
-            onChange={(e) => handleSelectCase(e.target.value)}
-            style={{
-              background: 'var(--bg-card)',
-              color: 'var(--text-main)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: 20,
-              padding: '6px 14px',
-              fontSize: 13,
-              fontWeight: 500,
-              cursor: 'pointer',
-              outline: 'none'
-            }}
-          >
-            <option value="">-- Switch Case --</option>
-            {casesList.filter(c => c.status === 'open' || c.status === 'in_progress').map(c => (
-              <option key={c.case_id} value={c.case_id}>
-                {c.case_id} — {c.name || 'Unnamed'}
-              </option>
-            ))}
-          </select>
+            cases={casesList.filter(c => c.status === 'open' || c.status === 'in_progress')}
+            activeCaseId={activeCaseId}
+            onSelectCase={handleSelectCase}
+            placeholder="-- Switch Case --"
+            align="right"
+          />
         )}
         <button
           id="btn-topbar-upload"
@@ -411,29 +397,19 @@ const Evidence = () => {
           <p style={{ fontSize: '14px', color: 'var(--text-muted)', maxWidth: '440px', margin: '0 auto 20px' }}>Select an open case from the dropdown below or upload new evidence to begin your investigation.</p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
             {casesList.length > 0 && (
-              <select
+              <CaseSwitcher
                 id="evidence-empty-case-select"
-                value={activeCaseId || ''}
-                onChange={(e) => handleSelectCase(e.target.value)}
-                style={{
-                  background: 'var(--bg-app)',
-                  color: 'var(--text-main)',
-                  border: '1px solid var(--border-strong)',
-                  borderRadius: 20,
+                cases={casesList.filter(c => c.status === 'open' || c.status === 'in_progress')}
+                activeCaseId={activeCaseId}
+                onSelectCase={handleSelectCase}
+                placeholder="-- Select an Open Case to View Evidence --"
+                align="left"
+                buttonStyle={{
                   padding: '8px 16px',
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  outline: 'none'
+                  fontSize: '14px',
+                  maxWidth: '340px'
                 }}
-              >
-                <option value="">-- Select an Open Case to View Evidence --</option>
-                {casesList.filter(c => c.status === 'open' || c.status === 'in_progress').map(c => (
-                  <option key={c.case_id} value={c.case_id}>
-                    {c.case_id} — {c.name || 'Unnamed'}
-                  </option>
-                ))}
-              </select>
+              />
             )}
             <button
               id="btn-empty-upload"

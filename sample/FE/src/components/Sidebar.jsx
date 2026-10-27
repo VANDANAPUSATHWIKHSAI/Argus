@@ -11,6 +11,41 @@ const Sidebar = () => {
   
   const [unreadNotes, setUnreadNotes] = useState(0);
 
+  // Toggleable sidebar state (persisted across page reloads & navigation)
+  const [isCollapsed, setIsCollapsed] = useState(() => {
+    return localStorage.getItem('argus_sidebar_collapsed') === 'true';
+  });
+
+  // Sync collapsed state to HTML class and localStorage
+  useEffect(() => {
+    if (isCollapsed) {
+      document.documentElement.classList.add('sidebar-collapsed');
+      localStorage.setItem('argus_sidebar_collapsed', 'true');
+    } else {
+      document.documentElement.classList.remove('sidebar-collapsed');
+      localStorage.setItem('argus_sidebar_collapsed', 'false');
+    }
+  }, [isCollapsed]);
+
+  // Keyboard shortcut Ctrl+B or Cmd+B to toggle sidebar, plus custom event listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        setIsCollapsed((prev) => !prev);
+      }
+    };
+    const handleToggleEvent = () => {
+      setIsCollapsed((prev) => !prev);
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('argus:toggleSidebar', handleToggleEvent);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('argus:toggleSidebar', handleToggleEvent);
+    };
+  }, []);
+
   const [user, setUser] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('argus_user'));
@@ -91,14 +126,42 @@ const Sidebar = () => {
 
   return (
     <>
+      {/* ── FLOATING EXPAND TAB WHEN COLLAPSED ── */}
+      {isCollapsed && (
+        <button
+          onClick={() => setIsCollapsed(false)}
+          className="glass-sidebar-expand-pill"
+          title="Open Sidebar (Ctrl+B)"
+          aria-label="Open Sidebar"
+        >
+          <ArgusLogo size={22} />
+          <span>Menu</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      )}
+
       {/* ── 1. CENTERED FLOATING NAVIGATION CARD ── */}
-      <aside className="glass-sidebar sidebar">
-        <div className="glass-sidebar-brand sidebar-logo">
-          <ArgusLogo size={36} />
-          <div>
-            <h1 className="glass-sidebar-brand-title">ARGUS</h1>
-            <p className="glass-sidebar-brand-sub">AI Forensic Intelligence</p>
+      <aside className="glass-sidebar sidebar" aria-hidden={isCollapsed}>
+        <div className="glass-sidebar-brand sidebar-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <ArgusLogo size={36} />
+            <div>
+              <h1 className="glass-sidebar-brand-title">ARGUS</h1>
+              <p className="glass-sidebar-brand-sub">AI Forensic Intelligence</p>
+            </div>
           </div>
+          <button
+            onClick={() => setIsCollapsed(true)}
+            className="glass-sidebar-toggle-btn"
+            title="Collapse Sidebar (Ctrl+B)"
+            aria-label="Collapse Sidebar"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
         </div>
         
         <nav className="glass-sidebar-nav nav-menu">
@@ -208,7 +271,7 @@ const Sidebar = () => {
             </>
           )}
 
-          {/* Shared Settings */}
+          {/* Settings */}
           <Link to="/settings" className={`glass-nav-item nav-item ${currentPath === '/settings' ? 'active' : ''}`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
             <span>Settings</span>
@@ -217,8 +280,13 @@ const Sidebar = () => {
       </aside>
 
       {/* ── 2. SEPARATE ANCHORED USER SESSION CARD ── */}
-      <aside className="glass-user-card sidebar-footer-card">
-        <div className="glass-user-card-header">
+      <aside className="glass-user-card sidebar-footer-card" aria-hidden={isCollapsed}>
+        <div 
+          className="glass-user-card-header" 
+          onClick={() => navigate('/profile')} 
+          style={{ cursor: 'pointer' }}
+          title="View and manage My Profile"
+        >
           <div className="glass-user-avatar-wrap">
             <div className="glass-avatar-circle">
               {user?.name ? user.name.charAt(0).toUpperCase() : 'S'}
@@ -236,20 +304,47 @@ const Sidebar = () => {
 
         <div className="glass-user-card-divider" />
 
-        <button 
-          onClick={handleLogout} 
-          className="glass-user-card-logout" 
-          title="Sign out of Argus session"
-        >
-          <div className="glass-logout-icon-wrap">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-          </div>
-          <span>Sign Out</span>
-        </button>
+        <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+          <button
+            onClick={() => navigate('/profile')}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+              padding: '6px 8px',
+              borderRadius: '8px',
+              background: currentPath === '/profile' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+              border: currentPath === '/profile' ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+              color: currentPath === '/profile' ? '#93c5fd' : 'var(--text-main, #f8fafc)',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+            title="Open My Profile"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <span>Profile</span>
+          </button>
+
+          <button 
+            onClick={handleLogout} 
+            className="glass-user-card-logout" 
+            title="Sign out of Argus session"
+            style={{ width: 'auto', padding: '6px 10px' }}
+          >
+            <div className="glass-logout-icon-wrap">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                <polyline points="16 17 21 12 16 7" />
+                <line x1="21" y1="12" x2="9" y2="12" />
+              </svg>
+            </div>
+            <span>Sign Out</span>
+          </button>
+        </div>
       </aside>
     </>
   );

@@ -2692,3 +2692,524 @@ input:checked + .slider:before {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
+
+/* ── MY PROFILE PAGE GLASS THEME TOKENS & RESPONSIVE ADAPTATION ── */
+.glass-profile-hero {
+  border-radius: 24px;
+  padding: 32px 36px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+  background: var(--glass-dash-surface-gradient);
+  border: 1px solid var(--glass-dash-border);
+  box-shadow: var(--glass-dash-shadow-card);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+}
+
+.glass-profile-section-card {
+  background: var(--glass-dash-surface-gradient);
+  border: 1px solid var(--glass-dash-border);
+  border-radius: 20px;
+  padding: 28px;
+  box-shadow: var(--glass-dash-shadow-card);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+}
+
+.glass-profile-nested-box {
+  background: var(--glass-dash-surface-nested);
+  border: 1px solid var(--glass-dash-border-subtle);
+  padding: 16px;
+  border-radius: 14px;
+}
+
+.glass-profile-input {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--bg-input, var(--glass-dash-surface-nested));
+  border: 1px solid var(--glass-dash-border-subtle);
+  color: var(--glass-dash-text-main);
+  font-size: 14px;
+  outline: none;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.glass-profile-input:focus {
+  border-color: var(--glass-dash-blue);
+  box-shadow: 0 0 0 3px var(--glass-dash-blue-soft);
+}
+
+.glass-profile-tab-bar {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid var(--glass-dash-border-subtle);
+  margin-bottom: 24px;
+  padding-bottom: 2px;
+}
+
+.glass-profile-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 18px;
+  color: var(--glass-dash-text-muted);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+
+.glass-profile-tab-btn:hover {
+  color: var(--glass-dash-text-main);
+}
+
+.glass-profile-tab-btn.active {
+  color: var(--glass-dash-blue);
+  border-bottom-color: var(--glass-dash-blue);
+}
+
+.glass-profile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--glass-dash-border-subtle);
+}
+
+.glass-profile-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.glass-profile-label {
+  font-size: 13px;
+  color: var(--glass-dash-text-muted);
+}
+
+.glass-profile-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--glass-dash-text-main);
+}
+
+.glass-profile-heading {
+  font-size: 17px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--glass-dash-text-main);
+}
+
+/* ── SIDEBAR TOGGLE & COLLAPSE SYSTEM ── */
+.glass-sidebar-toggle-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--glass-dash-surface-nested);
+  border: 1px solid var(--glass-dash-border-subtle);
+  color: var(--glass-dash-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-left: auto;
+}
+
+.glass-sidebar-toggle-btn:hover {
+  background: var(--glass-dash-surface-hover);
+  color: var(--glass-dash-text-main);
+  border-color: var(--glass-dash-blue);
+  transform: scale(1.05);
+}
+
+.glass-sidebar-expand-pill {
+  position: fixed;
+  left: 20px;
+  top: calc(50% - 60px);
+  transform: translateY(-50%);
+  background: var(--glass-dash-surface-gradient);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid var(--glass-dash-border);
+  box-shadow: var(--glass-dash-shadow-card);
+  border-radius: 20px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--glass-dash-text-main);
+  cursor: pointer;
+  z-index: 45;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.glass-sidebar-expand-pill:hover {
+  transform: translateY(-50%) translateX(4px);
+  border-color: var(--glass-dash-blue);
+  color: var(--glass-dash-blue);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.25);
+}
+
+/* Smooth transitions for sidebar and workspace */
+.glass-sidebar, .glass-user-card {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease !important;
+}
+
+.main-content {
+  transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s cubic-bezier(0.16, 1, 0.3, 1), padding 0.3s ease !important;
+}
+
+/* Collapsed state overrides */
+.sidebar-collapsed .glass-sidebar {
+  transform: translateY(-50%) translateX(-330px) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.sidebar-collapsed .glass-user-card {
+  transform: translateX(-330px) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.sidebar-collapsed .main-content {
+  margin-left: 0 !important;
+  width: 100vw !important;
+  padding-left: 60px !important;
+  padding-right: 60px !important;
+}
+
+.sidebar-collapsed .main-content.chatbot-layout {
+  margin-left: 0 !important;
+  width: 100vw !important;
+  padding-left: 50px !important;
+  padding-right: 50px !important;
+}
+
+/* ==========================================================================
+   ARGUS MULTI-AGENT SWARM WORKFLOW & TELEMETRY STYLES
+   ========================================================================== */
+
+/* Swarm Workflow Master Card */
+.swarm-workflow-card {
+  background: var(--glass-dash-surface-nested);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-dash-border-subtle);
+  border-radius: 20px;
+  padding: 22px 24px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.swarm-workflow-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 20px;
+  right: 20px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--glass-dash-blue), #10b981, transparent);
+  opacity: 0.8;
+}
+
+/* Swarm Progress Track */
+.swarm-progress-bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: rgba(125, 140, 160, 0.15);
+  border-radius: 9999px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.swarm-progress-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #3b82f6 0%, #06b6d4 40%, #10b981 100%);
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.swarm-progress-bar-fill.is-running::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.4) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: swarm-shimmer 2s infinite linear;
+}
+
+@keyframes swarm-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Pipeline Flow Visualizer Track */
+.swarm-pipeline-flow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 14px 6px 6px 6px;
+  scroll-behavior: smooth;
+}
+
+.swarm-pipeline-flow::-webkit-scrollbar {
+  height: 5px;
+}
+.swarm-pipeline-flow::-webkit-scrollbar-thumb {
+  background: var(--glass-dash-border-subtle);
+  border-radius: 4px;
+}
+
+/* Stage Node */
+.swarm-stage-node {
+  flex: 1 1 0;
+  min-width: 140px;
+  max-width: 180px;
+  background: var(--glass-dash-surface);
+  border: 1px solid var(--glass-dash-border-subtle);
+  border-radius: 14px;
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.swarm-stage-node:hover {
+  transform: translateY(-2px);
+  border-color: var(--glass-dash-blue);
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.15);
+}
+
+.swarm-stage-node.is-active-tab {
+  background: var(--glass-dash-surface-nested);
+  box-shadow: 0 0 0 2px var(--glass-dash-blue), 0 8px 25px rgba(37, 99, 235, 0.2);
+}
+
+.swarm-stage-node.status-completed {
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+.swarm-stage-node.status-running {
+  border-color: #38bdf8;
+  box-shadow: 0 0 16px rgba(56, 189, 248, 0.25);
+  animation: swarm-pulse-glow 2s infinite ease-in-out;
+}
+
+.swarm-stage-node.status-failed {
+  border-color: rgba(239, 68, 68, 0.5);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.15);
+}
+
+@keyframes swarm-pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(56, 189, 248, 0.45);
+  }
+}
+
+/* Connector Arrow Between Stages */
+.swarm-flow-connector {
+  flex: 0 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--glass-dash-text-muted);
+  opacity: 0.5;
+  transition: all 0.3s ease;
+}
+
+.swarm-flow-connector.is-passed {
+  color: #10b981;
+  opacity: 0.9;
+}
+
+.swarm-flow-connector.is-active {
+  color: #38bdf8;
+  opacity: 1;
+  animation: swarm-connector-pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes swarm-connector-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.7; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* Stage Split Container for 5a/5b */
+.swarm-split-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1.1 1 0;
+  min-width: 155px;
+}
+
+.swarm-split-node {
+  background: var(--glass-dash-surface);
+  border: 1px solid var(--glass-dash-border-subtle);
+  border-radius: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.swarm-split-node:hover {
+  transform: translateX(2px);
+  border-color: var(--glass-dash-blue);
+}
+
+.swarm-split-node.is-active-tab {
+  box-shadow: 0 0 0 2px var(--glass-dash-blue);
+}
+
+/* Status Badges */
+.swarm-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2.5px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.swarm-badge-ready {
+  background: rgba(16, 185, 129, 0.16);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.swarm-badge-running {
+  background: rgba(56, 189, 248, 0.18);
+  color: #0284c7;
+  border: 1px solid rgba(56, 189, 248, 0.5);
+}
+
+[data-theme="dark"] .swarm-badge-running {
+  color: #38bdf8;
+}
+
+.swarm-badge-failed {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.swarm-badge-pending {
+  background: var(--glass-dash-surface-nested);
+  color: var(--glass-dash-text-muted);
+  border: 1px solid var(--glass-dash-border-subtle);
+}
+
+/* Pulsing Live Dot */
+.swarm-radar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: currentColor;
+  position: relative;
+}
+
+.swarm-radar-dot::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  animation: swarm-radar-pulse 1.4s cubic-bezier(0, 0.2, 0.8, 1) infinite;
+}
+
+@keyframes swarm-radar-pulse {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Workflow Breadcrumb Banner */
+.swarm-breadcrumb-banner {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+}
+
+/* Case Selector Modal/Dropdown in Agents */
+.swarm-case-select-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 340px;
+  background: var(--bg-card-modal);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.25);
+  z-index: 100;
+  padding: 8px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+
+.swarm-case-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+}
+
+.swarm-case-item:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-subtle);
+}
+
+.swarm-case-item.is-selected {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: var(--blue);
+}
+

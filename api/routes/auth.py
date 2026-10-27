@@ -73,6 +73,8 @@ def init_users_table():
                         phone VARCHAR(50),
                         doj VARCHAR(50)
                     );
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS doj VARCHAR(50);
                 """)
             conn.commit()
     except Exception as e:
@@ -106,7 +108,9 @@ for u in _BASE_FALLBACK_USERS:
         "email": u["email"],
         "password": _FALLBACK_HASH,
         "role": u["role"],
-        "name": u["name"]
+        "name": u["name"],
+        "phone": u.get("phone", "+1-555-0100"),
+        "doj": u.get("doj", "2025-01-15")
     }
     FALLBACK_USERS[u["id"].lower()] = user_rec
     FALLBACK_USERS[u["email"].lower()] = user_rec
@@ -121,7 +125,7 @@ def get_user_by_id(userid: str):
             init_users_table()
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT id, email, password_hash, role, name FROM users WHERE LOWER(id) = %s OR LOWER(email) = %s", (clean_id, clean_id))
+                    cur.execute("SELECT id, email, password_hash, role, name, phone, doj FROM users WHERE LOWER(id) = %s OR LOWER(email) = %s", (clean_id, clean_id))
                     row = cur.fetchone()
                     if row:
                         return {
@@ -129,7 +133,9 @@ def get_user_by_id(userid: str):
                             "email": row[1],
                             "password": row[2],
                             "role": row[3],
-                            "name": row[4]
+                            "name": row[4],
+                            "phone": row[5] if len(row) > 5 and row[5] else "+1-555-0100",
+                            "doj": row[6] if len(row) > 6 and row[6] else "2025-01-15"
                         }
     except Exception as e:
         print(f"DB Error: {e}")
@@ -253,7 +259,9 @@ def login(credentials: LoginRequest):
                 "id": user["id"],
                 "email": user["email"],
                 "role": user["role"],
-                "name": user["name"]
+                "name": user["name"],
+                "phone": user.get("phone", "+1-555-0100"),
+                "doj": user.get("doj", "2025-01-15")
             }
         }
     
@@ -322,6 +330,145 @@ async def update_password(req: UpdatePasswordRequest, current_user: dict = Depen
     return {
         "message": "Password successfully updated!"
     }
+
+ROLE_CLEARANCE_MAP = {
+    "admin": {
+        "title": "System Administrator",
+        "clearance_level": "Level 5 - Unrestricted Autonomous System Administrator",
+        "badge_prefix": "SEC-ADM",
+        "department": "Digital Forensics & Incident Response Command",
+        "permissions": [
+            "Autonomous Agent Swarm Orchestration",
+            "Full System & User Access Control",
+            "Cryptographic Key & Tenant Administration",
+            "Evidence Ingestion & Raw Disk Parsing",
+            "Global Audit Log Forensics & Telemetry",
+            "Executive Report Endorsement & Digital Signing"
+        ]
+    },
+    "senior_analyst": {
+        "title": "Senior Forensic Reviewer",
+        "clearance_level": "Level 4 - Advanced Case Review & Verification",
+        "badge_prefix": "SEC-SR",
+        "department": "High-Impact Forensic Investigation & Threat Intelligence",
+        "permissions": [
+            "DeBERTa-v3 Forensic Claim Verification",
+            "Case Notes & Peer Review Endorsement",
+            "AI Assistant Multi-Agent Query Dispatch",
+            "Executive Report Validation & Release",
+            "Evidence Correlation & MITRE ATT&CK Matrix Review"
+        ]
+    },
+    "analyst": {
+        "title": "Digital Forensics Investigator",
+        "clearance_level": "Level 3 - Evidence Ingestion & Artifact Preprocessing",
+        "badge_prefix": "SEC-ANA",
+        "department": "Cybercrime Investigation & Forensic Operations",
+        "permissions": [
+            "Evidence Extraction & Sanitization Upload",
+            "Cross-Artifact Timeline Exploration",
+            "Live Memory & EVTX Parser Execution",
+            "Investigative Case Notes Drafting",
+            "AI Investigation Assistant Collaboration"
+        ]
+    },
+    "auditor": {
+        "title": "Compliance & Forensic Auditor",
+        "clearance_level": "Level 2 - Independent Compliance Verification",
+        "badge_prefix": "SEC-AUD",
+        "department": "Governance, Risk, Compliance & Quality Assurance",
+        "permissions": [
+            "Read-Only Forensic Audit Trail Inspection",
+            "Chain of Custody & Hash Integrity Verification",
+            "Final Investigation Report Audit Review",
+            "Agent Reasoning Transparency Verification",
+            "Compliance Log Export"
+        ]
+    }
+}
+
+class ProfileUpdateRequest(BaseModel):
+    name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+
+@router.get("/me")
+async def get_my_profile(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["id"]
+    user = get_user_by_id(user_id) or current_user
+    role = user.get("role", "analyst")
+    meta = ROLE_CLEARANCE_MAP.get(role, ROLE_CLEARANCE_MAP["analyst"])
+    
+    return {
+        "id": user["id"],
+        "email": user["email"],
+        "name": user["name"],
+        "role": role,
+        "phone": user.get("phone", "+1-555-0100"),
+        "doj": user.get("doj", "2025-01-15"),
+        "status": "Active",
+        "title": meta["title"],
+        "clearance_level": meta["clearance_level"],
+        "badge_id": f"{meta['badge_prefix']}-{str(user['id']).upper()}",
+        "department": meta["department"],
+        "permissions": meta["permissions"]
+    }
+
+@router.put("/me")
+async def update_my_profile(profile_data: ProfileUpdateRequest, current_user: dict = Depends(get_current_user)):
+    user_id = current_user["id"]
+    
+    if profile_data.name is not None:
+        clean_name = profile_data.name.strip()
+        if not clean_name:
+            raise HTTPException(status_code=400, detail="Name cannot be empty")
+    else:
+        clean_name = current_user.get("name", "")
+
+    if profile_data.email is not None:
+        clean_email = profile_data.email.strip().lower()
+        if not clean_email or not EMAIL_REGEX.match(clean_email):
+            raise HTTPException(status_code=400, detail="Invalid email format")
+    else:
+        clean_email = current_user.get("email", "").strip().lower()
+
+    if profile_data.phone is not None:
+        clean_phone = profile_data.phone.strip()
+    else:
+        clean_phone = current_user.get("phone", "")
+
+    try:
+        if db_pool:
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM users WHERE LOWER(email) = %s AND id != %s", (clean_email, user_id))
+                    if cur.fetchone():
+                        raise HTTPException(status_code=400, detail="Email is already in use by another user")
+                    cur.execute(
+                        "UPDATE users SET name = %s, email = %s, phone = %s WHERE id = %s",
+                        (clean_name, clean_email, clean_phone, user_id)
+                    )
+                conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"DB update error: {e}")
+
+    # Update in-memory fallback
+    for u in _BASE_FALLBACK_USERS:
+        if u["id"].lower() == user_id.lower() or u["email"].lower() == current_user.get("email", "").lower():
+            u["name"] = clean_name
+            u["email"] = clean_email
+            u["phone"] = clean_phone
+    auth_rec = FALLBACK_USERS.get(user_id.lower())
+    if auth_rec:
+        auth_rec["name"] = clean_name
+        auth_rec["email"] = clean_email
+        auth_rec["phone"] = clean_phone
+    if clean_email:
+        FALLBACK_USERS[clean_email] = auth_rec
+
+    return await get_my_profile({"id": user_id, "role": current_user.get("role", "analyst")})
 
 class EmployeeCreate(BaseModel):
     userid: str

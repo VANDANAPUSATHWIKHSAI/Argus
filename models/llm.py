@@ -310,11 +310,11 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
 
     # 6. Case Forensic Assistant / Dynamic Grounded Synthesizer
     user_query = ""
-    uq_m = re.search(r'<user_query>(.*?)</user_query>', prompt, re.DOTALL | re.IGNORECASE)
-    if uq_m:
-        user_query = uq_m.group(1).strip()
+    uq_blocks = re.findall(r'<(?:analyst_query|user_query)>\s*(.*?)\s*</(?:analyst_query|user_query)>', prompt, re.DOTALL | re.IGNORECASE)
+    if uq_blocks:
+        user_query = uq_blocks[-1].strip()
     else:
-        q_m = re.search(r'(?:user query|query|question):\s*(.*?)(?:\n\n|\Z)', prompt, re.DOTALL | re.IGNORECASE)
+        q_m = re.search(r'(?:analyst query|user query|query|question):\s*(.*?)(?:\n\n|\Z)', prompt, re.DOTALL | re.IGNORECASE)
         if q_m:
             user_query = q_m.group(1).strip()
     uq_lower = user_query.lower()
@@ -359,8 +359,14 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
     beacon_finding = next((f for f in parsed_findings if any(k in f["fact"].lower() for k in ("beacon", "c2", "http", "outbound"))), parsed_findings[0] if parsed_findings else None)
     dga_finding = next((f for f in parsed_findings if any(k in f["fact"].lower() for k in ("dga", "cfd", "entropy", "resolution"))), None)
 
-    # Question-specific responses for containment actions, attribution, affected hosts, IOCs:
-    if any(k in uq_lower for k in ("action", "contain", "mitigat", "remediat", "what to do", "what should i do", "next step", "recommend", "isolate")):
+    # Intent routing: summary requests must always return the structured summary cards
+    is_summary = any(k in uq_lower for k in ("summary", "summarize", "overview", "what happened", "case summary", "briefing"))
+    is_action = any(k in uq_lower for k in ("action", "contain", "mitigat", "remediat", "what to do", "what should i do", "next step", "recommend", "isolate")) and not is_summary
+    is_victim = any(k in uq_lower for k in ("victim", "target", "affected", "workstation", "who was attacked")) and not is_summary
+    is_ioc = any(k in uq_lower for k in ("ioc", "indicator", "domain", "c2 address", "c2 domain")) and not is_summary
+    is_actor = any(k in uq_lower for k in ("who", "actor", "threat actor", "attribution", "group", "apt")) and not is_summary
+
+    if is_action:
         return (
             f"### Recommended Immediate Containment Actions (Case ARGUS_06)\n\n"
             f"Based on confirmed active Command-and-Control (C2) beaconing detected from victim host **{victim_ip}**:\n\n"
@@ -380,7 +386,7 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
             f"   - Invalidate active domain credentials and Kerberos TGTs for accounts logged into `{victim_ip}` during the infection window."
         )
 
-    if any(k in uq_lower for k in ("ip", "victim", "host", "system", "affected", "workstation", "who was attacked")):
+    if is_victim:
         return (
             f"### Affected System Telemetry & Victim Analysis\n\n"
             f"- **Target Victim IP**: `{victim_ip}` (Internal Workstation)\n"
@@ -392,7 +398,7 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
             f"- **Telemetry Assessment**: 100% network PCAP capture coverage confirms outbound beaconing. Host endpoint telemetry is pending forensic triage."
         )
 
-    if any(k in uq_lower for k in ("ioc", "domain", "indicator", "c2 address", "c2 domain")):
+    if is_ioc:
         return (
             f"### Key Case Indicators of Compromise (IOCs)\n\n"
             f"| Type | Observable / Indicator | MITRE Mapping | Confidence |\n"
@@ -404,7 +410,7 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
             f"| **Beacon Interval**| 15 - 30 seconds periodic | T1071.001 | 95% |"
         )
 
-    if any(k in uq_lower for k in ("who", "actor", "threat actor", "attribution", "group", "apt")):
+    if is_actor:
         return (
             f"### Threat Actor & Behavioral Attribution Assessment\n\n"
             f"- **Attribution Confidence**: Moderate / Pending External CTI Correlation\n"
@@ -726,47 +732,37 @@ class OllamaWrapper:
         url = f"{self.base_url}/api/generate"
 
         model_name = self.model_name
-        if model_name in ("Qwen/Qwen3-8B", "Qwen3-8B", "Qwen/Qwen3-14B", "Qwen3-14B"):
+        if model_name in ("Qwen/Qwen3-8B", "Qwen3-8B", "Qwen/Qwen3-14B", "Qwen3-14B", "qwen3:8b"):
             model_name = "qwen2.5:latest"
         elif "/" in model_name:
             model_name = model_name.split("/")[-1].lower()
 
-        # Build candidate models list prioritizing fast instruct models on CPU
-        preferred_models = []
-        if model_name:
-            preferred_models.append(model_name)
-        if "qwen2.5:latest" not in preferred_models:
-            preferred_models.append("qwen2.5:latest")
-        if "qwen3:8b" not in preferred_models:
-            preferred_models.append("qwen3:8b")
-
         conn_timeout = float(os.getenv("OLLAMA_CONNECT_TIMEOUT", "3.0"))
-        read_timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", str(self.timeout if self.timeout else 35.0)))
+        read_timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", str(self.timeout if self.timeout else 50.0)))
 
-        for candidate in preferred_models:
-            payload = {
-                "model": candidate,
-                "prompt": prompt,
-                "stream": False,
-                "options": {
-                    "num_predict": 350,
-                    "temperature": 0.2
-                }
+        payload = {
+            "model": model_name,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": "24h",
+            "options": {
+                "num_predict": 300,
+                "temperature": 0.2
             }
-            if system_prompt:
-                payload["system"] = system_prompt
+        }
+        if system_prompt:
+            payload["system"] = system_prompt
 
-            try:
-                r = requests.post(url, json=payload, timeout=(conn_timeout, read_timeout))
-                if r.status_code == 200:
-                    resp = r.json().get("response", "")
-                    if resp and resp.strip():
-                        return resp.strip()
-            except Exception as e:
-                logger.debug("Ollama candidate '%s' error: %s", candidate, e)
-                continue
+        try:
+            r = requests.post(url, json=payload, timeout=(conn_timeout, read_timeout))
+            if r.status_code == 200:
+                resp = r.json().get("response", "")
+                if resp and resp.strip():
+                    return resp.strip()
+        except Exception as e:
+            logger.info("Ollama primary model '%s' error: %s", model_name, e)
 
         if self.allow_mock or getattr(settings, "app_env", "development") != "production":
-            logger.info("[OLLAMA FALLBACK] Ollama models unavailable or timed out. Utilizing query-aware dynamic synthesis.")
+            logger.info("[OLLAMA FALLBACK] Utilizing query-aware dynamic synthesis.")
             return generate_smart_reasoning_fallback(prompt, system_prompt)
-        raise RuntimeError(f"Ollama generation failed for candidates: {preferred_models}")
+        raise RuntimeError(f"Ollama generation failed for model '{model_name}'")

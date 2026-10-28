@@ -91,6 +91,8 @@
   z-index: 1;
   display: block;
   cursor: grab;
+  will-change: transform;
+  transform: translateZ(0);
 }
 
 #forensic-canvas:active {
@@ -124,8 +126,7 @@
   height: 420px;
   border-radius: 50%;
   background: radial-gradient(circle at 45% 45%, rgba(255, 255, 255, 0.8) 0%, rgba(241, 245, 249, 0.4) 55%, rgba(203, 213, 225, 0.18) 100%);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  filter: blur(28px);
   border: 2px solid rgba(255, 255, 255, 0.9);
   box-shadow: 
     inset 0 0 45px rgba(255, 255, 255, 0.85),
@@ -133,6 +134,7 @@
     0 25px 60px rgba(15, 23, 42, 0.06);
   pointer-events: none;
   z-index: 0;
+  transform: translateZ(0);
 }
 
 .glass-orb-bottom-right {
@@ -143,8 +145,7 @@
   height: 480px;
   border-radius: 50%;
   background: radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.8) 0%, rgba(241, 245, 249, 0.4) 55%, rgba(203, 213, 225, 0.18) 100%);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  filter: blur(28px);
   border: 2px solid rgba(255, 255, 255, 0.9);
   box-shadow: 
     inset 0 0 50px rgba(255, 255, 255, 0.85),
@@ -152,6 +153,7 @@
     0 30px 70px rgba(15, 23, 42, 0.08);
   pointer-events: none;
   z-index: 0;
+  transform: translateZ(0);
 }
 
 [data-theme="dark"] .glass-orb-top-left,
@@ -192,19 +194,23 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 24px;
-  background: rgba(255, 255, 255, 0.65);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: 20px;
   box-shadow: 0 6px 24px -2px rgba(15, 23, 42, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.95);
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
+  transform: translateZ(0);
 }
 
 [data-theme="dark"] .top-telemetry-bar {
-  background: rgba(24, 27, 34, 0.72);
+  background: rgba(24, 27, 34, 0.88);
   border-color: rgba(255, 255, 255, 0.12);
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transform: translateZ(0);
 }
 
 .brand-telemetry-left {
@@ -361,9 +367,9 @@
 
 .capability-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: 20px;
   padding: 26px 22px 24px;
@@ -377,6 +383,7 @@
     inset 0 1.5px 1.5px rgba(255, 255, 255, 1);
   transition: transform 0.25s ease, box-shadow 0.25s ease;
   overflow: hidden;
+  transform: translateZ(0);
 }
 
 /* Prismatic rim reflection on top-right and bottom-left edges */
@@ -456,9 +463,9 @@
 .forensic-login-card {
   width: 100%;
   max-width: 510px;
-  background: rgba(255, 255, 255, 0.58);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   border: 1px solid rgba(255, 255, 255, 0.88);
   border-radius: 28px;
   padding: 44px 42px 34px;
@@ -468,7 +475,9 @@
     inset 0 1.5px 1.5px rgba(255, 255, 255, 1);
   position: relative;
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 /* Prismatic chromatic optical rim reflection on login card */
@@ -500,9 +509,12 @@
 }
 
 [data-theme="dark"] .forensic-login-card {
-  background: rgba(24, 27, 34, 0.82);
+  background: rgba(24, 27, 34, 0.88);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
   border-color: rgba(255, 255, 255, 0.12);
   box-shadow: 0 28px 65px -12px rgba(0, 0, 0, 0.75), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+  transform: translateZ(0);
 }
 
 [data-theme="dark"] .forensic-login-card::before {

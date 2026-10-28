@@ -898,22 +898,23 @@ async def get_case(
     if not evidence_list:
         ev_status = InvestigationStageStatus.NOT_STARTED
     else:
-        # If any evidence is NOT in a final state, it's still in progress
-        final_states = {"stored", "failed"}
-        all_done = all(e.status.value in final_states if hasattr(e.status, 'value') else str(e.status) in final_states for e in evidence_list)
-        ev_status = InvestigationStageStatus.COMPLETED if all_done else InvestigationStageStatus.IN_PROGRESS
+        # Evidence has been uploaded to the case -> Evidence Collection stage is complete.
+        ev_status = InvestigationStageStatus.COMPLETED
 
     # 2. Analysis & 3. Correlation
     # In ARGUS, Stage 1-4 is synchronous, so if findings exist, analysis/correlation are complete.
     if ev_status != InvestigationStageStatus.COMPLETED:
         an_status = InvestigationStageStatus.NOT_STARTED
         cor_status = InvestigationStageStatus.NOT_STARTED
-    elif len(findings) == 0:
-        an_status = InvestigationStageStatus.IN_PROGRESS
-        cor_status = InvestigationStageStatus.IN_PROGRESS
-    else:
+    elif len(findings) > 0:
         an_status = InvestigationStageStatus.COMPLETED
         cor_status = InvestigationStageStatus.COMPLETED
+    elif total_artifacts > 0:
+        an_status = InvestigationStageStatus.COMPLETED
+        cor_status = InvestigationStageStatus.IN_PROGRESS
+    else:
+        an_status = InvestigationStageStatus.IN_PROGRESS
+        cor_status = InvestigationStageStatus.NOT_STARTED
         
     # 4. Findings
     if cor_status != InvestigationStageStatus.COMPLETED:
@@ -1543,8 +1544,11 @@ async def get_case_agent_results(
     else:
         status_val = "READY"
         results_data = {}
+        has_evidence = bool(evidence_list)
         stage_statuses = {
-            "agent1": "PENDING", "agent2": "PENDING", "agent3": "PENDING",
+            "agent1": "COMPLETED" if has_evidence else "PENDING",
+            "agent2": "COMPLETED" if (has_evidence and findings) else "PENDING",
+            "agent3": "COMPLETED" if (has_evidence and findings) else "PENDING",
             "agent4": "PENDING", "agent5a": "PENDING", "agent5b": "PENDING",
             "agent6": "PENDING", "agent7": "PENDING"
         }

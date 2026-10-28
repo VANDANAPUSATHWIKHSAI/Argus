@@ -42,7 +42,9 @@ const Evidence = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [filterRef]);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [casesLoading, setCasesLoading] = useState(true);
+  const evidenceCacheRef = useRef({});
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [_showProfileModal, _setShowProfileModal] = useState(false);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
@@ -53,22 +55,33 @@ const Evidence = () => {
   const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
 
   useEffect(() => {
+    let isMounted = true;
     const getCases = async () => {
       try {
+        setCasesLoading(true);
         const res = await fetchCases();
         const list = res?.data || res || [];
+        if (!isMounted) return;
         setCasesList(Array.isArray(list) ? list : []);
+
         const currentSavedId = getActiveCaseId();
-        const foundSaved = list.find(c => c.case_id === currentSavedId);
-        if (foundSaved && (foundSaved.status === 'open' || foundSaved.status === 'in_progress')) {
+        let foundSaved = list.find(c => c.case_id === currentSavedId && (c.status === 'open' || c.status === 'in_progress'));
+        if (!foundSaved && list.length > 0) {
+          foundSaved = list.find(c => c.status === 'open' || c.status === 'in_progress') || list[0];
+        }
+        if (foundSaved) {
+          setActiveCase(foundSaved.case_id, foundSaved.name || foundSaved.case_id);
           setActiveCaseId(foundSaved.case_id);
           setActiveCaseName(foundSaved.name || foundSaved.case_id);
         }
       } catch (err) {
         console.error('Failed to load cases in Evidence:', err);
+      } finally {
+        if (isMounted) setCasesLoading(false);
       }
     };
     getCases();
+    return () => { isMounted = false; };
   }, []);
 
   const handleSelectCase = (cId) => {
@@ -103,13 +116,21 @@ const Evidence = () => {
     setCustomAlert(prev => ({ ...prev, isOpen: false, onClose: null, onConfirm: null }));
   };
 
-  const loadEvidence = useCallback(async () => {
+  const loadEvidence = useCallback(async (forceRefresh = false) => {
     try {
-      setLoading(true);
       if (!activeCaseId) {
         setEvidenceData([]);
         setLoading(false);
         return;
+      }
+
+      // Stale-While-Revalidate: render cached data in 0ms if available
+      const cached = evidenceCacheRef.current[activeCaseId];
+      if (cached && !forceRefresh) {
+        setEvidenceData(cached);
+        setLoading(false);
+      } else {
+        setLoading(true);
       }
 
       const rawData = await fetchEvidenceForCase(activeCaseId);
@@ -132,15 +153,15 @@ const Evidence = () => {
         // Preserve authentic backend processing status
         const rawStatus = (item.status || '').toLowerCase();
         let normalizedStatus = 'Unknown';
-        if (rawStatus.includes('fail') || rawStatus === 'error' || rawStatus === 'rejected' || Boolean(item.metadata?.error || item.error)) {
+        if (rawStatus.includes('fail') || rawStatus === 'error' || rawStatus === 'rejected') {
           normalizedStatus = 'Failed';
-        } else if (rawStatus === 'processing' || rawStatus === 'uploaded' || rawStatus === 'sandboxed' || rawStatus === 'hashed' || rawStatus === 'metadata_extracted') {
+        } else if (rawStatus === 'processing' || rawStatus === 'sandboxed' || rawStatus === 'hashed' || rawStatus === 'metadata_extracted') {
           normalizedStatus = 'Processing';
         } else if (rawStatus === 'queued' || rawStatus === 'pending') {
           normalizedStatus = 'Queued';
-        } else if (rawStatus === 'completed' || rawStatus === 'analyzed') {
+        } else if (rawStatus === 'completed' || rawStatus === 'analyzed' || rawStatus === 'success') {
           normalizedStatus = 'Analyzed';
-        } else if (rawStatus === 'stored' || rawStatus === 'ingested') {
+        } else if (rawStatus === 'stored' || rawStatus === 'ingested' || rawStatus === 'uploaded' || rawStatus === 'partial_success') {
           normalizedStatus = 'Stored';
         } else if (item.status) {
           normalizedStatus = item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase();
@@ -167,6 +188,7 @@ const Evidence = () => {
         };
       });
       
+      evidenceCacheRef.current[activeCaseId] = mappedData;
       setEvidenceData(mappedData);
     } catch (err) {
       console.error("Failed to fetch evidence", err);
@@ -197,7 +219,8 @@ const Evidence = () => {
           if (selectedItem?.id === item.id) {
             setSelectedItem(null);
           }
-          await loadEvidence();
+          delete evidenceCacheRef.current[activeCaseId];
+          await loadEvidence(true);
           setCustomAlert({
             isOpen: true,
             title: 'Evidence Removed',
@@ -322,16 +345,15 @@ const Evidence = () => {
         <span className="search-shortcut">⌘ K</span>
       </div>
       <div className="glass-topbar-right topbar-actions">
-        {casesList.length > 0 && (
-          <CaseSwitcher
-            id="evidence-topbar-case-select"
-            cases={casesList.filter(c => c.status === 'open' || c.status === 'in_progress')}
-            activeCaseId={activeCaseId}
-            onSelectCase={handleSelectCase}
-            placeholder="-- Switch Case --"
-            align="left"
-          />
-        )}
+        <CaseSwitcher
+          id="evidence-topbar-case-select"
+          cases={casesList.length > 0 ? casesList.filter(c => c.status === 'open' || c.status === 'in_progress') : (activeCaseId ? [{ case_id: activeCaseId, name: activeCaseName || activeCaseId, status: 'open' }] : [])}
+          activeCaseId={activeCaseId}
+          onSelectCase={handleSelectCase}
+          placeholder="-- Switch Case --"
+          align="left"
+          loading={casesLoading}
+        />
         <button
           id="btn-topbar-upload"
           className="btn btn-primary"
@@ -491,7 +513,7 @@ const Evidence = () => {
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
           </div>
           <div className="stat-info">
-            <h2>{ingestedCount}</h2>
+            <h2>{loading ? <span className="skeleton-line" style={{ width: '38px', height: '24px' }}></span> : ingestedCount}</h2>
             <h4>Ingested</h4>
             <p>Ready for analysis</p>
           </div>
@@ -510,7 +532,7 @@ const Evidence = () => {
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
           </div>
           <div className="stat-info">
-            <h2>{processingCount}</h2>
+            <h2>{loading ? <span className="skeleton-line" style={{ width: '38px', height: '24px' }}></span> : processingCount}</h2>
             <h4>Processing</h4>
             <p>Currently analyzing</p>
           </div>
@@ -529,7 +551,9 @@ const Evidence = () => {
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
           </div>
           <div className="stat-info">
-            <h2 style={{ color: failedCount > 0 ? 'var(--red, #ef4444)' : 'inherit' }}>{failedCount}</h2>
+            <h2 style={{ color: failedCount > 0 ? 'var(--red, #ef4444)' : 'inherit' }}>
+              {loading ? <span className="skeleton-line" style={{ width: '38px', height: '24px' }}></span> : failedCount}
+            </h2>
             <h4>Failed</h4>
             <p style={{ color: failedCount > 0 ? 'var(--red, #ef4444)' : 'var(--text-muted)', fontWeight: failedCount > 0 ? 600 : 'normal' }}>
               {failedCount === 0 ? 'No errors detected' : `${failedCount} error${failedCount > 1 ? 's' : ''} require attention`}
@@ -541,7 +565,15 @@ const Evidence = () => {
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
           </div>
           <div className="stat-info">
-            <h2>{totalBytes > 0 ? (totalBytes / (1024*1024)).toFixed(2) + ' MB' : '0 B'}</h2>
+            <h2>
+              {loading ? (
+                <span className="skeleton-line" style={{ width: '56px', height: '24px' }}></span>
+              ) : totalBytes > 0 ? (
+                (totalBytes / (1024*1024)).toFixed(2) + ' MB'
+              ) : (
+                '0 B'
+              )}
+            </h2>
             <h4>Total Size</h4>
             <p>Across all evidence</p>
           </div>
@@ -680,10 +712,49 @@ const Evidence = () => {
               </thead>
               
                 <tbody id="evidence-tbody">
-                  {currentItems.length === 0 ? (
+                  {loading ? (
+                    Array.from({ length: 6 }).map((_, idx) => (
+                      <tr key={`skeleton-row-${idx}`} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '16px 24px' }}>
+                          <div className="skeleton-line" style={{ width: '16px', height: '16px', borderRadius: '4px' }}></div>
+                        </td>
+                        <td style={{ padding: '16px 12px' }}>
+                          <div className="skeleton-line" style={{ width: '74px', height: '22px', borderRadius: '6px' }}></div>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div className="skeleton-line" style={{ width: '16px', height: '16px', borderRadius: '4px' }}></div>
+                            <div className="skeleton-line" style={{ width: `${140 + (idx % 3) * 40}px`, height: '16px', borderRadius: '4px' }}></div>
+                          </div>
+                        </td>
+                        <td><div className="skeleton-line" style={{ width: '56px', height: '18px', borderRadius: '4px' }}></div></td>
+                        <td><div className="skeleton-line" style={{ width: '80px', height: '16px', borderRadius: '4px' }}></div></td>
+                        <td><div className="skeleton-line" style={{ width: '50px', height: '16px', borderRadius: '4px' }}></div></td>
+                        <td><div className="skeleton-line" style={{ width: '72px', height: '22px', borderRadius: '12px' }}></div></td>
+                        <td><div className="skeleton-line" style={{ width: '84px', height: '16px', borderRadius: '4px' }}></div></td>
+                        <td><div className="skeleton-line" style={{ width: '64px', height: '16px', borderRadius: '4px' }}></div></td>
+                        <td style={{ textAlign: 'right', padding: '16px 24px' }}>
+                          <div className="skeleton-line" style={{ width: '64px', height: '26px', borderRadius: '6px', marginLeft: 'auto' }}></div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : !activeCaseId ? (
                     <tr>
-                      <td colSpan="10" style={{textAlign: 'center', padding: '40px', color: 'var(--text-muted)'}}>
-                        No evidence files found matching your criteria.
+                      <td colSpan="10" style={{ textAlign: 'center', padding: '56px 24px', color: 'var(--text-muted)' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.5 }}>
+                            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                            <polyline points="13 2 13 9 20 9"></polyline>
+                          </svg>
+                          <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-main)' }}>No Active Case Selected</span>
+                          <span style={{ fontSize: '13px' }}>Please choose an investigation case from the topbar switcher above to view its evidence files.</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : currentItems.length === 0 ? (
+                    <tr>
+                      <td colSpan="10" style={{ textAlign: 'center', padding: '48px 24px', color: 'var(--text-muted)' }}>
+                        <p style={{ margin: 0, fontSize: '14px' }}>No evidence files found matching your criteria.</p>
                       </td>
                     </tr>
                   ) : (
@@ -745,8 +816,8 @@ const Evidence = () => {
                               borderRadius: '12px', 
                               fontSize: '11px', 
                               fontWeight: '600', 
-                              backgroundColor: item.status === 'Stored' ? 'var(--green-light, #e6f6ec)' : item.status === 'Failed' ? 'var(--red-light, #fee2e2)' : 'var(--orange-light, #fef3c7)', 
-                              color: item.status === 'Stored' ? 'var(--green, #10b981)' : item.status === 'Failed' ? 'var(--red, #ef4444)' : 'var(--orange, #f59e0b)' 
+                              backgroundColor: (item.status === 'Stored' || item.status === 'Analyzed') ? 'var(--green-light, #e6f6ec)' : item.status === 'Failed' ? 'var(--red-light, #fee2e2)' : 'var(--orange-light, #fef3c7)', 
+                              color: (item.status === 'Stored' || item.status === 'Analyzed') ? 'var(--green, #10b981)' : item.status === 'Failed' ? 'var(--red, #ef4444)' : 'var(--orange, #f59e0b)' 
                             }}
                           >
                             <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'currentColor', marginRight: '6px' }}></span>

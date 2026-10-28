@@ -228,9 +228,7 @@ def _run_forensic_pipeline(
                     logger.error(err_msg)
                     errors.append(err_msg)
             else:
-                err_msg = f"Parser routing: no parser matched for '{filename_original}' (status: {routing_res.status})."
-                logger.warning(err_msg)
-                errors.append(err_msg)
+                logger.info(f"Parser routing: raw file intake stored without specialized parser for '{filename_original}' (status: {routing_res.status}).")
 
         # Store evidence into durable storage (MinIO/local) AFTER parsing
         # so the temp file is still available during parse.

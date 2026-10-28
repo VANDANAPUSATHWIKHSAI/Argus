@@ -13,7 +13,8 @@ const CaseSwitcher = ({
   placeholder = '-- Switch Case --',
   style = {},
   buttonStyle = {},
-  align = 'right'
+  align = 'right',
+  loading = false
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -154,6 +155,11 @@ const CaseSwitcher = ({
                 {activeCase.name || 'Unnamed'}
               </span>
             </>
+          ) : loading ? (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted, #94a3b8)' }}>
+              <span className="spinner" style={{ width: '12px', height: '12px', borderWidth: '1.5px' }}></span>
+              Loading cases...
+            </span>
           ) : (
             <span style={{ color: 'var(--text-main, #f8fafc)' }}>{placeholder}</span>
           )}

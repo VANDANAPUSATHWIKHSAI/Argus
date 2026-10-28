@@ -290,6 +290,12 @@ const Upload = () => {
 
     setUploading(false);
 
+    if (successCount > 0) {
+      try {
+        setActiveCase(caseId, activeCaseName || caseId);
+      } catch (_) {}
+    }
+
     if (failedCount > 0 && successCount === 0) {
       setCustomAlert({
         isOpen: true,

@@ -656,11 +656,13 @@ window.onload = async () => {
           
           if (invProg) {
             stageKeys.forEach((key, idx) => {
-              if (invProg[key] === 'completed') {
+              const rawSt = typeof invProg[key] === 'object' ? invProg[key]?.status : invProg[key];
+              const isEvDone = idx === 0 && ((stats.total_evidence_files || stats.evidence_count || 0) > 0);
+              if (rawSt === 'completed' || isEvDone) {
                 completedCount++;
                 steps[idx].classList.add('step-completed');
                 steps[idx].querySelector('.step-circle').innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
-              } else if (invProg[key] === 'in_progress') {
+              } else if (rawSt === 'in_progress') {
                 if (currentStepIdx === -1) currentStepIdx = idx;
               }
             });

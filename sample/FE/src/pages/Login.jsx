@@ -158,14 +158,13 @@ const Login = () => {
       authenticateDev();
     }
   }, [location.search, navigate]);
-
-  // Ultra-Crisp 3D Forensic Particle Network Globe Engine (1200 Pinpoint Nodes)
+  // High-Performance 3D Forensic Particle Network Globe Engine (Optimized Batched Draw Calls)
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext('2d');
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const ctx = canvas.getContext('2d', { alpha: true });
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     let width = window.innerWidth;
     let height = window.innerHeight;
 
@@ -184,8 +183,8 @@ const Login = () => {
     };
     window.addEventListener('resize', handleResize);
 
-    // 1,200 Uniform Fibonacci Spherical Lattice Points (crisp pinpoint distribution)
-    const POINT_COUNT = 1200;
+    // 240 Uniform Fibonacci Spherical Lattice Points (crisp pinpoint distribution, 5x lighter)
+    const POINT_COUNT = 240;
     const points = [];
 
     for (let i = 0; i < POINT_COUNT; i++) {
@@ -195,7 +194,7 @@ const Login = () => {
         nx: Math.cos(theta) * Math.sin(phi),
         ny: Math.sin(theta) * Math.sin(phi),
         nz: Math.cos(phi),
-        isThreat: i % 24 === 0,
+        isThreat: i % 16 === 0,
         pulse: Math.random() * Math.PI * 2
       });
     }
@@ -206,6 +205,7 @@ const Login = () => {
     let lastMouseX = 0;
     let lastMouseY = 0;
     let frameId;
+    let isPaused = false;
 
     const handleMouseDown = (e) => {
       if (e.target.closest('.forensic-login-card') || e.target.closest('.top-telemetry-bar')) return;
@@ -228,18 +228,30 @@ const Login = () => {
       isDragging = false;
     };
 
+    const handleVisibility = () => {
+      if (document.hidden) {
+        isPaused = true;
+      } else {
+        isPaused = false;
+        frameId = requestAnimationFrame(renderGlobe);
+      }
+    };
+
     window.addEventListener('mousedown', handleMouseDown);
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('visibilitychange', handleVisibility);
 
     function renderGlobe() {
+      if (isPaused) return;
+
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, width, height);
 
       // Auto-rotation
       if (!isDragging) {
-        rotY += 0.0022;
+        rotY += 0.0020;
         rotX += 0.0004;
       }
 
@@ -289,106 +301,107 @@ const Login = () => {
         });
       }
 
-      // Depth sorting (furthest back rendered first)
-      projected.sort((a, b) => b.z - a.z);
-
-      // Draw crisp network interconnect lines on visible hemisphere
+      // Draw batched network interconnect lines
       ctx.lineWidth = 1;
-      const maxDist = 50;
+      const maxDist = 65;
+
+      ctx.beginPath();
+      ctx.strokeStyle = isDark ? 'rgba(56, 189, 248, 0.22)' : 'rgba(37, 99, 235, 0.20)';
 
       for (let i = 0; i < projected.length; i += 2) {
-        if (projected[i].z < -RADIUS * 0.15) continue;
+        if (projected[i].z < -RADIUS * 0.2) continue;
 
-        for (let j = i + 1; j < Math.min(i + 6, projected.length); j++) {
+        for (let j = i + 1; j < Math.min(i + 5, projected.length); j++) {
           const p1 = projected[i];
           const p2 = projected[j];
-          if (p2.z < -RADIUS * 0.15) continue;
+          if (p2.z < -RADIUS * 0.2) continue;
 
-          const dist = Math.hypot(p1.x - p2.x, p1.y - p2.y);
-
-          if (dist < maxDist) {
-            const lineAlpha = (1 - dist / maxDist) * 0.42;
-
-            if (p1.isThreat || p2.isThreat) {
-              ctx.strokeStyle = isDark
-                ? `rgba(239, 68, 68, ${lineAlpha * 1.5})`
-                : `rgba(220, 38, 38, ${lineAlpha * 1.5})`;
-            } else {
-              ctx.strokeStyle = isDark
-                ? `rgba(56, 189, 248, ${lineAlpha})`
-                : `rgba(37, 99, 235, ${lineAlpha})`;
-            }
-
-            ctx.beginPath();
+          const dx = p1.x - p2.x;
+          const dy = p1.y - p2.y;
+          if (dx * dx + dy * dy < maxDist * maxDist) {
             ctx.moveTo(p1.x, p1.y);
             ctx.lineTo(p2.x, p2.y);
-            ctx.stroke();
           }
         }
       }
+      ctx.stroke();
 
-      // Draw razor-sharp, solid pinpoint nodes with optical depth hierarchy
+      // Draw batched normal nodes grouped by depth tier
+      const nearNodes = [];
+      const midNodes = [];
+      const farNodes = [];
+      const threatNodes = [];
+
       for (let i = 0; i < projected.length; i++) {
         const p = projected[i];
-        if (p.z < -RADIUS * 0.96) continue;
-
-        const baseRadius = p.isThreat ? 3.2 : (p.z > 0 ? 2.3 : 1.4);
-        const r = Math.max(0.9, baseRadius * p.scale);
+        if (p.z < -RADIUS * 0.95) continue;
 
         if (p.isThreat) {
-          // Sharp tactical strobe rings (double concentric radar rings matching reference)
-          const ringProgress1 = (p.pulse % Math.PI) / Math.PI;
-          const ringRadius1 = r + ringProgress1 * 11;
-          const ringAlpha1 = (1 - ringProgress1) * 0.8;
-
-          const ringProgress2 = ((p.pulse + Math.PI * 0.45) % Math.PI) / Math.PI;
-          const ringRadius2 = r + ringProgress2 * 11;
-          const ringAlpha2 = (1 - ringProgress2) * 0.55;
-
-          ctx.lineWidth = 1;
-          ctx.strokeStyle = isDark
-            ? `rgba(239, 68, 68, ${ringAlpha1})`
-            : `rgba(220, 38, 38, ${ringAlpha1})`;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, ringRadius1, 0, Math.PI * 2);
-          ctx.stroke();
-
-          ctx.strokeStyle = isDark
-            ? `rgba(239, 68, 68, ${ringAlpha2})`
-            : `rgba(220, 38, 38, ${ringAlpha2})`;
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, ringRadius2, 0, Math.PI * 2);
-          ctx.stroke();
-
-          // Crisp solid threat core
-          ctx.fillStyle = isDark ? '#ff3b30' : '#dc2626';
-          ctx.beginPath();
-          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
-          ctx.fill();
+          threatNodes.push(p);
+        } else if (p.z > RADIUS * 0.25) {
+          nearNodes.push(p);
+        } else if (p.z > -RADIUS * 0.3) {
+          midNodes.push(p);
         } else {
-          // Sharp solid forensic pinpoint node (no fuzzy outer disc)
-          if (isDark) {
-            if (p.z > RADIUS * 0.35) {
-              ctx.fillStyle = '#ffffff'; // White glint highlight for nearest nodes
-            } else if (p.z > 0) {
-              ctx.fillStyle = '#38bdf8'; // Electric sky blue
-            } else if (p.z > -RADIUS * 0.45) {
-              ctx.fillStyle = '#0284c7'; // Vivid cerulean
-            } else {
-              ctx.fillStyle = '#1e40af'; // Deep sapphire for distant nodes
-            }
-          } else {
-            if (p.z > RADIUS * 0.35) {
-              ctx.fillStyle = '#1e3a8a'; // Deepest sharp navy
-            } else if (p.z > 0) {
-              ctx.fillStyle = '#2563eb'; // Royal cobalt
-            } else if (p.z > -RADIUS * 0.45) {
-              ctx.fillStyle = '#3b82f6';
-            } else {
-              ctx.fillStyle = '#93c5fd';
-            }
-          }
+          farNodes.push(p);
+        }
+      }
 
+      // 1. Far nodes
+      if (farNodes.length > 0) {
+        ctx.fillStyle = isDark ? '#1e40af' : '#93c5fd';
+        ctx.beginPath();
+        for (let i = 0; i < farNodes.length; i++) {
+          const p = farNodes[i];
+          const r = Math.max(0.8, 1.2 * p.scale);
+          ctx.moveTo(p.x + r, p.y);
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+
+      // 2. Mid nodes
+      if (midNodes.length > 0) {
+        ctx.fillStyle = isDark ? '#0284c7' : '#3b82f6';
+        ctx.beginPath();
+        for (let i = 0; i < midNodes.length; i++) {
+          const p = midNodes[i];
+          const r = Math.max(1.0, 1.8 * p.scale);
+          ctx.moveTo(p.x + r, p.y);
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+
+      // 3. Near nodes (crisp highlights)
+      if (nearNodes.length > 0) {
+        ctx.fillStyle = isDark ? '#ffffff' : '#1e3a8a';
+        ctx.beginPath();
+        for (let i = 0; i < nearNodes.length; i++) {
+          const p = nearNodes[i];
+          const r = Math.max(1.2, 2.2 * p.scale);
+          ctx.moveTo(p.x + r, p.y);
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        }
+        ctx.fill();
+      }
+
+      // 4. Threat nodes with radar pulse
+      if (threatNodes.length > 0) {
+        for (let i = 0; i < threatNodes.length; i++) {
+          const p = threatNodes[i];
+          const r = Math.max(1.5, 3.0 * p.scale);
+
+          const ringProgress = (p.pulse % Math.PI) / Math.PI;
+          const ringRadius = r + ringProgress * 10;
+          const ringAlpha = (1 - ringProgress) * 0.7;
+
+          ctx.strokeStyle = isDark ? `rgba(239, 68, 68, ${ringAlpha})` : `rgba(220, 38, 38, ${ringAlpha})`;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, ringRadius, 0, Math.PI * 2);
+          ctx.stroke();
+
+          ctx.fillStyle = isDark ? '#ff3b30' : '#dc2626';
           ctx.beginPath();
           ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
           ctx.fill();
@@ -399,7 +412,7 @@ const Login = () => {
       frameId = requestAnimationFrame(renderGlobe);
     }
 
-    renderGlobe();
+    frameId = requestAnimationFrame(renderGlobe);
 
     return () => {
       cancelAnimationFrame(frameId);
@@ -407,6 +420,7 @@ const Login = () => {
       window.removeEventListener('mousedown', handleMouseDown);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, []);
 

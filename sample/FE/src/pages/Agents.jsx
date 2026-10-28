@@ -445,7 +445,11 @@ const Agents = () => {
 
   const closeAlert = () => setCustomAlert(prev => ({ ...prev, isOpen: false }));
 
-  const stageStatuses = agentData?.stage_statuses || {};
+  const stageStatuses = { ...(agentData?.stage_statuses || {}) };
+  // If evidence has been uploaded to the case, Stage 01 (Evidence Intelligence) is ready/completed
+  if ((agentData?.evidence_count || 0) > 0 && (!stageStatuses.agent1 || stageStatuses.agent1 === 'PENDING')) {
+    stageStatuses.agent1 = 'COMPLETED';
+  }
   const currentAgent = AGENT_METADATA[selectedAgentTab] || AGENT_METADATA.agent7;
   const currentAgentData = agentData?.[selectedAgentTab] || {};
 

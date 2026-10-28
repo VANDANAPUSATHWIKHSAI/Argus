@@ -192,45 +192,128 @@ const Dashboard = () => {
 
   const criticalHigh = (activeSummary?.severity_breakdown?.critical ?? 0) + (activeSummary?.severity_breakdown?.high ?? 0);
 
-  const timelineSteps = ['Evidence\nCollection', 'Analysis', 'Correlation', 'Findings', 'Report'];
-  let completedSteps = 0;
-  let activeStep = -1;
-  
-  if (activeSummary) {
-    if (activeSummary.investigation_progress) {
-      const prog = activeSummary.investigation_progress;
-      const stageKeys = ['evidence_collection', 'analysis', 'correlation', 'findings', 'report'];
-      const stages = stageKeys.map(k => (typeof prog[k] === 'object' ? prog[k]?.status : prog[k]));
-      completedSteps = stages.filter(s => s === 'completed').length;
-      const inProgIdx = stages.findIndex(s => s === 'in_progress');
-      activeStep = inProgIdx !== -1 ? inProgIdx : (completedSteps >= 5 ? 4 : completedSteps);
-    } else {
-      const evidenceCount = (activeSummary.total_evidence_files || activeSummary.evidence_count || 0);
-      const findingsCount = (activeSummary.total_findings ?? activeSummary.findings_count ?? 0);
+  const STAGE_DEFINITIONS = [
+    {
+      key: 'evidence_collection',
+      label: 'Evidence\nCollection',
+      shortLabel: 'Evidence',
+      path: '/evidence',
+      actionText: 'View Evidence'
+    },
+    {
+      key: 'analysis',
+      label: 'Artifact\nAnalysis',
+      shortLabel: 'Analysis',
+      path: '/evidence',
+      actionText: 'Inspect Artifacts'
+    },
+    {
+      key: 'correlation',
+      label: 'Entity\nCorrelation',
+      shortLabel: 'Correlation',
+      path: '/agents',
+      actionText: 'Agent Swarm'
+    },
+    {
+      key: 'findings',
+      label: 'FIR\nFindings',
+      shortLabel: 'Findings',
+      path: '/findings',
+      actionText: 'Review Findings'
+    },
+    {
+      key: 'report',
+      label: 'Case\nReport',
+      shortLabel: 'Report',
+      path: '/report',
+      actionText: 'View Report'
+    }
+  ];
 
-      if (findingsCount > 0) {
-        // Findings generated → Evidence, Analysis, Correlation completed
-        completedSteps = 4;
-        activeStep = 4;
-      } else if ((activeSummary.total_artifacts || 0) > 0) {
-        // Artifacts extracted → Analysis is completed, Correlation is active
-        completedSteps = 2;
-        activeStep = 2;
-      } else if (evidenceCount > 0) {
-        // Evidence uploaded → Evidence Collection completed, Analysis is active
-        completedSteps = 1;
-        activeStep = 1;
-      } else {
-        // Case created but no evidence yet
-        completedSteps = 0;
-        activeStep = 0;
-      }
+  const evidenceCount = activeSummary
+    ? (activeSummary.total_evidence_files || activeSummary.evidence_count || activeSummary.formatted_evidence?.length || 0)
+    : 0;
+  const findingsCount = activeSummary
+    ? (activeSummary.total_findings ?? activeSummary.findings_count ?? 0)
+    : 0;
+  const artifactsCount = activeSummary
+    ? (activeSummary.total_artifacts ?? 0)
+    : 0;
+  const isCaseClosed = activeSummary?.status === 'closed';
+
+  let rawStageStatuses = ['not_started', 'not_started', 'not_started', 'not_started', 'not_started'];
+
+  if (activeSummary?.investigation_progress) {
+    const prog = activeSummary.investigation_progress;
+    const stageKeys = ['evidence_collection', 'analysis', 'correlation', 'findings', 'report'];
+    rawStageStatuses = stageKeys.map(k => {
+      const val = prog[k];
+      return (typeof val === 'object' ? val?.status : val) || 'not_started';
+    });
+  } else if (activeSummary) {
+    if (evidenceCount > 0) rawStageStatuses[0] = 'completed';
+    if (artifactsCount > 0) rawStageStatuses[1] = 'completed';
+    else if (evidenceCount > 0) rawStageStatuses[1] = 'in_progress';
+
+    if (findingsCount > 0) {
+      rawStageStatuses[1] = 'completed';
+      rawStageStatuses[2] = 'completed';
+      rawStageStatuses[3] = 'in_progress';
+    } else if (artifactsCount > 0) {
+      rawStageStatuses[2] = 'in_progress';
+    }
+
+    if (isCaseClosed) {
+      rawStageStatuses[3] = 'completed';
+      rawStageStatuses[4] = 'completed';
     }
   }
 
-  const stepRatio = Math.max(0, activeStep) / (timelineSteps.length - 1);
-  const activeLineWidth = `calc((100% - 80px) * ${stepRatio})`;
-  const progressBarWidth = `${(completedSteps / timelineSteps.length) * 100}%`;
+  // Real-time resilience guarantees
+  if (evidenceCount > 0 && rawStageStatuses[0] !== 'completed') {
+    rawStageStatuses[0] = 'completed';
+  }
+  if (artifactsCount > 0 && rawStageStatuses[1] !== 'completed') {
+    rawStageStatuses[1] = 'completed';
+  }
+  if (findingsCount > 0) {
+    if (rawStageStatuses[0] !== 'completed') rawStageStatuses[0] = 'completed';
+    if (rawStageStatuses[1] !== 'completed') rawStageStatuses[1] = 'completed';
+    if (rawStageStatuses[2] !== 'completed') rawStageStatuses[2] = 'completed';
+  }
+  if (isCaseClosed) {
+    rawStageStatuses[4] = 'completed';
+  }
+
+  // Contextual telemetry metrics under each stage
+  const stageTelemetry = [
+    evidenceCount > 0 ? `${evidenceCount} file${evidenceCount > 1 ? 's' : ''}` : 'No files',
+    artifactsCount > 0 ? `${artifactsCount} artifact${artifactsCount > 1 ? 's' : ''}` : (rawStageStatuses[0] === 'completed' ? 'Parsing...' : 'Pending'),
+    findingsCount > 0 ? 'Correlated' : (artifactsCount > 0 ? 'Correlating' : 'Pending'),
+    findingsCount > 0 ? `${findingsCount} finding${findingsCount > 1 ? 's' : ''}` : 'Pending review',
+    isCaseClosed ? 'Case Closed' : (findingsCount > 0 ? 'Report Ready' : 'In Review')
+  ];
+
+  const stages = STAGE_DEFINITIONS.map((def, idx) => {
+    const status = rawStageStatuses[idx];
+    const isDone = status === 'completed';
+    const isActive = status === 'in_progress';
+    const isPending = status === 'not_started';
+    return {
+      ...def,
+      status,
+      isDone,
+      isActive,
+      isPending,
+      metric: stageTelemetry[idx]
+    };
+  });
+
+  const completedSteps = stages.filter(s => s.isDone).length;
+  const inProgIdx = stages.findIndex(s => s.isActive);
+  const activeStep = inProgIdx !== -1 ? inProgIdx : (completedSteps >= 5 ? 4 : completedSteps);
+  const progressBarWidth = `${(completedSteps / stages.length) * 100}%`;
+
 
   return (
     <>
@@ -617,53 +700,118 @@ const Dashboard = () => {
                           <p style={{ margin: '4px 0 0 0' }}>Track the lifecycle of the active case.</p>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)' }}>{completedSteps} of {timelineSteps.length} stages complete</span>
+                          <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-muted)' }}>{completedSteps} of {stages.length} stages complete</span>
                           <div style={{ width: '120px', height: '5px', backgroundColor: 'var(--border-strong)', borderRadius: '99px', overflow: 'hidden' }}>
-                            <div style={{ width: progressBarWidth, height: '100%', background: 'var(--blue)', borderRadius: '99px', transition: 'width 0.6s ease' }}></div>
+                            <div style={{ width: progressBarWidth, height: '100%', background: '#10b981', borderRadius: '99px', transition: 'width 0.6s ease' }}></div>
                           </div>
                         </div>
                       </div>
-                      {/* Single-track timeline — no double lines */}
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative', padding: '8px 0' }}>
-                        {timelineSteps.map((label, i) => {
-                          const isDone    = i < completedSteps;
-                          const isActive  = i === activeStep;
-                          const isPending = !isDone && !isActive;
-                          const isLast    = i === timelineSteps.length - 1;
+                      {/* Single-track timeline */}
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative', padding: '12px 4px 6px' }}>
+                        {stages.map((stage, i) => {
+                          const isLast = i === stages.length - 1;
+                          const lineFilled = stage.isDone;
 
                           return (
-                            <React.Fragment key={i}>
-                              {/* Step node */}
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', zIndex: 2 }}>
+                            <React.Fragment key={stage.key}>
+                              {/* Step node wrapped in Link for direct navigation */}
+                              <Link
+                                to={stage.path}
+                                title={`${stage.shortLabel} — Click to ${stage.actionText}`}
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  zIndex: 2,
+                                  textDecoration: 'none',
+                                  cursor: 'pointer',
+                                  transition: 'transform 0.2s ease',
+                                  minWidth: '80px',
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+                              >
                                 <div style={{
-                                  width: '32px', height: '32px', borderRadius: '50%',
-                                  background: isDone ? 'var(--blue)' : isActive ? 'var(--blue)' : 'var(--bg-app)',
-                                  border: isPending ? '2.5px solid var(--border-strong)' : '2.5px solid var(--blue)',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  transition: 'all 0.3s ease', flexShrink: 0
+                                  width: '34px',
+                                  height: '34px',
+                                  borderRadius: '50%',
+                                  background: stage.isDone
+                                    ? '#10b981'
+                                    : stage.isActive
+                                    ? 'var(--blue)'
+                                    : 'var(--bg-app)',
+                                  border: stage.isDone
+                                    ? '2.5px solid #10b981'
+                                    : stage.isActive
+                                    ? '2.5px solid var(--blue)'
+                                    : '2.5px solid var(--border-strong)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  transition: 'all 0.3s ease',
+                                  flexShrink: 0,
+                                  boxShadow: stage.isActive
+                                    ? '0 0 12px rgba(59, 130, 246, 0.5)'
+                                    : stage.isDone
+                                    ? '0 0 8px rgba(16, 185, 129, 0.3)'
+                                    : 'none'
                                 }}>
-                                  {isDone && (
-                                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                  {stage.isDone && (
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                       <polyline points="20 6 9 17 4 12" />
                                     </svg>
                                   )}
-                                  {isActive && (
-                                    <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'white' }} />
+                                  {stage.isActive && (
+                                    <div style={{
+                                      width: '10px',
+                                      height: '10px',
+                                      borderRadius: '50%',
+                                      background: 'white',
+                                      boxShadow: '0 0 4px white'
+                                    }} />
+                                  )}
+                                  {stage.isPending && (
+                                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                                      {i + 1}
+                                    </span>
                                   )}
                                 </div>
-                                <span style={{
-                                  fontSize: '12px', fontWeight: isActive ? 700 : isDone ? 600 : 500,
-                                  color: isActive ? 'var(--blue)' : isDone ? 'var(--text-main)' : 'var(--text-muted)',
-                                  textAlign: 'center', lineHeight: '1.3', whiteSpace: 'pre-line'
-                                }}>{label.replace('\n', '\n')}</span>
-                              </div>
+
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                  <span style={{
+                                    fontSize: '12px',
+                                    fontWeight: stage.isActive ? 700 : stage.isDone ? 600 : 500,
+                                    color: stage.isActive ? 'var(--blue)' : stage.isDone ? 'var(--text-main)' : 'var(--text-muted)',
+                                    textAlign: 'center',
+                                    lineHeight: '1.25',
+                                    whiteSpace: 'pre-line'
+                                  }}>
+                                    {stage.label}
+                                  </span>
+                                  <span style={{
+                                    fontSize: '10.5px',
+                                    fontWeight: 600,
+                                    color: stage.isDone ? '#10b981' : stage.isActive ? 'var(--blue)' : 'var(--text-muted)',
+                                    background: stage.isDone ? 'rgba(16, 185, 129, 0.12)' : stage.isActive ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                                    border: stage.isDone ? '1px solid rgba(16, 185, 129, 0.25)' : stage.isActive ? '1px solid rgba(59, 130, 246, 0.25)' : '1px solid var(--border-subtle)',
+                                    padding: '1px 6px',
+                                    borderRadius: '4px',
+                                    letterSpacing: '0.2px'
+                                  }}>
+                                    {stage.metric}
+                                  </span>
+                                </div>
+                              </Link>
+
                               {/* Connector line between steps */}
                               {!isLast && (
                                 <div style={{
-                                  flex: 1, height: '2.5px', marginTop: '15px', borderRadius: '99px',
-                                  background: i < completedSteps
-                                    ? 'var(--blue)'
-                                    : 'var(--border-strong)',
+                                  flex: 1,
+                                  height: '2.5px',
+                                  marginTop: '16px',
+                                  borderRadius: '99px',
+                                  background: lineFilled ? '#10b981' : 'var(--border-strong)',
                                   transition: 'background 0.5s ease'
                                 }} />
                               )}
@@ -672,6 +820,7 @@ const Dashboard = () => {
                         })}
                       </div>
                     </div>
+
 
                   </div>
                 )}

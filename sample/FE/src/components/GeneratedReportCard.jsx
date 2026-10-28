@@ -173,10 +173,12 @@ export default function GeneratedReportCard({
                 alignItems: 'center',
                 gap: '8px',
                 borderRadius: '10px',
-                background: effectiveSubmittedToAuditor ? '#10b981' : 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-                color: '#ffffff',
-                border: 'none',
-                boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                background: effectiveSubmittedToAuditor
+                  ? 'rgba(37, 99, 235, 0.15)'
+                  : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                color: effectiveSubmittedToAuditor ? 'var(--glass-dash-blue, #60a5fa)' : '#ffffff',
+                border: effectiveSubmittedToAuditor ? '1px solid rgba(37, 99, 235, 0.4)' : '1px solid rgba(255, 255, 255, 0.2)',
+                boxShadow: effectiveSubmittedToAuditor ? '0 2px 8px rgba(37, 99, 235, 0.15)' : '0 4px 12px rgba(37, 99, 235, 0.35)',
                 cursor: 'pointer'
               }}
               title={effectiveSubmittedToAuditor ? 'Report already escalated to Auditor' : 'Approve findings and escalate to Auditor'}

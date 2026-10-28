@@ -653,7 +653,7 @@ const AdminDashboard = () => {
 
       {/* Admin Create Case Modal */}
       {showCreateModal && (
-        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { if (e.target === e.currentTarget) setShowCreateModal(false); }}>
           <div className="modal-content" style={{ width: '100%', maxWidth: '420px', borderRadius: '22px', overflow: 'visible' }}>
             <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle, rgba(226, 232, 240, 0.8))', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-main, #0f172a)' }}>Create New Case</h2>
@@ -697,7 +697,7 @@ const AdminDashboard = () => {
 
       {/* Assign Senior Analyst Modal */}
       {showAssignSeniorModal && currentCase && (
-        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1001, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { if (e.target === e.currentTarget) setShowAssignSeniorModal(false); }}>
           <div className="modal-content" style={{ width: '100%', maxWidth: '380px', borderRadius: '22px', overflow: 'visible', padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: 'var(--text-main, #0f172a)' }}>Assign Senior Analyst</h2>

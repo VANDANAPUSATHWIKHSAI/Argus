@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchAuditorStats, fetchFindings, fetchCases } from '../js/api';
+import { fetchAuditorStats, fetchFindings, fetchCases, fetchReport } from '../js/api';
+import GeneratedReportCard from '../components/GeneratedReportCard';
+import GeneratedReportModal from '../components/GeneratedReportModal';
 import { setActiveCase } from '../js/caseEvents';
 import SearchableSelect from '../components/SearchableSelect';
 
@@ -19,6 +21,9 @@ export default function AuditorDashboard() {
   const [casesList, setCasesList] = useState([]);
   const [presentFindings, setPresentFindings] = useState([]);
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
+  const [reportData, setReportData] = useState(null);
+  const [reportHtml, setReportHtml] = useState('');
+  const [reportModalOpen, setReportModalOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -63,6 +68,34 @@ export default function AuditorDashboard() {
           const fRes = await fetchFindings(targetId);
           const fList = Array.isArray(fRes) ? fRes : (fRes?.data || []);
           if (isMounted) setPresentFindings(fList);
+
+          // Fetch authoritative generated report for present case
+          try {
+            const [repJsonRes, repHtmlRes] = await Promise.allSettled([
+              fetchReport(targetId, 'json', true),
+              fetchReport(targetId, 'html', true)
+            ]);
+            let rData = null;
+            if (repJsonRes.status === 'fulfilled' && repJsonRes.value) {
+              rData = typeof repJsonRes.value === 'string' ? JSON.parse(repJsonRes.value) : repJsonRes.value;
+              if (isMounted) setReportData(rData);
+            }
+            if (repHtmlRes.status === 'fulfilled' && repHtmlRes.value) {
+              const hVal = typeof repHtmlRes.value === 'string' ? repHtmlRes.value : JSON.stringify(repHtmlRes.value);
+              if (isMounted) setReportHtml(hVal);
+            }
+            if (!rData && isMounted) {
+              setReportData({
+                case_id: targetId,
+                findings: fList,
+                evidence_files: [],
+                timeline: [],
+                executive_summary: `Audit baseline report for Case ${targetId}. Triaged ${fList.length} finding(s) subject to independent review.`
+              });
+            }
+          } catch (repErr) {
+            console.warn('Auditor report load non-fatal error:', repErr);
+          }
         }
       } catch (err) {
         console.error("Failed to load auditor dashboard data:", err);
@@ -86,6 +119,30 @@ export default function AuditorDashboard() {
       const fRes = await fetchFindings(cId);
       const fList = Array.isArray(fRes) ? fRes : (fRes?.data || []);
       setPresentFindings(fList);
+
+      // Refresh report for switched case
+      const [repJsonRes, repHtmlRes] = await Promise.allSettled([
+        fetchReport(cId, 'json', true),
+        fetchReport(cId, 'html', true)
+      ]);
+      let rData = null;
+      if (repJsonRes.status === 'fulfilled' && repJsonRes.value) {
+        rData = typeof repJsonRes.value === 'string' ? JSON.parse(repJsonRes.value) : repJsonRes.value;
+        setReportData(rData);
+      }
+      if (repHtmlRes.status === 'fulfilled' && repHtmlRes.value) {
+        const hVal = typeof repHtmlRes.value === 'string' ? repHtmlRes.value : JSON.stringify(repHtmlRes.value);
+        setReportHtml(hVal);
+      }
+      if (!rData) {
+        setReportData({
+          case_id: cId,
+          findings: fList,
+          evidence_files: [],
+          timeline: [],
+          executive_summary: `Audit baseline report for Case ${cId}. Triaged ${fList.length} finding(s) subject to independent review.`
+        });
+      }
     } catch (e) {
       console.error('Error switching case:', e);
     }
@@ -259,6 +316,106 @@ export default function AuditorDashboard() {
           <SummaryCard icon="warning" title="Medium Severity" value={mediumSeverity} subtitle="Require verification" color="#f59e0b" bg="rgba(245, 158, 11, 0.12)" />
           <SummaryCard icon="check" title="Low Severity" value={lowSeverity} subtitle="Routine findings" color="var(--glass-dash-green)" bg="var(--glass-dash-green-soft)" />
         </div>
+
+        {/* Senior Analyst Handoff & Escalation Card (if submitted) */}
+        {(() => {
+          const rawEsc = localStorage.getItem(`argus_case_${activeCaseId}_submitted_to_auditor`);
+          if (!rawEsc) return null;
+          try {
+            const esc = JSON.parse(rawEsc);
+            if (!esc?.submitted) return null;
+            return (
+              <div className="panel-card" style={{
+                padding: '18px 24px',
+                borderRadius: '18px',
+                marginBottom: '24px',
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '16px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0, flex: 1 }}>
+                  <div style={{
+                    width: '42px',
+                    height: '42px',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    flexShrink: 0,
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+                  }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                      <polyline points="9 12 11 14 15 10"></polyline>
+                    </svg>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#10b981' }}>
+                        Case Report Validated & Escalated by Senior Analyst
+                      </span>
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        background: 'rgba(16, 185, 129, 0.2)',
+                        color: '#10b981',
+                        padding: '2px 8px',
+                        borderRadius: '9999px',
+                        border: '1px solid rgba(16, 185, 129, 0.4)'
+                      }}>
+                        {esc.senior_analyst_name || 'Senior Analyst'}
+                      </span>
+                      <span style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', fontFamily: 'monospace' }}>
+                        {esc.submitted_at ? new Date(esc.submitted_at).toLocaleString() : ''}
+                      </span>
+                    </div>
+                    {esc.memo && (
+                      <div style={{ fontSize: '12.5px', color: 'var(--glass-dash-text-muted)', marginTop: '4px', fontStyle: 'italic' }}>
+                        Validation Memo: <strong style={{ color: 'var(--glass-dash-text-main)', fontStyle: 'normal' }}>"{esc.memo}"</strong>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate('/report')}
+                  className="btn-primary"
+                  style={{
+                    padding: '8px 18px',
+                    fontSize: '12.5px',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span>Review in Workspace</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </button>
+              </div>
+            );
+          } catch (_e) {
+            return null;
+          }
+        })()}
+
+        {/* Present Case Generated Forensic Report */}
+        <GeneratedReportCard
+          caseId={activeCaseId || 'CASE'}
+          caseName={activeCaseName}
+          reportData={reportData}
+          reportHtml={reportHtml}
+          loading={loading}
+          onOpenReportModal={() => setReportModalOpen(true)}
+          role="auditor"
+        />
 
         {/* Main Graph Card */}
         <div className="panel-card" style={{ 
@@ -532,6 +689,15 @@ export default function AuditorDashboard() {
         )}
         </div>
       </div>
+
+      {/* Generated Report Preview Modal */}
+      <GeneratedReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        caseId={activeCaseId || 'CASE'}
+        reportData={reportData}
+        reportHtml={reportHtml}
+      />
     </>
   );
 }

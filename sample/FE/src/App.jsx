@@ -78,7 +78,7 @@ function App() {
         <Route path="/case-notes" element={<ProtectedRoute allowedRoles={['analyst', 'senior_analyst']}><CaseNotes /></ProtectedRoute>} />
         <Route path="/chatbot" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst', 'auditor']}><Chatbot /></ProtectedRoute>} />
         <Route path="/findings" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst']}><Findings /></ProtectedRoute>} />
-        <Route path="/timeline" element={<ProtectedRoute allowedRoles={['admin', 'senior_analyst']}><TimelineDetail /></ProtectedRoute>} />
+        <Route path="/timeline" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><TimelineDetail /></ProtectedRoute>} />
         <Route path="/evidence" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Evidence /></ProtectedRoute>} />
         <Route path="/upload" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Upload /></ProtectedRoute>} />
         <Route path="/sanitized" element={<ProtectedRoute allowedRoles={['admin', 'analyst', 'senior_analyst']}><Sanitized /></ProtectedRoute>} />

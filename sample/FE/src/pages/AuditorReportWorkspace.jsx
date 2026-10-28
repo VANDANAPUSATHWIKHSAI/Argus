@@ -7,8 +7,12 @@ import {
   fetchFindings, 
   fetchEvidenceForCase, 
   fetchCaseSummary, 
-  queryCase 
+  queryCase,
+  fetchReport
 } from '../js/api';
+import { generateHtmlFromReportData, handleDownloadHtml, handleDownloadJson } from '../js/reportUtils';
+import GeneratedReportModal from '../components/GeneratedReportModal';
+import SeniorSubmitToAuditorModal from '../components/SeniorSubmitToAuditorModal';
 import { getActiveCaseId, getActiveCaseName, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
@@ -99,6 +103,13 @@ export default function AuditorReportWorkspace() {
   const [isCertified, setIsCertified] = useState(false);
   const [certificationTimestamp, setCertificationTimestamp] = useState(null);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'info' });
+  const [reportData, setReportData] = useState(null);
+  const [reportHtml, setReportHtml] = useState('');
+  const [reportViewMode, setReportViewMode] = useState('dossier'); // 'dossier' | 'interactive'
+  const [dossierModalOpen, setDossierModalOpen] = useState(false);
+  const [submitToAuditorOpen, setSubmitToAuditorOpen] = useState(false);
+  const [isSubmittedToAuditor, setIsSubmittedToAuditor] = useState(false);
+  const [submittedToAuditorData, setSubmittedToAuditorData] = useState(null);
 
   // Chatbot State
   const [chatMessages, setChatMessages] = useState([]);
@@ -215,6 +226,50 @@ You can click any **"Verify with AI"** or **"Audit Artifact"** button in the rep
 
         if (sumRes.status === 'fulfilled' && sumRes.value) {
           setCaseSummary(sumRes.value);
+        }
+
+        // Fetch authoritative generated report package
+        try {
+          const [repJsonRes, repHtmlRes] = await Promise.allSettled([
+            fetchReport(activeCaseId, 'json', true),
+            fetchReport(activeCaseId, 'html', true)
+          ]);
+          let rData = null;
+          if (repJsonRes.status === 'fulfilled' && repJsonRes.value) {
+            rData = typeof repJsonRes.value === 'string' ? JSON.parse(repJsonRes.value) : repJsonRes.value;
+            if (isMounted) setReportData(rData);
+          }
+          if (repHtmlRes.status === 'fulfilled' && repHtmlRes.value) {
+            const hVal = typeof repHtmlRes.value === 'string' ? repHtmlRes.value : JSON.stringify(repHtmlRes.value);
+            if (isMounted) setReportHtml(hVal);
+          }
+          if (!rData && isMounted) {
+            setReportData({
+              case_id: activeCaseId,
+              findings: fRes.status === 'fulfilled' && fRes.value ? (Array.isArray(fRes.value) ? fRes.value : fRes.value.data || []) : [],
+              evidence_files: evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [],
+              timeline: [],
+              executive_summary: sumRes.status === 'fulfilled' && sumRes.value ? sumRes.value.description : `Forensic case baseline compiled for Case ${activeCaseId}.`
+            });
+          }
+        } catch (repErr) {
+          console.warn('Report fetch in workspace error:', repErr);
+        }
+
+        // Check if report was escalated to auditor
+        const subAud = localStorage.getItem(`argus_case_${activeCaseId}_submitted_to_auditor`);
+        if (subAud) {
+          try {
+            const parsedAud = JSON.parse(subAud);
+            setIsSubmittedToAuditor(Boolean(parsedAud?.submitted));
+            setSubmittedToAuditorData(parsedAud);
+          } catch (_e) {
+            setIsSubmittedToAuditor(false);
+            setSubmittedToAuditorData(null);
+          }
+        } else {
+          setIsSubmittedToAuditor(false);
+          setSubmittedToAuditorData(null);
         }
 
         // Check if previously certified
@@ -371,6 +426,14 @@ No hash match, custody event, signature, MITRE mapping, compliance verdict, or f
 
   // Print / Export PDF
   const handlePrintReport = () => {
+    if (reportViewMode === 'dossier') {
+      const frame = document.getElementById('argus-dossier-iframe');
+      if (frame && frame.contentWindow) {
+        frame.contentWindow.focus();
+        frame.contentWindow.print();
+        return;
+      }
+    }
     window.print();
   };
 
@@ -812,6 +875,40 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
 
           {/* Right Header Controls */}
           <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {user?.role === 'senior_analyst' && (
+              <button
+                type="button"
+                onClick={() => setSubmitToAuditorOpen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: isSubmittedToAuditor ? '#10b981' : 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '7px 18px',
+                  borderRadius: '9999px',
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                  transition: 'all 0.2s'
+                }}
+                title={isSubmittedToAuditor ? 'Report already escalated to Auditor' : 'Approve findings and escalate report to Compliance Auditor'}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  {isSubmittedToAuditor ? (
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  ) : (
+                    <>
+                      <line x1="22" y1="2" x2="11" y2="13"></line>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </>
+                  )}
+                </svg>
+                <span>{isSubmittedToAuditor ? '✓ Escalated to Auditor' : 'Submit to Auditor'}</span>
+              </button>
+            )}
             {/* Certify Button */}
             <button
               type="button"
@@ -896,10 +993,185 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
             flex: '0 0 54%',
             maxWidth: '54%',
             height: '100%',
-            overflowY: 'auto',
-            padding: '28px',
-            boxSizing: 'border-box'
+            overflowY: reportViewMode === 'dossier' ? 'hidden' : 'auto',
+            padding: reportViewMode === 'dossier' ? '20px' : '28px',
+            boxSizing: 'border-box',
+            display: 'flex',
+            flexDirection: 'column'
           }}>
+            {/* Senior Analyst Review & Escalation Status Banner */}
+            {submittedToAuditorData?.submitted ? (
+              <div style={{
+                marginBottom: '12px',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: 'rgba(16, 185, 129, 0.12)',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '12px',
+                flexShrink: 0
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                  <div style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '7px',
+                    background: '#10b981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    flexShrink: 0
+                  }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                      <polyline points="9 12 11 14 15 10"></polyline>
+                    </svg>
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <strong style={{ fontSize: '12.5px', color: '#10b981' }}>
+                        Validated & Promoted by Senior Analyst: {submittedToAuditorData.senior_analyst_name || 'Senior Analyst'}
+                      </strong>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                        {submittedToAuditorData.submitted_at ? new Date(submittedToAuditorData.submitted_at).toLocaleString() : ''}
+                      </span>
+                    </div>
+                    {submittedToAuditorData.memo && (
+                      <div style={{ fontSize: '12px', color: isDark ? '#d1fae5' : '#065f46', marginTop: '2px', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        "{submittedToAuditorData.memo}"
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <span style={{
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  background: 'rgba(16, 185, 129, 0.2)',
+                  color: '#10b981',
+                  padding: '3px 10px',
+                  borderRadius: '9999px',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  flexShrink: 0
+                }}>
+                  Senior Approved
+                </span>
+              </div>
+            ) : isAuditor ? (
+              <div style={{
+                marginBottom: '12px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                background: 'rgba(245, 158, 11, 0.1)',
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                color: isDark ? '#fbbf24' : '#b45309',
+                fontSize: '11.5px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flexShrink: 0
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+                <span>Notice: Pre-attestation review. Case report is pending formal escalation memo from Senior Analyst.</span>
+              </div>
+            ) : null}
+
+            {/* View Mode Switcher Header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px', gap: '8px', flexWrap: 'wrap', flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: '6px', background: 'var(--glass-dash-surface-nested)', padding: '4px', borderRadius: '10px', border: '1px solid var(--glass-dash-border-subtle)' }}>
+                <button
+                  type="button"
+                  onClick={() => setReportViewMode('dossier')}
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    borderRadius: '7px',
+                    border: 'none',
+                    background: reportViewMode === 'dossier' ? 'var(--glass-dash-blue, #38bdf8)' : 'transparent',
+                    color: reportViewMode === 'dossier' ? '#0f172a' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  📑 Official Generated Dossier
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setReportViewMode('interactive')}
+                  style={{
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    borderRadius: '7px',
+                    border: 'none',
+                    background: reportViewMode === 'interactive' ? 'var(--glass-dash-blue, #38bdf8)' : 'transparent',
+                    color: reportViewMode === 'interactive' ? '#0f172a' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  📋 Audit Verification Checklist
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadHtml(reportData, reportHtml, activeCaseId)}
+                  className="btn-outline"
+                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                  title="Download legal-grade HTML dossier"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  HTML
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDownloadJson(reportData, activeCaseId)}
+                  className="btn-outline"
+                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                  title="Download structured JSON report"
+                >
+                  JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDossierModalOpen(true)}
+                  className="btn-primary"
+                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
+                  title="Expand report to full screen view"
+                >
+                  Full Screen
+                </button>
+              </div>
+            </div>
+
+            {reportViewMode === 'dossier' ? (
+              <div style={{
+                flex: 1,
+                minHeight: 0,
+                borderRadius: '12px',
+                overflow: 'hidden',
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e2e8f0'}`,
+                background: '#ffffff'
+              }}>
+                <iframe
+                  id="argus-dossier-iframe"
+                  title="Official Generated Forensic Dossier"
+                  srcDoc={reportHtml || generateHtmlFromReportData(reportData || { case_id: activeCaseId, findings, evidence_files: evidenceFiles, executive_summary: caseSummary?.description })}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    border: 'none',
+                    display: 'block'
+                  }}
+                />
+              </div>
+            ) : (
+              <div style={{ flex: 1, overflowY: 'auto' }}>
             <div role="status" style={{
               marginBottom: '14px',
               padding: '11px 14px',
@@ -1408,6 +1680,8 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
               </div>
 
             </div>
+              </div>
+            )}
           </div>
 
 
@@ -2071,6 +2345,28 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
           </div>
         </div>
       )}
+      {/* Full Screen Dossier Modal */}
+      <GeneratedReportModal
+        isOpen={dossierModalOpen}
+        onClose={() => setDossierModalOpen(false)}
+        caseId={activeCaseId || 'CASE'}
+        reportData={reportData}
+        reportHtml={reportHtml}
+      />
+
+      {/* Senior Analyst -> Auditor Escalation Modal */}
+      <SeniorSubmitToAuditorModal
+        isOpen={submitToAuditorOpen}
+        onClose={() => setSubmitToAuditorOpen(false)}
+        caseId={activeCaseId || 'CASE'}
+        caseName={activeCaseName}
+        reportData={reportData}
+        reportHtml={reportHtml}
+        onSuccess={(rec) => {
+          setIsSubmittedToAuditor(true);
+          setSubmittedToAuditorData(rec);
+        }}
+      />
     </div>
   );
 }

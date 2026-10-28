@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../css/style.css';
 import NotificationMenu from '../components/NotificationMenu';
-import { fetchCases, fetchCaseSummary, fetchEvidenceForCase, fetchFindings } from '../js/api';
+import { fetchCases, fetchCaseSummary, fetchEvidenceForCase, fetchFindings, fetchReport } from '../js/api';
+import GeneratedReportCard from '../components/GeneratedReportCard';
+import GeneratedReportModal from '../components/GeneratedReportModal';
+import SeniorSubmitToAuditorModal from '../components/SeniorSubmitToAuditorModal';
 import { safeFormatTime } from '../js/dateUtils';
 
 const SeniorDashboard = () => {
@@ -14,6 +17,13 @@ const SeniorDashboard = () => {
   const [evidenceStats, setEvidenceStats] = useState({ available: 0, partial: 0, missing: 0 });
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(localStorage.getItem('argus_theme') || 'dark');
+  const [reportData, setReportData] = useState(null);
+  const [reportHtml, setReportHtml] = useState('');
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [isSubmittedByAnalyst, setIsSubmittedByAnalyst] = useState(false);
+  const [submitToAuditorOpen, setSubmitToAuditorOpen] = useState(false);
+  const [isSubmittedToAuditor, setIsSubmittedToAuditor] = useState(false);
+  const [auditorSubmissionDetails, setAuditorSubmissionDetails] = useState(null);
   
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
@@ -39,6 +49,21 @@ const SeniorDashboard = () => {
       }
       
       if (targetCaseId) {
+        const sub = localStorage.getItem(`argus_case_${targetCaseId}_submitted_to_senior`);
+        setIsSubmittedByAnalyst(Boolean(sub));
+        const subAud = localStorage.getItem(`argus_case_${targetCaseId}_submitted_to_auditor`);
+        if (subAud) {
+          try {
+            const parsedAud = JSON.parse(subAud);
+            setIsSubmittedToAuditor(Boolean(parsedAud?.submitted));
+            setAuditorSubmissionDetails(parsedAud);
+          } catch (_e) {
+            setIsSubmittedToAuditor(false);
+          }
+        } else {
+          setIsSubmittedToAuditor(false);
+          setAuditorSubmissionDetails(null);
+        }
         const currentCase = caseList.find(c => c.case_id === targetCaseId);
         if (currentCase) {
           setActiveCaseDetails(currentCase);
@@ -62,6 +87,34 @@ const SeniorDashboard = () => {
             else missing++;
         });
         setEvidenceStats({ available, partial, missing });
+
+        // Fetch authoritative generated report package
+        try {
+          const [repJsonRes, repHtmlRes] = await Promise.allSettled([
+            fetchReport(targetCaseId, 'json', true),
+            fetchReport(targetCaseId, 'html', true)
+          ]);
+          let rData = null;
+          if (repJsonRes.status === 'fulfilled' && repJsonRes.value) {
+            rData = typeof repJsonRes.value === 'string' ? JSON.parse(repJsonRes.value) : repJsonRes.value;
+            setReportData(rData);
+          }
+          if (repHtmlRes.status === 'fulfilled' && repHtmlRes.value) {
+            const hVal = typeof repHtmlRes.value === 'string' ? repHtmlRes.value : JSON.stringify(repHtmlRes.value);
+            setReportHtml(hVal);
+          }
+          if (!rData) {
+            setReportData({
+              case_id: targetCaseId,
+              findings: findingsList,
+              evidence_files: evList,
+              timeline: [],
+              executive_summary: summaryData?.description || `Forensic case baseline compiled for Case ${targetCaseId}. Contains ${evList.length} evidence artifact(s) and ${findingsList.length} triaged finding(s).`
+            });
+          }
+        } catch (repErr) {
+          console.warn('Authoritative report fetch non-fatal error:', repErr);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -116,7 +169,19 @@ const SeniorDashboard = () => {
             <div>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '8px' }}>
                 <h1 style={{ margin: 0, fontSize: '24px', fontWeight: 700, color: 'var(--text-main)' }}>Case #{activeSummary?.case_id || 'ARG-2026-001'}</h1>
-                <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600 }}>Ready for Review</span>
+                {isSubmittedToAuditor ? (
+                  <span style={{ background: 'rgba(16, 185, 129, 0.2)', color: '#10b981', border: '1px solid rgba(16, 185, 129, 0.4)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Escalated to Auditor &middot; Ready for Attestation
+                  </span>
+                ) : isSubmittedByAnalyst ? (
+                  <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#38bdf8', border: '1px solid rgba(56, 189, 248, 0.3)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Submitted by Analyst &middot; Ready for Review
+                  </span>
+                ) : (
+                  <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600 }}>Ready for Review</span>
+                )}
               </div>
               <div style={{ display: 'flex', gap: '12px', alignItems: 'center', fontSize: '15px', color: 'var(--text-muted)' }}>
                 <span>{activeSummary?.name || activeCaseDetails?.name || 'Investigation Case'}</span>
@@ -192,6 +257,39 @@ const SeniorDashboard = () => {
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
                 Report Review
               </button>
+
+              <button
+                type="button"
+                onClick={() => setSubmitToAuditorOpen(true)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 18px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: isSubmittedToAuditor ? '#10b981' : 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                  color: '#ffffff',
+                  fontSize: '13px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
+                  transition: 'all 0.2s'
+                }}
+                title={isSubmittedToAuditor ? 'Report already escalated to Auditor' : 'Approve findings and escalate to Auditor'}
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                  {isSubmittedToAuditor ? (
+                    <polyline points="20 6 9 17 4 12"></polyline>
+                  ) : (
+                    <>
+                      <line x1="22" y1="2" x2="11" y2="13"></line>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </>
+                  )}
+                </svg>
+                {isSubmittedToAuditor ? '✓ Submitted to Auditor' : '🚀 Submit to Auditor'}
+              </button>
             </div>
           </div>
           
@@ -204,6 +302,19 @@ const SeniorDashboard = () => {
             </p>
           </div>
         </div>
+
+        {/* Official Generated Case Report Section */}
+        <GeneratedReportCard
+          caseId={activeSummary?.case_id || activeCaseDetails?.case_id || localStorage.getItem('active_case_id') || 'CASE'}
+          caseName={activeSummary?.name || activeCaseDetails?.name}
+          reportData={reportData}
+          reportHtml={reportHtml}
+          loading={loading}
+          onOpenReportModal={() => setReportModalOpen(true)}
+          role="senior_analyst"
+          onSubmitToAuditor={() => setSubmitToAuditorOpen(true)}
+          isSubmittedToAuditor={isSubmittedToAuditor}
+        />
 
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px', marginBottom: '24px' }}>
           
@@ -353,6 +464,29 @@ const SeniorDashboard = () => {
         </div>
 
       </div>
+
+      {/* Generated Report Preview Modal */}
+      <GeneratedReportModal
+        isOpen={reportModalOpen}
+        onClose={() => setReportModalOpen(false)}
+        caseId={activeSummary?.case_id || activeCaseDetails?.case_id || localStorage.getItem('active_case_id') || 'CASE'}
+        reportData={reportData}
+        reportHtml={reportHtml}
+      />
+
+      {/* Senior Analyst -> Auditor Escalation Modal */}
+      <SeniorSubmitToAuditorModal
+        isOpen={submitToAuditorOpen}
+        onClose={() => setSubmitToAuditorOpen(false)}
+        caseId={activeSummary?.case_id || activeCaseDetails?.case_id || localStorage.getItem('active_case_id') || 'CASE'}
+        caseName={activeSummary?.name || activeCaseDetails?.name}
+        reportData={reportData}
+        reportHtml={reportHtml}
+        onSuccess={(rec) => {
+          setIsSubmittedToAuditor(true);
+          setAuditorSubmissionDetails(rec);
+        }}
+      />
     </>
   );
 };

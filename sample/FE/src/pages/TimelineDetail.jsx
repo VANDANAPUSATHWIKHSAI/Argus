@@ -25,11 +25,7 @@ const TimelineDetail = () => {
     user = currentUserStr ? JSON.parse(currentUserStr) : null;
   } catch (_e) {}
 
-  useEffect(() => {
-    if (user?.role === 'analyst') {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [user, navigate]);
+// Analyst role authorized for timeline exploration
 
   const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
   const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());

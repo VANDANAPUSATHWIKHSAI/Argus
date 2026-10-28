@@ -339,10 +339,7 @@ const Upload = () => {
     <>
       <div id="app-shell">
         <AlertModal 
-          isOpen={customAlert.isOpen} 
-          title={customAlert.title} 
-          message={customAlert.message} 
-          type={customAlert.type} 
+          {...customAlert} 
           onClose={closeAlert} 
         />
         <Sidebar active="upload" />

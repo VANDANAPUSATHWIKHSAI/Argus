@@ -9,6 +9,7 @@ import AdminDashboard from './AdminDashboard';
 import SeniorDashboard from './SeniorDashboard';
 import AuditorDashboard from './AuditorDashboard';
 import ForensicGraph from '../components/ForensicGraph';
+import AnalystSubmitReportModal from '../components/AnalystSubmitReportModal';
 import { fetchCases, fetchCaseSummary, fetchAgentResults, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 import { safeFormatDateTime } from '../js/dateUtils';
 
@@ -32,6 +33,8 @@ const Dashboard = () => {
   const [creating, setCreating] = useState(false);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
   const [theme, setTheme] = useState(localStorage.getItem('argus_theme') || 'dark');
+  const [submitModalOpen, setSubmitModalOpen] = useState(false);
+  const [isReportSubmitted, setIsReportSubmitted] = useState(false);
 
   const toggleTheme = () => {
     const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -39,6 +42,21 @@ const Dashboard = () => {
     document.documentElement.setAttribute('data-theme', nextTheme);
     localStorage.setItem('argus_theme', nextTheme);
   };
+
+  useEffect(() => {
+    const syncReportSubmission = () => {
+      const cId = activeSummary?.case_id || localStorage.getItem('active_case_id');
+      if (cId) {
+        const subRecord = localStorage.getItem(`argus_case_${cId}_submitted_to_senior`);
+        setIsReportSubmitted(Boolean(subRecord));
+      } else {
+        setIsReportSubmitted(false);
+      }
+    };
+    syncReportSubmission();
+    window.addEventListener('storage', syncReportSubmission);
+    return () => window.removeEventListener('storage', syncReportSubmission);
+  }, [activeSummary]);
 
   const closeAlert = () => {
     if (customAlert.onClose) customAlert.onClose();
@@ -241,6 +259,11 @@ const Dashboard = () => {
     : 0;
   const isCaseClosed = activeSummary?.status === 'closed';
 
+  const currentCaseId = activeSummary?.case_id || localStorage.getItem('active_case_id');
+  const isSubmittedToSenior = isReportSubmitted || Boolean(currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_senior`));
+  const isSubmittedToAuditor = Boolean(currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_auditor`));
+  const isReportCompleted = isSubmittedToAuditor || isSubmittedToSenior || isCaseClosed;
+
   let rawStageStatuses = ['not_started', 'not_started', 'not_started', 'not_started', 'not_started'];
 
   if (activeSummary?.investigation_progress) {
@@ -250,48 +273,51 @@ const Dashboard = () => {
       const val = prog[k];
       return (typeof val === 'object' ? val?.status : val) || 'not_started';
     });
-  } else if (activeSummary) {
-    if (evidenceCount > 0) rawStageStatuses[0] = 'completed';
-    if (artifactsCount > 0) rawStageStatuses[1] = 'completed';
-    else if (evidenceCount > 0) rawStageStatuses[1] = 'in_progress';
-
-    if (findingsCount > 0) {
-      rawStageStatuses[1] = 'completed';
-      rawStageStatuses[2] = 'completed';
-      rawStageStatuses[3] = 'in_progress';
-    } else if (artifactsCount > 0) {
-      rawStageStatuses[2] = 'in_progress';
-    }
-
-    if (isCaseClosed) {
-      rawStageStatuses[3] = 'completed';
-      rawStageStatuses[4] = 'completed';
-    }
   }
 
-  // Real-time resilience guarantees
-  if (evidenceCount > 0 && rawStageStatuses[0] !== 'completed') {
+  // Comprehensive forensic stage integration:
+  if (evidenceCount > 0) {
     rawStageStatuses[0] = 'completed';
-  }
-  if (artifactsCount > 0 && rawStageStatuses[1] !== 'completed') {
     rawStageStatuses[1] = 'completed';
+    rawStageStatuses[2] = 'completed';
+    rawStageStatuses[3] = 'completed';
+    rawStageStatuses[4] = isReportCompleted ? 'completed' : 'in_progress';
   }
-  if (findingsCount > 0) {
-    if (rawStageStatuses[0] !== 'completed') rawStageStatuses[0] = 'completed';
-    if (rawStageStatuses[1] !== 'completed') rawStageStatuses[1] = 'completed';
-    if (rawStageStatuses[2] !== 'completed') rawStageStatuses[2] = 'completed';
+
+  if (artifactsCount > 0 || findingsCount > 0) {
+    rawStageStatuses[0] = 'completed';
+    rawStageStatuses[1] = 'completed';
+    rawStageStatuses[2] = 'completed';
+    rawStageStatuses[3] = 'completed';
   }
-  if (isCaseClosed) {
+
+  if (isReportCompleted) {
+    rawStageStatuses[0] = 'completed';
+    rawStageStatuses[1] = 'completed';
+    rawStageStatuses[2] = 'completed';
+    rawStageStatuses[3] = 'completed';
     rawStageStatuses[4] = 'completed';
   }
 
   // Contextual telemetry metrics under each stage
   const stageTelemetry = [
     evidenceCount > 0 ? `${evidenceCount} file${evidenceCount > 1 ? 's' : ''}` : 'No files',
-    artifactsCount > 0 ? `${artifactsCount} artifact${artifactsCount > 1 ? 's' : ''}` : (rawStageStatuses[0] === 'completed' ? 'Parsing...' : 'Pending'),
-    findingsCount > 0 ? 'Correlated' : (artifactsCount > 0 ? 'Correlating' : 'Pending'),
-    findingsCount > 0 ? `${findingsCount} finding${findingsCount > 1 ? 's' : ''}` : 'Pending review',
-    isCaseClosed ? 'Case Closed' : (findingsCount > 0 ? 'Report Ready' : 'In Review')
+    artifactsCount > 0
+      ? `${artifactsCount} artifact${artifactsCount > 1 ? 's' : ''}`
+      : (evidenceCount > 0 ? 'Analyzed' : 'Pending'),
+    findingsCount > 0
+      ? 'Correlated'
+      : (evidenceCount > 0 ? 'Correlated' : 'Pending'),
+    findingsCount > 0
+      ? `${findingsCount} finding${findingsCount > 1 ? 's' : ''}`
+      : (evidenceCount > 0 ? 'Triaged' : 'Pending review'),
+    isSubmittedToAuditor
+      ? 'Escalated to Auditor'
+      : isSubmittedToSenior
+      ? 'Submitted to Senior'
+      : isCaseClosed
+      ? 'Case Closed'
+      : (evidenceCount > 0 ? 'Ready for Senior' : 'Pending')
   ];
 
   const stages = STAGE_DEFINITIONS.map((def, idx) => {
@@ -314,15 +340,18 @@ const Dashboard = () => {
   const activeStep = inProgIdx !== -1 ? inProgIdx : (completedSteps >= 5 ? 4 : completedSteps);
   const progressBarWidth = `${(completedSteps / stages.length) * 100}%`;
 
+  const totalIntervals = Math.max(1, stages.length - 1);
+  const highestDoneStep = stages.map(s => s.isDone).lastIndexOf(true);
+  const targetStep = inProgIdx !== -1 ? inProgIdx : Math.max(0, highestDoneStep);
+  const fillRatio = highestDoneStep === -1 && inProgIdx <= 0 ? 0 : Math.min(1, targetStep / totalIntervals);
+  const activeTrackWidth = `calc((100% - 90px) * ${fillRatio})`;
+
 
   return (
     <>
       <div id="app-shell">
         <AlertModal 
-          isOpen={customAlert.isOpen} 
-          title={customAlert.title} 
-          message={customAlert.message} 
-          type={customAlert.type} 
+          {...customAlert} 
           onClose={closeAlert} 
         />
 
@@ -541,6 +570,46 @@ const Dashboard = () => {
                         </div>
                       </div>
 
+                      {/* Analyst Report Generation Option */}
+                      {!isAdmin && (
+                        <div className="header-actions-wrap" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, marginTop: '8px' }}>
+                          <button
+                            type="button"
+                            onClick={() => setSubmitModalOpen(true)}
+                            id="btn-analyst-generate-report"
+                            className="btn btn-primary"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              padding: '10px 18px',
+                              borderRadius: '12px',
+                              background: isReportSubmitted
+                                ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                                : 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                              color: '#ffffff',
+                              fontSize: '13px',
+                              fontWeight: 700,
+                              border: 'none',
+                              cursor: 'pointer',
+                              boxShadow: isReportSubmitted
+                                ? '0 4px 14px rgba(16, 185, 129, 0.35)'
+                                : '0 4px 14px rgba(37, 99, 235, 0.35)',
+                              transition: 'all 0.2s ease',
+                              whiteSpace: 'nowrap'
+                            }}
+                            title="Compile multi-agent findings and hand off report to Senior Analyst for validation"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                              <polyline points="14 2 14 8 20 8"></polyline>
+                              <line x1="16" y1="13" x2="8" y2="13"></line>
+                              <line x1="16" y1="17" x2="8" y2="17"></line>
+                            </svg>
+                            <span>{isReportSubmitted ? '✓ Report Submitted to Senior' : '📑 Generate Report for Senior'}</span>
+                          </button>
+                        </div>
+                      )}
 
                     </div>
 
@@ -675,27 +744,25 @@ const Dashboard = () => {
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             <h3 style={{ margin: 0 }}>Investigation Progress</h3>
-                            {currentUser?.role !== 'analyst' && (
-                              <Link 
-                                to="/timeline" 
-                                style={{ 
-                                  fontSize: '11.5px', 
-                                  fontWeight: 700, 
-                                  color: '#3b82f6', 
-                                  textDecoration: 'none', 
-                                  display: 'inline-flex', 
-                                  alignItems: 'center', 
-                                  gap: '4px', 
-                                  padding: '3px 8px', 
-                                  borderRadius: '6px', 
-                                  background: 'rgba(59, 130, 246, 0.1)', 
-                                  border: '1px solid rgba(59, 130, 246, 0.25)' 
-                                }}
-                              >
-                                <span>Attack Timeline</span>
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-                              </Link>
-                            )}
+                            <Link 
+                              to="/timeline" 
+                              style={{ 
+                                fontSize: '11.5px', 
+                                fontWeight: 700, 
+                                color: '#3b82f6', 
+                                textDecoration: 'none', 
+                                display: 'inline-flex', 
+                                alignItems: 'center', 
+                                gap: '4px', 
+                                padding: '3px 8px', 
+                                borderRadius: '6px', 
+                                background: 'rgba(59, 130, 246, 0.1)', 
+                                border: '1px solid rgba(59, 130, 246, 0.25)' 
+                              }}
+                            >
+                              <span>Attack Timeline</span>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                            </Link>
                           </div>
                           <p style={{ margin: '4px 0 0 0' }}>Track the lifecycle of the active case.</p>
                         </div>
@@ -706,32 +773,41 @@ const Dashboard = () => {
                           </div>
                         </div>
                       </div>
-                      {/* Single-track timeline */}
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative', padding: '12px 4px 6px' }}>
-                        {stages.map((stage, i) => {
-                          const isLast = i === stages.length - 1;
-                          const lineFilled = stage.isDone;
 
-                          return (
-                            <React.Fragment key={stage.key}>
-                              {/* Step node wrapped in Link for direct navigation */}
-                              <Link
-                                to={stage.path}
-                                title={`${stage.shortLabel} — Click to ${stage.actionText}`}
-                                style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  gap: '8px',
-                                  zIndex: 2,
-                                  textDecoration: 'none',
-                                  cursor: 'pointer',
-                                  transition: 'transform 0.2s ease',
-                                  minWidth: '80px',
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
-                              >
+                      {/* Continuous Stepper Container */}
+                      <div style={{ position: 'relative', padding: '16px 0 8px 0' }}>
+                        {/* Background Track Line spanning across all circle centers */}
+                        <div style={{
+                          position: 'absolute',
+                          top: '33px',
+                          left: '45px',
+                          right: '45px',
+                          height: '3px',
+                          backgroundColor: 'var(--border-strong)',
+                          borderRadius: '99px',
+                          zIndex: 0
+                        }} />
+                        {/* Dynamic Active Fill Track Line */}
+                        <div style={{
+                          position: 'absolute',
+                          top: '33px',
+                          left: '45px',
+                          width: activeTrackWidth,
+                          height: '3px',
+                          background: 'linear-gradient(90deg, #10b981, #3b82f6)',
+                          borderRadius: '99px',
+                          zIndex: 0,
+                          transition: 'width 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
+                        }} />
+
+                        {/* Interactive Stage Nodes */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', position: 'relative', zIndex: 1 }}>
+                          {stages.map((stage, i) => {
+                            const isAnalystRole = !isAdmin && !isSeniorAnalyst && !isAuditor;
+                            const isReportStep = stage.key === 'report';
+
+                            const nodeContent = (
+                              <>
                                 <div style={{
                                   width: '34px',
                                   height: '34px',
@@ -740,7 +816,7 @@ const Dashboard = () => {
                                     ? '#10b981'
                                     : stage.isActive
                                     ? 'var(--blue)'
-                                    : 'var(--bg-app)',
+                                    : 'var(--bg-card)',
                                   border: stage.isDone
                                     ? '2.5px solid #10b981'
                                     : stage.isActive
@@ -751,6 +827,7 @@ const Dashboard = () => {
                                   justifyContent: 'center',
                                   transition: 'all 0.3s ease',
                                   flexShrink: 0,
+                                  zIndex: 2,
                                   boxShadow: stage.isActive
                                     ? '0 0 12px rgba(59, 130, 246, 0.5)'
                                     : stage.isDone
@@ -778,7 +855,7 @@ const Dashboard = () => {
                                   )}
                                 </div>
 
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '100%' }}>
                                   <span style={{
                                     fontSize: '12px',
                                     fontWeight: stage.isActive ? 700 : stage.isDone ? 600 : 500,
@@ -797,27 +874,57 @@ const Dashboard = () => {
                                     border: stage.isDone ? '1px solid rgba(16, 185, 129, 0.25)' : stage.isActive ? '1px solid rgba(59, 130, 246, 0.25)' : '1px solid var(--border-subtle)',
                                     padding: '1px 6px',
                                     borderRadius: '4px',
-                                    letterSpacing: '0.2px'
+                                    letterSpacing: '0.2px',
+                                    whiteSpace: 'nowrap'
                                   }}>
                                     {stage.metric}
                                   </span>
                                 </div>
-                              </Link>
+                              </>
+                            );
 
-                              {/* Connector line between steps */}
-                              {!isLast && (
-                                <div style={{
-                                  flex: 1,
-                                  height: '2.5px',
-                                  marginTop: '16px',
-                                  borderRadius: '99px',
-                                  background: lineFilled ? '#10b981' : 'var(--border-strong)',
-                                  transition: 'background 0.5s ease'
-                                }} />
-                              )}
-                            </React.Fragment>
-                          );
-                        })}
+                            if (isReportStep && isAnalystRole) {
+                              return (
+                                <div
+                                  key={stage.key}
+                                  onClick={() => setSubmitModalOpen(true)}
+                                  title="Click to generate and submit report to Senior Analyst"
+                                  style={{
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    cursor: 'pointer',
+                                    width: '90px',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {nodeContent}
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <Link
+                                key={stage.key}
+                                to={stage.path}
+                                title={`${stage.shortLabel} — Click to ${stage.actionText}`}
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  gap: '8px',
+                                  textDecoration: 'none',
+                                  cursor: 'pointer',
+                                  width: '90px',
+                                  flexShrink: 0
+                                }}
+                              >
+                                {nodeContent}
+                              </Link>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
 
@@ -878,6 +985,25 @@ const Dashboard = () => {
       )}
 
       <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
+
+      {/* Analyst Report Generation and Senior Submission Modal */}
+      <AnalystSubmitReportModal
+        isOpen={submitModalOpen}
+        onClose={() => setSubmitModalOpen(false)}
+        caseId={activeSummary?.case_id || localStorage.getItem('active_case_id') || ''}
+        caseName={activeSummary?.name || localStorage.getItem('active_case_name') || ''}
+        activeSummary={activeSummary}
+        onSuccess={() => {
+          setIsReportSubmitted(true);
+          setCustomAlert({
+            isOpen: true,
+            title: 'Report Submitted',
+            message: `Forensic report for Case ${activeSummary?.case_id || ''} has been compiled and submitted to the Senior Analyst for review.`,
+            type: 'success',
+            onClose: null
+          });
+        }}
+      />
     </>
   );
 };

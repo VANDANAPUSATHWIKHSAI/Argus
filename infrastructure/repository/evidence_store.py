@@ -1062,8 +1062,20 @@ def delete_evidence(
                 (evidence_id,)
             )
             row = cur.fetchone()
+            if not row and case_id:
+                cur.execute(
+                    """
+                    SELECT e.evidence_id, e.case_id, e.filename, c.tenant_id
+                    FROM evidence e
+                    LEFT JOIN cases c ON e.case_id = c.case_id
+                    WHERE (e.case_id = %s OR e.case_id = %s) AND (e.evidence_id = %s OR e.filename = %s);
+                    """,
+                    (case_id, case_id.replace('-', '_'), evidence_id, evidence_id)
+                )
+                row = cur.fetchone()
             if row:
                 ev_id, ev_case_id, ev_filename, ev_tenant_id = row
+                evidence_id = ev_id
                 # Enforce tenant isolation if tenant is specified and not admin wildcard
                 if ev_tenant_id and tenant_id not in ("default", "dev-team") and ev_tenant_id != tenant_id:
                     conn.close()

@@ -902,36 +902,47 @@ async def get_case(
         ev_status = InvestigationStageStatus.COMPLETED
 
     # 2. Analysis & 3. Correlation
-    # In ARGUS, Stage 1-4 is synchronous, so if findings exist, analysis/correlation are complete.
+    # In ARGUS, once evidence is collected, analysis & entity correlation complete.
     if ev_status != InvestigationStageStatus.COMPLETED:
         an_status = InvestigationStageStatus.NOT_STARTED
         cor_status = InvestigationStageStatus.NOT_STARTED
-    elif len(findings) > 0:
+    else:
         an_status = InvestigationStageStatus.COMPLETED
         cor_status = InvestigationStageStatus.COMPLETED
-    elif total_artifacts > 0:
-        an_status = InvestigationStageStatus.COMPLETED
-        cor_status = InvestigationStageStatus.IN_PROGRESS
-    else:
-        an_status = InvestigationStageStatus.IN_PROGRESS
-        cor_status = InvestigationStageStatus.NOT_STARTED
         
     # 4. Findings
     if cor_status != InvestigationStageStatus.COMPLETED:
         find_status = InvestigationStageStatus.NOT_STARTED
     else:
-        has_reviewed = status_counts.get("analyst_confirmed", 0) > 0 or status_counts.get("analyst_rejected", 0) > 0
-        find_status = InvestigationStageStatus.COMPLETED if has_reviewed else InvestigationStageStatus.IN_PROGRESS
+        find_status = InvestigationStageStatus.COMPLETED
         
     # 5. Report
     if find_status != InvestigationStageStatus.COMPLETED:
         rep_status = InvestigationStageStatus.NOT_STARTED
     else:
-        # Check case status for closure
+        # Check case status for closure or report submission
         cases = list_cases(tenant_id=x_tenant_id)
         current_case = next((c for c in cases if c.case_id == case_id), None)
         is_closed = current_case and current_case.status == "closed"
-        rep_status = InvestigationStageStatus.COMPLETED if is_closed else InvestigationStageStatus.IN_PROGRESS
+        
+        has_report_note = False
+        try:
+            from api.routes.auth import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT 1 FROM case_notes WHERE case_id = %s AND (title ILIKE %s OR title ILIKE %s) LIMIT 1",
+                        (case_id, "%Report Submitted%", "%Escalation to Auditor%")
+                    )
+                    if cur.fetchone():
+                        has_report_note = True
+        except Exception:
+            pass
+
+        if is_closed or has_report_note:
+            rep_status = InvestigationStageStatus.COMPLETED
+        else:
+            rep_status = InvestigationStageStatus.IN_PROGRESS
 
     progress = InvestigationProgress(
         evidence_collection=ev_status,

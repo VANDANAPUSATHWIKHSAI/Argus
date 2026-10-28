@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import CaseLockBanner from '../components/CaseLockBanner';
+import AnalystSubmitReportModal from '../components/AnalystSubmitReportModal';
 import { fetchAgentResults, triggerAgentAnalysis, fetchCases } from '../js/api';
 import { formatEvidenceId } from '../js/dateUtils';
 import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase, setActiveCase } from '../js/caseEvents';
@@ -226,6 +227,7 @@ const Agents = () => {
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('argus_theme') || 'dark');
+  const [submitReportModalOpen, setSubmitReportModalOpen] = useState(false);
   const [caseDetails, setCaseDetails] = useState(null);
   const [availableCases, setAvailableCases] = useState([]);
   const [showCaseSelector, setShowCaseSelector] = useState(false);
@@ -1368,6 +1370,50 @@ const Agents = () => {
                 {/* AGENT 7: SUPERVISOR & NLI VERIFICATION DEEP DIVE */}
                 {selectedAgentTab === 'agent7' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                    {/* Senior Analyst Handoff Banner */}
+                    <div style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(124, 58, 237, 0.12) 100%)',
+                      border: '1px solid rgba(59, 130, 246, 0.35)',
+                      borderRadius: 8,
+                      padding: '14px 18px',
+                      flexWrap: 'wrap',
+                      gap: 12
+                    }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--blue)' }}>
+                          Supervisor Synthesis Verified &mdash; Hand Off to Senior Analyst
+                        </div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                          Compile all verified multi-agent findings, timeline entries, and evidence into the official case report.
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSubmitReportModalOpen(true)}
+                        className="btn btn-primary"
+                        style={{
+                          padding: '8px 18px',
+                          fontSize: '12.5px',
+                          fontWeight: 700,
+                          background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                          border: 'none',
+                          color: '#fff',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        <span>📑 Generate Report for Senior Analyst</span>
+                        <span>&rarr;</span>
+                      </button>
+                    </div>
+
                     {/* Synthesis Narrative Box */}
                     <div style={{ background: 'var(--bg-app)', border: '1px solid var(--border-strong)', borderRadius: 8, padding: 18 }}>
                       <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--blue)', textTransform: 'uppercase', marginBottom: 8 }}>
@@ -2236,6 +2282,21 @@ const Agents = () => {
           )}
 
         </div>
+        <AnalystSubmitReportModal
+          isOpen={submitReportModalOpen}
+          onClose={() => setSubmitReportModalOpen(false)}
+          caseId={activeCaseId}
+          caseName={activeCaseName}
+          activeSummary={caseDetails}
+          onSuccess={() => {
+            setCustomAlert({
+              isOpen: true,
+              title: 'Report Submitted',
+              message: `Case ${activeCaseId} report successfully generated and submitted to the Senior Analyst for review.`,
+              type: 'success'
+            });
+          }}
+        />
       </main>
     </div>
   );

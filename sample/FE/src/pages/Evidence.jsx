@@ -221,6 +221,7 @@ const Evidence = () => {
           }
           delete evidenceCacheRef.current[activeCaseId];
           await loadEvidence(true);
+          setActiveCase(activeCaseId, activeCaseName);
           setCustomAlert({
             isOpen: true,
             title: 'Evidence Removed',
@@ -325,10 +326,7 @@ const Evidence = () => {
     <>
       <div id="app-shell">
         <AlertModal 
-          isOpen={customAlert.isOpen} 
-          title={customAlert.title} 
-          message={customAlert.message} 
-          type={customAlert.type} 
+          {...customAlert} 
           onClose={closeAlert} 
         />
   {/* SIDEBAR */}

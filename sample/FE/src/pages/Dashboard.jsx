@@ -24,9 +24,11 @@ import AnalystSubmitReportModal from '../components/AnalystSubmitReportModal';
 
 import CaseNotAssigned from '../components/CaseNotAssigned';
 
-import { fetchCases, fetchCaseSummary, fetchAgentResults, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { fetchCases, fetchCaseSummary, fetchAgentResults, stopWorkload, restartWorkload, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
 import { safeFormatDateTime } from '../js/dateUtils';
+
+import { setActiveCase } from '../js/caseEvents';
 
 
 
@@ -73,6 +75,70 @@ const Dashboard = () => {
   const [submitModalOpen, setSubmitModalOpen] = useState(false);
 
   const [isReportSubmitted, setIsReportSubmitted] = useState(false);
+
+  const [stoppingWorkload, setStoppingWorkload] = useState(false);
+
+  const [restartingWorkload, setRestartingWorkload] = useState(false);
+
+  const handleDashboardStopWorkload = async () => {
+    const targetCaseId = activeSummary?.case_id || (cases && cases[0]?.id);
+    if (!targetCaseId || stoppingWorkload) return;
+    setStoppingWorkload(true);
+    try {
+      const res = await stopWorkload(targetCaseId);
+      setCustomAlert({
+        isOpen: true,
+        title: '⏹ Workload Stopped',
+        message: res.message || 'Workload was stopped. All captured evidence is safely retained. You can upload missing evidence and restart anytime.',
+        type: 'info'
+      });
+      const [summaryData, agentData] = await Promise.all([
+        fetchCaseSummary(targetCaseId).catch(() => null),
+        fetchAgentResults(targetCaseId).catch(() => null)
+      ]);
+      if (summaryData) setActiveSummary(summaryData);
+      if (agentData) setAgentSummary(agentData);
+    } catch (err) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Error Stopping Workload',
+        message: err.message || 'Could not stop the workload.',
+        type: 'error'
+      });
+    } finally {
+      setStoppingWorkload(false);
+    }
+  };
+
+  const handleDashboardRestartWorkload = async () => {
+    const targetCaseId = activeSummary?.case_id || (cases && cases[0]?.id);
+    if (!targetCaseId || restartingWorkload) return;
+    setRestartingWorkload(true);
+    try {
+      const res = await restartWorkload(targetCaseId);
+      setCustomAlert({
+        isOpen: true,
+        title: '🔄 Workload Restarted',
+        message: res.message || 'Multi-agent analysis restarted with all captured evidence.',
+        type: 'success'
+      });
+      const [summaryData, agentData] = await Promise.all([
+        fetchCaseSummary(targetCaseId).catch(() => null),
+        fetchAgentResults(targetCaseId).catch(() => null)
+      ]);
+      if (summaryData) setActiveSummary(summaryData);
+      if (agentData) setAgentSummary(agentData);
+    } catch (err) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Error Restarting Workload',
+        message: err.message || 'Could not restart the workload.',
+        type: 'error'
+      });
+    } finally {
+      setRestartingWorkload(false);
+    }
+  };
 
 
 
@@ -232,11 +298,10 @@ const Dashboard = () => {
 
     e.preventDefault();
 
-    if (!newCaseName.trim()) return;
+    const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const finalCaseName = newCaseName.trim() || `Investigation Case (${dateStr})`;
 
-
-
-    if (cases.some(c => c.name && c.name.toLowerCase() === newCaseName.trim().toLowerCase())) {
+    if (newCaseName.trim() && cases.some(c => c.name && c.name.toLowerCase() === newCaseName.trim().toLowerCase())) {
 
       setCustomAlert({ isOpen: true, title: 'Notice', message: 'This case name is already in use. Please choose another.', type: 'warning' });
 
@@ -266,7 +331,7 @@ const Dashboard = () => {
 
         },
 
-        body: JSON.stringify({ name: newCaseName, description: newCaseDesc, analyst: 'Analyst' }),
+        body: JSON.stringify({ name: finalCaseName, description: newCaseDesc, analyst: 'Admin' }),
 
       });
 
@@ -276,11 +341,9 @@ const Dashboard = () => {
 
       const createdId = data.case_id || data.id;
 
-      localStorage.setItem('active_case_id', createdId);
+      setActiveCase(createdId, finalCaseName);
 
-      localStorage.setItem('active_case_name', newCaseName);
-
-      localStorage.setItem('active_case_desc', newCaseDesc);
+      if (newCaseDesc) localStorage.setItem('active_case_desc', newCaseDesc);
 
 
 
@@ -1335,76 +1398,96 @@ const Dashboard = () => {
                             </span>
 
                             <span style={{
-
                               fontSize: 11,
-
                               fontWeight: 800,
-
-                              background: agentSummary?.status === 'COMPLETED' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-
-                              color: agentSummary?.status === 'COMPLETED' ? '#10b981' : 'var(--blue)',
-
+                              background: agentSummary?.status === 'COMPLETED' ? 'rgba(16, 185, 129, 0.15)' : agentSummary?.status === 'STOPPED' ? 'rgba(245, 158, 11, 0.18)' : agentSummary?.status === 'RUNNING' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                              color: agentSummary?.status === 'COMPLETED' ? '#10b981' : agentSummary?.status === 'STOPPED' ? '#f59e0b' : agentSummary?.status === 'RUNNING' ? '#ef4444' : 'var(--blue)',
                               padding: '2px 8px',
-
-                              borderRadius: 4
-
+                              borderRadius: 4,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 5
                             }}>
-
+                              {agentSummary?.status === 'RUNNING' && <span className="live-dot" style={{ background: '#ef4444', width: 6, height: 6 }}></span>}
                               {agentSummary?.status || 'READY'}
-
                             </span>
-
                           </div>
-
                           <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-
                             Qwen3-8B Evidence Intelligence, Neo4j Graph Correlation, MITRE ATT&amp;CK Kill-Chain, YARA Heuristics, Threat Intel, and DeBERTa-v3 NLI Verification.
-
                           </p>
-
                         </div>
-
                       </div>
 
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        {agentSummary?.status === 'RUNNING' && (
+                          <button
+                            onClick={handleDashboardStopWorkload}
+                            disabled={stoppingWorkload}
+                            style={{
+                              background: 'rgba(239, 68, 68, 0.15)',
+                              border: '1px solid rgba(239, 68, 68, 0.4)',
+                              color: '#ef4444',
+                              padding: '9px 16px',
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: stoppingWorkload ? 'not-allowed' : 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6
+                            }}
+                            title="Stop workload to upload missing evidence or review current findings"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>
+                            <span>{stoppingWorkload ? 'Stopping...' : 'Stop Workload'}</span>
+                          </button>
+                        )}
 
+                        {agentSummary?.status !== 'RUNNING' && (
+                          <button
+                            onClick={handleDashboardRestartWorkload}
+                            disabled={restartingWorkload}
+                            style={{
+                              background: agentSummary?.status === 'STOPPED' ? '#10b981' : 'linear-gradient(135deg, #10b981, #059669)',
+                              border: 'none',
+                              color: '#fff',
+                              padding: '9px 16px',
+                              borderRadius: 6,
+                              fontSize: 12,
+                              fontWeight: 700,
+                              cursor: restartingWorkload ? 'not-allowed' : 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+                            }}
+                            title="Restart workload from scratch with all captured and newly uploaded evidence"
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                            <span>{restartingWorkload ? 'Restarting...' : 'Restart Workload'}</span>
+                          </button>
+                        )}
 
-                      <Link
-
-                        to="/agents"
-
-                        style={{
-
-                          background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
-
-                          color: '#fff',
-
-                          padding: '10px 20px',
-
-                          borderRadius: 6,
-
-                          fontSize: 12.5,
-
-                          fontWeight: 800,
-
-                          textDecoration: 'none',
-
-                          display: 'inline-flex',
-
-                          alignItems: 'center',
-
-                          gap: 8,
-
-                          boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
-
-                          whiteSpace: 'nowrap'
-
-                        }}
-
-                      >
-
-                        OPEN AGENT SWARM →
-
-                      </Link>
+                        <Link
+                          to="/agents"
+                          style={{
+                            background: 'linear-gradient(135deg, #3b82f6, #6366f1)',
+                            color: '#fff',
+                            padding: '10px 20px',
+                            borderRadius: 6,
+                            fontSize: 12.5,
+                            fontWeight: 800,
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            boxShadow: '0 4px 14px rgba(99, 102, 241, 0.35)',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          OPEN AGENT SWARM →
+                        </Link>
+                      </div>
 
                     </div>
 
@@ -1854,9 +1937,7 @@ const Dashboard = () => {
 
                     onChange={e => setNewCaseName(e.target.value)}
 
-                    placeholder="e.g. Ransomware Incident - Alpha Corp"
-
-                    required
+                    placeholder="e.g. Ransomware Incident - Alpha Corp (or auto-generated)"
 
                     style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: '14px', outline: 'none', boxSizing: 'border-box', background: 'var(--bg-app)', color: 'var(--text-main)' }}
 

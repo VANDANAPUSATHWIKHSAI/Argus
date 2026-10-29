@@ -124,8 +124,16 @@ def create_case_session(
             cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS name VARCHAR(255)")
             cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS description TEXT")
             
-            cur.execute(
-                "INSERT INTO cases (case_id, tenant_id, created_by, status, analyst_id, senior_analyst_id, name, description) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (case_id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description, analyst_id = EXCLUDED.analyst_id, senior_analyst_id = EXCLUDED.senior_analyst_id, status = EXCLUDED.status;",
+            cur.execute("""
+                INSERT INTO cases (case_id, tenant_id, created_by, status, analyst_id, senior_analyst_id, name, description)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (case_id) DO UPDATE SET
+                    name = COALESCE(EXCLUDED.name, cases.name),
+                    description = COALESCE(EXCLUDED.description, cases.description),
+                    analyst_id = COALESCE(EXCLUDED.analyst_id, cases.analyst_id),
+                    senior_analyst_id = COALESCE(EXCLUDED.senior_analyst_id, cases.senior_analyst_id),
+                    status = COALESCE(EXCLUDED.status, cases.status);
+            """,
                 (session.case_id, session.tenant_id, session.created_by, session.status, session.analyst_id, session.senior_analyst_id, session.name, session.description)
             )
             conn.commit()
@@ -140,18 +148,27 @@ def create_case_session(
         case_dir = Path(REPOSITORY_DIR) / session.case_id
         case_dir.mkdir(parents=True, exist_ok=True)
         session_file = case_dir / "case_session.json"
+        existing_data = {}
+        if session_file.exists():
+            try:
+                with open(session_file, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+            except Exception:
+                existing_data = {}
+
+        merged_data = {
+            "case_id": session.case_id,
+            "tenant_id": session.tenant_id or existing_data.get("tenant_id"),
+            "created_by": session.created_by or existing_data.get("created_by", "analyst"),
+            "created_at": (session.created_at.isoformat() if hasattr(session.created_at, "isoformat") else str(session.created_at)) or existing_data.get("created_at"),
+            "status": session.status or existing_data.get("status", "open"),
+            "analyst_id": session.analyst_id if session.analyst_id is not None else existing_data.get("analyst_id"),
+            "senior_analyst_id": session.senior_analyst_id if session.senior_analyst_id is not None else existing_data.get("senior_analyst_id"),
+            "name": session.name if session.name is not None else existing_data.get("name"),
+            "description": session.description if session.description is not None else existing_data.get("description")
+        }
         with open(session_file, "w", encoding="utf-8") as f:
-            json.dump({
-                "case_id": session.case_id,
-                "tenant_id": session.tenant_id,
-                "created_by": session.created_by,
-                "created_at": session.created_at.isoformat() if hasattr(session.created_at, "isoformat") else str(session.created_at),
-                "status": session.status,
-                "analyst_id": session.analyst_id,
-                "senior_analyst_id": session.senior_analyst_id,
-                "name": session.name,
-                "description": session.description
-            }, f, indent=2)
+            json.dump(merged_data, f, indent=2)
     except Exception as e:
         logger.warning(f"Could not persist local case_session.json: {e}")
 

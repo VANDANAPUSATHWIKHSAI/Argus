@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import '../css/style.css';
 
-import { uploadEvidenceFile, closeCase, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { uploadEvidenceFile, closeCase, fetchAgentResults, stopWorkload, restartWorkload, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
 import { getActiveCaseId, getActiveCaseName, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
@@ -75,6 +75,80 @@ const Upload = () => {
   const [creatingCase, setCreatingCase] = useState(false);
 
   const [caseLock, setCaseLock] = useState(null);
+
+  const [workloadStatus, setWorkloadStatus] = useState(null);
+
+  const [showRestartBanner, setShowRestartBanner] = useState(false);
+
+  const [stoppingWorkload, setStoppingWorkload] = useState(false);
+
+  const [restartingWorkload, setRestartingWorkload] = useState(false);
+
+  useEffect(() => {
+    let isCancelled = false;
+    if (activeCaseId) {
+      fetchAgentResults(activeCaseId)
+        .then(data => {
+          if (!isCancelled && data) {
+            setWorkloadStatus(data.status);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setWorkloadStatus(null);
+    }
+    return () => { isCancelled = true; };
+  }, [activeCaseId]);
+
+  const handleStopWorkloadInUpload = async () => {
+    if (!activeCaseId || stoppingWorkload) return;
+    setStoppingWorkload(true);
+    try {
+      const res = await stopWorkload(activeCaseId);
+      setWorkloadStatus('STOPPED');
+      setCustomAlert({
+        isOpen: true,
+        title: '⏹ Workload Stopped',
+        message: res.message || 'Workload was stopped. All captured evidence is safely retained. You can now upload the missing files and restart the workload.',
+        type: 'info'
+      });
+    } catch (err) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Error Stopping Workload',
+        message: err.message || 'Could not stop the workload.',
+        type: 'error'
+      });
+    } finally {
+      setStoppingWorkload(false);
+    }
+  };
+
+  const handleRestartWorkloadInUpload = async () => {
+    if (!activeCaseId || restartingWorkload) return;
+    setRestartingWorkload(true);
+    try {
+      const res = await restartWorkload(activeCaseId);
+      setWorkloadStatus('RUNNING');
+      setShowRestartBanner(false);
+      setCustomAlert({
+        isOpen: true,
+        title: '🔄 Workload Restarted',
+        message: res.message || 'Multi-agent analysis restarted with all captured and newly uploaded evidence.',
+        type: 'success'
+      });
+      navigate('/agents');
+    } catch (err) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Error Restarting Workload',
+        message: err.message || 'Could not restart the workload.',
+        type: 'error'
+      });
+    } finally {
+      setRestartingWorkload(false);
+    }
+  };
 
 
 
@@ -589,6 +663,8 @@ const Upload = () => {
 
       } catch (_) {}
 
+      setShowRestartBanner(true);
+
     }
 
 
@@ -904,6 +980,101 @@ const Upload = () => {
                   {/* Case Lock Banner for Active Case */}
 
                   <CaseLockBanner lockState={caseLock} caseId={activeCaseId} onLockRefreshed={setCaseLock} />
+
+                  {/* Active Workload Warning Banner */}
+                  {workloadStatus === 'RUNNING' && (
+                    <div style={{
+                      padding: '14px 18px',
+                      background: 'rgba(239, 68, 68, 0.12)',
+                      border: '1px solid rgba(239, 68, 68, 0.4)',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '14px',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span className="live-dot" style={{ background: '#ef4444' }}></span>
+                        <div>
+                          <div style={{ fontSize: '13px', color: '#f87171', fontWeight: 600 }}>
+                            Investigation Workload Currently Running
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            If you realized you missed uploading some evidence, click &quot;Stop Workload&quot; so it halts cleanly and all files can be included when restarted.
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={handleStopWorkloadInUpload}
+                        disabled={stoppingWorkload}
+                        style={{
+                          background: '#ef4444',
+                          border: 'none',
+                          color: '#fff',
+                          padding: '7px 16px',
+                          borderRadius: '8px',
+                          fontSize: '12px',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {stoppingWorkload ? 'Stopping...' : 'Stop Running Workload'}
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Post-Upload Restart Suggestion Banner */}
+                  {showRestartBanner && (
+                    <div style={{
+                      padding: '14px 18px',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      border: '1px solid rgba(16, 185, 129, 0.4)',
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '14px',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <span style={{ color: '#10b981', fontSize: '16px', fontWeight: 800 }}>✓</span>
+                        <div>
+                          <div style={{ fontSize: '13px', color: '#10b981', fontWeight: 600 }}>
+                            New Evidence Uploaded Successfully
+                          </div>
+                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            Restart the multi-agent workload to ensure this new evidence is analyzed together with all existing findings.
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <button
+                          onClick={() => setShowRestartBanner(false)}
+                          className="btn-outline"
+                          style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer' }}
+                        >
+                          Dismiss
+                        </button>
+                        <button
+                          onClick={handleRestartWorkloadInUpload}
+                          disabled={restartingWorkload}
+                          style={{
+                            background: '#10b981',
+                            border: 'none',
+                            color: '#fff',
+                            padding: '7px 16px',
+                            borderRadius: '8px',
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {restartingWorkload ? 'Restarting...' : 'Restart Workload Now →'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
 
 

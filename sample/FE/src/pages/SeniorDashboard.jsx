@@ -367,7 +367,13 @@ const SeniorDashboard = () => {
 
                 ) : (
 
-                  <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600 }}>Ready for Review</span>
+                  <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+
+                    Report Not Received &middot; Awaiting Analyst Submission
+
+                  </span>
 
                 )}
 
@@ -485,7 +491,20 @@ const SeniorDashboard = () => {
 
                 type="button"
 
-                onClick={() => setSubmitToAuditorOpen(true)}
+                onClick={() => {
+                  if (!isSubmittedByAnalyst && !isSubmittedToAuditor) {
+                    setCustomAlert({
+                      isOpen: true,
+                      title: 'Report Not Received',
+                      message: 'The assigned Analyst has not submitted the investigation report for this case yet. Please wait for the Analyst to submit the report before escalating to the Auditor.',
+                      type: 'warning'
+                    });
+                    return;
+                  }
+                  setSubmitToAuditorOpen(true);
+                }}
+
+                disabled={!isSubmittedByAnalyst && !isSubmittedToAuditor}
 
                 style={{
 
@@ -499,25 +518,41 @@ const SeniorDashboard = () => {
 
                     ? 'rgba(37, 99, 235, 0.15)'
 
+                    : !isSubmittedByAnalyst
+
+                    ? 'var(--glass-dash-surface-nested)'
+
                     : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
 
-                  color: isSubmittedToAuditor ? 'var(--glass-dash-blue, #60a5fa)' : '#ffffff',
+                  color: isSubmittedToAuditor 
+                    ? 'var(--glass-dash-blue, #60a5fa)' 
+                    : !isSubmittedByAnalyst
+                    ? 'var(--text-muted)'
+                    : '#ffffff',
 
                   fontSize: '13px',
 
                   fontWeight: 700,
 
-                  cursor: 'pointer',
+                  cursor: !isSubmittedByAnalyst && !isSubmittedToAuditor ? 'not-allowed' : 'pointer',
 
-                  border: isSubmittedToAuditor ? '1px solid rgba(37, 99, 235, 0.4)' : '1px solid rgba(255, 255, 255, 0.2)',
+                  border: isSubmittedToAuditor 
+                    ? '1px solid rgba(37, 99, 235, 0.4)' 
+                    : !isSubmittedByAnalyst
+                    ? '1px solid var(--border-subtle)'
+                    : '1px solid rgba(255, 255, 255, 0.2)',
 
-                  boxShadow: isSubmittedToAuditor ? '0 2px 8px rgba(37, 99, 235, 0.15)' : '0 4px 12px rgba(37, 99, 235, 0.35)',
+                  boxShadow: isSubmittedToAuditor || !isSubmittedByAnalyst 
+                    ? 'none' 
+                    : '0 4px 12px rgba(37, 99, 235, 0.35)',
+
+                  opacity: !isSubmittedByAnalyst && !isSubmittedToAuditor ? 0.6 : 1,
 
                   transition: 'all 0.2s'
 
                 }}
 
-                title={isSubmittedToAuditor ? 'Report already escalated to Auditor' : 'Approve findings and escalate to Auditor'}
+                title={isSubmittedToAuditor ? 'Report already escalated to Auditor' : !isSubmittedByAnalyst ? 'Report not received from Analyst yet' : 'Approve findings and escalate to Auditor'}
 
               >
 

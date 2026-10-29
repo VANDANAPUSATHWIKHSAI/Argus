@@ -4,7 +4,7 @@ import '../css/style.css';
 
 import '../css/evidence.css';
 
-import { fetchEvidenceForCase, closeCase, fetchCases, deleteEvidence } from '../js/api';
+import { fetchEvidenceForCase, closeCase, fetchCases, deleteEvidence, fetchAgentResults, stopWorkload, restartWorkload } from '../js/api';
 
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -109,6 +109,97 @@ const Evidence = () => {
   const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
 
   const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
+
+  const [workloadStatus, setWorkloadStatus] = useState(null);
+
+  const [stoppingWorkload, setStoppingWorkload] = useState(false);
+
+  const [restartingWorkload, setRestartingWorkload] = useState(false);
+
+  const loadWorkload = useCallback(async (caseId) => {
+    if (!caseId) {
+      setWorkloadStatus(null);
+      return;
+    }
+    try {
+      const data = await fetchAgentResults(caseId);
+      if (data && data.status) {
+        setWorkloadStatus(data.status);
+      } else {
+        setWorkloadStatus('READY');
+      }
+    } catch (_) {
+      setWorkloadStatus('READY');
+    }
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+    if (activeCaseId) {
+      loadWorkload(activeCaseId);
+      const interval = setInterval(() => {
+        if (!isCancelled && document.visibilityState === 'visible') {
+          loadWorkload(activeCaseId);
+        }
+      }, 4000);
+      return () => {
+        isCancelled = true;
+        clearInterval(interval);
+      };
+    } else {
+      setWorkloadStatus(null);
+    }
+  }, [activeCaseId, loadWorkload]);
+
+  const handleStopWorkload = async () => {
+    if (!activeCaseId || stoppingWorkload) return;
+    setStoppingWorkload(true);
+    try {
+      const res = await stopWorkload(activeCaseId);
+      setWorkloadStatus('STOPPED');
+      setCustomAlert({
+        isOpen: true,
+        title: '⏹ Workload Stopped',
+        message: res.message || 'Workload was stopped. All captured evidence is safely retained. You can upload missing files and restart anytime.',
+        type: 'info'
+      });
+      loadWorkload(activeCaseId);
+    } catch (err) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Error Stopping Workload',
+        message: err.message || 'Could not stop the workload.',
+        type: 'error'
+      });
+    } finally {
+      setStoppingWorkload(false);
+    }
+  };
+
+  const handleRestartWorkload = async () => {
+    if (!activeCaseId || restartingWorkload) return;
+    setRestartingWorkload(true);
+    try {
+      const res = await restartWorkload(activeCaseId);
+      setWorkloadStatus('RUNNING');
+      setCustomAlert({
+        isOpen: true,
+        title: '🔄 Workload Restarted',
+        message: res.message || 'Multi-agent analysis restarted with all captured and newly uploaded evidence.',
+        type: 'success'
+      });
+      loadWorkload(activeCaseId);
+    } catch (err) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Error Restarting Workload',
+        message: err.message || 'Could not restart the workload.',
+        type: 'error'
+      });
+    } finally {
+      setRestartingWorkload(false);
+    }
+  };
 
 
 
@@ -725,6 +816,86 @@ const Evidence = () => {
 
         )}
 
+        {/* Workload Status Indicator */}
+        {activeCaseId && (
+          <span style={{
+            padding: '6px 12px',
+            borderRadius: 'var(--radius-full)',
+            fontSize: '11.5px',
+            fontWeight: 700,
+            letterSpacing: '0.4px',
+            textTransform: 'uppercase',
+            background: workloadStatus === 'RUNNING' ? 'rgba(239, 68, 68, 0.15)' : (workloadStatus === 'STOPPED' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)'),
+            color: workloadStatus === 'RUNNING' ? '#ef4444' : (workloadStatus === 'STOPPED' ? '#f59e0b' : '#10b981'),
+            border: `1px solid ${workloadStatus === 'RUNNING' ? 'rgba(239, 68, 68, 0.4)' : (workloadStatus === 'STOPPED' ? 'rgba(245, 158, 11, 0.4)' : 'rgba(16, 185, 129, 0.4)')}`,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: workloadStatus === 'RUNNING' ? '#ef4444' : (workloadStatus === 'STOPPED' ? '#f59e0b' : '#10b981')
+            }} />
+            &bull; {workloadStatus || 'READY'}
+          </span>
+        )}
+
+        {/* STOP WORKLOAD BUTTON */}
+        {activeCaseId && workloadStatus === 'RUNNING' && (
+          <button
+            type="button"
+            onClick={handleStopWorkload}
+            disabled={stoppingWorkload}
+            style={{
+              padding: '7px 14px',
+              borderRadius: 'var(--radius-full)',
+              fontSize: '12.5px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: stoppingWorkload ? 'not-allowed' : 'pointer',
+              background: '#ef4444',
+              color: '#ffffff',
+              border: 'none',
+              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)'
+            }}
+            title="Stop running workload to upload missing evidence"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>
+            <span>{stoppingWorkload ? 'Stopping...' : 'Stop Workload'}</span>
+          </button>
+        )}
+
+        {/* RESTART WORKLOAD BUTTON */}
+        {activeCaseId && workloadStatus !== 'RUNNING' && (
+          <button
+            type="button"
+            onClick={handleRestartWorkload}
+            disabled={restartingWorkload}
+            style={{
+              padding: '7px 14px',
+              borderRadius: 'var(--radius-full)',
+              fontSize: '12.5px',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              cursor: restartingWorkload ? 'not-allowed' : 'pointer',
+              background: workloadStatus === 'STOPPED' ? '#10b981' : 'linear-gradient(135deg, #10b981, #059669)',
+              color: '#ffffff',
+              border: 'none',
+              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)'
+            }}
+            title="Restart multi-agent workload across all captured evidence"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            <span>{restartingWorkload ? 'Restarting...' : 'Restart Workload'}</span>
+          </button>
+        )}
+
         {isAdmin && activeCaseId && (
 
           <button
@@ -892,6 +1063,84 @@ const Evidence = () => {
                 </div>
 
               </div>
+
+              {/* Workload Status & Controls in Evidence Header */}
+              {activeCaseId && (
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', marginLeft: 'auto' }}>
+                  <span style={{
+                    padding: '5px 12px',
+                    borderRadius: '999px',
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    letterSpacing: '0.4px',
+                    textTransform: 'uppercase',
+                    background: workloadStatus === 'RUNNING' ? 'rgba(239, 68, 68, 0.15)' : (workloadStatus === 'STOPPED' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)'),
+                    color: workloadStatus === 'RUNNING' ? '#ef4444' : (workloadStatus === 'STOPPED' ? '#f59e0b' : '#10b981'),
+                    border: `1px solid ${workloadStatus === 'RUNNING' ? 'rgba(239, 68, 68, 0.3)' : (workloadStatus === 'STOPPED' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)')}`,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}>
+                    <span style={{
+                      width: '6px',
+                      height: '6px',
+                      borderRadius: '50%',
+                      background: workloadStatus === 'RUNNING' ? '#ef4444' : (workloadStatus === 'STOPPED' ? '#f59e0b' : '#10b981')
+                    }} />
+                    &bull; {workloadStatus || 'READY'}
+                  </span>
+
+                  {workloadStatus === 'RUNNING' ? (
+                    <button
+                      type="button"
+                      onClick={handleStopWorkload}
+                      disabled={stoppingWorkload}
+                      style={{
+                        background: '#ef4444',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        cursor: stoppingWorkload ? 'not-allowed' : 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 2px 8px rgba(239, 68, 68, 0.35)'
+                      }}
+                      title="Stop running workload to upload missing evidence"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>
+                      <span>{stoppingWorkload ? 'Stopping...' : 'Stop Workload'}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleRestartWorkload}
+                      disabled={restartingWorkload}
+                      style={{
+                        background: workloadStatus === 'STOPPED' ? '#10b981' : 'linear-gradient(135deg, #10b981, #059669)',
+                        border: 'none',
+                        color: '#ffffff',
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        fontSize: '12.5px',
+                        fontWeight: 700,
+                        cursor: restartingWorkload ? 'not-allowed' : 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        boxShadow: '0 2px 8px rgba(16, 185, 129, 0.35)'
+                      }}
+                      title="Restart workload with all captured evidence"
+                    >
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                      <span>{restartingWorkload ? 'Restarting...' : 'Restart Workload'}</span>
+                    </button>
+                  )}
+                </div>
+              )}
 
             </div>
 

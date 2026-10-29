@@ -77,7 +77,31 @@ async def get_report(
         if findings:
             target_case_id = case_id
 
-    if not evidence_list and not findings:
+    case_exists = bool(evidence_list or findings)
+    if not case_exists:
+        try:
+            from infrastructure.repository.evidence_store import get_case_session
+            session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+            if session:
+                case_exists = True
+        except Exception:
+            pass
+
+    if not case_exists:
+        try:
+            from api.routes.auth import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT case_id FROM cases WHERE (case_id = %s OR case_id = %s) AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'));",
+                        (clean_case_id, case_id, x_tenant_id)
+                    )
+                    if cur.fetchone():
+                        case_exists = True
+        except Exception:
+            pass
+
+    if not case_exists:
         raise HTTPException(
             status_code=404,
             detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."

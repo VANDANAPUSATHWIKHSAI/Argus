@@ -14,7 +14,7 @@ import CaseNotAssigned from '../components/CaseNotAssigned';
 
 import AnalystSubmitReportModal from '../components/AnalystSubmitReportModal';
 
-import { fetchAgentResults, triggerAgentAnalysis, fetchCases } from '../js/api';
+import { fetchAgentResults, triggerAgentAnalysis, stopWorkload, restartWorkload, fetchCases } from '../js/api';
 
 import { formatEvidenceId } from '../js/dateUtils';
 
@@ -468,6 +468,10 @@ const Agents = () => {
 
   const [caseLock, setCaseLock] = useState(null);
 
+  const [stoppingWorkload, setStoppingWorkload] = useState(false);
+
+  const [restartingWorkload, setRestartingWorkload] = useState(false);
+
 
 
   const currentUser = (() => {
@@ -735,6 +739,20 @@ const Agents = () => {
 
               });
 
+            } else if (data.status === 'STOPPED') {
+
+              setCustomAlert({
+
+                isOpen: true,
+
+                title: '⏹ Multi-Agent Workload Stopped',
+
+                message: data.message || `Workload for Case ${activeCaseId} stopped. All evidence collected so far has been safely retained. You can upload missing evidence and restart anytime.`,
+
+                type: 'info'
+
+              });
+
             } else if (data.status === 'PARTIAL_SUCCESS') {
 
               setCustomAlert({
@@ -896,6 +914,152 @@ const Agents = () => {
         type: 'error'
 
       });
+
+    }
+
+  };
+
+
+
+  const handleStopWorkload = async () => {
+
+    if (stoppingWorkload || !activeCaseId) return;
+
+    if (caseLock?.readOnly) {
+
+      setCustomAlert({
+
+        isOpen: true,
+
+        title: '🔒 Case Locked (Read-Only Mode)',
+
+        message: `Cannot stop workload. Case is currently locked by analyst ${caseLock.lockedBy?.name || 'another user'}.`,
+
+        type: 'warning'
+
+      });
+
+      return;
+
+    }
+
+
+
+    setStoppingWorkload(true);
+
+    try {
+
+      const res = await stopWorkload(activeCaseId);
+
+      setRunningAgents(false);
+
+      setCustomAlert({
+
+        isOpen: true,
+
+        title: '⏹ Workload Stopped',
+
+        message: res.message || 'The multi-agent workload was stopped. All captured evidence is safely retained. You can upload missing evidence and restart anytime.',
+
+        type: 'info'
+
+      });
+
+      await loadAgentResults(activeCaseId);
+
+    } catch (err) {
+
+      console.error('Failed to stop workload:', err);
+
+      setCustomAlert({
+
+        isOpen: true,
+
+        title: 'Error Stopping Workload',
+
+        message: err.message || 'Could not stop the workload.',
+
+        type: 'error'
+
+      });
+
+    } finally {
+
+      setStoppingWorkload(false);
+
+    }
+
+  };
+
+
+
+  const handleRestartWorkload = async () => {
+
+    if (restartingWorkload || !activeCaseId) return;
+
+    if (caseLock?.readOnly) {
+
+      setCustomAlert({
+
+        isOpen: true,
+
+        title: '🔒 Case Locked (Read-Only Mode)',
+
+        message: `Cannot restart workload. Case is currently locked by analyst ${caseLock.lockedBy?.name || 'another user'}.`,
+
+        type: 'warning'
+
+      });
+
+      return;
+
+    }
+
+
+
+    setRestartingWorkload(true);
+
+    setRunningAgents(true);
+
+    try {
+
+      const res = await restartWorkload(activeCaseId);
+
+      setCustomAlert({
+
+        isOpen: true,
+
+        title: '🔄 Workload Restarted',
+
+        message: res.message || 'Multi-agent analysis restarted with all captured evidence.',
+
+        type: 'success'
+
+      });
+
+      await loadAgentResults(activeCaseId);
+
+    } catch (err) {
+
+      console.error('Failed to restart workload:', err);
+
+      setRunningAgents(false);
+
+      setCustomAlert({
+
+        isOpen: true,
+
+        title: 'Error Restarting Workload',
+
+        message: err.message || 'Could not restart the workload.',
+
+        type: 'error'
+
+      });
+
+    } finally {
+
+      setRestartingWorkload(false);
 
     }
 
@@ -1441,63 +1605,118 @@ const Agents = () => {
 
 
 
-          <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-
-            <button
-
-              onClick={handleRunAnalysis}
-
-              disabled={runningAgents || loading || !activeCaseId}
-
-              className="btn-primary"
-
-              style={{
-
-                fontSize: '12.5px',
-
-                padding: '7px 16px',
-
-                borderRadius: '10px',
-
-                cursor: (runningAgents || loading || !activeCaseId || caseLock?.readOnly) ? 'not-allowed' : 'pointer',
-
-                opacity: (runningAgents || loading || !activeCaseId || caseLock?.readOnly) ? 0.6 : 1,
-
-                display: 'flex',
-
-                alignItems: 'center',
-
-                gap: '8px'
-
-              }}
-
-              title={caseLock?.readOnly ? `Read-Only: Case is locked by ${caseLock.lockedBy?.name || 'another analyst'}` : 'Launch multi-agent analysis'}
-
-            >
-
-              {runningAgents ? (
-
-                <>
-
+          <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {runningAgents ? (
+              <>
+                <button
+                  disabled
+                  className="btn-primary"
+                  style={{
+                    fontSize: '12.5px',
+                    padding: '7px 16px',
+                    borderRadius: '10px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    opacity: 0.95,
+                    cursor: 'default'
+                  }}
+                >
                   <div className="live-dot" style={{ background: '#38bdf8' }}></div>
-
                   <span>Swarm Analyzing...</span>
+                </button>
 
-                </>
+                <button
+                  id="btn-stop-workload"
+                  onClick={handleStopWorkload}
+                  disabled={stoppingWorkload || caseLock?.readOnly}
+                  className="btn-danger"
+                  style={{
+                    fontSize: '12.5px',
+                    padding: '7px 14px',
+                    borderRadius: '10px',
+                    background: 'rgba(239, 68, 68, 0.18)',
+                    border: '1px solid rgba(239, 68, 68, 0.5)',
+                    color: '#f87171',
+                    fontWeight: 600,
+                    cursor: (stoppingWorkload || caseLock?.readOnly) ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="Stop workload to review evidence or upload missing files"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2" /></svg>
+                  <span>{stoppingWorkload ? 'Stopping...' : 'Stop Workload'}</span>
+                </button>
 
-              ) : (
-
-                <>
-
+                <button
+                  id="btn-restart-workload-running"
+                  onClick={handleRestartWorkload}
+                  disabled={restartingWorkload || caseLock?.readOnly}
+                  className="btn-outline"
+                  style={{
+                    fontSize: '12.5px',
+                    padding: '7px 14px',
+                    borderRadius: '10px',
+                    fontWeight: 600,
+                    cursor: (restartingWorkload || caseLock?.readOnly) ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="Stop and restart analysis across all captured evidence"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                  <span>{restartingWorkload ? 'Restarting...' : 'Restart'}</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleRunAnalysis}
+                  disabled={loading || !activeCaseId || caseLock?.readOnly}
+                  className="btn-primary"
+                  style={{
+                    fontSize: '12.5px',
+                    padding: '7px 16px',
+                    borderRadius: '10px',
+                    cursor: (loading || !activeCaseId || caseLock?.readOnly) ? 'not-allowed' : 'pointer',
+                    opacity: (loading || !activeCaseId || caseLock?.readOnly) ? 0.6 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                  title={caseLock?.readOnly ? `Read-Only: Case is locked by ${caseLock.lockedBy?.name || 'another analyst'}` : 'Launch multi-agent analysis'}
+                >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
-
                   <span>{caseLock?.readOnly ? 'Read-Only Mode' : 'Run Multi-Agent Analysis'}</span>
+                </button>
 
-                </>
-
-              )}
-
-            </button>
+                {(agentData?.status === 'STOPPED' || agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS' || agentData?.status === 'PARTIAL_SUCCESS' || agentData?.status === 'FAILED') && (
+                  <button
+                    id="btn-restart-workload"
+                    onClick={handleRestartWorkload}
+                    disabled={restartingWorkload || loading || !activeCaseId || caseLock?.readOnly}
+                    className="btn-outline"
+                    style={{
+                      fontSize: '12.5px',
+                      padding: '7px 14px',
+                      borderRadius: '10px',
+                      fontWeight: 600,
+                      cursor: (restartingWorkload || loading || !activeCaseId || caseLock?.readOnly) ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                    title="Restart analysis from scratch with all retained and newly uploaded evidence"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    <span>{restartingWorkload ? 'Restarting...' : 'Restart Workload'}</span>
+                  </button>
+                )}
+              </>
+            )}
 
 
 
@@ -1580,6 +1799,138 @@ const Agents = () => {
           {/* Case Lock Warning Banner */}
 
           <CaseLockBanner lockState={caseLock} caseId={activeCaseId} onLockRefreshed={setCaseLock} />
+
+
+
+          {/* Workload Stopped / Evidence Ingestion Notice Banner */}
+
+          {agentData?.status === 'STOPPED' && (
+
+            <div style={{
+
+              margin: '0 0 16px 0',
+
+              padding: '14px 20px',
+
+              background: 'rgba(245, 158, 11, 0.12)',
+
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+
+              borderRadius: '14px',
+
+              display: 'flex',
+
+              alignItems: 'center',
+
+              justifyContent: 'space-between',
+
+              gap: '16px',
+
+              flexWrap: 'wrap'
+
+            }}>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+
+                <div style={{
+
+                  width: '32px',
+
+                  height: '32px',
+
+                  borderRadius: '50%',
+
+                  background: 'rgba(245, 158, 11, 0.25)',
+
+                  display: 'flex',
+
+                  alignItems: 'center',
+
+                  justifyContent: 'center',
+
+                  color: '#f59e0b',
+
+                  fontSize: '15px'
+
+                }}>
+
+                  ⏹
+
+                </div>
+
+                <div>
+
+                  <div style={{ fontWeight: 600, fontSize: '13.5px', color: '#f59e0b' }}>
+
+                    Workload Stopped — Evidence Safely Retained
+
+                  </div>
+
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+
+                    {agentData.evidence_count ? `${agentData.evidence_count} evidence item(s) preserved in repository. ` : ''}
+
+                    Did you realize not all evidence was uploaded? Go to Evidence or Upload to attach missing files, then restart the workload to re-analyze all evidence together.
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+
+                <button
+
+                  onClick={() => navigate('/upload')}
+
+                  className="btn-outline"
+
+                  style={{ fontSize: '12px', padding: '6px 14px', borderRadius: '8px', cursor: 'pointer' }}
+
+                >
+
+                  Upload Missing Evidence →
+
+                </button>
+
+                <button
+
+                  onClick={handleRestartWorkload}
+
+                  disabled={restartingWorkload || caseLock?.readOnly}
+
+                  style={{
+
+                    fontSize: '12px',
+
+                    padding: '6px 16px',
+
+                    borderRadius: '8px',
+
+                    background: '#10b981',
+
+                    color: '#fff',
+
+                    border: 'none',
+
+                    fontWeight: 600,
+
+                    cursor: (restartingWorkload || caseLock?.readOnly) ? 'not-allowed' : 'pointer'
+
+                  }}
+
+                >
+
+                  {restartingWorkload ? 'Restarting...' : 'Restart Workload'}
+
+                </button>
+
+              </div>
+
+            </div>
+
+          )}
 
 
 

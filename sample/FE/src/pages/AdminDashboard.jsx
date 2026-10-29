@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { API_BASE_URL, DEFAULT_TENANT_ID, fetchAgentResults } from '../js/api';
 import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import AlertModal from '../components/AlertModal';
@@ -21,39 +21,24 @@ const AdminDashboard = () => {
   const [currentCase, setCurrentCase] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [hasOpenCase, setHasOpenCase] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [allCasesList, setAllCasesList] = useState([]);
-  const [caseSearchTerm, setCaseSearchTerm] = useState('');
-  const [caseStatusFilter, setCaseStatusFilter] = useState('all');
+  const [agentSummary, setAgentSummary] = useState(null);
 
-  const handleSetActiveCase = (caseItem) => {
-    localStorage.setItem('active_case_id', caseItem.case_id);
-    if (caseItem.name) localStorage.setItem('active_case_name', caseItem.name);
-    setCurrentCase(caseItem);
-    setCustomAlert({
-      isOpen: true,
-      title: 'Active Case Switched',
-      message: `Case ${caseItem.case_id} (${caseItem.name || 'Unnamed'}) is now selected as the active case.`,
-      type: 'success'
-    });
+  const loadWorkloadStatus = async (caseId) => {
+    if (!caseId) {
+      setAgentSummary(null);
+      return;
+    }
+    try {
+      const res = await fetchAgentResults(caseId);
+      setAgentSummary(res);
+    } catch (_) {
+      setAgentSummary(null);
+    }
   };
 
-  const filteredCases = allCasesList.filter(c => {
-    const matchesSearch = 
-      !caseSearchTerm.trim() ||
-      (c.case_id && c.case_id.toLowerCase().includes(caseSearchTerm.toLowerCase())) ||
-      (c.name && c.name.toLowerCase().includes(caseSearchTerm.toLowerCase())) ||
-      (c.analyst_name && c.analyst_name.toLowerCase().includes(caseSearchTerm.toLowerCase())) ||
-      (c.senior_analyst_name && c.senior_analyst_name.toLowerCase().includes(caseSearchTerm.toLowerCase()));
 
-    const matchesStatus = 
-      caseStatusFilter === 'all' ||
-      (caseStatusFilter === 'open' && (c.status === 'open' || c.status === 'in_progress')) ||
-      (caseStatusFilter === 'closed' && (c.status === 'closed' || c.status === 'completed' || c.status === 'archived'));
-
-    return matchesSearch && matchesStatus;
-  });
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCaseName, setNewCaseName] = useState('');
@@ -187,7 +172,7 @@ const AdminDashboard = () => {
         localStorage.removeItem('active_case_name');
         localStorage.removeItem('active_case_desc');
         setCurrentCase(null);
-        setHasOpenCase(false);
+        setAgentSummary(null);
         setRefreshTrigger(prev => prev + 1);
         setCustomAlert({
           isOpen: true,
@@ -290,12 +275,12 @@ const AdminDashboard = () => {
             }
             if (active) {
               setCurrentCase(active);
-              setHasOpenCase(true);
+              loadWorkloadStatus(active.case_id);
             }
           } else {
             setAllCasesList([]);
             setCurrentCase(null);
-            setHasOpenCase(false);
+            setAgentSummary(null);
           }
         }
         
@@ -475,10 +460,37 @@ const AdminDashboard = () => {
               </div>
             </div>
             
-            <div className="glass-header-badge-group">
+            <div className="glass-header-badge-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span className="glass-status-pill review">
                 &bull; {currentCase ? (currentCase.status === 'open' || currentCase.status === 'in_progress' ? 'Under Review' : 'Closed') : 'No Active Cases'}
               </span>
+
+              {/* Workload Status Pill */}
+              {currentCase && (
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: '999px',
+                  fontSize: '11px',
+                  fontWeight: 700,
+                  letterSpacing: '0.4px',
+                  textTransform: 'uppercase',
+                  background: agentSummary?.status === 'RUNNING' ? 'rgba(239, 68, 68, 0.15)' : (agentSummary?.status === 'STOPPED' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)'),
+                  color: agentSummary?.status === 'RUNNING' ? '#ef4444' : (agentSummary?.status === 'STOPPED' ? '#f59e0b' : '#10b981'),
+                  border: `1px solid ${agentSummary?.status === 'RUNNING' ? 'rgba(239, 68, 68, 0.3)' : (agentSummary?.status === 'STOPPED' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(16, 185, 129, 0.3)')}`,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <span style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: agentSummary?.status === 'RUNNING' ? '#ef4444' : (agentSummary?.status === 'STOPPED' ? '#f59e0b' : '#10b981')
+                  }} />
+                  &bull; {agentSummary?.status || 'READY'}
+                </span>
+              )}
+
               {currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress') && (
                 <button 
                   onClick={handleCloseCase}

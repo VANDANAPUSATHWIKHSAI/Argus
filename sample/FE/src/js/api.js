@@ -169,8 +169,9 @@ export async function verifyOtpAndResetPassword(userid, otp, newPassword) {
   return response.json();
 }
 
-export async function fetchActivity() {
-  return fetchWithAuth('/cases/activity');
+export async function fetchActivity(caseId = null) {
+  const query = caseId ? `?case_id=${encodeURIComponent(caseId)}&limit=200` : '?limit=200';
+  return fetchWithAuth(`/cases/activity${query}`);
 }
 
 export async function fetchEmployees() {
@@ -242,6 +243,32 @@ export async function fetchAgentResults(caseId) {
 export async function triggerAgentAnalysis(caseId) {
   return fetchWithAuth(`/cases/${caseId}/run-agents`, {
     method: 'POST',
+  });
+}
+
+export async function stopWorkload(caseId) {
+  return fetchWithAuth(`/cases/${encodeURIComponent(caseId)}/stop-workload`, {
+    method: 'POST',
+  });
+}
+
+export async function restartWorkload(caseId) {
+  return fetchWithAuth(`/cases/${encodeURIComponent(caseId)}/restart-workload`, {
+    method: 'POST',
+  });
+}
+
+export async function assignAnalyst(caseId, analystId) {
+  return fetchWithAuth(`/cases/${encodeURIComponent(caseId)}/assign-analyst`, {
+    method: 'PUT',
+    body: JSON.stringify({ analyst_id: analystId }),
+  });
+}
+
+export async function assignSeniorAnalyst(caseId, seniorAnalystId) {
+  return fetchWithAuth(`/cases/${encodeURIComponent(caseId)}/assign-senior`, {
+    method: 'PUT',
+    body: JSON.stringify({ senior_analyst_id: seniorAnalystId }),
   });
 }
 

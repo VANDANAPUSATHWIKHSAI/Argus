@@ -1,11 +1,15 @@
+import os
+os.environ["OPENBLAS_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["NUMEXPR_NUM_THREADS"] = "1"
+
 # Argus FastAPI entry point
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import evidence, cases, reports, query, auth
 
 app = FastAPI(title='Argus', description='Multi-Agent Digital Forensic Investigation Platform')
-
-import os
 
 _allowed_origins_env = os.environ.get("ARGUS_ALLOWED_ORIGINS", "")
 if _allowed_origins_env:

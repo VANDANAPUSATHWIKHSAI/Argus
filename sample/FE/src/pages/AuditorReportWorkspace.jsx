@@ -13,6 +13,7 @@ import {
 import { generateHtmlFromReportData, handleDownloadHtml, handleDownloadJson } from '../js/reportUtils';
 import GeneratedReportModal from '../components/GeneratedReportModal';
 import SeniorSubmitToAuditorModal from '../components/SeniorSubmitToAuditorModal';
+import CaseNotAssigned from '../components/CaseNotAssigned';
 import { getActiveCaseId, getActiveCaseName, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 import '../css/style.css';
 
@@ -110,6 +111,8 @@ export default function AuditorReportWorkspace() {
   const [submitToAuditorOpen, setSubmitToAuditorOpen] = useState(false);
   const [isSubmittedToAuditor, setIsSubmittedToAuditor] = useState(false);
   const [submittedToAuditorData, setSubmittedToAuditorData] = useState(null);
+  const [isSubmittedByAnalyst, setIsSubmittedByAnalyst] = useState(false);
+  const [analystSubmissionData, setAnalystSubmissionData] = useState(null);
 
   // Chatbot State
   const [chatMessages, setChatMessages] = useState([]);
@@ -173,7 +176,10 @@ export default function AuditorReportWorkspace() {
   };
 
   // Initialize Welcome Message
-  const initAuditChatWelcome = (caseId, caseName) => {
+  const initAuditChatWelcome = (caseId, caseName, isSubmitted = true) => {
+    const notSubmittedNotice = (user?.role === 'senior_analyst' && !isSubmitted)
+      ? '\n\n> ⚠️ **Notice:** The assigned Analyst has not submitted the investigation report for case **' + caseId + '** yet. The formal report dossier is awaiting Analyst submission.'
+      : '';
     const roleTitle = isAuditor ? 'Auditor' : 'Senior Analyst';
     setChatMessages([
       {
@@ -181,7 +187,7 @@ export default function AuditorReportWorkspace() {
         sender: 'assistant',
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         text: `### 🛡️ AI Forensic Audit Copilot Ready
-Welcome, **${user?.name || roleTitle}**. I can help inspect records returned by ARGUS for case **${caseId}** (${caseName || 'Active Case'}). The backend must supply evidence for any audit conclusion.
+Welcome, **${user?.name || roleTitle}**. I can help inspect records returned by ARGUS for case **${caseId}** (${caseName || 'Active Case'}). The backend must supply evidence for any audit conclusion.${notSubmittedNotice}
 
 #### Active Audit Scope:
 - **Evidence Ledgers:** Evidence metadata loaded where available; integrity status is shown only when returned by the verification service.
@@ -256,6 +262,24 @@ You can click any **"Verify with AI"** or **"Audit Artifact"** button in the rep
           console.warn('Report fetch in workspace error:', repErr);
         }
 
+        // Check if report was submitted by junior analyst to senior analyst
+        let subSeniorFlag = false;
+        const subSenior = localStorage.getItem(`argus_case_${activeCaseId}_submitted_to_senior`);
+        if (subSenior) {
+          try {
+            const parsedSenior = JSON.parse(subSenior);
+            subSeniorFlag = Boolean(parsedSenior?.submitted);
+            setIsSubmittedByAnalyst(subSeniorFlag);
+            setAnalystSubmissionData(parsedSenior);
+          } catch (_e) {
+            setIsSubmittedByAnalyst(false);
+            setAnalystSubmissionData(null);
+          }
+        } else {
+          setIsSubmittedByAnalyst(false);
+          setAnalystSubmissionData(null);
+        }
+
         // Check if report was escalated to auditor
         const subAud = localStorage.getItem(`argus_case_${activeCaseId}_submitted_to_auditor`);
         if (subAud) {
@@ -288,7 +312,7 @@ You can click any **"Verify with AI"** or **"Audit Artifact"** button in the rep
         }
 
         // Initialize audit chat welcome message for this case
-        initAuditChatWelcome(activeCaseId, activeCaseName);
+        initAuditChatWelcome(activeCaseId, activeCaseName, subSeniorFlag);
 
       } catch (err) {
         console.error('Failed to load case data for audit:', err);
@@ -724,151 +748,26 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
               </div>
             </div>
 
-            {/* Interactive Case Selector Dropdown */}
-            <div ref={dropdownRef} style={{ position: 'relative', marginLeft: '8px' }}>
-              <button
-                type="button"
-                onClick={() => setCaseDropdownOpen(prev => !prev)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: 'var(--glass-dash-surface-nested)',
-                  border: '1px solid var(--glass-dash-border-subtle)',
-                  borderRadius: '9999px',
-                  padding: '6px 14px',
-                  color: 'var(--glass-dash-text-main)',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  boxShadow: caseDropdownOpen ? '0 0 0 2px var(--glass-dash-blue)' : 'none'
-                }}
-                title="Click to open or switch case"
-              >
-                <span style={{ color: 'var(--glass-dash-blue)', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Case:</span>
-                <span style={{ fontFamily: 'var(--glass-dash-mono)', fontWeight: 700, color: 'var(--glass-dash-text-main)' }}>{activeCaseId || 'Select Case'}</span>
-                {activeCaseName && activeCaseName !== activeCaseId && (
-                  <span style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    ({activeCaseName})
-                  </span>
-                )}
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ transform: caseDropdownOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-              </button>
-
-              {caseDropdownOpen && (
-                <div style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 8px)',
-                  left: 0,
-                  width: '320px',
-                  maxHeight: '380px',
-                  background: themeStyles.cardBg,
-                  border: `1px solid ${themeStyles.cardBorder}`,
-                  borderRadius: '14px',
-                  boxShadow: '0 18px 40px rgba(0,0,0,0.45)',
-                  zIndex: 100,
-                  padding: '10px',
-                  backdropFilter: 'blur(16px)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 4px 6px', borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : '#e2e8f0'}` }}>
-                    <span style={{ fontSize: '11px', fontWeight: 700, color: themeStyles.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Available Cases ({casesList.length})
-                    </span>
-                    <span style={{ fontSize: '10px', color: '#38bdf8', fontWeight: 600 }}>Click to switch</span>
-                  </div>
-
-                  {/* Case Search Input */}
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="text"
-                      placeholder="Filter cases..."
-                      value={caseSearch}
-                      onChange={(e) => setCaseSearch(e.target.value)}
-                      style={{
-                        width: '100%',
-                        boxSizing: 'border-box',
-                        padding: '6px 10px',
-                        background: isDark ? 'rgba(255,255,255,0.05)' : '#f1f5f9',
-                        border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#cbd5e1'}`,
-                        borderRadius: '8px',
-                        fontSize: '11.5px',
-                        color: themeStyles.textMain,
-                        outline: 'none'
-                      }}
-                    />
-                  </div>
-
-                  {/* Case Items List */}
-                  <div style={{ overflowY: 'auto', maxHeight: '250px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {casesList
-                      .filter(c => {
-                        if (!caseSearch.trim()) return true;
-                        const q = caseSearch.toLowerCase();
-                        return (c.case_id || '').toLowerCase().includes(q) || (c.name || '').toLowerCase().includes(q);
-                      })
-                      .map(c => {
-                        const isCurrent = c.case_id === activeCaseId;
-                        return (
-                          <div
-                            key={c.case_id}
-                            onClick={() => handleSelectCase(c.case_id, c.name)}
-                            style={{
-                              padding: '8px 10px',
-                              borderRadius: '8px',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              background: isCurrent ? (isDark ? 'rgba(56,189,248,0.15)' : '#e0f2fe') : 'transparent',
-                              color: isCurrent ? '#0284c7' : themeStyles.textMain,
-                              transition: 'background 0.15s'
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!isCurrent) e.currentTarget.style.background = isDark ? 'rgba(255,255,255,0.06)' : '#f8fafc';
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!isCurrent) e.currentTarget.style.background = 'transparent';
-                            }}
-                          >
-                            <div style={{ minWidth: 0, flex: 1 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <span style={{ fontFamily: 'var(--glass-dash-mono)', fontWeight: 700, fontSize: '12px' }}>
-                                  {c.case_id}
-                                </span>
-                                {c.status && (
-                                  <span style={{
-                                    fontSize: '9.5px',
-                                    fontWeight: 700,
-                                    textTransform: 'uppercase',
-                                    padding: '1px 5px',
-                                    borderRadius: '4px',
-                                    background: c.status === 'open' ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.08)',
-                                    color: c.status === 'open' ? '#10b981' : themeStyles.textMuted
-                                  }}>
-                                    {c.status}
-                                  </span>
-                                )}
-                              </div>
-                              {c.name && (
-                                <div style={{ fontSize: '11px', color: themeStyles.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
-                                  {c.name}
-                                </div>
-                              )}
-                            </div>
-                            {isCurrent && (
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                            )}
-                          </div>
-                        );
-                      })}
-                  </div>
-                </div>
+            {/* Active Case Badge (Static) */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: 'var(--glass-dash-surface-nested)',
+              border: '1px solid var(--glass-dash-border-subtle)',
+              borderRadius: '9999px',
+              padding: '6px 14px',
+              color: 'var(--glass-dash-text-main)',
+              fontSize: '12px',
+              fontWeight: 600,
+              marginLeft: '8px'
+            }}>
+              <span style={{ color: 'var(--glass-dash-blue)', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Case:</span>
+              <span style={{ fontFamily: 'var(--glass-dash-mono)', fontWeight: 700, color: 'var(--glass-dash-text-main)' }}>{activeCaseId || 'Case Not Assigned'}</span>
+              {activeCaseName && activeCaseName !== activeCaseId && (
+                <span style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  ({activeCaseName})
+                </span>
               )}
             </div>
           </div>
@@ -878,25 +777,58 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
             {user?.role === 'senior_analyst' && (
               <button
                 type="button"
-                onClick={() => setSubmitToAuditorOpen(true)}
+                onClick={() => {
+                  if (!isSubmittedByAnalyst && !isSubmittedToAuditor) {
+                    setCustomAlert({
+                      isOpen: true,
+                      title: 'Report Not Received',
+                      message: 'The assigned Analyst has not submitted the investigation report for this case yet. Please wait for the Analyst to submit the report before escalating to the Auditor.',
+                      type: 'warning'
+                    });
+                    return;
+                  }
+                  setSubmitToAuditorOpen(true);
+                }}
+                disabled={!isSubmittedByAnalyst && !isSubmittedToAuditor}
                 style={{
-                  display: 'flex',
+                  display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  background: isSubmittedToAuditor ? '#10b981' : 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-                  color: '#ffffff',
-                  border: 'none',
+                  gap: '7px',
+                  background: isSubmittedToAuditor
+                    ? (isDark ? 'rgba(59, 130, 246, 0.16)' : 'rgba(37, 99, 235, 0.1)')
+                    : !isSubmittedByAnalyst
+                    ? 'var(--glass-dash-surface-nested)'
+                    : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  color: isSubmittedToAuditor
+                    ? (isDark ? '#60a5fa' : '#2563eb')
+                    : !isSubmittedByAnalyst
+                    ? 'var(--text-muted)'
+                    : '#ffffff',
+                  border: isSubmittedToAuditor
+                    ? (isDark ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(37, 99, 235, 0.35)')
+                    : !isSubmittedByAnalyst
+                    ? '1px solid var(--border-subtle)'
+                    : '1px solid rgba(255, 255, 255, 0.18)',
                   padding: '7px 18px',
                   borderRadius: '9999px',
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(16, 185, 129, 0.35)',
-                  transition: 'all 0.2s'
+                  fontSize: '12.5px',
+                  fontWeight: 600,
+                  cursor: !isSubmittedByAnalyst && !isSubmittedToAuditor ? 'not-allowed' : 'pointer',
+                  opacity: !isSubmittedByAnalyst && !isSubmittedToAuditor ? 0.6 : 1,
+                  boxShadow: isSubmittedToAuditor || !isSubmittedByAnalyst
+                    ? 'none'
+                    : '0 4px 14px rgba(37, 99, 235, 0.35)',
+                  transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
                 }}
-                title={isSubmittedToAuditor ? 'Report already escalated to Auditor' : 'Approve findings and escalate report to Compliance Auditor'}
+                title={
+                  isSubmittedToAuditor
+                    ? 'Report already escalated to Auditor'
+                    : !isSubmittedByAnalyst
+                    ? 'Report not received from Analyst yet'
+                    : 'Approve findings and escalate report to Compliance Auditor'
+                }
               >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ flexShrink: 0 }}>
                   {isSubmittedToAuditor ? (
                     <polyline points="20 6 9 17 4 12"></polyline>
                   ) : (
@@ -914,22 +846,33 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
               type="button"
               onClick={handleToggleCertification}
               style={{
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
-                gap: '6px',
-                background: isCertified ? '#10b981' : 'var(--glass-dash-green-soft)',
-                color: isCertified ? '#ffffff' : 'var(--glass-dash-green)',
-                border: `1px solid ${isCertified ? '#059669' : 'var(--glass-dash-green-border)'}`,
+                gap: '7px',
+                background: isCertified
+                  ? (isDark ? 'rgba(59, 130, 246, 0.18)' : 'rgba(37, 99, 235, 0.1)')
+                  : 'var(--glass-dash-surface-nested)',
+                color: isCertified
+                  ? (isDark ? '#93c5fa' : '#2563eb')
+                  : 'var(--glass-dash-text-main)',
+                border: isCertified
+                  ? (isDark ? '1px solid rgba(59, 130, 246, 0.45)' : '1px solid rgba(37, 99, 235, 0.35)')
+                  : '1px solid var(--glass-dash-border-subtle)',
                 padding: '7px 16px',
                 borderRadius: '9999px',
-                fontSize: '12px',
-                fontWeight: 700,
+                fontSize: '12.5px',
+                fontWeight: 600,
                 cursor: 'pointer',
-                transition: 'all 0.2s'
+                boxShadow: isCertified
+                  ? '0 2px 8px rgba(37, 99, 235, 0.15)'
+                  : '0 1px 3px rgba(0, 0, 0, 0.05)',
+                transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)'
               }}
               title="Save or remove a local review marker; this does not certify evidence or lock the case"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" style={{ flexShrink: 0 }}>
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
               <span>{isCertified ? 'Review Marked' : 'Mark Review'}</span>
             </button>
 
@@ -977,6 +920,11 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
         </header>
 
         {/* ── SPLIT WORKSPACE BODY (54% LEFT REPORT, 46% RIGHT CHATBOT) ── */}
+        {!activeCaseId ? (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
+            <CaseNotAssigned />
+          </div>
+        ) : (
         <div style={{
           flex: 1,
           display: 'flex',
@@ -1059,6 +1007,41 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                   Senior Approved
                 </span>
               </div>
+            ) : user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? (
+              <div style={{
+                marginBottom: '14px',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.3)',
+                color: isDark ? '#fbbf24' : '#b45309',
+                fontSize: '12px',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                flexShrink: 0
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                <span><strong>Report Not Received:</strong> The assigned Analyst has not submitted the investigation report for this case yet. The case is currently undergoing active investigation.</span>
+              </div>
+            ) : user?.role === 'senior_analyst' && isSubmittedByAnalyst ? (
+              <div style={{
+                marginBottom: '12px',
+                padding: '8px 14px',
+                borderRadius: '8px',
+                background: 'rgba(56, 189, 248, 0.1)',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                color: '#38bdf8',
+                fontSize: '11.5px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                flexShrink: 0
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                <span><strong>Report Received from Analyst:</strong> Submitted by {analystSubmissionData?.analyst_name || 'Analyst'}. Ready for Senior Analyst validation.</span>
+              </div>
             ) : isAuditor ? (
               <div style={{
                 marginBottom: '12px',
@@ -1120,20 +1103,42 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   type="button"
-                  onClick={() => handleDownloadHtml(reportData, reportHtml, activeCaseId)}
+                  onClick={() => {
+                    if (user?.role === 'senior_analyst' && !isSubmittedByAnalyst) {
+                      setCustomAlert({
+                        isOpen: true,
+                        title: 'Report Not Received',
+                        message: 'Cannot download report: The assigned Analyst has not submitted the case report yet.',
+                        type: 'warning'
+                      });
+                      return;
+                    }
+                    handleDownloadHtml(reportData, reportHtml, activeCaseId);
+                  }}
                   className="btn-outline"
-                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
-                  title="Download legal-grade HTML dossier"
+                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 'not-allowed' : 'pointer', opacity: user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 0.5 : 1 }}
+                  title={user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 'Report not received yet' : 'Download legal-grade HTML dossier'}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                   HTML
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleDownloadJson(reportData, activeCaseId)}
+                  onClick={() => {
+                    if (user?.role === 'senior_analyst' && !isSubmittedByAnalyst) {
+                      setCustomAlert({
+                        isOpen: true,
+                        title: 'Report Not Received',
+                        message: 'Cannot download report: The assigned Analyst has not submitted the case report yet.',
+                        type: 'warning'
+                      });
+                      return;
+                    }
+                    handleDownloadJson(reportData, activeCaseId);
+                  }}
                   className="btn-outline"
-                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
-                  title="Download structured JSON report"
+                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 'not-allowed' : 'pointer', opacity: user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 0.5 : 1 }}
+                  title={user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 'Report not received yet' : 'Download structured JSON report'}
                 >
                   JSON
                 </button>
@@ -1149,7 +1154,64 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
               </div>
             </div>
 
-            {reportViewMode === 'dossier' ? (
+            {user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? (
+              <div style={{
+                flex: 1,
+                minHeight: 0,
+                borderRadius: '16px',
+                border: '1px dashed var(--glass-dash-border)',
+                background: 'var(--glass-dash-surface-nested)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '48px 24px',
+                textAlign: 'center'
+              }}>
+                <div style={{
+                  width: '64px',
+                  height: '64px',
+                  borderRadius: '50%',
+                  background: 'rgba(245, 158, 11, 0.12)',
+                  color: '#f59e0b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginBottom: '18px'
+                }}>
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="12" y1="18" x2="12" y2="12"></line>
+                    <line x1="9" y1="15" x2="15" y2="15"></line>
+                  </svg>
+                </div>
+                <h3 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: 700, color: 'var(--text-main)' }}>
+                  Report Not Received
+                </h3>
+                <p style={{ margin: '0 0 16px 0', maxWidth: '480px', fontSize: '14px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
+                  The assigned Analyst has not submitted the case report for <strong>{activeCaseId}</strong> ({activeCaseName || 'Active Case'}) yet.
+                </p>
+                <div style={{
+                  padding: '9px 18px',
+                  borderRadius: '8px',
+                  background: 'rgba(245, 158, 11, 0.1)',
+                  border: '1px solid rgba(245, 158, 11, 0.25)',
+                  fontSize: '12.5px',
+                  color: isDark ? '#fbbf24' : '#b45309',
+                  fontWeight: 600,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  <span>Awaiting Analyst Hand-off &middot; Case is in Investigation Stage</span>
+                </div>
+                <p style={{ marginTop: '18px', fontSize: '12.5px', color: 'var(--text-dim)', maxWidth: '440px', lineHeight: '1.5' }}>
+                  Once the assigned Analyst completes the investigation and clicks <strong>Submit Report to Senior Analyst</strong> from their dashboard, the finalized report package will automatically appear here for your review and auditor escalation.
+                </p>
+              </div>
+            ) : reportViewMode === 'dossier' ? (
               <div style={{
                 flex: 1,
                 minHeight: 0,
@@ -2021,6 +2083,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
           </div>
 
         </div>
+        )}
 
       </div>
 

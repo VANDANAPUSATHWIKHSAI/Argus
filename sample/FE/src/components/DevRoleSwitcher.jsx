@@ -46,7 +46,6 @@ const DEV_ACCOUNTS = [
     allowedRoutes: [
       { name: 'Dashboard', path: '/dashboard' },
       { name: 'Agents Swarm', path: '/agents' },
-      { name: 'Chatbot', path: '/chatbot' },
       { name: 'Notes', path: '/case-notes' },
       { name: 'Forensic Report', path: '/report' },
       { name: 'Settings', path: '/settings' },

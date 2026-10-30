@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import { fetchActivity } from '../js/api';
+import { setActiveCase } from '../js/caseEvents';
 
 import { safeFormatDateTime } from '../js/dateUtils';
 
@@ -38,7 +39,10 @@ const getActionDetails = (action, details, case_id, user_name) => {
 
 const AuditLogs = () => {
   const navigate = useNavigate();
-  const activeCaseId = localStorage.getItem('active_case_id');
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const queryCaseId = queryParams.get('case_id') || '';
+  const [activeCaseId, setActiveCaseId] = useState(queryCaseId || localStorage.getItem('active_case_id') || '');
 
   const [logs, setLogs] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,14 +58,23 @@ const AuditLogs = () => {
     setCurrentPage(1);
   }, [searchTerm, filterUser, itemsPerPage, activeCaseId]);
 
-  const loadData = async () => {
+  useEffect(() => {
+    const cid = queryCaseId || localStorage.getItem('active_case_id') || '';
+    setActiveCaseId(cid);
+    if (queryCaseId && queryCaseId !== localStorage.getItem('active_case_id')) {
+      setActiveCase(queryCaseId);
+    }
+  }, [location.search, queryCaseId]);
+
+  const loadData = async (targetId) => {
     try {
-      const res = await fetchActivity();
+      const caseToFetch = targetId !== undefined ? targetId : activeCaseId;
+      const res = await fetchActivity(caseToFetch);
       if (res.status === 'SUCCESS' && res.data) {
         const now = new Date();
         
-        // 1. IMPORTANT — Audit Logs are for ONE CASE ONLY
-        const caseLogs = activeCaseId ? res.data.filter(item => item.case_id === activeCaseId) : [];
+        // Audit Logs filtered for active case, or all logs if none specified
+        const caseLogs = caseToFetch ? res.data.filter(item => item.case_id === caseToFetch) : res.data;
 
         let tTotal = caseLogs.length;
         let tToday = 0;
@@ -100,8 +113,8 @@ const AuditLogs = () => {
   };
 
   useEffect(() => {
-    loadData();
-  }, [activeCaseId]);
+    loadData(activeCaseId);
+  }, [activeCaseId, location.search]);
 
   
   const exportLogs = () => {
@@ -174,7 +187,30 @@ const uniqueUsers = Array.from(
           <div className="glass-topbar-left">
             <h2 className="glass-welcome-title">Audit Logs</h2>
             <p className="glass-welcome-sub">
-              {activeCaseId ? `Current Case: ${activeCaseId}` : 'No active case selected.'}
+              {activeCaseId ? (
+                <>
+                  Case: <strong style={{ color: 'var(--blue)' }}>{activeCaseId}</strong>
+                  <button
+                    onClick={() => {
+                      navigate('/audit-logs');
+                      setActiveCaseId('');
+                    }}
+                    style={{
+                      marginLeft: '12px',
+                      background: 'rgba(59, 130, 246, 0.1)',
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      color: '#3b82f6',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    View All Cases
+                  </button>
+                </>
+              ) : 'Viewing All System Audit Events'}
             </p>
           </div>
           <div className="glass-topbar-right topbar-actions">

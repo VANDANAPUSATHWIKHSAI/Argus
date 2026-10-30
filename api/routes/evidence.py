@@ -462,6 +462,9 @@ async def upload_evidence(
 
     target_case_id = sanitize_uuid(raw_case_id)
     tenant_id = authorize_tenant_access(current_user, tenant_id)
+    if target_case_id:
+        from api.routes.cases import verify_case_access
+        verify_case_access(target_case_id, current_user, tenant_id)
 
     # Check if case exists to resolve actual tenant
     try:
@@ -491,11 +494,24 @@ async def upload_evidence(
 
     # Create or fetch case session
     uploader_name = current_user.get("name", uploaded_by)
-    try:
-        session = create_case_session(tenant_id=tenant_id, created_by=uploader_name, case_id=target_case_id)
-    except Exception as e:
-        logger.warning(f"Case session setup warning: {e}")
-        session = CaseSession(case_id=target_case_id, tenant_id=tenant_id, created_by=uploader_name)
+    if existing_session:
+        session = existing_session
+    else:
+        try:
+            session = create_case_session(
+                tenant_id=tenant_id,
+                created_by=uploader_name,
+                case_id=target_case_id,
+                analyst_id=str(current_user.get("id")) if current_user.get("id") else None
+            )
+        except Exception as e:
+            logger.warning(f"Case session setup warning: {e}")
+            session = CaseSession(
+                case_id=target_case_id,
+                tenant_id=tenant_id,
+                created_by=uploader_name,
+                analyst_id=str(current_user.get("id")) if current_user.get("id") else None
+            )
 
     # Save temp upload file
     temp_dir = Path(tempfile.gettempdir()) / "argus_uploads"
@@ -750,6 +766,8 @@ async def get_evidence_by_case(
     """
     try:
         tenant_id = authorize_tenant_access(current_user, tenant_id)
+        from api.routes.cases import verify_case_access
+        verify_case_access(case_id, current_user, tenant_id)
         evidence_list = list_evidence_by_case(tenant_id=tenant_id, case_id=case_id)
         return {"status": "SUCCESS", "data": [e.model_dump(mode='json') for e in evidence_list]}
     except HTTPException:

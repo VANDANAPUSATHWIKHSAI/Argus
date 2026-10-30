@@ -96,62 +96,88 @@ def run_pipeline(
     fir_findings: Optional[List[Any]] = None,
     stop_on_error: bool = False,
     resume: bool = True,
-    evidence_id: Optional[str] = None
+    evidence_id: Optional[str] = None,
+    evidence_paths: Optional[List[str]] = None,
+    evidence_ids: Optional[List[str]] = None,
+    cancel_event: Optional[Any] = None
 ) -> Dict[str, Any]:
     """
     Executes the integrated ARGUS production pipeline covering Stages 1-4 and Agents 1, 2, 3, 4, 5a, 5b, 6, and 7.
-    Supports durable cross-cutting ISM checkpointing, idempotency keys, and stage resume.
+    Supports durable cross-cutting ISM checkpointing, idempotency keys, stage resume, multi-evidence aggregation,
+    and responsive workload cancellation/stop requests.
     """
-    if evidence_path is None and fir_findings is None:
-        raise ValueError("Either evidence_path or fir_findings must be provided to run_pipeline.")
+    evidence_paths_list: List[str] = []
+    if evidence_paths:
+        evidence_paths_list.extend([p for p in evidence_paths if p])
+    elif evidence_path:
+        evidence_paths_list.append(evidence_path)
 
-    if evidence_path and not os.path.exists(evidence_path):
-        raise FileNotFoundError(f"Evidence file not found: {evidence_path}")
+    if not evidence_paths_list and fir_findings is None:
+        raise ValueError("Either evidence_path, evidence_paths, or fir_findings must be provided to run_pipeline.")
 
-    filename = os.path.basename(evidence_path) if evidence_path else "synthetic_case"
+    for p in evidence_paths_list:
+        if p and not os.path.exists(p):
+            logger.warning(f"Evidence file candidate not found on disk: {p}")
+
+    evidence_ids_list: List[str] = []
+    if evidence_ids:
+        evidence_ids_list.extend(evidence_ids)
+    elif evidence_id:
+        evidence_ids_list.append(evidence_id)
+
+    first_path = evidence_paths_list[0] if evidence_paths_list else None
+    filename = os.path.basename(first_path) if first_path else "synthetic_case"
     case_id = case_id or f"CASE-{Path(filename).stem.upper()}-{uuid.uuid4().hex[:6]}"
     if not evidence_id and fir_findings:
         first_ref = getattr(fir_findings[0], "evidence_reference", None) or (fir_findings[0].get("evidence_reference") if isinstance(fir_findings[0], dict) else None)
         if first_ref:
             evidence_id = first_ref[0] if isinstance(first_ref, list) and first_ref else str(first_ref)
     evidence_id = evidence_id or f"EVID-{Path(filename).stem.upper()}"
-
+    if not evidence_ids_list:
+        evidence_ids_list = [evidence_id]
 
     logger.info("=" * 80)
     logger.info("  ARGUS UNIFIED PRODUCTION PIPELINE INGESTION & MULTI-AGENT REASONING")
     logger.info("=" * 80)
-    logger.info(f"Evidence Source: {evidence_path or 'Pre-loaded FIR findings'}")
-    logger.info(f"Case ID        : {case_id}")
-    logger.info(f"Tenant ID      : {tenant_id}")
+    logger.info(f"Evidence Sources : {evidence_paths_list or 'Pre-loaded FIR findings'}")
+    logger.info(f"Case ID          : {case_id}")
+    logger.info(f"Tenant ID        : {tenant_id}")
 
     fir_repo = FIRRepository()
     gw = SanitizationGateway()
     artifacts: List[Any] = []
 
-    # ── STAGE 1–4: Evidence Intake & Parsing (if evidence file provided) ───
-    if evidence_path:
-        logger.info("\n[STAGE 1] Ingesting & Routing Evidence...")
+    # ── STAGE 1–4: Evidence Intake & Parsing (if evidence file(s) provided) ───
+    if evidence_paths_list:
+        logger.info(f"\n[STAGE 1] Ingesting & Routing {len(evidence_paths_list)} Evidence File(s)...")
         router = ParserRouter()
-        evidence_obj = Evidence(
-            evidence_id=evidence_id,
-            case_id=case_id,
-            tenant_id=tenant_id,
-            filename=filename,
-            file_path=evidence_path,
-            raw_file_path=evidence_path,
-            uploaded_by="argus_cli"
-        )
+        all_parsed_artifacts = []
+        for idx, ev_p in enumerate(evidence_paths_list):
+            if not os.path.exists(ev_p):
+                continue
+            cur_eid = evidence_ids_list[idx] if idx < len(evidence_ids_list) else f"EVID-{Path(ev_p).stem.upper()}"
+            cur_fname = os.path.basename(ev_p)
+            evidence_obj = Evidence(
+                evidence_id=cur_eid,
+                case_id=case_id,
+                tenant_id=tenant_id,
+                filename=cur_fname,
+                file_path=ev_p,
+                raw_file_path=ev_p,
+                uploaded_by="argus_cli"
+            )
+            routing_res = router.determine_routing(evidence_obj)
+            if routing_res.status == "ROUTED" and routing_res.parser_instance:
+                cur_arts = routing_res.parser_instance.parse(ev_p, cur_eid) or []
+                for art in cur_arts:
+                    art.case_id = case_id
+                all_parsed_artifacts.extend(cur_arts)
+        artifacts = all_parsed_artifacts
+        logger.info(f"[+] Stage 1 Complete: Extracted {len(artifacts)} raw artifacts across all evidence files.")
 
-        routing_res = router.determine_routing(evidence_obj)
-        if routing_res.status == "ROUTED" and routing_res.parser_instance:
-            artifacts = routing_res.parser_instance.parse(evidence_path, evidence_id) or []
-            for art in artifacts:
-                art.case_id = case_id
-        logger.info(f"[+] Stage 1 Complete: Extracted {len(artifacts)} raw artifacts.")
-
-        logger.info("\n[STAGE 2 & 3] Derived Observables & FCR Correlation...")
+        logger.info("\n[STAGE 2 & 3] Derived Observables & FCR Correlation across all evidence...")
         extractor = ArtifactExtractor()
-        observables = extractor.extract(artifacts, evidence_id=evidence_id) or []
+        observables = extractor.extract(artifacts, evidence_id=evidence_ids_list[0] if evidence_ids_list else evidence_id) or []
         for obs in observables:
             obs.case_id = case_id
 
@@ -173,8 +199,15 @@ def run_pipeline(
             tenant_id=tenant_id
         )
 
-        fir_findings = fir_repo.get_by_case(tenant_id=tenant_id, case_id=case_id) or []
-        logger.info(f"[+] Stage 4 Complete: Ingested {len(fir_findings)} FIR findings into repository ('{case_id}').")
+        all_findings = fir_repo.get_by_case(tenant_id=tenant_id, case_id=case_id) or []
+        if fir_findings:
+            existing_fps = {f.finding_fingerprint for f in all_findings if hasattr(f, 'finding_fingerprint')}
+            for pf in fir_findings:
+                fp = getattr(pf, 'finding_fingerprint', None) or (pf.get('finding_fingerprint') if isinstance(pf, dict) else None)
+                if not fp or fp not in existing_fps:
+                    all_findings.append(pf)
+        fir_findings = all_findings
+        logger.info(f"[+] Stage 4 Complete: Total of {len(fir_findings)} FIR findings retained in repository for Case '{case_id}'.")
     else:
         # Pre-loaded FIR findings: insert into repository for tenant & case isolation
         logger.info(f"\n[STAGE 4] Registering {len(fir_findings)} pre-loaded FIR findings into repository...")
@@ -247,10 +280,13 @@ def run_pipeline(
     idempotency_key = build_ism_idempotency_key(
         case_id=case_id,
         tenant_id=tenant_id,
-        evidence_ids=[evidence_id] if evidence_id else [],
+        evidence_ids=evidence_ids_list if evidence_ids_list else ([evidence_id] if evidence_id else []),
         pipeline_version=pipeline_version
     )
     pipeline_results["idempotency_key"] = idempotency_key
+
+    def _is_cancelled() -> bool:
+        return bool(cancel_event and getattr(cancel_event, "is_set", lambda: False)())
 
     def _get_resumed_stage(stage_key: str) -> Optional[Any]:
         if not resume:
@@ -277,6 +313,14 @@ def run_pipeline(
             idempotency_key=idempotency_key,
             pipeline_version=pipeline_version
         )
+
+    # Check for early cancellation
+    if _is_cancelled():
+        logger.info(f"[!] Pipeline cancelled before Agent 1 for Case {case_id}")
+        pipeline_results["execution_status"] = "STOPPED"
+        pipeline_results["error"] = "Workload stopped by user request."
+        pipeline_results["stage_statuses"] = stage_statuses
+        return pipeline_results
 
     # ── AGENT 1: Evidence Intelligence Agent ─────────────────────────────────
     logger.info("\n[AGENT 1] Evidence Intelligence Agent Execution...")
@@ -312,6 +356,13 @@ def run_pipeline(
             if stop_on_error:
                 raise
 
+    if _is_cancelled():
+        logger.info(f"[!] Pipeline cancelled before Agent 2 for Case {case_id}")
+        pipeline_results["execution_status"] = "STOPPED"
+        pipeline_results["error"] = "Workload stopped by user request."
+        pipeline_results["stage_statuses"] = stage_statuses
+        return pipeline_results
+
     # ── AGENT 2: Evidence Correlation Agent ──────────────────────────────────
     logger.info("\n[AGENT 2] Evidence Correlation & Graph Engine Execution...")
     resumed_a2 = _get_resumed_stage("agent2")
@@ -343,6 +394,13 @@ def run_pipeline(
             _save_stage("agent2", state={"error": str(exc)}, status="FAILED", retry_count=1)
             if stop_on_error:
                 raise
+
+    if _is_cancelled():
+        logger.info(f"[!] Pipeline cancelled before Agent 3 for Case {case_id}")
+        pipeline_results["execution_status"] = "STOPPED"
+        pipeline_results["error"] = "Workload stopped by user request."
+        pipeline_results["stage_statuses"] = stage_statuses
+        return pipeline_results
 
     # ── AGENT 3: Attack Reconstruction Agent ─────────────────────────────────
     logger.info("\n[AGENT 3] Attack Reconstruction Agent Execution...")
@@ -377,6 +435,13 @@ def run_pipeline(
             if stop_on_error:
                 raise
 
+    if _is_cancelled():
+        logger.info(f"[!] Pipeline cancelled before Agent 4 for Case {case_id}")
+        pipeline_results["execution_status"] = "STOPPED"
+        pipeline_results["error"] = "Workload stopped by user request."
+        pipeline_results["stage_statuses"] = stage_statuses
+        return pipeline_results
+
     # ── AGENT 4: Malware Behaviour Agent ─────────────────────────────────────
     logger.info("\n[AGENT 4] Malware Behaviour Agent Execution...")
     resumed_a4 = _get_resumed_stage("agent4")
@@ -402,6 +467,13 @@ def run_pipeline(
             _save_stage("agent4", state={"error": str(exc)}, status="FAILED", retry_count=1)
             if stop_on_error:
                 raise
+
+    if _is_cancelled():
+        logger.info(f"[!] Pipeline cancelled before Agent 5a for Case {case_id}")
+        pipeline_results["execution_status"] = "STOPPED"
+        pipeline_results["error"] = "Workload stopped by user request."
+        pipeline_results["stage_statuses"] = stage_statuses
+        return pipeline_results
 
     # ── AGENT 5a: Threat Intelligence Agent ──────────────────────────────────
     logger.info("\n[AGENT 5a] Threat Intelligence Agent Execution...")
@@ -441,6 +513,13 @@ def run_pipeline(
             if stop_on_error:
                 raise
 
+    if _is_cancelled():
+        logger.info(f"[!] Pipeline cancelled before Agent 5b for Case {case_id}")
+        pipeline_results["execution_status"] = "STOPPED"
+        pipeline_results["error"] = "Workload stopped by user request."
+        pipeline_results["stage_statuses"] = stage_statuses
+        return pipeline_results
+
     # ── AGENT 5b: Campaign Similarity Agent ──────────────────────────────────
     logger.info("\n[AGENT 5b] Campaign Similarity Agent Execution...")
     resumed_a5b = _get_resumed_stage("agent5b")
@@ -477,6 +556,13 @@ def run_pipeline(
             _save_stage("agent5b", state={"error": str(exc)}, status="FAILED", retry_count=1)
             if stop_on_error:
                 raise
+
+    if _is_cancelled():
+        logger.info(f"[!] Pipeline cancelled before Agent 6 for Case {case_id}")
+        pipeline_results["execution_status"] = "STOPPED"
+        pipeline_results["error"] = "Workload stopped by user request."
+        pipeline_results["stage_statuses"] = stage_statuses
+        return pipeline_results
 
     # ── AGENT 6: Impact Assessment Agent ─────────────────────────────────────
     logger.info("\n[AGENT 6] Impact Assessment Agent Execution...")
@@ -518,6 +604,13 @@ def run_pipeline(
             _save_stage("agent6", state={"error": str(exc)}, status="FAILED", retry_count=1)
             if stop_on_error:
                 raise
+
+    if _is_cancelled():
+        logger.info(f"[!] Pipeline cancelled before Agent 7 for Case {case_id}")
+        pipeline_results["execution_status"] = "STOPPED"
+        pipeline_results["error"] = "Workload stopped by user request."
+        pipeline_results["stage_statuses"] = stage_statuses
+        return pipeline_results
 
     # ── AGENT 7: Supervisor Agent (Synthesis, Verification, Reports) ─────────
     logger.info("\n[AGENT 7] Supervisor Synthesis, Independent Verification & Report Generation...")

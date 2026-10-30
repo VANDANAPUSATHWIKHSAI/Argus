@@ -39,6 +39,7 @@ import threading
 _agent_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="argus_agents")
 _agent_jobs: Dict[str, Dict[str, Any]] = {}
 _agent_jobs_lock = threading.Lock()
+_agent_cancellations: Dict[str, threading.Event] = {}
 
 
 class InvestigationStageStatus(str, Enum):
@@ -120,6 +121,52 @@ def send_assignment_email(target_email: str, case_id: str, case_name: str, role_
     except Exception as e:
         print(f"[AUTH EMAIL ERROR] {e}")
         return False
+
+def verify_case_access(case_id: str, current_user: dict, x_tenant_id: str = "default") -> None:
+    """
+    Enforces strict case access control.
+    Non-admin, non-auditor users can ONLY access cases they are explicitly assigned to.
+    If not assigned, returns HTTP 404 (as if the case does not exist).
+    """
+    role = (current_user.get("role") or "").lower()
+    if role in ("admin", "auditor"):
+        return
+
+    uid = str(current_user.get("id", ""))
+    u_email = str(current_user.get("email", "")).lower()
+
+    assigned = False
+    try:
+        from api.routes.auth import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT analyst_id, senior_analyst_id FROM cases WHERE case_id = %s",
+                    (case_id,)
+                )
+                row = cur.fetchone()
+                if row:
+                    a_id = str(row[0] or "")
+                    s_id = str(row[1] or "")
+                    if a_id in (uid, u_email) or s_id in (uid, u_email):
+                        assigned = True
+    except Exception:
+        pass
+
+    if not assigned:
+        from infrastructure.repository.evidence_store import get_case_session
+        session = get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+        if session:
+            a_id = str(getattr(session, "analyst_id", None) or "")
+            s_id = str(getattr(session, "senior_analyst_id", None) or "")
+            if a_id in (uid, u_email) or s_id in (uid, u_email):
+                assigned = True
+
+    if not assigned:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Case '{case_id}' not found."
+        )
 
 @router.post("/", response_model=Dict[str, Any])
 async def create_case(
@@ -222,7 +269,10 @@ async def get_all_cases(
             user_map[str(u["id"])] = u["name"]
 
     user_id = str(current_user.get("id", ""))
-    is_admin = current_user.get("role") == "admin"
+    user_email = str(current_user.get("email", "")).lower()
+    user_role = (current_user.get("role") or "").lower()
+    is_admin = user_role == "admin"
+    is_auditor = user_role == "auditor"
 
     result = []
     for c in cases:
@@ -233,7 +283,15 @@ async def get_all_cases(
         
         analyst_id_str = str(c_analyst_id or "")
         senior_id_str = str(c_senior_id or "")
-        assigned = is_admin or analyst_id_str == user_id or senior_id_str == user_id
+        assigned = (
+            is_admin or is_auditor or 
+            analyst_id_str in (user_id, user_email) or 
+            senior_id_str in (user_id, user_email)
+        )
+
+        # Non-assigned cases are completely invisible to regular users
+        if not is_admin and not is_auditor and not assigned:
+            continue
         
         analyst_name = user_map.get(analyst_id_str, analyst_id_str)
         senior_name = user_map.get(senior_id_str, senior_id_str)
@@ -260,6 +318,8 @@ async def get_all_cases(
 
 @router.get("/activity", response_model=Dict[str, Any])
 async def get_recent_activity(
+    case_id: Optional[str] = Query(None),
+    limit: int = Query(200, ge=1, le=1000),
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: dict = Depends(get_current_user)
 ):
@@ -390,14 +450,48 @@ async def get_recent_activity(
                         "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
                         "details": f"{title} ({note_type})"
                     })
+
+                # 5. Audit Log table events
+                try:
+                    cur.execute(
+                        """
+                        SELECT id, case_id, action, actor, timestamp, details
+                        FROM audit_log
+                        WHERE (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))
+                        ORDER BY timestamp DESC
+                        LIMIT 200;
+                        """,
+                        (x_tenant_id,)
+                    )
+                    for row in cur.fetchall():
+                        log_id, log_case_id, log_action, log_actor, log_ts, log_details = row
+                        details_str = ""
+                        if isinstance(log_details, dict):
+                            details_str = log_details.get("description") or log_details.get("event") or json.dumps(log_details)
+                        elif log_details:
+                            details_str = str(log_details)
+                        activity.append({
+                            "action": log_action or "Audit Event",
+                            "case_id": log_case_id,
+                            "created_by": user_map.get(str(log_actor), str(log_actor)) if log_actor else "System",
+                            "created_by_id": log_actor or "system",
+                            "created_at": log_ts.isoformat() if hasattr(log_ts, "isoformat") and log_ts else str(log_ts),
+                            "details": details_str
+                        })
+                except Exception as al_err:
+                    logger.debug(f"Audit log fetch note: {al_err}")
     except Exception as e:
         print(f"[DB WARNING] Could not fetch comprehensive activity: {e}")
         
-    activity.sort(key=lambda x: x["created_at"], reverse=True)
-    
+    activity.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
+
+    if case_id:
+        clean_cid = str(case_id).strip()
+        activity = [a for a in activity if str(a.get("case_id") or "").strip() == clean_cid]
+
     return {
         "status": "SUCCESS",
-        "data": activity[:20]
+        "data": activity[:limit]
     }
 
 
@@ -605,7 +699,11 @@ async def close_case_endpoint(
 
 
 class AssignSeniorRequest(BaseModel):
-    senior_analyst_id: int
+    senior_analyst_id: Union[int, str]
+
+
+class AssignAnalystRequest(BaseModel):
+    analyst_id: Union[int, str]
 
 
 @router.put("/{case_id}/assign-senior")
@@ -658,6 +756,67 @@ async def assign_senior_analyst(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.put("/{case_id}/assign-analyst")
+async def assign_analyst(
+    case_id: str,
+    req: AssignAnalystRequest,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Assign an analyst to an existing case. Admin only.
+    """
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can assign an analyst.")
+    try:
+        from config.settings import settings
+        import psycopg2
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password, connect_timeout=2
+        )
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE cases SET analyst_id = %s WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
+            (str(req.analyst_id), case_id, x_tenant_id)
+        )
+        if cur.rowcount == 0:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Case not found.")
+        conn.commit()
+
+        try:
+            from infrastructure.repository.evidence_store import REPOSITORY_DIR
+            case_file = Path(REPOSITORY_DIR) / case_id / "case_session.json"
+            if case_file.exists():
+                with open(case_file, "r", encoding="utf-8") as f:
+                    cdata = json.load(f)
+                cdata["analyst_id"] = str(req.analyst_id)
+                with open(case_file, "w", encoding="utf-8") as f:
+                    json.dump(cdata, f, indent=2)
+        except Exception:
+            pass
+
+        analyst = get_user_by_id(req.analyst_id)
+        if analyst and analyst.get("email"):
+            case_name = case_id
+            try:
+                cur.execute("SELECT name FROM cases WHERE case_id = %s", (case_id,))
+                row = cur.fetchone()
+                if row and row[0]: case_name = row[0]
+            except Exception: pass
+            send_assignment_email(analyst["email"], case_id, case_name, "Analyst")
+
+        conn.close()
+        return {"status": "SUCCESS", "message": f"Analyst {req.analyst_id} assigned to {case_id}."}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to assign analyst: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/locks/active", response_model=Dict[str, Any])
 async def get_all_active_case_locks(
     current_user: Dict = Depends(get_current_user)
@@ -677,6 +836,7 @@ async def acquire_or_refresh_case_lock(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
+    verify_case_access(case_id, current_user, x_tenant_id)
     """
     Acquire or refresh an exclusive investigation lock on a case.
     If the case is already locked by another analyst:
@@ -832,6 +992,7 @@ async def get_case(
     Retrieve structured case summary, severity metrics, and review status breakdown.
     Enforces strict tenant isolation.
     """
+    verify_case_access(case_id, current_user, x_tenant_id)
     from api.routes.evidence import sanitize_uuid
     from infrastructure.repository.evidence_store import get_case_session, list_evidence_by_case
 
@@ -1012,30 +1173,7 @@ async def get_case_findings(
     if not case_id or not case_id.strip():
         raise HTTPException(status_code=400, detail="case_id path parameter cannot be empty.")
 
-    # Enforce access control — check DB assignment
-    if current_user.get("role") != "admin":
-        try:
-            from api.routes.auth import get_db_connection
-            with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT analyst_id, senior_analyst_id, created_by FROM cases WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
-                        (case_id, x_tenant_id)
-                    )
-                    row = cur.fetchone()
-            if row:
-                uid = str(current_user.get("id", ""))
-                u_name = str(current_user.get("name", ""))
-                analyst_id   = str(row[0] or "")
-                senior_id    = str(row[1] or "")
-                created_by   = str(row[2] or "")
-                # If specifically assigned to someone else and not created by this user, deny
-                if analyst_id and analyst_id != uid and senior_id and senior_id != uid and created_by != u_name:
-                    raise HTTPException(status_code=403, detail="Access denied. This case is not assigned to you.")
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.warning(f"Could not verify case assignment: {e}")
+    verify_case_access(case_id, current_user, x_tenant_id)
     
     findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
     
@@ -1540,6 +1678,10 @@ async def get_case_agent_results(
         status_val = job_source["status"]
         results_data = job_source.get("results") or stored_pipeline_results or {}
         stage_statuses = results_data.get("stage_statuses", job_source.get("stage_statuses", {}))
+    elif job_source and job_source.get("status") in ("STOPPED", "CANCELLED"):
+        status_val = "STOPPED"
+        results_data = job_source.get("results") or stored_pipeline_results or {}
+        stage_statuses = results_data.get("stage_statuses", job_source.get("stage_statuses", {}))
     elif stored_pipeline_results:
         status_val = stored_pipeline_results.get("execution_status", "COMPLETED")
         results_data = stored_pipeline_results
@@ -1605,56 +1747,40 @@ async def get_case_agent_results(
         "confidence_gate": a7_data.get("confidence_gate", {}),
         "review_level": a7_data.get("review_level", None),
         "verification_results": a7_data.get("verification", []),
-        "agent_errors": results_data.get("agent_errors", job_source.get("error", None) if job_source else None)
+        "agent_errors": results_data.get("agent_errors", job_source.get("error", None) if job_source else None),
+        "stopped_at": job_source.get("stopped_at") if job_source else None,
+        "message": job_source.get("message") if job_source else None
     }
 
 
-@router.post("/{case_id}/run-agents")
-async def run_case_agents(
-    case_id: str,
-    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
-    current_user: Dict = Depends(get_current_user)
-):
-    """
-    Launch asynchronous multi-agent reasoning execution (Agents 1-7)
-    for an existing case and its ingested evidence/findings.
-    Enforces case authorization, tenant isolation, and durable state tracking.
-    """
-    from api.routes.evidence import sanitize_uuid
-    from infrastructure.repository.evidence_store import list_evidence_by_case, get_case_session
+def _dispatch_pipeline_job(
+    clean_case_id: str,
+    case_id_raw: str,
+    x_tenant_id: str,
+    current_user: Dict[str, Any],
+    is_restart: bool = False
+) -> Dict[str, Any]:
+    from api.routes.evidence import sanitize_uuid, _resolve_authoritative_artifact_path
+    from infrastructure.repository.evidence_store import get_case_session
     from ism.checkpointer import Checkpointer
     from config.settings import settings
     import psycopg2
     from pathlib import Path
-
-    clean_case_id = sanitize_uuid(case_id)
-
-    # Enforce case lock: another analyst cannot run agents if case is locked by someone else
-    user_id = str(current_user.get("id", ""))
-    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
-        case_id=clean_case_id,
-        user_id=user_id,
-        is_admin=current_user.get("role") == "admin"
-    )
-    if not is_allowed and lock:
-        raise HTTPException(
-            status_code=423,
-            detail=f"Cannot run multi-agent analysis: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
-        )
+    from datetime import datetime, timezone
 
     # 1. Enforce Case Existence for this Tenant
     evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
-    if not evidence_list and case_id != clean_case_id:
-        evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id)
+    if not evidence_list and case_id_raw != clean_case_id:
+        evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id_raw)
 
     findings = _analyst_service.list_findings(case_id=clean_case_id, tenant_id=x_tenant_id)
-    if not findings and case_id != clean_case_id:
-        findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
+    if not findings and case_id_raw != clean_case_id:
+        findings = _analyst_service.list_findings(case_id=case_id_raw, tenant_id=x_tenant_id)
 
     case_exists = bool(evidence_list or findings)
     if not case_exists:
         try:
-            session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+            session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id_raw)
             if session:
                 case_exists = True
         except Exception:
@@ -1670,7 +1796,7 @@ async def run_case_agents(
             cur = conn.cursor()
             cur.execute(
                 "SELECT case_id FROM cases WHERE (case_id = %s OR case_id = %s) AND tenant_id = %s;",
-                (clean_case_id, case_id, x_tenant_id)
+                (clean_case_id, case_id_raw, x_tenant_id)
             )
             if cur.fetchone():
                 case_exists = True
@@ -1681,25 +1807,38 @@ async def run_case_agents(
     if not case_exists:
         raise HTTPException(
             status_code=404,
-            detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
+            detail=f"Case '{case_id_raw}' not found for tenant '{x_tenant_id}'."
         )
 
-    # 2. Check for actively running job
-    with _agent_jobs_lock:
-        current_job = _agent_jobs.get(clean_case_id)
-        if current_job and current_job.get("status") == "RUNNING" and current_job.get("tenant_id") == x_tenant_id:
-            return {
-                "status": "RUNNING",
-                "case_id": clean_case_id,
-                "message": "Multi-agent analysis is already running for this case."
-            }
-
-    # 3. Check for evidence/findings requirement
+    # 2. Check for evidence/findings requirement
     if not findings and not evidence_list:
         raise HTTPException(
             status_code=400,
-            detail=f"Cannot run agents: Case '{case_id}' has no ingested evidence or findings."
+            detail=f"Cannot run agents: Case '{case_id_raw}' has no ingested evidence or findings."
         )
+
+    # 3. Collect ALL evidence candidate paths and ids so no evidence is missed
+    evidence_paths = []
+    evidence_ids = []
+    for ev in (evidence_list or []):
+        p = _resolve_authoritative_artifact_path(ev)
+        if p and p.exists():
+            evidence_paths.append(str(p))
+            evidence_ids.append(ev.evidence_id)
+        elif ev.file_path and Path(ev.file_path).exists():
+            evidence_paths.append(str(Path(ev.file_path)))
+            evidence_ids.append(ev.evidence_id)
+        elif ev.raw_file_path and Path(ev.raw_file_path).exists():
+            evidence_paths.append(str(Path(ev.raw_file_path)))
+            evidence_ids.append(ev.evidence_id)
+
+    # 4. Setup cancellation token
+    cancel_evt = threading.Event()
+    with _agent_jobs_lock:
+        prev_cancel = _agent_cancellations.get(clean_case_id)
+        if prev_cancel:
+            prev_cancel.set()
+        _agent_cancellations[clean_case_id] = cancel_evt
 
     initial_stage_statuses = {
         "agent1": "RUNNING", "agent2": "PENDING", "agent3": "PENDING",
@@ -1707,13 +1846,17 @@ async def run_case_agents(
         "agent6": "PENDING", "agent7": "PENDING"
     }
 
-    # 4. Initialize job in memory and durable ISM checkpoint
+    # 5. Initialize job in memory and durable ISM checkpoint
     with _agent_jobs_lock:
         _agent_jobs[clean_case_id] = {
             "status": "RUNNING",
             "case_id": clean_case_id,
             "tenant_id": x_tenant_id,
-            "stage_statuses": initial_stage_statuses
+            "stage_statuses": initial_stage_statuses,
+            "evidence_count": len(evidence_list or []),
+            "findings_count": len(findings or []),
+            "is_restart": is_restart,
+            "started_at": datetime.now(timezone.utc).isoformat()
         }
 
     checkpointer = Checkpointer()
@@ -1721,19 +1864,14 @@ async def run_case_agents(
         checkpointer.save_stage_checkpoint(
             case_id=clean_case_id,
             stage="pipeline_job",
-            state={
-                "status": "RUNNING",
-                "case_id": clean_case_id,
-                "tenant_id": x_tenant_id,
-                "stage_statuses": initial_stage_statuses
-            },
+            state=_agent_jobs[clean_case_id],
             status="RUNNING",
             tenant_id=x_tenant_id
         )
     except Exception as cp_err:
         logger.warning(f"Could not write initial pipeline_job checkpoint: {cp_err}")
 
-    # 5. Log to audit log
+    # 6. Log to audit log
     try:
         conn = psycopg2.connect(
             host=settings.postgres_host, port=settings.postgres_port,
@@ -1741,13 +1879,43 @@ async def run_case_agents(
             password=settings.postgres_password, connect_timeout=2
         )
         cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (x_tenant_id, clean_case_id, current_user.get("id") or current_user.get("user_id", "analyst"), current_user.get("name") or "analyst", "Triggered Multi-Agent Analysis", json.dumps({"description": "Launched Agents 1-7 reasoning swarm"}))
-        )
+        try:
+            cur.execute(
+                """
+                INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    x_tenant_id, clean_case_id,
+                    current_user.get("id") or current_user.get("user_id", "analyst"),
+                    current_user.get("name") or "analyst",
+                    "Restarted Multi-Agent Analysis" if is_restart else "Triggered Multi-Agent Analysis",
+                    json.dumps({
+                        "description": f"Multi-agent reasoning swarm {'restarted' if is_restart else 'launched'} capturing {len(evidence_list or [])} evidence files and {len(findings or [])} findings.",
+                        "evidence_count": len(evidence_list or []),
+                        "evidence_paths": evidence_paths
+                    })
+                )
+            )
+        except Exception:
+            conn.rollback()
+            cur.execute(
+                """
+                INSERT INTO audit_log (tenant_id, case_id, action, actor, details)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    x_tenant_id, clean_case_id,
+                    "Restarted Multi-Agent Analysis" if is_restart else "Triggered Multi-Agent Analysis",
+                    current_user.get("name") or "analyst",
+                    json.dumps({
+                        "user_id": current_user.get("id") or current_user.get("user_id", "analyst"),
+                        "description": f"Multi-agent reasoning swarm {'restarted' if is_restart else 'launched'} capturing {len(evidence_list or [])} evidence files and {len(findings or [])} findings.",
+                        "evidence_count": len(evidence_list or []),
+                        "evidence_paths": evidence_paths
+                    })
+                )
+            )
         conn.commit()
         conn.close()
     except Exception as al_e:
@@ -1756,22 +1924,23 @@ async def run_case_agents(
     def _execute_agent_pipeline():
         try:
             from argus_pipeline import run_pipeline
-            ev_path = None
-            if evidence_list and len(evidence_list) > 0 and getattr(evidence_list[0], "file_path", None):
-                candidate_path = Path(evidence_list[0].file_path)
-                if candidate_path.exists():
-                    ev_path = str(candidate_path)
 
             results = run_pipeline(
-                evidence_path=ev_path,
+                evidence_paths=evidence_paths if evidence_paths else None,
+                evidence_ids=evidence_ids if evidence_ids else None,
+                evidence_path=evidence_paths[0] if evidence_paths else None,
                 case_id=clean_case_id,
                 tenant_id=x_tenant_id,
-                fir_findings=findings if not ev_path else None,
+                fir_findings=findings,
                 stop_on_error=False,
-                resume=True
+                resume=(not is_restart),
+                cancel_event=cancel_evt
             )
 
             final_status = results.get("execution_status", "COMPLETED")
+            if cancel_evt.is_set():
+                final_status = "STOPPED"
+                results["execution_status"] = "STOPPED"
 
             with _agent_jobs_lock:
                 _agent_jobs[clean_case_id] = {
@@ -1779,7 +1948,10 @@ async def run_case_agents(
                     "case_id": clean_case_id,
                     "tenant_id": x_tenant_id,
                     "results": results,
-                    "stage_statuses": results.get("stage_statuses", {})
+                    "stage_statuses": results.get("stage_statuses", {}),
+                    "evidence_count": len(evidence_list or []),
+                    "findings_count": len(findings or []),
+                    "completed_at": datetime.now(timezone.utc).isoformat()
                 }
 
             # Save durable final checkpoint to ISM
@@ -1787,24 +1959,15 @@ async def run_case_agents(
                 checkpointer.save_stage_checkpoint(
                     case_id=clean_case_id,
                     stage="pipeline_job",
-                    state={
-                        "status": final_status,
-                        "case_id": clean_case_id,
-                        "tenant_id": x_tenant_id,
-                        "results": results,
-                        "stage_statuses": results.get("stage_statuses", {})
-                    },
+                    state=_agent_jobs[clean_case_id],
                     status=final_status,
                     tenant_id=x_tenant_id
                 )
             except Exception as cp_err:
                 logger.warning(f"Could not persist final pipeline_job checkpoint: {cp_err}")
 
-            # Update evidence metadata
-            if evidence_list and len(evidence_list) > 0:
-                first_ev = evidence_list[0]
-                first_ev.metadata = first_ev.metadata or {}
-                first_ev.metadata["agent_results"] = results
+            # Update evidence metadata for ALL evidence items in this case to ensure full retention
+            if evidence_list:
                 try:
                     conn = psycopg2.connect(
                         host=settings.postgres_host, port=settings.postgres_port,
@@ -1812,11 +1975,14 @@ async def run_case_agents(
                         password=settings.postgres_password, connect_timeout=2
                     )
                     cur = conn.cursor()
-                    import json
-                    cur.execute(
-                        "UPDATE evidence SET metadata = %s WHERE evidence_id = %s AND case_id = %s;",
-                        (json.dumps(first_ev.metadata, default=str), first_ev.evidence_id, clean_case_id)
-                    )
+                    for ev_item in evidence_list:
+                        ev_item.metadata = ev_item.metadata or {}
+                        ev_item.metadata["agent_results"] = results
+                        ev_item.metadata["workload_status"] = final_status
+                        cur.execute(
+                            "UPDATE evidence SET metadata = %s WHERE evidence_id = %s AND case_id = %s;",
+                            (json.dumps(ev_item.metadata, default=str), ev_item.evidence_id, clean_case_id)
+                        )
                     conn.commit()
                     conn.close()
                 except Exception as meta_e:
@@ -1851,11 +2017,229 @@ async def run_case_agents(
 
     _agent_executor.submit(_execute_agent_pipeline)
 
+    action_word = "restarted" if is_restart else "initiated"
     return {
-        "status": "STARTED",
+        "status": "RUNNING" if is_restart else "STARTED",
         "case_id": clean_case_id,
-        "message": f"Multi-agent forensic pipeline (Agents 1-7) initiated for Case '{clean_case_id}'."
+        "evidence_count": len(evidence_list or []),
+        "message": f"Multi-agent forensic workload (Agents 1-7) successfully {action_word} for Case '{clean_case_id}' across {len(evidence_list or [])} evidence files."
     }
+
+
+@router.post("/{case_id}/run-agents")
+async def run_case_agents(
+    case_id: str,
+    restart: bool = Query(False, description="Whether to restart the workload from scratch with all evidence"),
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Launch asynchronous multi-agent reasoning execution (Agents 1-7)
+    for an existing case and its ingested evidence/findings.
+    Enforces case authorization, tenant isolation, and durable state tracking.
+    """
+    from api.routes.evidence import sanitize_uuid
+
+    clean_case_id = sanitize_uuid(case_id)
+    verify_case_access(clean_case_id, current_user, x_tenant_id)
+
+    # Enforce case lock: another analyst cannot run agents if case is locked by someone else
+    user_id = str(current_user.get("id", ""))
+    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+        case_id=clean_case_id,
+        user_id=user_id,
+        is_admin=current_user.get("role") == "admin"
+    )
+    if not is_allowed and lock:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Cannot run multi-agent analysis: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+        )
+
+    if restart:
+        return _dispatch_pipeline_job(
+            clean_case_id=clean_case_id,
+            case_id_raw=case_id,
+            x_tenant_id=x_tenant_id,
+            current_user=current_user,
+            is_restart=True
+        )
+
+    # Check for actively running job
+    with _agent_jobs_lock:
+        current_job = _agent_jobs.get(clean_case_id)
+        if current_job and current_job.get("status") == "RUNNING" and current_job.get("tenant_id") == x_tenant_id:
+            return {
+                "status": "RUNNING",
+                "case_id": clean_case_id,
+                "message": "Multi-agent analysis is already running for this case."
+            }
+
+    return _dispatch_pipeline_job(
+        clean_case_id=clean_case_id,
+        case_id_raw=case_id,
+        x_tenant_id=x_tenant_id,
+        current_user=current_user,
+        is_restart=False
+    )
+
+
+@router.post("/{case_id}/stop-workload")
+@router.post("/{case_id}/stop-agents")
+async def stop_case_workload(
+    case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Stops/aborts the active multi-agent reasoning workload for the case.
+    Ensures all captured evidence and findings are safely retained in repository.
+    Allows analysts to upload missing evidence and resume or restart cleanly.
+    """
+    from api.routes.evidence import sanitize_uuid
+    from ism.checkpointer import Checkpointer
+    from config.settings import settings
+    import psycopg2
+    from datetime import datetime, timezone
+
+    clean_case_id = sanitize_uuid(case_id)
+    verify_case_access(clean_case_id, current_user, x_tenant_id)
+
+    user_id = str(current_user.get("id", ""))
+    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+        case_id=clean_case_id,
+        user_id=user_id,
+        is_admin=current_user.get("role") == "admin"
+    )
+    if not is_allowed and lock:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Cannot stop workload: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+        )
+
+    with _agent_jobs_lock:
+        cancel_evt = _agent_cancellations.get(clean_case_id)
+        if cancel_evt:
+            cancel_evt.set()
+
+        current_job = _agent_jobs.get(clean_case_id)
+        stage_statuses = dict(current_job.get("stage_statuses", {})) if current_job else {}
+        for k, v in stage_statuses.items():
+            if v == "RUNNING":
+                stage_statuses[k] = "STOPPED"
+
+        stopped_payload = {
+            "status": "STOPPED",
+            "case_id": clean_case_id,
+            "tenant_id": x_tenant_id,
+            "message": "Workload stopped by analyst. All captured evidence is safely retained.",
+            "stage_statuses": stage_statuses,
+            "results": current_job.get("results") if current_job else None,
+            "stopped_at": datetime.now(timezone.utc).isoformat()
+        }
+        _agent_jobs[clean_case_id] = stopped_payload
+
+    # Persist durable STOPPED checkpoint in ISM
+    checkpointer = Checkpointer()
+    try:
+        checkpointer.save_stage_checkpoint(
+            case_id=clean_case_id,
+            stage="pipeline_job",
+            state=stopped_payload,
+            status="STOPPED",
+            tenant_id=x_tenant_id
+        )
+    except Exception as cp_err:
+        logger.warning(f"Could not persist STOPPED checkpoint: {cp_err}")
+
+    # Write audit log
+    try:
+        conn = psycopg2.connect(
+            host=settings.postgres_host, port=settings.postgres_port,
+            database=settings.postgres_db, user=settings.postgres_user,
+            password=settings.postgres_password, connect_timeout=2
+        )
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                """
+                INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    x_tenant_id, clean_case_id,
+                    current_user.get("id") or current_user.get("user_id", "analyst"),
+                    current_user.get("name") or "analyst",
+                    "Stopped Multi-Agent Analysis",
+                    json.dumps({"description": "Workload stopped by analyst to review or capture additional evidence."})
+                )
+            )
+        except Exception:
+            conn.rollback()
+            cur.execute(
+                """
+                INSERT INTO audit_log (tenant_id, case_id, action, actor, details)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    x_tenant_id, clean_case_id,
+                    "Stopped Multi-Agent Analysis",
+                    current_user.get("name") or "analyst",
+                    json.dumps({
+                        "user_id": current_user.get("id") or current_user.get("user_id", "analyst"),
+                        "description": "Workload stopped by analyst to review or capture additional evidence."
+                    })
+                )
+            )
+        conn.commit()
+        conn.close()
+    except Exception as al_e:
+        logger.warning(f"Could not write audit log for stop workload: {al_e}")
+
+    return {
+        "status": "STOPPED",
+        "case_id": clean_case_id,
+        "message": f"Workload for Case '{clean_case_id}' successfully stopped. All evidence has been retained properly.",
+        "tenant_id": x_tenant_id
+    }
+
+
+@router.post("/{case_id}/restart-workload")
+@router.post("/{case_id}/restart-agents")
+async def restart_case_workload(
+    case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: Dict = Depends(get_current_user)
+):
+    """
+    Restarts the multi-agent workload from scratch for this case.
+    Re-aggregates all uploaded evidence files and findings, clearing stale stage checkpoints
+    so that no newly uploaded or previously missed evidence is omitted.
+    """
+    from api.routes.evidence import sanitize_uuid
+
+    clean_case_id = sanitize_uuid(case_id)
+    verify_case_access(clean_case_id, current_user, x_tenant_id)
+
+    user_id = str(current_user.get("id", ""))
+    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+        case_id=clean_case_id,
+        user_id=user_id,
+        is_admin=current_user.get("role") == "admin"
+    )
+    if not is_allowed and lock:
+        raise HTTPException(
+            status_code=423,
+            detail=f"Cannot restart workload: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+        )
+
+    return _dispatch_pipeline_job(
+        clean_case_id=clean_case_id,
+        case_id_raw=case_id,
+        x_tenant_id=x_tenant_id,
+        current_user=current_user,
+        is_restart=True
+    )
 
 
 # ── TASK A: Analyst Finding Review Endpoint ──────────────────────────────────

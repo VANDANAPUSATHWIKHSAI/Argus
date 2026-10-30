@@ -4,6 +4,7 @@ import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
 import ProfileModal from '../components/ProfileModal';
 import NotificationMenu from '../components/NotificationMenu';
+import GeneratedReportModal from '../components/GeneratedReportModal';
 import { fetchCases, fetchEmployees, fetchReport, closeCase } from '../js/api';
 import { safeFormatDateOnly } from '../js/dateUtils';
 import { getActiveCaseId, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
@@ -18,6 +19,7 @@ const Cases = () => {
   const itemsPerPage = 10;
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
   const [loadingReportId, setLoadingReportId] = useState(null);
+  const [reportModal, setReportModal] = useState({ isOpen: false, caseId: '', reportHtml: '', reportData: null });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
@@ -40,17 +42,25 @@ const Cases = () => {
   const handleViewReport = async (caseItem) => {
     try {
       setLoadingReportId(caseItem.case_id);
-      // Fetch report adhering to backend review gating (allowUnreviewed = false)
-      const html = await fetchReport(caseItem.case_id, 'html', false);
+      let html;
+      try {
+        html = await fetchReport(caseItem.case_id, 'html', false);
+      } catch (err) {
+        // Fall back to draft / unreviewed dossier if findings are pending review or case has no findings
+        html = await fetchReport(caseItem.case_id, 'html', true);
+      }
       const content = typeof html === 'string' ? html : JSON.stringify(html, null, 2);
-      const blob = new Blob([content], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      setReportModal({
+        isOpen: true,
+        caseId: caseItem.case_id,
+        reportHtml: content,
+        reportData: { case_id: caseItem.case_id }
+      });
     } catch (err) {
       setCustomAlert({
         isOpen: true,
         title: 'Report Unavailable',
-        message: err.message || `No finalized forensic report available for case ${caseItem.name || caseItem.case_id}. Review findings must be completed before report finalization.`,
+        message: err.message || `No forensic report available for case ${caseItem.name || caseItem.case_id}.`,
         type: 'warning'
       });
     } finally {
@@ -177,6 +187,13 @@ const Cases = () => {
     <div id="app-shell">
       <AlertModal {...customAlert} onClose={closeAlert} />
       {showProfileModal && <ProfileModal onClose={() => setShowProfileModal(false)} />}
+      <GeneratedReportModal
+        isOpen={reportModal.isOpen}
+        onClose={() => setReportModal(prev => ({ ...prev, isOpen: false }))}
+        caseId={reportModal.caseId}
+        reportData={reportModal.reportData}
+        reportHtml={reportModal.reportHtml}
+      />
       
       <Sidebar />
 
@@ -369,24 +386,7 @@ const Cases = () => {
                           </td>
                           <td style={{ padding: '16px 24px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                              {!isActive && isOpen && (
-                                <button
-                                  onClick={() => handleSetActiveCase(c)}
-                                  style={{
-                                    background: c.lock?.is_locked && c.lock?.read_only ? 'rgba(245, 158, 11, 0.12)' : 'rgba(16, 185, 129, 0.12)',
-                                    color: c.lock?.is_locked && c.lock?.read_only ? '#f59e0b' : '#10b981',
-                                    border: `1px solid ${c.lock?.is_locked && c.lock?.read_only ? 'rgba(245, 158, 11, 0.35)' : 'rgba(16, 185, 129, 0.35)'}`,
-                                    padding: '6px 12px',
-                                    borderRadius: '6px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer'
-                                  }}
-                                  title={c.lock?.is_locked && c.lock?.read_only ? 'Open case in read-only mode' : 'Select as active investigation case'}
-                                >
-                                  {c.lock?.is_locked && c.lock?.read_only ? 'Investigate (Read-Only)' : 'Set Active'}
-                                </button>
-                              )}
+
                               <button
                                 onClick={() => handleViewReport(c)}
                                 disabled={loadingReportId === c.case_id}
@@ -422,7 +422,10 @@ const Cases = () => {
                                 </button>
                               )}
                               <button
-                                onClick={() => navigate(`/audit-logs?case_id=${c.case_id}`)}
+                                onClick={() => {
+                                  setActiveCase(c.case_id, c.name || '');
+                                  navigate(`/audit-logs?case_id=${encodeURIComponent(c.case_id)}`);
+                                }}
                                 style={{
                                   background: 'var(--bg-app)',
                                   color: 'var(--text-main)',

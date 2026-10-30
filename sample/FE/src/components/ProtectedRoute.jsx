@@ -26,8 +26,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
     const isAuthorized = allowedRoles.map(r => r.toLowerCase()).includes(userRole);
 
     if (!isAuthorized) {
-      // Auditor is restricted to report view
-      if (userRole === 'auditor') {
+      // Auditor and Senior Analyst are directed to report view
+      if (userRole === 'auditor' || userRole === 'senior_analyst') {
         return <Navigate to="/report" replace />;
       }
       // Other roles navigate back to authorized dashboard

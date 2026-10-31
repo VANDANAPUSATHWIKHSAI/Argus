@@ -5,7 +5,7 @@ import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import AlertModal from '../components/AlertModal';
 import { safeFormatDateOnly, safeFormatDateTime, safeFormatTime } from '../js/dateUtils';
-import { setActiveCase } from '../js/caseEvents';
+import { setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -57,10 +57,11 @@ const AdminDashboard = () => {
         statusLabel: 'No Active Cases',
         pillClass: 'closed',
         progressWidth: '0%',
-        investigationActive: false,
-        reviewActive: false,
-        auditActive: false,
-        closedActive: false
+        progressOpacity: 0,
+        investigationStatus: 'pending',
+        reviewStatus: 'pending',
+        auditStatus: 'pending',
+        closedStatus: 'pending'
       };
     }
     const isClosed = caseObj.status === 'closed' || caseObj.status === 'completed' || caseObj.status === 'archived';
@@ -79,11 +80,12 @@ const AdminDashboard = () => {
         stage: 'closed',
         statusLabel: 'Closed',
         pillClass: 'closed',
-        progressWidth: '100%',
-        investigationActive: true,
-        reviewActive: true,
-        auditActive: true,
-        closedActive: true
+        progressWidth: 'calc(100% - 56px)',
+        progressOpacity: 1,
+        investigationStatus: 'completed',
+        reviewStatus: 'completed',
+        auditStatus: 'completed',
+        closedStatus: 'completed'
       };
     }
 
@@ -92,11 +94,12 @@ const AdminDashboard = () => {
         stage: 'audit',
         statusLabel: 'In Audit',
         pillClass: 'audit',
-        progressWidth: '66%',
-        investigationActive: true,
-        reviewActive: true,
-        auditActive: true,
-        closedActive: false
+        progressWidth: 'calc((100% - 56px) * 0.666)',
+        progressOpacity: 1,
+        investigationStatus: 'completed',
+        reviewStatus: 'completed',
+        auditStatus: 'active',
+        closedStatus: 'pending'
       };
     }
 
@@ -105,11 +108,12 @@ const AdminDashboard = () => {
         stage: 'review',
         statusLabel: 'Under Review',
         pillClass: 'review',
-        progressWidth: '33%',
-        investigationActive: true,
-        reviewActive: true,
-        auditActive: false,
-        closedActive: false
+        progressWidth: 'calc((100% - 56px) * 0.333)',
+        progressOpacity: 1,
+        investigationStatus: 'completed',
+        reviewStatus: 'active',
+        auditStatus: 'pending',
+        closedStatus: 'pending'
       };
     }
 
@@ -118,14 +122,32 @@ const AdminDashboard = () => {
       statusLabel: 'Investigation',
       pillClass: 'investigation',
       progressWidth: '0%',
-      investigationActive: true,
-      reviewActive: false,
-      auditActive: false,
-      closedActive: false
+      progressOpacity: 0,
+      investigationStatus: 'active',
+      reviewStatus: 'pending',
+      auditStatus: 'pending',
+      closedStatus: 'pending'
     };
   };
 
   const caseStageInfo = getCaseStageInfo(currentCase);
+
+  useEffect(() => {
+    const unsub = subscribeToActiveCase(() => {
+      setRefreshTrigger(prev => prev + 1);
+    });
+    const handleStorage = (e) => {
+      if (!e.key || e.key.includes('submitted_to_senior') || e.key.includes('submitted_to_auditor') || e.key.includes('active_case')) {
+        setRefreshTrigger(prev => prev + 1);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => {
+      unsub();
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, []);
+
 
   const analystSelectOptions = (() => {
     const list = employees.filter(e => e.role === 'analyst' || e.role === 'forensic_analyst');
@@ -602,28 +624,64 @@ const AdminDashboard = () => {
             <div className="glass-pipeline-track" />
             <div 
               className="glass-pipeline-progress" 
-              style={{ width: caseStageInfo.progressWidth }} 
+              style={{ 
+                width: caseStageInfo.progressWidth,
+                opacity: caseStageInfo.progressOpacity
+              }} 
             />
             
             <div className="glass-pipeline-nodes">
-              <div className="glass-pipeline-node">
-                <span className={`glass-pipeline-dot ${caseStageInfo.investigationActive ? 'active' : 'pending'}`} />
+              <div 
+                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''}`}
+                onClick={() => currentCase && navigate('/agents')}
+                title={currentCase ? 'Investigation: Run agent swarm & review evidence' : 'No active case'}
+              >
+                <span className={`glass-pipeline-dot ${caseStageInfo.investigationStatus}`}>
+                  {caseStageInfo.investigationStatus === 'completed' ? (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  ) : null}
+                </span>
                 <span className="glass-pipeline-label">Investigation</span>
                 <span className="glass-pipeline-role">(Analyst)</span>
               </div>
-              <div className="glass-pipeline-node">
-                <span className={`glass-pipeline-dot ${caseStageInfo.reviewActive ? 'active' : 'pending'}`} />
+              <div 
+                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''}`}
+                onClick={() => currentCase && navigate('/report')}
+                title={currentCase ? 'Review: Senior analyst report validation' : 'No active case'}
+              >
+                <span className={`glass-pipeline-dot ${caseStageInfo.reviewStatus}`}>
+                  {caseStageInfo.reviewStatus === 'completed' ? (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  ) : null}
+                </span>
                 <span className="glass-pipeline-label">Review</span>
                 <span className="glass-pipeline-role">(Senior Analyst)</span>
               </div>
-              <div className="glass-pipeline-node">
-                <span className={`glass-pipeline-dot ${caseStageInfo.auditActive ? 'active' : 'pending'}`} />
+              <div 
+                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''}`}
+                onClick={() => currentCase && navigate(`/audit-logs?case_id=${encodeURIComponent(currentCase.case_id)}`)}
+                title={currentCase ? 'Audit: RFC-3161 timestamps & audit logs' : 'No active case'}
+              >
+                <span className={`glass-pipeline-dot ${caseStageInfo.auditStatus}`}>
+                  {caseStageInfo.auditStatus === 'completed' ? (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  ) : null}
+                </span>
                 <span className="glass-pipeline-label">Audit</span>
                 <span className="glass-pipeline-role">({currentCase?.auditor_name || 'Not Assigned'})</span>
               </div>
-              <div className="glass-pipeline-node">
-                <span className={`glass-pipeline-dot ${caseStageInfo.closedActive ? 'active' : 'pending'}`} />
+              <div 
+                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''}`}
+                onClick={() => currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress') && handleCloseCase()}
+                title={currentCase ? (currentCase.status === 'closed' ? 'Case is closed' : 'Click to close active case') : 'No active case'}
+              >
+                <span className={`glass-pipeline-dot ${caseStageInfo.closedStatus}`}>
+                  {caseStageInfo.closedStatus === 'completed' ? (
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  ) : null}
+                </span>
                 <span className="glass-pipeline-label">Closed</span>
+                <span className="glass-pipeline-role">{currentCase?.status === 'closed' ? '(Resolved)' : '(Final)'}</span>
               </div>
             </div>
           </div>

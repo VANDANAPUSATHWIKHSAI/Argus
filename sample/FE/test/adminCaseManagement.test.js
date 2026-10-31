@@ -8,15 +8,19 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const srcDir = path.resolve(__dirname, '../src');
 
-test('adminCaseManagement: AdminDashboard imports and uses canonical setActiveCase', () => {
+test('adminCaseManagement: AdminDashboard imports and uses canonical setActiveCase and subscribeToActiveCase', () => {
   const pagePath = path.join(srcDir, 'pages', 'AdminDashboard.jsx');
   assert.ok(fs.existsSync(pagePath), 'AdminDashboard.jsx must exist');
   const content = fs.readFileSync(pagePath, 'utf8');
 
-  // Must import canonical setActiveCase
+  // Must import canonical setActiveCase and subscribeToActiveCase
   assert.ok(
-    content.includes("import { setActiveCase } from '../js/caseEvents'"),
+    content.includes('setActiveCase') && content.includes('../js/caseEvents'),
     'AdminDashboard must import canonical setActiveCase from caseEvents'
+  );
+  assert.ok(
+    content.includes('subscribeToActiveCase'),
+    'AdminDashboard must subscribe to active case changes'
   );
 
   // Must call setActiveCase on case creation
@@ -58,6 +62,12 @@ test('adminCaseManagement: AdminDashboard dynamically computes case stage withou
   assert.ok(
     content.includes("stage: 'closed'"),
     'Must support closed stage'
+  );
+
+  // Must support clean pending states when no case is active
+  assert.ok(
+    content.includes("investigationStatus: 'pending'"),
+    'All pipeline nodes must remain pending when no case is active'
   );
 });
 

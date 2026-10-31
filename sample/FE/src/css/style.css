@@ -2835,33 +2835,43 @@ input:checked + .slider:before {
 
 .glass-sidebar-expand-pill {
   position: fixed;
-  left: 20px;
-  top: calc(50% - 60px);
-  transform: translateY(-50%);
+  top: 30px;
+  left: 34px;
+  height: 44px;
   background: var(--glass-dash-surface-gradient);
   backdrop-filter: blur(28px) saturate(190%);
   -webkit-backdrop-filter: blur(28px) saturate(190%);
   border: 1px solid var(--glass-dash-border);
-  box-shadow: var(--glass-dash-shadow-card);
-  border-radius: 20px;
-  padding: 10px 14px;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.08), inset 0 1px 1px rgba(255, 255, 255, 0.8);
+  border-radius: 14px;
+  padding: 0 16px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   color: var(--glass-dash-text-main);
   cursor: pointer;
-  z-index: 45;
+  z-index: 150;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .glass-sidebar-expand-pill:hover {
-  transform: translateY(-50%) translateX(4px);
+  transform: translateY(-1px);
   border-color: var(--glass-dash-blue);
   color: var(--glass-dash-blue);
-  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.2);
+}
+
+.glass-sidebar-expand-pill:active {
+  transform: translateY(0);
+}
+
+.sidebar-collapsed .glass-topbar-capsule,
+.sidebar-collapsed .topbar {
+  padding-left: 155px !important;
+  transition: padding-left 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
 
 /* Smooth transitions for sidebar and workspace */

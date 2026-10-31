@@ -1008,6 +1008,17 @@
   box-shadow: 0 0 0 2px #38bdf8, 0 0 12px rgba(56, 189, 248, 0.8);
 }
 
+.glass-pipeline-dot.completed {
+  background: #10b981;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 0 2px #10b981, 0 0 12px rgba(16, 185, 129, 0.6);
+}
+
+[data-theme="dark"] .glass-pipeline-dot.completed {
+  border-color: #121826;
+  box-shadow: 0 0 0 2px #10b981, 0 0 12px rgba(16, 185, 129, 0.8);
+}
+
 .glass-pipeline-dot.pending {
   background: var(--glass-dash-surface);
   border: 2px solid var(--glass-dash-border-subtle);

@@ -1675,14 +1675,14 @@ const Agents = () => {
               <>
                 <button
                   onClick={handleRunAnalysis}
-                  disabled={loading || !activeCaseId || caseLock?.readOnly}
+                  disabled={runningAgents || loading || !activeCaseId || caseLock?.readOnly}
                   className="btn-primary"
                   style={{
                     fontSize: '12.5px',
                     padding: '7px 16px',
                     borderRadius: '10px',
-                    cursor: (loading || !activeCaseId || caseLock?.readOnly) ? 'not-allowed' : 'pointer',
-                    opacity: (loading || !activeCaseId || caseLock?.readOnly) ? 0.6 : 1,
+                    cursor: (runningAgents || loading || !activeCaseId || caseLock?.readOnly) ? 'not-allowed' : 'pointer',
+                    opacity: (runningAgents || loading || !activeCaseId || caseLock?.readOnly) ? 0.6 : 1,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px'

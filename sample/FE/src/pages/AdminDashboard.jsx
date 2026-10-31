@@ -1,10 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL, DEFAULT_TENANT_ID, fetchAgentResults } from '../js/api';
+import { API_BASE_URL, DEFAULT_TENANT_ID, fetchAgentResults, fetchCaseSummary } from '../js/api';
 import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
+import '../templates/GlassDashboardTemplate.css';
 import AlertModal from '../components/AlertModal';
 import { safeFormatDateOnly, safeFormatDateTime, safeFormatTime } from '../js/dateUtils';
+import { setActiveCase } from '../js/caseEvents';
+
+const DEFAULT_ANALYSTS = [
+  { value: 'analyst', label: 'Junior Analyst (analyst)' },
+  { value: 'EMP-002', label: 'Lead Analyst (EMP-002)' },
+  { value: '4', label: 'sathwik (4)' },
+  { value: '5', label: 'Analyst 5 (5)' }
+];
+
+const DEFAULT_SENIORS = [
+  { value: 'senior_analyst', label: 'Senior Analyst (senior_analyst)' },
+  { value: 'EMP-003', label: 'Senior Analyst (EMP-003)' },
+  { value: '6', label: 'Senior Analyst 6 (6)' },
+  { value: '7', label: 'Senior Analyst 7 (7)' }
+];
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -24,6 +40,7 @@ const AdminDashboard = () => {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [allCasesList, setAllCasesList] = useState([]);
   const [agentSummary, setAgentSummary] = useState(null);
+  const [caseSummary, setCaseSummary] = useState(null);
 
   const loadWorkloadStatus = async (caseId) => {
     if (!caseId) {
@@ -38,7 +55,18 @@ const AdminDashboard = () => {
     }
   };
 
-
+  const loadCaseSummary = async (caseId) => {
+    if (!caseId) {
+      setCaseSummary(null);
+      return;
+    }
+    try {
+      const summary = await fetchCaseSummary(caseId);
+      setCaseSummary(summary);
+    } catch (_) {
+      setCaseSummary(null);
+    }
+  };
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCaseName, setNewCaseName] = useState('');
@@ -48,6 +76,23 @@ const AdminDashboard = () => {
   const [showAssignSeniorModal, setShowAssignSeniorModal] = useState(false);
   const [assigningSenior, setAssigningSenior] = useState('');
   const [assigningLoading, setAssigningLoading] = useState(false);
+
+  const analystOptions = employees
+    .filter(e => {
+      const r = (e.role || '').toLowerCase();
+      return (r.includes('analyst') || r.includes('investigator')) && !r.includes('senior');
+    })
+    .map(emp => ({ value: String(emp.id), label: `${emp.name || emp.id} (${emp.id})` }));
+
+  const seniorOptions = employees
+    .filter(e => {
+      const r = (e.role || '').toLowerCase();
+      return r.includes('senior');
+    })
+    .map(emp => ({ value: String(emp.id), label: `${emp.name || emp.id} (${emp.id})` }));
+
+  const availableAnalystOptions = analystOptions.length > 0 ? analystOptions : DEFAULT_ANALYSTS;
+  const availableSeniorOptions = seniorOptions.length > 0 ? seniorOptions : DEFAULT_SENIORS;
 
   const handleCreateCase = async (e) => {
     e.preventDefault();
@@ -68,7 +113,7 @@ const AdminDashboard = () => {
           'X-Tenant-ID': DEFAULT_TENANT_ID
         },
         body: JSON.stringify({ 
-          name: newCaseName, 
+          name: newCaseName.trim(), 
           analyst: 'Admin', 
           analyst_id: newCaseAnalyst || null,
           senior_analyst_id: newCaseSeniorAnalyst || null,
@@ -86,26 +131,27 @@ const AdminDashboard = () => {
       }
       const data = await res.json();
       const createdId = data.case_id || data.id;
-      localStorage.setItem('active_case_id', createdId);
-      localStorage.setItem('active_case_name', newCaseName);
+
+      setActiveCase(createdId, newCaseName.trim());
       
-      const assignedAnalyst = employees.find(emp => String(emp.id) === String(newCaseAnalyst));
-      const assignedSenior = employees.find(emp => String(emp.id) === String(newCaseSeniorAnalyst));
+      const assignedAnalyst = employees.find(emp => String(emp.id) === String(newCaseAnalyst)) ||
+        availableAnalystOptions.find(opt => String(opt.value) === String(newCaseAnalyst));
+      const assignedSenior = employees.find(emp => String(emp.id) === String(newCaseSeniorAnalyst)) ||
+        availableSeniorOptions.find(opt => String(opt.value) === String(newCaseSeniorAnalyst));
 
       const newCaseObj = {
         case_id: createdId,
-        name: newCaseName,
+        name: newCaseName.trim(),
         status: 'open',
         analyst_id: newCaseAnalyst || null,
-        analyst_name: assignedAnalyst ? assignedAnalyst.name : newCaseAnalyst,
+        analyst_name: assignedAnalyst ? (assignedAnalyst.name || assignedAnalyst.label) : newCaseAnalyst,
         senior_analyst_id: newCaseSeniorAnalyst || null,
-        senior_analyst_name: assignedSenior ? assignedSenior.name : newCaseSeniorAnalyst,
+        senior_analyst_name: assignedSenior ? (assignedSenior.name || assignedSenior.label) : newCaseSeniorAnalyst,
         created_at: new Date().toISOString()
       };
 
       setCurrentCase(newCaseObj);
-      setHasOpenCase(true);
-      setAllCasesList(prev => [newCaseObj, ...prev]);
+      setAllCasesList(prev => [newCaseObj, ...prev.filter(c => c.case_id !== createdId)]);
 
       setShowCreateModal(false);
       setNewCaseName('');
@@ -113,13 +159,13 @@ const AdminDashboard = () => {
       setNewCaseSeniorAnalyst('');
       setRefreshTrigger(prev => prev + 1);
 
-      window.dispatchEvent(new Event('storage'));
-      window.dispatchEvent(new CustomEvent('argus:caseChanged', { detail: { caseId: createdId } }));
+      loadWorkloadStatus(createdId);
+      loadCaseSummary(createdId);
 
       setCustomAlert({
         isOpen: true,
         title: 'Success',
-        message: `Case ${createdId} ("${newCaseName}") created successfully and analyst assigned.`,
+        message: `Case ${createdId} ("${newCaseName.trim()}") created successfully and analyst assigned.`,
         type: 'success',
         onClose: null
       });
@@ -136,13 +182,22 @@ const AdminDashboard = () => {
     setAssigningLoading(true);
     try {
       const token = localStorage.getItem('argus_token');
-      // Update via PATCH — send senior_analyst_id
       const res = await fetch(`${API_BASE_URL}/cases/${currentCase.case_id}/assign-senior`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': DEFAULT_TENANT_ID },
         body: JSON.stringify({ senior_analyst_id: assigningSenior })
       });
       if (!res.ok) throw new Error(await res.text());
+
+      const assignedSeniorObj = employees.find(emp => String(emp.id) === String(assigningSenior)) ||
+        availableSeniorOptions.find(opt => String(opt.value) === String(assigningSenior));
+
+      setCurrentCase(prev => prev ? ({
+        ...prev,
+        senior_analyst_id: assigningSenior,
+        senior_analyst_name: assignedSeniorObj ? (assignedSeniorObj.name || assignedSeniorObj.label) : assigningSenior
+      }) : null);
+
       setShowAssignSeniorModal(false);
       setAssigningSenior('');
       setRefreshTrigger(prev => prev + 1);
@@ -168,10 +223,8 @@ const AdminDashboard = () => {
       if (res.ok) {
         const closedId = currentCase.case_id;
         const closedName = currentCase.name || closedId;
-        localStorage.removeItem('active_case_id');
-        localStorage.removeItem('active_case_name');
-        localStorage.removeItem('active_case_desc');
-        setCurrentCase(null);
+        setActiveCase('', '');
+        setCurrentCase(prev => prev ? ({ ...prev, status: 'closed' }) : null);
         setAgentSummary(null);
         setRefreshTrigger(prev => prev + 1);
         setCustomAlert({
@@ -221,16 +274,16 @@ const AdminDashboard = () => {
           if (empRes.ok) {
             const empData = await empRes.json();
             const count = Array.isArray(empData) ? empData.length : 0;
-            setTotalEmployees(count > 0 ? count : 11);
+            setTotalEmployees(count);
             setEmployees(empData || []);
             (empData || []).forEach(emp => {
               employeeMap[String(emp.id)] = emp;
             });
           } else {
-            setTotalEmployees(11);
+            setTotalEmployees(0);
           }
         } catch (_) {
-          setTotalEmployees(11);
+          setTotalEmployees(0);
         }
 
         // Fetch Cases
@@ -239,7 +292,7 @@ const AdminDashboard = () => {
           const caseData = await caseRes.json();
           const cases = caseData.data || [];
           const closedCount = cases.filter(c => c.status === 'closed' || c.status === 'completed' || c.status === 'archived').length;
-          setCasesSolved(closedCount > 0 ? closedCount : (cases.length || 12));
+          setCasesSolved(closedCount);
           
           if (cases.length > 0) {
             // Enrich each case with resolved analyst and senior analyst names
@@ -259,28 +312,32 @@ const AdminDashboard = () => {
             
             // Prefer selected active case; if none or closed, fallback to latest open case
             const activeId = localStorage.getItem('active_case_id');
-            let active = activeId ? sorted.find(c => c.case_id === activeId && (c.status === 'open' || c.status === 'in_progress')) : null;
+            let active = activeId ? sorted.find(c => c.case_id === activeId) : null;
             if (!active) {
               active = sorted.find(c => (c.status === 'open' || c.status === 'in_progress') && c.case_id?.startsWith('ARGUS_')) ||
-                       sorted.find(c => c.status === 'open' || c.status === 'in_progress');
+                       sorted.find(c => c.status === 'open' || c.status === 'in_progress') ||
+                       sorted[0];
               if (active) {
-                localStorage.setItem('active_case_id', active.case_id);
-                if (active.name) localStorage.setItem('active_case_name', active.name);
-                if (active.description) localStorage.setItem('active_case_desc', active.description);
+                setActiveCase(active.case_id, active.name || '');
               } else if (activeId) {
-                localStorage.removeItem('active_case_id');
-                localStorage.removeItem('active_case_name');
-                localStorage.removeItem('active_case_desc');
+                setActiveCase('', '');
               }
             }
             if (active) {
               setCurrentCase(active);
               loadWorkloadStatus(active.case_id);
+              loadCaseSummary(active.case_id);
+            } else {
+              setCurrentCase(null);
+              setAgentSummary(null);
+              setCaseSummary(null);
             }
           } else {
             setAllCasesList([]);
             setCurrentCase(null);
             setAgentSummary(null);
+            setCaseSummary(null);
+            setActiveCase('', '');
           }
         }
         
@@ -319,6 +376,82 @@ const AdminDashboard = () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [refreshTrigger]);
+
+  // Dynamic Case Progress & Completion Calculations
+  const isCaseClosed = Boolean(
+    currentCase && (currentCase.status === 'closed' || currentCase.status === 'completed' || currentCase.status === 'archived')
+  );
+
+  const isSubmittedToSenior = Boolean(
+    currentCase && (
+      localStorage.getItem(`argus_case_${currentCase.case_id}_submitted_to_senior`) === 'true' ||
+      caseSummary?.investigation_progress?.report === 'completed' ||
+      isCaseClosed
+    )
+  );
+
+  const isSubmittedToAuditor = Boolean(
+    currentCase && (
+      localStorage.getItem(`argus_case_${currentCase.case_id}_submitted_to_auditor`) === 'true' ||
+      isCaseClosed
+    )
+  );
+
+  const evidenceCount = caseSummary?.total_evidence_files || 0;
+  const findingsCount = caseSummary?.total_findings || 0;
+  const hasStartedInvestigation = evidenceCount > 0 || findingsCount > 0 || agentSummary?.status === 'RUNNING' || agentSummary?.status === 'COMPLETED';
+
+  let stage1Status = 'pending';
+  let stage2Status = 'pending';
+  let stage3Status = 'pending';
+  let stage4Status = 'pending';
+  let progressPercent = 0;
+  let stageStatusText = 'No Active Case';
+
+  if (!currentCase) {
+    stage1Status = 'pending';
+    stage2Status = 'pending';
+    stage3Status = 'pending';
+    stage4Status = 'pending';
+    progressPercent = 0;
+    stageStatusText = 'No Active Case · 0% Complete';
+  } else if (isCaseClosed) {
+    stage1Status = 'completed';
+    stage2Status = 'completed';
+    stage3Status = 'completed';
+    stage4Status = 'completed';
+    progressPercent = 100;
+    stageStatusText = '4 of 4 stages complete (100%) · Investigation Closed & Sealed';
+  } else if (isSubmittedToAuditor) {
+    stage1Status = 'completed';
+    stage2Status = 'completed';
+    stage3Status = 'active';
+    stage4Status = 'pending';
+    progressPercent = 75;
+    stageStatusText = '2 of 4 stages complete (75%) · In Compliance Audit';
+  } else if (isSubmittedToSenior) {
+    stage1Status = 'completed';
+    stage2Status = 'active';
+    stage3Status = 'pending';
+    stage4Status = 'pending';
+    progressPercent = 50;
+    stageStatusText = '1 of 4 stages complete (50%) · In Senior Analyst Review';
+  } else if (hasStartedInvestigation) {
+    stage1Status = 'active';
+    stage2Status = 'pending';
+    stage3Status = 'pending';
+    stage4Status = 'pending';
+    progressPercent = 25;
+    stageStatusText = '0 of 4 stages complete (25%) · Investigation In Progress';
+  } else {
+    // Brand-new case with 0 evidence uploaded
+    stage1Status = 'active';
+    stage2Status = 'pending';
+    stage3Status = 'pending';
+    stage4Status = 'pending';
+    progressPercent = 0;
+    stageStatusText = '0 of 4 stages complete (0%) · Case Initialized, Awaiting Evidence';
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
@@ -369,23 +502,9 @@ const AdminDashboard = () => {
             <span>{new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric' })}</span>
           </div>
           <button
-            onClick={() => {
-              if (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) {
-                setCustomAlert({
-                  isOpen: true,
-                  title: 'Notice',
-                  message: `Active case "${currentCase.name || currentCase.case_id}" is currently open. Please close it before creating a new case.`,
-                  type: 'warning'
-                });
-              } else {
-                setShowCreateModal(true);
-              }
-            }}
+            onClick={() => setShowCreateModal(true)}
             className="btn-glass-primary"
-            style={{ 
-              cursor: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 'not-allowed' : 'pointer', 
-              opacity: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 0.6 : 1 
-            }}
+            style={{ cursor: 'pointer', opacity: 1 }}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
             Create Case
@@ -455,14 +574,57 @@ const AdminDashboard = () => {
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
               </div>
               <div>
-                <h2 className="glass-case-id-text">{currentCase ? currentCase.case_id : 'No Active Case'}</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2 className="glass-case-id-text" style={{ margin: 0 }}>{currentCase ? currentCase.case_id : 'No Active Case'}</h2>
+                  {allCasesList.length > 1 && (
+                    <select
+                      value={currentCase?.case_id || ''}
+                      onChange={(e) => {
+                        const sel = allCasesList.find(c => c.case_id === e.target.value);
+                        if (sel) {
+                          setCurrentCase(sel);
+                          setActiveCase(sel.case_id, sel.name || '');
+                          loadWorkloadStatus(sel.case_id);
+                          loadCaseSummary(sel.case_id);
+                        }
+                      }}
+                      style={{
+                        padding: '3px 8px',
+                        fontSize: '11.5px',
+                        fontWeight: 600,
+                        borderRadius: '8px',
+                        background: 'var(--glass-dash-surface-nested)',
+                        border: '1px solid var(--glass-dash-border-subtle)',
+                        color: 'var(--glass-dash-text-main)',
+                        cursor: 'pointer'
+                      }}
+                      title="Switch active case"
+                    >
+                      {allCasesList.map(c => (
+                        <option key={c.case_id} value={c.case_id}>
+                          {c.case_id}: {c.name || 'Unnamed'} ({c.status})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
                 <p className="glass-case-desc-text">{currentCase ? currentCase.name : 'Create a case to get started'}</p>
               </div>
             </div>
             
             <div className="glass-header-badge-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span className="glass-status-pill review">
-                &bull; {currentCase ? (currentCase.status === 'open' || currentCase.status === 'in_progress' ? 'Under Review' : 'Closed') : 'No Active Cases'}
+              <span className={`glass-status-pill ${isCaseClosed ? 'closed' : isSubmittedToAuditor ? 'audit' : isSubmittedToSenior ? 'review' : currentCase ? 'active' : 'inactive'}`}>
+                &bull; {
+                  !currentCase 
+                    ? 'No Active Cases'
+                    : isCaseClosed
+                    ? 'Closed'
+                    : isSubmittedToAuditor
+                    ? 'Compliance Audit'
+                    : isSubmittedToSenior
+                    ? 'Senior Review'
+                    : 'Investigation Active'
+                }
               </span>
 
               {/* Workload Status Pill */}
@@ -503,34 +665,78 @@ const AdminDashboard = () => {
             </div>
           </div>
 
+          {/* Progress Header with Accurate How Much Completed Metric */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '14px 0 6px 0', flexWrap: 'wrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--glass-dash-text-dim)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Lifecycle Pipeline
+              </span>
+              <span style={{ 
+                fontSize: '11px', 
+                fontWeight: 700, 
+                padding: '2px 8px', 
+                borderRadius: '12px',
+                background: progressPercent === 100 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(37, 99, 235, 0.12)',
+                color: progressPercent === 100 ? '#10b981' : 'var(--glass-dash-blue, #38bdf8)',
+                border: `1px solid ${progressPercent === 100 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(37, 99, 235, 0.25)'}`
+              }}>
+                {progressPercent}% Complete
+              </span>
+            </div>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--glass-dash-text-muted)' }}>
+              {stageStatusText}
+            </span>
+          </div>
+
           {/* Progress Timeline Pipeline */}
           <div className="glass-pipeline-container">
             <div className="glass-pipeline-track" />
             <div 
               className="glass-pipeline-progress" 
-              style={{ width: currentCase?.status === 'closed' ? '100%' : '33%' }} 
+              style={{ width: `${progressPercent}%`, transition: 'width 0.4s ease' }} 
             />
             
             <div className="glass-pipeline-nodes">
               <div className="glass-pipeline-node">
-                <span className="glass-pipeline-dot active" />
+                <span className={`glass-pipeline-dot ${stage1Status}`} />
                 <span className="glass-pipeline-label">Investigation</span>
-                <span className="glass-pipeline-role">(Analyst)</span>
+                <span className="glass-pipeline-role">({currentCase ? (currentCase.analyst_name || currentCase.analyst_id || 'Analyst') : 'Analyst'})</span>
               </div>
               <div className="glass-pipeline-node">
-                <span className={`glass-pipeline-dot ${currentCase?.status !== 'closed' ? 'active' : 'pending'}`} />
+                <span className={`glass-pipeline-dot ${stage2Status}`} />
                 <span className="glass-pipeline-label">Review</span>
-                <span className="glass-pipeline-role">(Senior Analyst)</span>
+                <span className="glass-pipeline-role">({currentCase ? (currentCase.senior_analyst_name || currentCase.senior_analyst_id || 'Senior Analyst') : 'Senior Analyst'})</span>
               </div>
               <div className="glass-pipeline-node">
-                <span className="glass-pipeline-dot pending" />
+                <span className={`glass-pipeline-dot ${stage3Status}`} />
                 <span className="glass-pipeline-label">Audit</span>
-                <span className="glass-pipeline-role">(Not Assigned)</span>
+                <span className="glass-pipeline-role">({currentCase ? (currentCase.auditor_name || currentCase.auditor_id || 'Compliance Auditor') : 'Compliance Auditor'})</span>
               </div>
               <div className="glass-pipeline-node">
-                <span className={`glass-pipeline-dot ${currentCase?.status === 'closed' ? 'active' : 'pending'}`} />
+                <span className={`glass-pipeline-dot ${stage4Status}`} />
                 <span className="glass-pipeline-label">Closed</span>
+                <span className="glass-pipeline-role">({isCaseClosed ? 'Archived' : 'Final'})</span>
               </div>
+            </div>
+          </div>
+
+          {/* Real-time Case Telemetry Chips */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginTop: '14px', marginBottom: '4px' }}>
+            <div style={{ padding: '8px 12px', borderRadius: '10px', background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--glass-dash-border-subtle)', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', fontWeight: 600 }}>Evidence Files</div>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--glass-dash-text-main)', marginTop: '2px' }}>{currentCase ? evidenceCount : 0}</div>
+            </div>
+            <div style={{ padding: '8px 12px', borderRadius: '10px', background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--glass-dash-border-subtle)', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', fontWeight: 600 }}>Artifacts</div>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--glass-dash-text-main)', marginTop: '2px' }}>{currentCase ? (caseSummary?.total_artifacts || 0) : 0}</div>
+            </div>
+            <div style={{ padding: '8px 12px', borderRadius: '10px', background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--glass-dash-border-subtle)', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', fontWeight: 600 }}>Findings</div>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--glass-dash-text-main)', marginTop: '2px' }}>{currentCase ? findingsCount : 0}</div>
+            </div>
+            <div style={{ padding: '8px 12px', borderRadius: '10px', background: 'var(--glass-dash-surface-nested)', border: '1px solid var(--glass-dash-border-subtle)', textAlign: 'center' }}>
+              <div style={{ fontSize: '11px', color: 'var(--glass-dash-text-muted)', fontWeight: 600 }}>Completion</div>
+              <div style={{ fontSize: '15px', fontWeight: 700, color: progressPercent === 100 ? '#10b981' : 'var(--glass-dash-blue, #38bdf8)', marginTop: '2px' }}>{progressPercent}%</div>
             </div>
           </div>
 
@@ -684,7 +890,7 @@ const AdminDashboard = () => {
                   value={newCaseAnalyst} 
                   onChange={setNewCaseAnalyst} 
                   placeholder="Select Analyst"
-                  options={employees.filter(e => e.role === 'analyst' || e.role === 'forensic_analyst').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
+                  options={availableAnalystOptions}
                 />
               </div>
 
@@ -694,13 +900,15 @@ const AdminDashboard = () => {
                   value={newCaseSeniorAnalyst} 
                   onChange={setNewCaseSeniorAnalyst} 
                   placeholder="Select Senior Analyst"
-                  options={employees.filter(e => e.role === 'senior_analyst' || e.role === 'senior').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
+                  options={availableSeniorOptions}
                 />
               </div>
 
               <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid var(--border-subtle, rgba(226, 232, 240, 0.8))' }}>
                 <button type="button" onClick={() => setShowCreateModal(false)} className="btn-outline">Cancel</button>
-                <button type="submit" disabled={!newCaseName || !newCaseAnalyst} className="btn-primary" style={{ cursor: (!newCaseName || !newCaseAnalyst) ? 'not-allowed' : 'pointer', opacity: (!newCaseName || !newCaseAnalyst) ? 0.6 : 1 }}>Create Case</button>
+                <button type="submit" disabled={!newCaseName.trim() || !newCaseAnalyst || creating} className="btn-primary" style={{ cursor: (!newCaseName.trim() || !newCaseAnalyst || creating) ? 'not-allowed' : 'pointer', opacity: (!newCaseName.trim() || !newCaseAnalyst || creating) ? 0.6 : 1 }}>
+                  {creating ? 'Creating...' : 'Create Case'}
+                </button>
               </div>
             </form>
           </div>
@@ -722,7 +930,7 @@ const AdminDashboard = () => {
               value={assigningSenior}
               onChange={setAssigningSenior}
               placeholder="Select Senior Analyst"
-              options={employees.filter(e => e.role === 'senior_analyst' || e.role === 'senior').map(emp => ({ value: emp.id, label: `${emp.name} (${emp.id})` }))}
+              options={availableSeniorOptions}
             />
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '24px' }}>
               <button onClick={() => setShowAssignSeniorModal(false)} className="btn-outline">Cancel</button>

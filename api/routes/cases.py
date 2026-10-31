@@ -415,7 +415,7 @@ async def get_recent_activity(
                     user_map[str(row[0])] = row[1]
                     
                 # 1. Case Creation
-                cur.execute("SELECT case_id, created_by, created_at, closed_at, closed_by FROM cases WHERE tenant_id = %s", (x_tenant_id,))
+                cur.execute("SELECT case_id, created_by, created_at, closed_at, closed_by FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team'))", (x_tenant_id, x_tenant_id))
                 for row in cur.fetchall():
                     case_id, c_by, created_at, closed_at, closed_by = row
                     mapped_name = user_map.get(c_by, c_by)
@@ -444,9 +444,9 @@ async def get_recent_activity(
                     SELECT e.evidence_id, e.case_id, e.filename, e.uploaded_by, e.upload_timestamp
                     FROM evidence e
                     INNER JOIN cases c ON e.case_id = c.case_id
-                    WHERE c.tenant_id = %s
+                    WHERE c.tenant_id = %s OR (%s IN ('default', 'dev-team') AND c.tenant_id IN ('default', 'dev-team'))
                     """, 
-                    (x_tenant_id,)
+                    (x_tenant_id, x_tenant_id)
                 )
                 for row in cur.fetchall():
                     u_by = row[3] if row[3] else ""
@@ -465,10 +465,10 @@ async def get_recent_activity(
                     SELECT f.case_id, f.created_at, f.fact, f.source_engine, f.reviewed_by, f.review_status, f.timestamp
                     FROM fir_findings f
                     INNER JOIN cases c ON f.case_id = c.case_id
-                    WHERE c.tenant_id = %s
+                    WHERE c.tenant_id = %s OR (%s IN ('default', 'dev-team') AND c.tenant_id IN ('default', 'dev-team'))
                     ORDER BY f.timestamp DESC
                     """,
-                    (x_tenant_id,)
+                    (x_tenant_id, x_tenant_id)
                 )
                 
                 # Deduplicate findings by action, case, user, and approximate minute
@@ -516,9 +516,9 @@ async def get_recent_activity(
                     """
                     SELECT note_id, case_id, created_by, created_at, title, type
                     FROM case_notes
-                    WHERE tenant_id = %s
+                    WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team'))
                     """,
-                    (x_tenant_id,)
+                    (x_tenant_id, x_tenant_id)
                 )
                 for row in cur.fetchall():
                     note_id, case_id, created_by, created_at, title, note_type = row

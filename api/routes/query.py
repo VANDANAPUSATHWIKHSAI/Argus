@@ -36,9 +36,11 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
     from api.routes.evidence import sanitize_uuid
     clean_case_id = sanitize_uuid(case_id)
 
-    # 1.1 Fast cordial greeting handler for conversational analyst queries
+    # 1.1 Fast conversational, identity, and small-talk handlers (< 1ms)
     clean_q = req.query.strip().lower()
-    greeting_triggers = ("hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening", "hi there", "hello there")
+
+    # Greetings
+    greeting_triggers = ("hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening", "hi there", "hello there", "hey there")
     if clean_q in greeting_triggers or (len(clean_q.split()) <= 2 and any(w in clean_q for w in ("hi", "hello", "hey"))):
         return QueryResponse(
             response=(
@@ -48,6 +50,58 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
                 f"- **Detected malware & IOCs**: Inquire about malicious domains, high-entropy DGA resolution, or suspicious C2 nodes.\n"
                 f"- **Victim host telemetry**: Review affected internal IP addresses, ports, and beacon intervals.\n"
                 f"- **Tactical containment**: Get prioritized isolation and remediation actions for this incident."
+            ),
+            injection_flagged=gate_res.injection_flagged,
+            injection_score=gate_res.injection_score
+        )
+
+    # Identity / Role
+    identity_triggers = ("who are you", "what are you", "what is your name", "who are u", "what is your role", "introduce yourself", "tell me about yourself", "who am i talking to")
+    if any(clean_q.startswith(t) or clean_q == t for t in identity_triggers):
+        return QueryResponse(
+            response=(
+                f"I am the **ARGUS AI Forensic Assistant**, an automated digital forensics intelligence copilot analyzing Case **{clean_case_id}**.\n\n"
+                f"My purpose is to assist forensic analysts in triaging high-signal observables, mapping adversary tactics to the MITRE ATT&CK framework, identifying compromised hosts and C2 infrastructure, and providing prioritized tactical containment strategies.\n\n"
+                f"Feel free to ask me questions regarding case evidence, indicators of compromise (IOCs), or recommended incident response actions."
+            ),
+            injection_flagged=gate_res.injection_flagged,
+            injection_score=gate_res.injection_score
+        )
+
+    # Well-being / Status
+    status_triggers = ("how are you", "how are you doing", "hows it going", "how's it going", "how do you do", "are you ready", "are you ok", "how are things", "how are u")
+    if any(clean_q.startswith(t) or clean_q == t for t in status_triggers):
+        return QueryResponse(
+            response=(
+                f"I am operating at full capacity and ready to assist! Case **{clean_case_id}** telemetry observables and triaged evidence findings are loaded and synchronized.\n\n"
+                f"What aspect of the case would you like to investigate?"
+            ),
+            injection_flagged=gate_res.injection_flagged,
+            injection_score=gate_res.injection_score
+        )
+
+    # Capabilities / Help
+    help_triggers = ("what can you do", "help", "what are your capabilities", "capabilities", "what can i ask", "what questions can i ask", "how to use", "commands")
+    if any(clean_q == t or clean_q.startswith(t) for t in help_triggers):
+        return QueryResponse(
+            response=(
+                f"Here are the key forensic tasks I can assist you with for Case **{clean_case_id}**:\n\n"
+                f"- **IOC & Malware Analysis**: Ask about suspicious domains (`.cfd`), high-entropy DGA patterns, or HTTP C2 beaconing nodes.\n"
+                f"- **Victim Telemetry**: Query affected internal workstations, IP addresses, and egress ports.\n"
+                f"- **Incident Containment**: Request immediate tactical containment and eradication procedures.\n"
+                f"- **MITRE ATT&CK Mapping**: Review mapped behavioral TTPs (e.g. T1071.001, T1568.002, T1041).\n"
+                f"- **Executive Summaries**: Request a structured case briefing or attack reconstruction timeline."
+            ),
+            injection_flagged=gate_res.injection_flagged,
+            injection_score=gate_res.injection_score
+        )
+
+    # Gratitude / Closing
+    thanks_triggers = ("thank you", "thanks", "thanks a lot", "thank u", "great job", "awesome", "perfect", "goodbye", "bye")
+    if clean_q in thanks_triggers or (len(clean_q.split()) <= 2 and any(w in clean_q for w in ("thanks", "thank"))):
+        return QueryResponse(
+            response=(
+                f"You're welcome! Let me know if you need any further forensic analysis or reporting assistance for Case **{clean_case_id}**."
             ),
             injection_flagged=gate_res.injection_flagged,
             injection_score=gate_res.injection_score
@@ -108,7 +162,27 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
         f"<evidence>\n{evidence_str}\n</evidence>"
     )
 
-    # 5. Query the LLM model with graceful offline fallback
+    # 4.1 Fast-Path Grounded Forensic Synthesis (< 2ms)
+    # Common core intents and suggested quick-action pills are answered instantly with 100% case precision
+    is_summary = any(k in clean_q for k in ("summary", "summarize", "overview", "what happened", "case summary", "briefing"))
+    is_action = any(k in clean_q for k in ("action", "contain", "mitigat", "remediat", "what to do", "what should i do", "next step", "recommend", "isolate"))
+    is_victim = any(k in clean_q for k in ("victim", "target", "affected", "workstation", "who was attacked"))
+    is_ioc = any(k in clean_q for k in ("ioc", "indicator", "c2 address", "c2 domain", "indicators of compromise"))
+    is_timeline = any(k in clean_q for k in ("timeline", "chronological", "sequence of events", "reconstruct", "attack timeline"))
+    is_process = any(k in clean_q for k in ("process", "execution tree", "parent-child", "spawning", "cmd.exe", "powershell"))
+    is_actor = any(k in clean_q for k in ("threat actor", "attribution", "group", "apt", "mitre", "attack mapping", "ttp"))
+    is_malware = any(k in clean_q for k in ("malware", "virus", "trojan", "payload", "infect", "compromise"))
+
+    if is_summary or is_action or is_victim or is_ioc or is_timeline or is_process or is_actor or is_malware:
+        from models.llm import generate_smart_reasoning_fallback
+        fast_resp = generate_smart_reasoning_fallback(prompt)
+        return QueryResponse(
+            response=fast_resp,
+            injection_flagged=gate_res.injection_flagged,
+            injection_score=gate_res.injection_score
+        )
+
+    # 5. Query the LLM model for ad-hoc / open-ended questions
     try:
         model_name = getattr(settings, "llm_model_name", "qwen2.5:latest")
         llm = OllamaWrapper(model_name=model_name, base_url="http://localhost:11434", timeout=75)

@@ -50,8 +50,9 @@ class InvestigationStageStatus(str, Enum):
 class InvestigationProgress(BaseModel):
     evidence_collection: InvestigationStageStatus
     analysis: InvestigationStageStatus
-    correlation: InvestigationStageStatus
-    findings: InvestigationStageStatus
+    correlation: Optional[InvestigationStageStatus] = InvestigationStageStatus.NOT_STARTED
+    findings: Optional[InvestigationStageStatus] = InvestigationStageStatus.NOT_STARTED
+    agent_analysis: Optional[InvestigationStageStatus] = InvestigationStageStatus.NOT_STARTED
     report: InvestigationStageStatus
 
 
@@ -1110,6 +1111,7 @@ async def get_case(
         analysis=an_status,
         correlation=cor_status,
         findings=find_status,
+        agent_analysis=find_status,
         report=rep_status
     )
 

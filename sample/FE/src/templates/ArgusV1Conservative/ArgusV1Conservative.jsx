@@ -23,7 +23,7 @@ export default function ArgusV1Conservative() {
   const activeCase = MOCK_CASES.find(c => c.case_id === activeCaseId) || MOCK_CASES[0];
   const criticalHighCount = MOCK_FIR_FINDINGS.filter(f => f.severity === 'CRITICAL' || f.severity === 'HIGH').length;
 
-  const timelineSteps = ['Evidence\nCollection', 'Analysis', 'Correlation', 'Findings', 'Report'];
+  const timelineSteps = ['Evidence\nCollection', 'File\nAnalysis', 'Agent\nAnalysis', 'Case\nReport'];
   const completedSteps = 3;
   const activeStep = 3;
   const progressBarWidth = `${(completedSteps / timelineSteps.length) * 100}%`;

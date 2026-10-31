@@ -483,41 +483,27 @@ const Dashboard = () => {
 
       key: 'analysis',
 
-      label: 'Artifact\nAnalysis',
+      label: 'File\nAnalysis',
 
-      shortLabel: 'Analysis',
+      shortLabel: 'File Analysis',
 
       path: '/evidence',
 
-      actionText: 'Inspect Artifacts'
+      actionText: 'Inspect Files'
 
     },
 
     {
 
-      key: 'correlation',
+      key: 'agent_analysis',
 
-      label: 'Entity\nCorrelation',
+      label: 'Agent\nAnalysis',
 
-      shortLabel: 'Correlation',
+      shortLabel: 'Agent Analysis',
 
       path: '/agents',
 
-      actionText: 'Agent Swarm'
-
-    },
-
-    {
-
-      key: 'findings',
-
-      label: 'FIR\nFindings',
-
-      shortLabel: 'Findings',
-
-      path: '/findings',
-
-      actionText: 'Review Findings'
+      actionText: 'Run Agent Swarm'
 
     },
 
@@ -571,7 +557,7 @@ const Dashboard = () => {
 
 
 
-  let rawStageStatuses = ['not_started', 'not_started', 'not_started', 'not_started', 'not_started'];
+  let rawStageStatuses = ['not_started', 'not_started', 'not_started', 'not_started'];
 
 
 
@@ -579,15 +565,27 @@ const Dashboard = () => {
 
     const prog = activeSummary.investigation_progress;
 
-    const stageKeys = ['evidence_collection', 'analysis', 'correlation', 'findings', 'report'];
+    const evVal = prog.evidence_collection;
 
-    rawStageStatuses = stageKeys.map(k => {
+    rawStageStatuses[0] = (typeof evVal === 'object' ? evVal?.status : evVal) || 'not_started';
 
-      const val = prog[k];
 
-      return (typeof val === 'object' ? val?.status : val) || 'not_started';
 
-    });
+    const anVal = prog.analysis;
+
+    rawStageStatuses[1] = (typeof anVal === 'object' ? anVal?.status : anVal) || 'not_started';
+
+
+
+    const agVal = prog.agent_analysis || prog.findings || prog.correlation;
+
+    rawStageStatuses[2] = (typeof agVal === 'object' ? agVal?.status : agVal) || 'not_started';
+
+
+
+    const repVal = prog.report;
+
+    rawStageStatuses[3] = (typeof repVal === 'object' ? repVal?.status : repVal) || 'not_started';
 
   }
 
@@ -599,19 +597,45 @@ const Dashboard = () => {
 
     rawStageStatuses[0] = 'completed';
 
-    rawStageStatuses[1] = 'completed';
+    // Stage 2 (File Analysis) is dynamic: completed when artifacts extracted, in-progress when files uploaded but parsing
 
-    rawStageStatuses[2] = 'completed';
+    rawStageStatuses[1] = artifactsCount > 0 ? 'completed' : 'in_progress';
 
-    rawStageStatuses[3] = 'completed';
+    rawStageStatuses[2] = findingsCount > 0 ? 'completed' : (artifactsCount > 0 ? 'in_progress' : 'not_started');
 
-    rawStageStatuses[4] = isReportCompleted ? 'completed' : 'in_progress';
+    rawStageStatuses[3] = isReportCompleted ? 'completed' : (findingsCount > 0 ? 'in_progress' : 'not_started');
+
+  } else {
+
+    rawStageStatuses[0] = 'not_started';
+
+    rawStageStatuses[1] = 'not_started';
+
+    rawStageStatuses[2] = 'not_started';
+
+    rawStageStatuses[3] = 'not_started';
 
   }
 
 
 
-  if (artifactsCount > 0 || findingsCount > 0) {
+  if (artifactsCount > 0) {
+
+    rawStageStatuses[0] = 'completed';
+
+    rawStageStatuses[1] = 'completed';
+
+    if (rawStageStatuses[2] === 'not_started') {
+
+      rawStageStatuses[2] = 'in_progress';
+
+    }
+
+  }
+
+
+
+  if (findingsCount > 0) {
 
     rawStageStatuses[0] = 'completed';
 
@@ -619,7 +643,7 @@ const Dashboard = () => {
 
     rawStageStatuses[2] = 'completed';
 
-    rawStageStatuses[3] = 'completed';
+    rawStageStatuses[3] = isReportCompleted ? 'completed' : 'in_progress';
 
   }
 
@@ -635,8 +659,6 @@ const Dashboard = () => {
 
     rawStageStatuses[3] = 'completed';
 
-    rawStageStatuses[4] = 'completed';
-
   }
 
 
@@ -649,21 +671,15 @@ const Dashboard = () => {
 
     artifactsCount > 0
 
-      ? `${artifactsCount} artifact${artifactsCount > 1 ? 's' : ''}`
+      ? `${artifactsCount} parsed`
 
-      : (evidenceCount > 0 ? 'Analyzed' : 'Pending'),
-
-    findingsCount > 0
-
-      ? 'Correlated'
-
-      : (evidenceCount > 0 ? 'Correlated' : 'Pending'),
+      : (evidenceCount > 0 ? 'Parsing...' : 'Pending'),
 
     findingsCount > 0
 
       ? `${findingsCount} finding${findingsCount > 1 ? 's' : ''}`
 
-      : (evidenceCount > 0 ? 'Triaged' : 'Pending review'),
+      : (artifactsCount > 0 ? 'Ready to run' : 'Pending'),
 
     isSubmittedToAuditor
 
@@ -677,7 +693,7 @@ const Dashboard = () => {
 
       ? 'Case Closed'
 
-      : (evidenceCount > 0 ? 'Ready for Senior' : 'Pending')
+      : (findingsCount > 0 ? 'Ready for Senior' : 'Pending')
 
   ];
 
@@ -717,7 +733,7 @@ const Dashboard = () => {
 
   const inProgIdx = stages.findIndex(s => s.isActive);
 
-  const activeStep = inProgIdx !== -1 ? inProgIdx : (completedSteps >= 5 ? 4 : completedSteps);
+  const activeStep = inProgIdx !== -1 ? inProgIdx : (completedSteps >= stages.length ? stages.length - 1 : completedSteps);
 
   const progressBarWidth = `${(completedSteps / stages.length) * 100}%`;
 
@@ -1507,49 +1523,7 @@ const Dashboard = () => {
 
                         <div>
 
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-
-                            <h3 style={{ margin: 0 }}>Investigation Progress</h3>
-
-                            <Link 
-
-                              to="/timeline" 
-
-                              style={{ 
-
-                                fontSize: '11.5px', 
-
-                                fontWeight: 700, 
-
-                                color: '#3b82f6', 
-
-                                textDecoration: 'none', 
-
-                                display: 'inline-flex', 
-
-                                alignItems: 'center', 
-
-                                gap: '4px', 
-
-                                padding: '3px 8px', 
-
-                                borderRadius: '6px', 
-
-                                background: 'rgba(59, 130, 246, 0.1)', 
-
-                                border: '1px solid rgba(59, 130, 246, 0.25)' 
-
-                              }}
-
-                            >
-
-                              <span>Attack Timeline</span>
-
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-
-                            </Link>
-
-                          </div>
+                          <h3 style={{ margin: 0 }}>Investigation Progress</h3>
 
                           <p style={{ margin: '4px 0 0 0' }}>Track the lifecycle of the active case.</p>
 

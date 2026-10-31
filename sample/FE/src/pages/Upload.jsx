@@ -76,6 +76,20 @@ const Upload = () => {
 
   const [caseLock, setCaseLock] = useState(null);
 
+  const currentCase = casesList.find(c => c.case_id === activeCaseId);
+  const isAssignedAnalyst = Boolean(
+    currentUser && (
+      isAdmin ||
+      (currentCase && (
+        String(currentUser.id) === String(currentCase.analyst_id) ||
+        String(currentUser.id) === String(currentCase.senior_analyst_id) ||
+        (currentUser.email && (currentUser.email === currentCase.analyst_id || currentUser.email === currentCase.senior_analyst_id)) ||
+        (currentUser.name && (currentUser.name === currentCase.analyst_name || currentUser.name === currentCase.senior_analyst_name))
+      ))
+    )
+  );
+  const isCaseReadOnly = Boolean(caseLock?.readOnly && !isAssignedAnalyst);
+
   const [workloadStatus, setWorkloadStatus] = useState(null);
 
   const [showRestartBanner, setShowRestartBanner] = useState(false);
@@ -393,7 +407,7 @@ const Upload = () => {
 
   const handleCloseCase = async () => {
 
-    if (caseLock?.readOnly) {
+    if (isCaseReadOnly) {
 
       setCustomAlert({
 
@@ -467,7 +481,7 @@ const Upload = () => {
 
     setDragOver(false);
 
-    if (caseLock?.readOnly) {
+    if (isCaseReadOnly) {
 
       setCustomAlert({
 
@@ -497,7 +511,7 @@ const Upload = () => {
 
     if (!files || files.length === 0) return;
 
-    if (caseLock?.readOnly) {
+    if (isCaseReadOnly) {
 
       setCustomAlert({
 
@@ -579,7 +593,7 @@ const Upload = () => {
 
 
 
-    if (caseLock?.readOnly) {
+    if (isCaseReadOnly) {
 
       setCustomAlert({
 
@@ -937,7 +951,7 @@ const Upload = () => {
 
                     </div>
 
-                    {caseLock?.readOnly && <CaseLockBanner compact lockState={caseLock} />}
+                    {isCaseReadOnly && <CaseLockBanner compact lockState={caseLock} />}
 
                   </div>
 
@@ -1082,7 +1096,7 @@ const Upload = () => {
 
                   <div
 
-                    onDragOver={e => { e.preventDefault(); if (!caseLock?.readOnly) setDragOver(true); }}
+                    onDragOver={e => { e.preventDefault(); if (!isCaseReadOnly) setDragOver(true); }}
 
                     onDragLeave={() => setDragOver(false)}
 
@@ -1116,9 +1130,9 @@ const Upload = () => {
 
                       borderRadius: 'var(--radius-lg)',
 
-                      border: `2px dashed ${caseLock?.readOnly ? 'rgba(245, 158, 11, 0.6)' : dragOver ? 'var(--purple)' : 'var(--blue)'}`,
+                      border: `2px dashed ${isCaseReadOnly ? 'rgba(245, 158, 11, 0.6)' : dragOver ? 'var(--purple)' : 'var(--blue)'}`,
 
-                      background: caseLock?.readOnly ? 'rgba(245, 158, 11, 0.05)' : dragOver ? 'var(--purple-light, #f3e8ff)' : 'var(--bg-card)',
+                      background: isCaseReadOnly ? 'rgba(245, 158, 11, 0.05)' : dragOver ? 'var(--purple-light, #f3e8ff)' : 'var(--bg-card)',
 
                       textAlign: 'center',
 
@@ -1136,7 +1150,7 @@ const Upload = () => {
 
                       justifyContent: 'center',
 
-                      cursor: caseLock?.readOnly ? 'not-allowed' : 'pointer',
+                      cursor: isCaseReadOnly ? 'not-allowed' : 'pointer',
 
                       transition: 'all 0.3s ease',
 
@@ -1146,7 +1160,7 @@ const Upload = () => {
 
                     <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle at center, rgba(37,99,235,0.04) 0%, transparent 70%)', pointerEvents: 'none' }} />
 
-                    {caseLock?.readOnly ? (
+                    {isCaseReadOnly ? (
 
                       <>
 
@@ -1232,9 +1246,9 @@ const Upload = () => {
 
                           gap: 8,
 
-                          opacity: caseLock?.readOnly ? 0.6 : 1,
+                          opacity: isCaseReadOnly ? 0.6 : 1,
 
-                          cursor: caseLock?.readOnly ? 'not-allowed' : 'pointer'
+                          cursor: isCaseReadOnly ? 'not-allowed' : 'pointer'
 
                         }}
 
@@ -1294,9 +1308,9 @@ const Upload = () => {
 
                           background: 'var(--bg-card)',
 
-                          opacity: caseLock?.readOnly ? 0.6 : 1,
+                          opacity: isCaseReadOnly ? 0.6 : 1,
 
-                          cursor: caseLock?.readOnly ? 'not-allowed' : 'pointer'
+                          cursor: isCaseReadOnly ? 'not-allowed' : 'pointer'
 
                         }}
 

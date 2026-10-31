@@ -123,6 +123,85 @@ def send_assignment_email(target_email: str, case_id: str, case_name: str, role_
         print(f"[AUTH EMAIL ERROR] {e}")
         return False
 
+def get_case_assigned_users(case_id: str, x_tenant_id: str = "default") -> Tuple[str, str]:
+    """
+    Returns (analyst_id, senior_analyst_id) for the given case.
+    """
+    try:
+        from api.routes.auth import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT analyst_id, senior_analyst_id FROM cases WHERE case_id = %s",
+                    (case_id,)
+                )
+                row = cur.fetchone()
+                if row:
+                    return str(row[0] or ""), str(row[1] or "")
+    except Exception:
+        pass
+
+    try:
+        from infrastructure.repository.evidence_store import get_case_session
+        session = get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+        if session:
+            return str(getattr(session, "analyst_id", None) or ""), str(getattr(session, "senior_analyst_id", None) or "")
+    except Exception:
+        pass
+
+    return "", ""
+
+
+def is_user_authorized_for_case_modification(
+    case_id: str,
+    current_user: dict,
+    x_tenant_id: str = "default"
+) -> bool:
+    """
+    Returns True if current_user is:
+    - An Admin ('admin' role)
+    - The assigned Analyst for this case (matching analyst_id by id, name, or email)
+    - The assigned Senior Analyst for this case (matching senior_analyst_id by id, name, or email)
+    """
+    role = (current_user.get("role") or "").lower()
+    if role == "admin":
+        return True
+    
+    if role == "auditor":
+        return False
+
+    uid = str(current_user.get("id") or "").strip().lower()
+    uname = str(current_user.get("name") or "").strip().lower()
+    uemail = str(current_user.get("email") or "").strip().lower()
+    user_identifiers = {i for i in [uid, uname, uemail] if i}
+
+    a_id, s_id = get_case_assigned_users(case_id, x_tenant_id)
+    a_id = str(a_id or "").strip().lower()
+    s_id = str(s_id or "").strip().lower()
+
+    if a_id and a_id in user_identifiers:
+        return True
+    if s_id and s_id in user_identifiers:
+        return True
+
+    try:
+        from api.routes.auth import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, name, email FROM users WHERE id IN (%s, %s) OR email IN (%s, %s)",
+                    (a_id, s_id, a_id, s_id)
+                )
+                for row in cur.fetchall():
+                    row_ids = {str(col or "").strip().lower() for col in row if col}
+                    if user_identifiers.intersection(row_ids):
+                        return True
+    except Exception:
+        pass
+
+    return False
+
+
 def verify_case_access(case_id: str, current_user: dict, x_tenant_id: str = "default") -> None:
     """
     Enforces strict case access control.
@@ -838,30 +917,26 @@ async def acquire_or_refresh_case_lock(
     current_user: Dict = Depends(get_current_user)
 ):
     verify_case_access(case_id, current_user, x_tenant_id)
-    """
-    Acquire or refresh an exclusive investigation lock on a case.
-    If the case is already locked by another analyst:
-      - Denies write lock
-      - Returns read_only=True and details of the current lock holder
-    """
     user_id = str(current_user.get("id", ""))
     user_name = current_user.get("name") or current_user.get("userid") or "Analyst"
     user_email = current_user.get("email")
+
+    is_authorized = is_user_authorized_for_case_modification(case_id, current_user, x_tenant_id)
 
     granted, lock, status_code = case_lock_manager.acquire_or_refresh(
         case_id=case_id,
         user_id=user_id,
         user_name=user_name,
-        user_email=user_email
+        user_email=user_email,
+        is_assigned_team=is_authorized
     )
 
-    lock_dict = lock.to_dict(user_id)
-    if granted:
-        message = (
-            "Case lock acquired. You have exclusive investigation and modification rights."
-            if status_code == "ACQUIRED"
-            else "Case lock refreshed."
-        )
+    is_owner = granted or is_authorized
+    read_only = False if is_authorized else (not granted)
+    lock_dict = lock.to_dict(user_id, is_assigned=is_authorized)
+
+    if is_owner:
+        message = f"Case lock active for assigned investigator '{user_name}'."
     else:
         message = (
             f"Case '{case_id}' is currently being investigated by analyst '{lock.locked_by_user_name}'. "
@@ -869,11 +944,11 @@ async def acquire_or_refresh_case_lock(
         )
 
     return {
-        "status": "SUCCESS" if granted else "LOCKED_BY_OTHER",
+        "status": "SUCCESS" if is_owner else "LOCKED_BY_OTHER",
         "lock_status": status_code,
         "is_locked": True,
-        "is_owner": granted,
-        "read_only": not granted,
+        "is_owner": is_owner,
+        "read_only": read_only,
         "message": message,
         "lock": lock_dict
     }
@@ -882,48 +957,53 @@ async def acquire_or_refresh_case_lock(
 @router.get("/{case_id}/lock", response_model=Dict[str, Any])
 async def get_case_lock_status(
     case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
     """
     Check current lock status for a specific case.
     """
     user_id = str(current_user.get("id", ""))
+    is_authorized = is_user_authorized_for_case_modification(case_id, current_user, x_tenant_id)
     lock = case_lock_manager.get_lock(case_id)
     if not lock:
         return {
             "status": "UNLOCKED",
             "is_locked": False,
-            "is_owner": False,
-            "read_only": False,
+            "is_owner": is_authorized,
+            "read_only": not is_authorized,
             "message": "Case is currently not locked by any analyst.",
             "lock": None
         }
 
-    is_owner = (lock.locked_by_user_id == user_id)
+    is_owner = is_authorized or (lock.locked_by_user_id == user_id)
+    read_only = False if is_authorized else (not is_owner)
     return {
-        "status": "LOCKED" if not is_owner else "OWNED",
+        "status": "OWNED" if is_owner else "LOCKED",
         "is_locked": True,
         "is_owner": is_owner,
-        "read_only": not is_owner,
+        "read_only": read_only,
         "message": (
-            "You hold the active investigation lock."
+            "You have active investigation rights on this case."
             if is_owner
             else f"Case is currently locked by analyst '{lock.locked_by_user_name}'."
         ),
-        "lock": lock.to_dict(user_id)
+        "lock": lock.to_dict(user_id, is_assigned=is_authorized)
     }
 
 
 @router.post("/{case_id}/heartbeat", response_model=Dict[str, Any])
 async def case_lock_heartbeat(
     case_id: str,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
     """
     Heartbeat to extend TTL of an active case lock.
     """
     user_id = str(current_user.get("id", ""))
-    success, lock, code = case_lock_manager.heartbeat(case_id=case_id, user_id=user_id)
+    is_authorized = is_user_authorized_for_case_modification(case_id, current_user, x_tenant_id)
+    success, lock, code = case_lock_manager.heartbeat(case_id=case_id, user_id=user_id, is_assigned=is_authorized)
     if not success:
         if code == "NOT_OWNER":
             raise HTTPException(
@@ -1141,8 +1221,9 @@ async def get_case(
         logger.warning(f"Could not fetch case name for summary: {e}")
 
     user_id = str(current_user.get("id", ""))
+    is_authorized = is_user_authorized_for_case_modification(case_id, current_user, x_tenant_id)
     case_lock = case_lock_manager.get_lock(case_id)
-    lock_dict = case_lock.to_dict(user_id) if case_lock else None
+    lock_dict = case_lock.to_dict(user_id, is_assigned=is_authorized) if case_lock else None
 
     return CaseSummaryResponse(
         case_id=case_id,

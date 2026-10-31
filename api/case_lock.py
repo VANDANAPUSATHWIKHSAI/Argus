@@ -4,6 +4,9 @@ ARGUS Case Locking Service
 Ensures that when one analyst opens a case for investigation, another analyst cannot
 simultaneously investigate or modify the same case. Provides clear lock ownership,
 heartbeat renewals, auto-expiration (TTL), and read-only access enforcement.
+
+Crucially: The designated investigation team (the assigned Analyst, the assigned
+Senior Analyst, and System Admins) share authorized modification access to their case.
 """
 
 from __future__ import annotations
@@ -49,9 +52,9 @@ class CaseLock:
         self.last_heartbeat = now
         self.expires_at = now + timedelta(seconds=ttl)
 
-    def to_dict(self, current_user_id: Optional[str] = None) -> Dict[str, Any]:
+    def to_dict(self, current_user_id: Optional[str] = None, is_assigned: bool = False) -> Dict[str, Any]:
         user_id_str = str(current_user_id or "")
-        is_owner = bool(user_id_str and user_id_str == self.locked_by_user_id)
+        is_owner = bool((user_id_str and user_id_str == self.locked_by_user_id) or is_assigned)
         return {
             "case_id": self.case_id,
             "is_locked": not self.is_expired(),
@@ -100,7 +103,8 @@ class CaseLockManager:
         user_id: str,
         user_name: str,
         user_email: Optional[str] = None,
-        ttl_seconds: int = DEFAULT_LOCK_TTL_SECONDS
+        ttl_seconds: int = DEFAULT_LOCK_TTL_SECONDS,
+        is_assigned_team: bool = False
     ) -> Tuple[bool, CaseLock, str]:
         """
         Attempts to acquire a case lock for `user_id`.
@@ -126,15 +130,16 @@ class CaseLockManager:
                 logger.info(f"[CASE LOCK] Acquired lock for case '{cid}' by user '{user_name}' ({uid})")
                 return True, new_lock, "ACQUIRED"
 
-            # 2. Existing lock owned by SAME analyst -> refresh
-            if existing.locked_by_user_id == uid:
+            # 2. Existing lock owned by SAME analyst OR caller is an authorized assigned team member (Analyst/Senior Analyst/Admin)
+            if existing.locked_by_user_id == uid or is_assigned_team:
                 existing.refresh(ttl_seconds)
-                # Update display name if changed
+                # Transfer active lock holder to current active investigator
+                existing.locked_by_user_id = uid
                 if user_name:
                     existing.locked_by_user_name = user_name
                 if user_email:
                     existing.locked_by_user_email = user_email
-                logger.debug(f"[CASE LOCK] Refreshed lock for case '{cid}' by user '{user_name}' ({uid})")
+                logger.debug(f"[CASE LOCK] Refreshed/transferred lock for case '{cid}' to assigned user '{user_name}' ({uid})")
                 return True, existing, "REFRESHED"
 
             # 3. Existing lock owned by ANOTHER analyst -> lock denied, read-only
@@ -144,7 +149,13 @@ class CaseLockManager:
             )
             return False, existing, "LOCKED_BY_OTHER"
 
-    def heartbeat(self, case_id: str, user_id: str, ttl_seconds: int = DEFAULT_LOCK_TTL_SECONDS) -> Tuple[bool, Optional[CaseLock], str]:
+    def heartbeat(
+        self,
+        case_id: str,
+        user_id: str,
+        ttl_seconds: int = DEFAULT_LOCK_TTL_SECONDS,
+        is_assigned: bool = False
+    ) -> Tuple[bool, Optional[CaseLock], str]:
         with self._lock:
             cid = str(case_id)
             uid = str(user_id)
@@ -153,7 +164,7 @@ class CaseLockManager:
             if not existing:
                 return False, None, "NO_LOCK"
 
-            if existing.locked_by_user_id != uid:
+            if existing.locked_by_user_id != uid and not is_assigned:
                 return False, existing, "NOT_OWNER"
 
             existing.refresh(ttl_seconds)
@@ -175,7 +186,13 @@ class CaseLockManager:
 
             return False, "NOT_AUTHORIZED"
 
-    def check_modification_allowed(self, case_id: str, user_id: str, is_admin: bool = False) -> Tuple[bool, Optional[CaseLock], str]:
+    def check_modification_allowed(
+        self,
+        case_id: str,
+        user_id: str,
+        is_admin: bool = False,
+        is_assigned: bool = False
+    ) -> Tuple[bool, Optional[CaseLock], str]:
         """
         Validates if `user_id` is permitted to modify or investigate `case_id`.
         Returns:
@@ -190,7 +207,7 @@ class CaseLockManager:
             if not existing:
                 return True, None, "UNLOCKED"
 
-            if existing.locked_by_user_id == uid or is_admin:
+            if existing.locked_by_user_id == uid or is_admin or is_assigned:
                 return True, existing, "OWNER"
 
             return False, existing, (

@@ -941,6 +941,24 @@
   gap: 6px;
 }
 
+.glass-status-pill.investigation {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.glass-status-pill.audit {
+  background: rgba(168, 85, 247, 0.1);
+  color: #a855f7;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.glass-status-pill.closed {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
+  border: 1px solid rgba(100, 116, 139, 0.3);
+}
+
 .glass-status-pill.review {
   background: rgba(37, 99, 235, 0.1);
   color: var(--glass-dash-blue);

@@ -387,6 +387,24 @@ const Cases = () => {
                           <td style={{ padding: '16px 24px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
 
+                              {isOpen && (
+                                <button
+                                  onClick={() => handleSetActiveCase(c)}
+                                  style={{
+                                    background: c.lock?.is_locked && c.lock?.read_only ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.1)',
+                                    color: c.lock?.is_locked && c.lock?.read_only ? '#f59e0b' : '#3b82f6',
+                                    border: c.lock?.is_locked && c.lock?.read_only ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid rgba(59, 130, 246, 0.3)',
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                  }}
+                                  title={c.lock?.is_locked && c.lock?.read_only ? 'Open case in read-only mode' : 'Select as active investigation case'}
+                                >
+                                  {c.lock?.is_locked && c.lock?.read_only ? 'Investigate (Read-Only)' : 'Set Active'}
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleViewReport(c)}
                                 disabled={loadingReportId === c.case_id}

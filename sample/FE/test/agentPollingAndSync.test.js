@@ -48,7 +48,7 @@ test('agentPollingAndSync: duplicate agent execution is prevented when running o
 
   // Verify button is disabled
   assert.ok(
-    source.includes('disabled={runningAgents || loading || !activeCaseId}'),
+    source.includes('disabled={runningAgents || loading || !activeCaseId'),
     'Run button must be disabled when running, loading, or no active case'
   );
 });

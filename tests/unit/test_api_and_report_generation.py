@@ -25,7 +25,7 @@ from api.routes.auth import get_current_user
 
 client = TestClient(app)
 
-app.dependency_overrides[get_current_user] = lambda: {"username": "test_user"}
+app.dependency_overrides[get_current_user] = lambda: {"username": "test_user", "role": "admin"}
 
 class TestApiAndReportGeneration:
 

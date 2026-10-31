@@ -632,7 +632,7 @@ const AdminDashboard = () => {
             
             <div className="glass-pipeline-nodes">
               <div 
-                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''}`}
+                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''} ${caseStageInfo.investigationStatus}`}
                 onClick={() => currentCase && navigate('/agents')}
                 title={currentCase ? 'Investigation: Run agent swarm & review evidence' : 'No active case'}
               >
@@ -645,7 +645,7 @@ const AdminDashboard = () => {
                 <span className="glass-pipeline-role">(Analyst)</span>
               </div>
               <div 
-                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''}`}
+                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''} ${caseStageInfo.reviewStatus}`}
                 onClick={() => currentCase && navigate('/report')}
                 title={currentCase ? 'Review: Senior analyst report validation' : 'No active case'}
               >
@@ -658,7 +658,7 @@ const AdminDashboard = () => {
                 <span className="glass-pipeline-role">(Senior Analyst)</span>
               </div>
               <div 
-                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''}`}
+                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''} ${caseStageInfo.auditStatus}`}
                 onClick={() => currentCase && navigate(`/audit-logs?case_id=${encodeURIComponent(currentCase.case_id)}`)}
                 title={currentCase ? 'Audit: RFC-3161 timestamps & audit logs' : 'No active case'}
               >
@@ -671,7 +671,7 @@ const AdminDashboard = () => {
                 <span className="glass-pipeline-role">({currentCase?.auditor_name || 'Not Assigned'})</span>
               </div>
               <div 
-                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''}`}
+                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''} ${caseStageInfo.closedStatus}`}
                 onClick={() => currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress') && handleCloseCase()}
                 title={currentCase ? (currentCase.status === 'closed' ? 'Case is closed' : 'Click to close active case') : 'No active case'}
               >

@@ -207,22 +207,18 @@ const SeniorDashboard = () => {
 
           }
 
-          if (!rData) {
-
-            setReportData({
-
-              case_id: targetCaseId,
-
-              findings: findingsList,
-
-              evidence_files: evList,
-
-              timeline: [],
-
-              executive_summary: summaryData?.description || `Forensic case baseline compiled for Case ${targetCaseId}. Contains ${evList.length} evidence artifact(s) and ${findingsList.length} triaged finding(s).`
-
-            });
-
+                    if (!rData) {
+            if (findingsList.length === 0 && evList.length === 0) {
+              setReportData(null);
+            } else {
+              setReportData({
+                case_id: targetCaseId,
+                findings: findingsList,
+                evidence_files: evList,
+                timeline: [],
+                executive_summary: summaryData?.description || `Forensic case baseline compiled for Case ${targetCaseId}. Contains ${evList.length} evidence artifact(s) and ${findingsList.length} triaged finding(s).`
+              });
+            }
           }
 
         } catch (repErr) {

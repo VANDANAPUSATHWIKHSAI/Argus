@@ -249,14 +249,20 @@ You can click any **"Verify with AI"** or **"Audit Artifact"** button in the rep
             const hVal = typeof repHtmlRes.value === 'string' ? repHtmlRes.value : JSON.stringify(repHtmlRes.value);
             if (isMounted) setReportHtml(hVal);
           }
-          if (!rData && isMounted) {
-            setReportData({
-              case_id: activeCaseId,
-              findings: fRes.status === 'fulfilled' && fRes.value ? (Array.isArray(fRes.value) ? fRes.value : fRes.value.data || []) : [],
-              evidence_files: evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [],
-              timeline: [],
-              executive_summary: sumRes.status === 'fulfilled' && sumRes.value ? sumRes.value.description : `Forensic case baseline compiled for Case ${activeCaseId}.`
-            });
+                    if (!rData && isMounted) {
+            const currentFindings = fRes.status === 'fulfilled' && fRes.value ? (Array.isArray(fRes.value) ? fRes.value : fRes.value.data || []) : [];
+            const currentEvidence = evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [];
+            if (currentFindings.length === 0 && currentEvidence.length === 0) {
+              setReportData(null);
+            } else {
+              setReportData({
+                case_id: activeCaseId,
+                findings: currentFindings,
+                evidence_files: currentEvidence,
+                timeline: [],
+                executive_summary: sumRes.status === 'fulfilled' && sumRes.value ? sumRes.value.description : `Forensic case baseline compiled for Case ${activeCaseId}.`
+              });
+            }
           }
         } catch (repErr) {
           console.warn('Report fetch in workspace error:', repErr);

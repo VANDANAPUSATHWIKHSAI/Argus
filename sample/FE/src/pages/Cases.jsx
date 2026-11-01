@@ -20,6 +20,10 @@ const Cases = () => {
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
   const [loadingReportId, setLoadingReportId] = useState(null);
   const [reportModal, setReportModal] = useState({ isOpen: false, caseId: '', reportHtml: '', reportData: null });
+  const [selectedCaseForDetails, setSelectedCaseForDetails] = useState(null);
+  const [showCloseReasonModal, setShowCloseReasonModal] = useState(false);
+  const [caseToClose, setCaseToClose] = useState(null);
+  const [caseCloseReasonInput, setCaseCloseReasonInput] = useState('');
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
@@ -136,7 +140,7 @@ const Cases = () => {
     fetchCasesData();
   };
 
-  const handleCloseCase = async (caseId, caseName) => {
+  const handleCloseCase = (caseId, caseName) => {
     const targetCase = cases.find(c => c.case_id === caseId);
     if (targetCase?.lock?.is_locked && targetCase?.lock?.read_only) {
       setCustomAlert({
@@ -147,15 +151,37 @@ const Cases = () => {
       });
       return;
     }
+    setCaseToClose({ caseId, caseName });
+    setCaseCloseReasonInput('');
+    setShowCloseReasonModal(true);
+  };
+
+  const confirmCloseCaseWithReason = async () => {
+    if (!caseToClose) return;
+    if (!caseCloseReasonInput.trim()) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Description Required',
+        message: 'Please provide a reason / description for closing this case.',
+        type: 'warning'
+      });
+      return;
+    }
+    const { caseId, caseName } = caseToClose;
+    const reasonText = caseCloseReasonInput.trim();
     try {
-      await closeCase(caseId);
+      await closeCase(caseId, reasonText);
+      localStorage.setItem(`argus_case_${caseId}_close_reason`, reasonText);
+      setShowCloseReasonModal(false);
+      setCaseToClose(null);
+      setCaseCloseReasonInput('');
       if (activeCaseId === caseId) {
         setActiveCase('', '');
       }
       setCustomAlert({
         isOpen: true,
-        title: 'Success',
-        message: `Case ${caseName || caseId} was closed successfully.`,
+        title: 'Case Closed',
+        message: `Case ${caseName || caseId} was closed successfully. Reason recorded: ${reasonText}`,
         type: 'success'
       });
       fetchCasesData();
@@ -357,7 +383,17 @@ const Cases = () => {
                             </div>
                           </td>
                           <td style={{ padding: '16px 24px', color: 'var(--text-main)', fontSize: '14px', fontWeight: 500 }}>
-                            {c.name || 'Unnamed Case'}
+                            <div style={{ fontWeight: 600 }}>{c.name || 'Unnamed Case'}</div>
+                            {c.description && (
+                              <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.description}>
+                                {c.description}
+                              </div>
+                            )}
+                            {(c.status === 'closed' || c.status === 'completed') && (c.close_reason || localStorage.getItem(`argus_case_${c.case_id}_close_reason`)) && (
+                              <div style={{ fontSize: '11px', color: '#f59e0b', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <span style={{ fontWeight: 700 }}>⚠️ Closed Reason:</span> {c.close_reason || localStorage.getItem(`argus_case_${c.case_id}_close_reason`)}
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding: '16px 24px', color: 'var(--text-muted)', fontSize: '13px' }}>
                             {c.analyst_name || c.analyst_id || c.created_by || '-'}
@@ -439,6 +475,22 @@ const Cases = () => {
                                   Close
                                 </button>
                               )}
+                              <button
+                                onClick={() => setSelectedCaseForDetails(c)}
+                                style={{
+                                  background: 'rgba(56, 189, 248, 0.1)',
+                                  color: '#0284c7',
+                                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                                  padding: '6px 12px',
+                                  borderRadius: '6px',
+                                  fontSize: '12px',
+                                  fontWeight: 600,
+                                  cursor: 'pointer'
+                                }}
+                                title="View case description and closure reason"
+                              >
+                                Description
+                              </button>
                               <button
                                 onClick={() => {
                                   setActiveCase(c.case_id, c.name || '');
@@ -523,6 +575,122 @@ const Cases = () => {
           </div>
         </div>
       </main>
+      {/* Modal: View Case Description & Closure Reason */}
+      {selectedCaseForDetails && (
+        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1002, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { if (e.target === e.currentTarget) setSelectedCaseForDetails(null); }}>
+          <div className="modal-content" style={{ width: '100%', maxWidth: '520px', borderRadius: '22px', padding: '28px', background: 'var(--bg-card, #ffffff)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ fontSize: '20px' }}>📋</span>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--text-main, #0f172a)' }}>Case Overview & Description</h2>
+              </div>
+              <button onClick={() => setSelectedCaseForDetails(null)} className="icon-btn" style={{ width: '32px', height: '32px', cursor: 'pointer', background: 'none', border: 'none', fontSize: '18px' }}>✕</button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', fontSize: '13px' }}>
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: '14px', borderRadius: '12px', border: '1px solid var(--border-subtle, #e2e8f0)' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Case Identifier & Name</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-main)', marginTop: '2px' }}>
+                  {selectedCaseForDetails.name || 'Unnamed Case'} <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 400 }}>({selectedCaseForDetails.case_id})</span>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '6px' }}>Initial Case Description</div>
+                <div style={{ padding: '12px 14px', borderRadius: '10px', background: 'var(--bg-subtle, #f8fafc)', border: '1px solid var(--border-subtle, #e2e8f0)', color: 'var(--text-main)', lineHeight: '1.5' }}>
+                  {selectedCaseForDetails.description || 'No initial description provided when creating the case.'}
+                </div>
+              </div>
+
+              {(selectedCaseForDetails.status === 'closed' || selectedCaseForDetails.status === 'completed') && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '12px', padding: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#f59e0b', fontWeight: 800, fontSize: '13px', marginBottom: '8px' }}>
+                    <span>⚠️</span>
+                    <span>Reason for Closing Case</span>
+                  </div>
+                  <div style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--text-main)', fontWeight: 500 }}>
+                    {selectedCaseForDetails.close_reason || localStorage.getItem(`argus_case_${selectedCaseForDetails.case_id}_close_reason`) || 'No specific closure reason recorded.'}
+                  </div>
+                  {selectedCaseForDetails.closed_at && (
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '8px' }}>
+                      Closed at: {selectedCaseForDetails.closed_at}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+              <button onClick={() => setSelectedCaseForDetails(null)} className="btn-primary" style={{ padding: '8px 20px', borderRadius: '10px' }}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Ask for description when closing a case from Cases table */}
+      {showCloseReasonModal && caseToClose && (
+        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1002, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { if (e.target === e.currentTarget) setShowCloseReasonModal(false); }}>
+          <div className="modal-content" style={{ width: '100%', maxWidth: '480px', borderRadius: '22px', padding: '28px', background: 'var(--bg-card, #ffffff)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                ⚠️
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--text-main, #0f172a)' }}>Close Case: Reason Required</h2>
+                <div style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 700 }}>Record Administrative Closure Reason</div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--text-secondary, #475569)', marginBottom: '16px' }}>
+              Please provide a description / reason for closing case <strong>{caseToClose.caseName || caseToClose.caseId}</strong>. This description will be saved and displayed in Case Overview.
+            </p>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main, #0f172a)' }}>
+                Closure Reason / Description <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <textarea
+                rows={3}
+                value={caseCloseReasonInput}
+                onChange={(e) => setCaseCloseReasonInput(e.target.value)}
+                placeholder="e.g. Investigation completed externally, test case, false positive, or closed by administrator..."
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-light, #cbd5e1)',
+                  background: 'var(--bg-subtle, #f8fafc)',
+                  color: 'var(--text-main, #0f172a)',
+                  fontSize: '13px',
+                  lineHeight: '1.5',
+                  boxSizing: 'border-box',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowCloseReasonModal(false)}
+                className="btn-outline"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmCloseCaseWithReason}
+                className="btn-primary"
+                style={{ background: '#ef4444', borderColor: '#ef4444' }}
+              >
+                Confirm Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

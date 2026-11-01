@@ -217,25 +217,27 @@ export async function deleteReviewNote(caseId, noteId) {
   });
 }
 
-export async function queryCase(caseId, queryText) {
-  return fetchWithAuth(`/cases/${caseId}/query`, {
+export async function queryCase(caseId, queryText, history = []) {
+  return fetchWithAuth(/cases//query, {
     method: 'POST',
-    body: JSON.stringify({ query: queryText }),
+    body: JSON.stringify({ query: queryText, history }),
   });
 }
-
 export async function fetchReport(caseId, format = 'html', allowUnreviewed = false) {
   const cleanFormat = encodeURIComponent(format || 'html');
   const allowFlag = Boolean(allowUnreviewed);
   return fetchWithAuth(`/reports/${encodeURIComponent(caseId)}/report?format=${cleanFormat}&allow_unreviewed=${allowFlag}`);
 }
 
-export async function closeCase(caseId) {
-  return fetchWithAuth(`/cases/${caseId}/close`, {
+export async function closeCase(caseId, closeReason = '') {
+  return fetchWithAuth(/cases//close, {
     method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: closeReason ? JSON.stringify({ close_reason: closeReason }) : JSON.stringify({})
   });
 }
-
 export async function fetchAgentResults(caseId) {
   return fetchWithAuth(`/cases/${caseId}/agents`);
 }

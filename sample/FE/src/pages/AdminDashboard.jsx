@@ -41,6 +41,9 @@ const AdminDashboard = () => {
   const [allCasesList, setAllCasesList] = useState([]);
   const [agentSummary, setAgentSummary] = useState(null);
   const [caseSummary, setCaseSummary] = useState(null);
+  const [showCloseWithoutReportModal, setShowCloseWithoutReportModal] = useState(false);
+  const [closeReason, setCloseReason] = useState('');
+  const [closingCase, setClosingCase] = useState(false);
 
   const loadWorkloadStatus = async (caseId) => {
     if (!caseId) {
@@ -209,28 +212,57 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleCloseCase = async () => {
+  const handleCloseCase = () => {
     if (!currentCase) return;
+    const isSubmittedToAuditor = Boolean(
+      (typeof localStorage !== 'undefined' && localStorage.getItem(`argus_case_${currentCase.case_id}_submitted_to_auditor`)) ||
+      currentCase.submitted_to_auditor
+    );
+    const isSubmittedToSenior = Boolean(
+      (typeof localStorage !== 'undefined' && localStorage.getItem(`argus_case_${currentCase.case_id}_submitted_to_senior`)) ||
+      currentCase.submitted_to_senior ||
+      isSubmittedToAuditor
+    );
+    const evidenceCount = Number(currentCase.total_evidence_files ?? currentCase.evidence_count ?? 0);
+    const findingsCount = Number(currentCase.total_findings ?? currentCase.findings_count ?? 0);
+    const reportGenerated = isSubmittedToSenior || isSubmittedToAuditor || (evidenceCount > 0 && findingsCount > 0 && agentSummary?.status === 'COMPLETED');
+
+    if (!reportGenerated) {
+      setCloseReason('');
+      setShowCloseWithoutReportModal(true);
+      return;
+    }
+
+    executeCloseCase('');
+  };
+
+  const executeCloseCase = async (reason = '') => {
+    if (!currentCase) return;
+    setClosingCase(true);
     try {
       const token = localStorage.getItem('argus_token');
       const res = await fetch(`${API_BASE_URL}/cases/${currentCase.case_id}/close`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': DEFAULT_TENANT_ID
-        }
+          'X-Tenant-ID': DEFAULT_TENANT_ID,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ close_reason: reason })
       });
       if (res.ok) {
         const closedId = currentCase.case_id;
         const closedName = currentCase.name || closedId;
+        setShowCloseWithoutReportModal(false);
+        setCloseReason('');
         setActiveCase('', '');
         setCurrentCase(prev => prev ? ({ ...prev, status: 'closed' }) : null);
         setAgentSummary(null);
         setRefreshTrigger(prev => prev + 1);
         setCustomAlert({
           isOpen: true,
-          title: 'Success',
-          message: `Case ${closedId} (${closedName}) closed successfully.`,
+          title: 'Case Closed',
+          message: `Case ${closedId} (${closedName}) closed successfully.${reason ? ' Reason recorded: ' + reason : ''}`,
           type: 'success',
           onClose: null
         });
@@ -252,9 +284,11 @@ const AdminDashboard = () => {
       setCustomAlert({
         isOpen: true,
         title: 'Error',
-        message: 'An error occurred.',
+        message: 'An error occurred while closing the case.',
         type: 'error'
       });
+    } finally {
+      setClosingCase(false);
     }
   };
 
@@ -936,6 +970,82 @@ const AdminDashboard = () => {
               <button onClick={() => setShowAssignSeniorModal(false)} className="btn-outline">Cancel</button>
               <button onClick={handleAssignSenior} disabled={!assigningSenior || assigningLoading} className="btn-primary" style={{ opacity: (!assigningSenior || assigningLoading) ? 0.6 : 1 }}>
                 {assigningLoading ? 'Assigning...' : 'Assign'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal: Close Case Without Report (Admin Description Required) */}
+      {showCloseWithoutReportModal && currentCase && (
+        <div className="modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1002, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={(e) => { if (e.target === e.currentTarget && !closingCase) setShowCloseWithoutReportModal(false); }}>
+          <div className="modal-content" style={{ width: '100%', maxWidth: '480px', borderRadius: '22px', padding: '28px', background: 'var(--bg-card, #ffffff)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px' }}>
+                ⚠️
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 800, color: 'var(--text-main, #0f172a)' }}>Close Case Without Report</h2>
+                <div style={{ fontSize: '12px', color: '#f59e0b', fontWeight: 700 }}>Investigation Report Not Generated</div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '13px', lineHeight: '1.6', color: 'var(--text-secondary, #475569)', marginBottom: '16px' }}>
+              The investigation report has not been generated for case <strong>{currentCase.name || currentCase.case_id}</strong>.
+              To close this case early without waiting for the report, please provide a mandatory description / reason for administrative audit records.
+            </p>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 700, marginBottom: '8px', color: 'var(--text-main, #0f172a)' }}>
+                Closure Reason / Description <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <textarea
+                rows={3}
+                value={closeReason}
+                onChange={(e) => setCloseReason(e.target.value)}
+                placeholder="e.g. Test case created in error, duplicate incident, or closed without waiting for report..."
+                style={{
+                  width: '100%',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border-light, #cbd5e1)',
+                  background: 'var(--bg-subtle, #f8fafc)',
+                  color: 'var(--text-main, #0f172a)',
+                  fontSize: '13px',
+                  lineHeight: '1.5',
+                  boxSizing: 'border-box',
+                  resize: 'vertical'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={() => setShowCloseWithoutReportModal(false)}
+                disabled={closingCase}
+                className="btn-outline"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!closeReason.trim()) {
+                    setCustomAlert({
+                      isOpen: true,
+                      title: 'Description Required',
+                      message: 'Please provide a description / reason for closing this case without waiting for the report.',
+                      type: 'warning'
+                    });
+                    return;
+                  }
+                  executeCloseCase(closeReason.trim());
+                }}
+                disabled={closingCase}
+                className="btn-primary"
+                style={{ background: '#ef4444', borderColor: '#ef4444' }}
+              >
+                {closingCase ? 'Closing...' : 'Confirm Early Close'}
               </button>
             </div>
           </div>

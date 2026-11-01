@@ -107,6 +107,13 @@ async def get_report(
             detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
         )
 
+    # If the case exists but has 0 evidence files and 0 findings, no forensic report can be generated
+    if not evidence_list and not findings:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No forensic report has been generated for case '{case_id}'. The case has no evidence or findings."
+        )
+
     # 2. Export sanitized findings payload subject to review gate
     exported_findings = []
     if findings:

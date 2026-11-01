@@ -71,6 +71,9 @@ class CaseSummaryResponse(BaseModel):
     latest_timestamp: Optional[str] = None
     evidence_files: list[Dict[str, Any]] = Field(default_factory=list)
     lock: Optional[Dict[str, Any]] = None
+    close_reason: Optional[str] = None
+    closed_by: Optional[str] = None
+    closed_at: Optional[str] = None
 
 class CreateCaseRequest(BaseModel):
     name: str
@@ -252,6 +255,7 @@ async def get_all_cases(
     cases = list_cases(tenant_id=x_tenant_id)
     
     user_map = {}
+    case_meta_map = {}
     try:
         from api.routes.auth import get_db_connection
         with get_db_connection() as conn:
@@ -259,8 +263,19 @@ async def get_all_cases(
                 cur.execute("SELECT id, name FROM users")
                 for row in cur.fetchall():
                     user_map[str(row[0])] = row[1]
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS close_reason TEXT;")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_by TEXT;")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;")
+                cur.execute("SELECT case_id, description, close_reason, closed_by, closed_at FROM cases;")
+                for r in cur.fetchall():
+                    case_meta_map[str(r[0])] = {
+                        "description": r[1],
+                        "close_reason": r[2],
+                        "closed_by": r[3],
+                        "closed_at": r[4].isoformat() if r[4] and hasattr(r[4], "isoformat") else (str(r[4]) if r[4] else None)
+                    }
     except Exception as e:
-        print(f"[DB WARNING] Could not fetch user names: {e}")
+        print(f"[DB WARNING] Could not fetch user names/case meta: {e}")
 
     # Fallback user_map when Postgres is offline
     if not user_map:
@@ -299,13 +314,22 @@ async def get_all_cases(
         lock = case_lock_manager.get_lock(c.case_id)
         lock_info = lock.to_dict(user_id) if lock else None
 
+        meta = case_meta_map.get(str(c.case_id), {})
+        close_reason_val = meta.get("close_reason") or getattr(c, "close_reason", None)
+        closed_by_val = meta.get("closed_by") or getattr(c, "closed_by", None)
+        closed_at_val = meta.get("closed_at") or (c.closed_at.isoformat() if hasattr(c, "closed_at") and c.closed_at else None)
+        c_desc_final = meta.get("description") or c_desc
+
         result.append({
             "case_id": c.case_id,
             "created_by": c.created_by,
             "created_at": c.created_at.isoformat() if hasattr(c.created_at, "isoformat") else (str(c.created_at) if c.created_at else None),
             "status": c.status,
             "name": c_name,
-            "description": c_desc,
+            "description": c_desc_final,
+            "close_reason": close_reason_val,
+            "closed_by": closed_by_val,
+            "closed_at": closed_at_val,
             "analyst_id": c_analyst_id,
             "analyst_name": analyst_name,
             "senior_analyst_id": c_senior_id,
@@ -620,9 +644,14 @@ async def get_auditor_stats(
 
 
 
+class CloseCaseRequest(BaseModel):
+    close_reason: Optional[str] = None
+
+
 @router.put("/{case_id}/close")
 async def close_case_endpoint(
     case_id: str,
+    body: Optional[CloseCaseRequest] = None,
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
@@ -675,9 +704,11 @@ async def close_case_endpoint(
         if row and row[0]:
             effective_tenant = row[0]
 
+        close_reason_val = body.close_reason.strip() if body and body.close_reason else None
+        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS close_reason TEXT;")
         cur.execute(
-            "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s WHERE case_id = %s;",
-            (str(current_user.get("id", current_user.get("name", "admin"))), clean_case_id)
+            "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s, close_reason = %s WHERE case_id = %s;",
+            (str(current_user.get("id", current_user.get("name", "admin"))), close_reason_val, clean_case_id)
         )
         if cur.rowcount > 0:
             db_updated = True
@@ -695,7 +726,7 @@ async def close_case_endpoint(
     if not success and not db_updated:
         raise HTTPException(status_code=404, detail="Case not found or could not be closed.")
         
-    return {"status": "SUCCESS", "message": f"Case {case_id} closed."}
+    return {"status": "SUCCESS", "message": f"Case {case_id} closed.", "close_reason": close_reason_val if 'close_reason_val' in locals() else None}
 
 
 class AssignSeniorRequest(BaseModel):
@@ -1128,13 +1159,25 @@ async def get_case(
             connect_timeout=2
         )
         cur = conn.cursor()
-        cur.execute("SELECT name, description FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
+        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS close_reason TEXT;")
+        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_by TEXT;")
+        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;")
+        cur.execute("SELECT name, description, close_reason, closed_by, closed_at FROM cases WHERE case_id = %s", (clean_case_id,))
         row = cur.fetchone()
+        case_close_reason = None
+        case_closed_by = None
+        case_closed_at = None
         if row:
             if row[0]:
                 case_name = row[0]
             if len(row) > 1 and row[1]:
                 case_desc = row[1]
+            if len(row) > 2 and row[2]:
+                case_close_reason = row[2]
+            if len(row) > 3 and row[3]:
+                case_closed_by = row[3]
+            if len(row) > 4 and row[4]:
+                case_closed_at = row[4].isoformat() if hasattr(row[4], "isoformat") else str(row[4])
     except Exception as e:
         logger.warning(f"Could not fetch case name for summary: {e}")
 
@@ -1157,7 +1200,10 @@ async def get_case(
         investigation_progress=progress,
         latest_timestamp=latest_ts,
         evidence_files=formatted_evidence,
-        lock=lock_dict
+        lock=lock_dict,
+        close_reason=locals().get("case_close_reason"),
+        closed_by=locals().get("case_closed_by"),
+        closed_at=locals().get("case_closed_at")
     )
 
 @router.get("/{case_id}/findings")

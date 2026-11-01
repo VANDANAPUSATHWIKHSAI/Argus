@@ -80,6 +80,34 @@ const Dashboard = () => {
 
   const [restartingWorkload, setRestartingWorkload] = useState(false);
 
+  const handleGenerateReportClick = () => {
+    const evidenceCount = Number(activeSummary?.total_evidence_files ?? 0);
+    const findingsCount = Number(activeSummary?.total_findings ?? 0);
+    const isRunning = agentSummary?.status === 'RUNNING';
+
+    if (evidenceCount === 0) {
+      setCustomAlert({
+        isOpen: true,
+        title: '⚠️ No Evidence Uploaded',
+        message: 'Cannot generate report: No evidence has been uploaded for this case yet. Please upload forensic evidence files on the Evidence page and run the investigation first.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    if (isRunning || findingsCount === 0) {
+      setCustomAlert({
+        isOpen: true,
+        title: '⏳ Investigation In Progress',
+        message: 'The case investigation is currently in progress. ARGUS is analyzing evidence and running multi-agent forensic analysis. Please wait until ARGUS completes its work before generating the report for senior review.',
+        type: 'warning'
+      });
+      return;
+    }
+
+    setSubmitModalOpen(true);
+  };
+
   const handleDashboardStopWorkload = async () => {
     const targetCaseId = activeSummary?.case_id || (cases && cases[0]?.id);
     if (!targetCaseId || stoppingWorkload) return;
@@ -1117,7 +1145,7 @@ const Dashboard = () => {
 
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
 
-                              {criticalHigh > 0 ? 'High Risk' : 'Under Review'}
+                              {activeSummary.total_evidence_files === 0 ? 'No Evidence' : (criticalHigh > 0 ? 'High Risk' : 'In Progress')}
 
                             </div>
 
@@ -1153,7 +1181,7 @@ const Dashboard = () => {
 
                             type="button"
 
-                            onClick={() => setSubmitModalOpen(true)}
+                            onClick={handleGenerateReportClick}
 
                             id="btn-analyst-generate-report"
 

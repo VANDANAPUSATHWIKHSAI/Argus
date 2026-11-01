@@ -16,7 +16,7 @@ import json
 from typing import List, Dict, Any, Optional
 
 import copy
-from fastapi import APIRouter, Header, HTTPException, Query, Depends, BackgroundTasks, Response
+from fastapi import APIRouter, Header, HTTPException, Query, Depends, BackgroundTasks, Response, Body
 from pydantic import BaseModel, Field
 from enum import Enum
 from infrastructure.repository.evidence_store import create_case_session, list_cases, list_evidence_by_case, close_case
@@ -357,7 +357,7 @@ async def get_all_cases(
 
     result = []
     for c in cases:
-        c_name = getattr(c, "name", None) or c.case_id
+        c_name = getattr(c, "name", None)
         c_desc = getattr(c, "description", None)
         c_analyst_id = getattr(c, "analyst_id", None)
         c_senior_id = getattr(c, "senior_analyst_id", None)
@@ -380,6 +380,12 @@ async def get_all_cases(
         lock = case_lock_manager.get_lock(c.case_id)
         lock_info = lock.to_dict(user_id) if lock else None
 
+        has_report = bool(
+            getattr(c, "submitted_to_senior", False) or
+            getattr(c, "submitted_to_auditor", False) or
+            getattr(c, "has_report", False)
+        )
+
         result.append({
             "case_id": c.case_id,
             "created_by": c.created_by,
@@ -393,6 +399,7 @@ async def get_all_cases(
             "senior_analyst_name": senior_name,
             "assigned_to_you": assigned,
             "lock": lock_info,
+            "has_report": has_report,
         })
 
     return {"status": "SUCCESS", "data": result}
@@ -748,8 +755,10 @@ async def get_auditor_stats(
 
 
 @router.put("/{case_id}/close")
+@router.post("/{case_id}/close")
 async def close_case_endpoint(
     case_id: str,
+    payload: Optional[Dict[str, Any]] = Body(None),
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
@@ -762,6 +771,10 @@ async def close_case_endpoint(
             status_code=403,
             detail="Analysts are not authorized to close cases. Only administrators and supervisors may close cases."
         )
+
+    reason = None
+    if isinstance(payload, dict):
+        reason = payload.get("reason")
 
     from api.routes.evidence import sanitize_uuid
     clean_case_id = sanitize_uuid(case_id)
@@ -802,10 +815,16 @@ async def close_case_endpoint(
         if row and row[0]:
             effective_tenant = row[0]
 
-        cur.execute(
-            "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s WHERE case_id = %s;",
-            (str(current_user.get("id", current_user.get("name", "admin"))), clean_case_id)
-        )
+        if reason:
+            cur.execute(
+                "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s, description = COALESCE(%s, description) WHERE case_id = %s;",
+                (str(current_user.get("id", current_user.get("name", "admin"))), reason, clean_case_id)
+            )
+        else:
+            cur.execute(
+                "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s WHERE case_id = %s;",
+                (str(current_user.get("id", current_user.get("name", "admin"))), clean_case_id)
+            )
         if cur.rowcount > 0:
             db_updated = True
         conn.commit()
@@ -813,11 +832,11 @@ async def close_case_endpoint(
     except Exception as e:
         print(f"[DB] Error closing case directly: {e}")
         
-    success = close_case(tenant_id=effective_tenant, case_id=clean_case_id)
+    success = close_case(tenant_id=effective_tenant, case_id=clean_case_id, reason=reason)
     if not success and clean_case_id != case_id:
-        success = close_case(tenant_id=effective_tenant, case_id=case_id)
+        success = close_case(tenant_id=effective_tenant, case_id=case_id, reason=reason)
     if not success and effective_tenant != x_tenant_id:
-        success = close_case(tenant_id=x_tenant_id, case_id=clean_case_id)
+        success = close_case(tenant_id=x_tenant_id, case_id=clean_case_id, reason=reason)
     
     if not success and not db_updated:
         raise HTTPException(status_code=404, detail="Case not found or could not be closed.")

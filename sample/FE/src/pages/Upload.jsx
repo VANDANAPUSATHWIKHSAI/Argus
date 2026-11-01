@@ -629,41 +629,45 @@ const Upload = () => {
 
     const itemsToUpload = queue.filter(item => item.status === 'ready' || item.status === 'uploading' || item.status === 'error');
 
-
-
-    for (const item of itemsToUpload) {
-
-      try {
-
-        const res = await uploadEvidenceFile(item.file, caseId);
-
-        if (res && (res.status === 'FAILED' || res.status === 'ERROR' || res.status === 'validation_failed' || res.error)) {
-
-          const errDetail = res.message || res.detail || res.error || 'Upload validation failed';
-
-          throw new Error(errDetail);
-
-        }
-
-        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', error: null } : i));
-
-        successCount++;
-
-      } catch (err) {
-
-        console.error(`Upload failed for ${item.name}:`, err);
-
-        lastErrorMsg = err.message || 'Upload failed';
-
-        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: lastErrorMsg } : i));
-
-        failedCount++;
-
-      }
-
+    if (itemsToUpload.length === 0) {
+      setUploading(false);
+      return;
     }
 
+    // Set all queued items to uploading status immediately
+    setQueue(prev => prev.map(i => (i.status === 'ready' || i.status === 'error') ? { ...i, status: 'uploading' } : i));
 
+    // Parallel asynchronous upload for all selected evidence files
+    const uploadTasks = itemsToUpload.map(async (item) => {
+      try {
+        const res = await uploadEvidenceFile(item.file, caseId, { asyncMode: true });
+        if (res && (res.status === 'FAILED' || res.status === 'ERROR' || res.status === 'validation_failed' || res.error)) {
+          const errDetail = res.message || res.detail || res.error || 'Upload validation failed';
+          throw new Error(errDetail);
+        }
+        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', error: null, evidenceId: res?.evidence_id } : i));
+        return { success: true, item };
+      } catch (err) {
+        console.error(`Upload failed for ${item.name}:`, err);
+        const errDetail = err.message || 'Upload failed';
+        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: errDetail } : i));
+        return { success: false, item, error: errDetail };
+      }
+    });
+
+    const settled = await Promise.allSettled(uploadTasks);
+    settled.forEach(r => {
+      if (r.status === 'fulfilled' && r.value.success) {
+        successCount++;
+      } else {
+        failedCount++;
+        if (r.status === 'fulfilled' && r.value.error) {
+          lastErrorMsg = r.value.error;
+        } else if (r.status === 'rejected') {
+          lastErrorMsg = r.reason?.message || 'Upload failed';
+        }
+      }
+    });
 
     setUploading(false);
 
@@ -973,7 +977,6 @@ const Upload = () => {
 
                 <div style={{ padding: '16px 20px', fontWeight: 600, fontSize: 14, color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'pointer' }}>Upload Evidence</div>
 
-                <div style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer' }}>Coverage</div>
 
               </div>
 

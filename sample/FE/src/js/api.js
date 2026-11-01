@@ -107,12 +107,13 @@ export async function fetchEvidenceForCase(caseId) {
   return fetchWithAuth(`/evidence/case/${caseId}`);
 }
 
-export async function uploadEvidenceFile(file, caseId) {
+export async function uploadEvidenceFile(file, caseId, options = {}) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('case_id', caseId);
 
-  return fetchWithAuth(`/evidence/upload?case_id=${encodeURIComponent(caseId)}`, {
+  const asyncQuery = options.asyncMode !== false ? '&async_mode=true' : '';
+  return fetchWithAuth(`/evidence/upload?case_id=${encodeURIComponent(caseId)}${asyncQuery}`, {
     method: 'POST',
     body: formData,
   });
@@ -233,10 +234,15 @@ export async function fetchReport(caseId, format = 'html', allowUnreviewed = fal
 
 
 
-export async function closeCase(caseId) {
-  return fetchWithAuth(`/cases/${caseId}/close`, {
+export async function closeCase(caseId, reason = null) {
+  const options = {
     method: 'PUT',
-  });
+  };
+  if (reason) {
+    options.headers = { 'Content-Type': 'application/json' };
+    options.body = JSON.stringify({ reason });
+  }
+  return fetchWithAuth(`/cases/${caseId}/close`, options);
 }
 
 export async function fetchAgentResults(caseId) {

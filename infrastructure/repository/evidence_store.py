@@ -555,11 +555,11 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                             return None
                         if not ev_tenant and tenant_id != "default":
                             return None
-                        from datetime import datetime
+                        from datetime import datetime, timezone
                         return CaseSession(
                             case_id=case_id,
                             tenant_id=ev_tenant or tenant_id,
-                            created_at=datetime.now(),
+                            created_at=datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
                             created_by=mdata.get("uploaded_by", "analyst"),
                             status=case_status
                         )
@@ -567,11 +567,11 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                         pass
                 elif (child / "original").exists() or (child / "encrypted").exists():
                     if tenant_id == "default":
-                        from datetime import datetime
+                        from datetime import datetime, timezone
                         return CaseSession(
                             case_id=case_id,
                             tenant_id=tenant_id,
-                            created_at=datetime.now(),
+                            created_at=datetime(2026, 1, 1, 0, 0, tzinfo=timezone.utc),
                             created_by="analyst",
                             status=case_status
                         )
@@ -705,9 +705,28 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
             except Exception as e:
                 logger.warning(f"Could not seed sample case {sc['case_id']}: {e}")
 
+    import re as _re
+    def _case_sequence_key(c: CaseSession):
+        cid = getattr(c, "case_id", "") or ""
+        m = _re.search(r"ARGUS_(\d+)", cid, _re.IGNORECASE)
+        seq = int(m.group(1)) if m else -1
+        created = getattr(c, "created_at", None)
+        ts = 0.0
+        if created:
+            if hasattr(created, "timestamp"):
+                ts = created.timestamp()
+            elif isinstance(created, str):
+                try:
+                    from datetime import datetime
+                    ts = datetime.fromisoformat(created).timestamp()
+                except Exception:
+                    pass
+        return (seq, ts)
+
+    cases.sort(key=_case_sequence_key, reverse=True)
     return cases
 
-def close_case(tenant_id: str, case_id: str) -> bool:
+def close_case(tenant_id: str, case_id: str, reason: Optional[str] = None) -> bool:
     """
     Updates the status of a CaseSession to 'closed' for the given tenant.
     Guarantees persistence across PostgreSQL and local repository fallback.
@@ -731,18 +750,16 @@ def close_case(tenant_id: str, case_id: str) -> bool:
             )
             cur = conn.cursor()
             if tenant_id:
-                cur.execute(
-                    "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s AND tenant_id = %s;",
-                    (case_id, tenant_id)
-                )
-                if cur.rowcount > 0:
-                    closed_any = True
-
-            if not closed_any:
-                cur.execute(
-                    "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s;",
-                    (case_id,)
-                )
+                if reason:
+                    cur.execute(
+                        "UPDATE cases SET status = 'closed', closed_at = NOW(), description = COALESCE(%s, description) WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')));",
+                        (reason, case_id, tenant_id, tenant_id)
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')));",
+                        (case_id, tenant_id, tenant_id)
+                    )
                 if cur.rowcount > 0:
                     closed_any = True
 
@@ -765,17 +782,23 @@ def close_case(tenant_id: str, case_id: str) -> bool:
                         data = json.load(f)
                 except Exception:
                     data = {}
-            data["case_id"] = case_id
-            data["status"] = "closed"
-            data["closed_at"] = datetime.now(timezone.utc).isoformat()
-            if tenant_id and "tenant_id" not in data:
-                data["tenant_id"] = tenant_id
-            with open(session_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, indent=2)
+            file_tenant = data.get("tenant_id")
+            if not file_tenant or file_tenant == tenant_id or (tenant_id in ("default", "dev-team") and file_tenant in ("default", "dev-team")):
+                data["case_id"] = case_id
+                data["status"] = "closed"
+                data["closed_at"] = datetime.now(timezone.utc).isoformat()
+                if reason:
+                    data["closed_reason"] = reason
+                    if not data.get("description"):
+                        data["description"] = reason
+                if tenant_id and "tenant_id" not in data:
+                    data["tenant_id"] = tenant_id
+                with open(session_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
 
-            status_file = case_dir / "status.json"
-            status_file.write_text(json.dumps({"status": "closed", "tenant_id": tenant_id}))
-            closed_any = True
+                status_file = case_dir / "status.json"
+                status_file.write_text(json.dumps({"status": "closed", "tenant_id": file_tenant or tenant_id}))
+                closed_any = True
     except Exception as disk_e:
         logger.warning(f"Failed to update local case session file for close_case: {disk_e}")
 

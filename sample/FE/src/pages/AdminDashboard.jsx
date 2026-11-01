@@ -540,6 +540,10 @@ const AdminDashboard = () => {
             if (active) {
               setCurrentCase(active);
               loadWorkloadStatus(active.case_id);
+            } else {
+              setCurrentCase(null);
+              setAgentSummary(null);
+              setActiveSummary(null);
             }
           } else {
             setAllCasesList([]);
@@ -709,6 +713,26 @@ const AdminDashboard = () => {
         
         {/* Current Case Dossier Card */}
         <div className="glass-dossier-card">
+          {!currentCase ? (
+            <div style={{ padding: '48px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(59, 130, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, color: 'var(--blue, #3b82f6)' }}>
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              </div>
+              <h2 style={{ fontSize: 20, fontWeight: 700, margin: '0 0 8px 0', color: 'var(--glass-dash-text-main, #fff)' }}>No Active Cases</h2>
+              <p style={{ fontSize: 14, color: 'var(--glass-dash-text-muted, #94a3b8)', margin: '0 0 24px 0', maxWidth: 440, lineHeight: 1.5 }}>
+                No active case is currently in progress. All investigations are completed or no case has been created yet.
+              </p>
+              <button 
+                onClick={() => setShowCreateModal(true)} 
+                className="btn-glass-primary" 
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 22px', fontSize: 14, fontWeight: 600 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                + Create Case
+              </button>
+            </div>
+          ) : (
+            <>
           <div className="glass-card-header-row">
             <div className="glass-case-brand-group">
               <div className="glass-case-icon-box">
@@ -754,10 +778,26 @@ const AdminDashboard = () => {
               {currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress') && (
                 <button 
                   onClick={handleCloseCase}
-                  className="btn-glass-outline-danger"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.5)',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.15)',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="Close this active case"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
-                  Close
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                  Close Case
                 </button>
               )}
             </div>
@@ -875,6 +915,8 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
+            </>
+          )}
         </div>
       </div>
 

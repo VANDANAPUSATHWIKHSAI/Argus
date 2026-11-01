@@ -480,11 +480,18 @@ async def upload_evidence(
     # Enforce case lock
     if target_case_id:
         from api.case_lock import case_lock_manager
+        from api.routes.cases import is_user_authorized_for_case_modification
         user_id = str(current_user.get("id", ""))
+        is_assigned = is_user_authorized_for_case_modification(
+            case_id=target_case_id,
+            current_user=current_user,
+            x_tenant_id=tenant_id
+        )
         is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
             case_id=target_case_id,
             user_id=user_id,
-            is_admin=current_user.get("role") == "admin"
+            is_admin=current_user.get("role") == "admin",
+            is_assigned=is_assigned
         )
         if not is_allowed and lock:
             raise HTTPException(

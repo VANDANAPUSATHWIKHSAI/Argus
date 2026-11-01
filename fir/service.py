@@ -70,7 +70,7 @@ class AnalystFindingService:
         if status is not None:
             case_findings = [f for f in case_findings if f.review_status == status]
 
-        return sorted(case_findings, key=lambda f: (f.timestamp is None, f.timestamp or datetime.min.replace(tzinfo=timezone.utc)))
+        return sorted(case_findings, key=lambda f: (f.timestamp is None, f.timestamp or datetime.min.replace(tzinfo=timezone.utc), str(f.finding_id or "")))
 
     def mark_review(
         self,

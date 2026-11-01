@@ -1,6 +1,6 @@
 ---
 description: Rule for retrieving the glass_theme_old template snapshot
-globs: ["**/*"]
+globs: "**/*"
 ---
 
 # glass_theme_old Rule

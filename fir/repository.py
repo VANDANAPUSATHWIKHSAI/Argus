@@ -195,8 +195,12 @@ class FIRRepository:
 
     def _hydrate_single_from_postgres(self, finding_id: str, tenant_id: str) -> Optional[FIRFinding]:
         """Hydrates a single finding from PostgreSQL 'fir_findings' table enforcing tenant scope."""
+        from infrastructure.repository.evidence_store import _should_attempt_postgres
         if FIRRepository._db_unreachable:
-            return None
+            if _should_attempt_postgres():
+                FIRRepository._db_unreachable = False
+            else:
+                return None
         try:
             import psycopg2
             from config.settings import settings
@@ -222,29 +226,52 @@ class FIRRepository:
             row = cur.fetchone()
             if row:
                 f_id, c_id, t_id, fact, s_fact, conf, sev, mitre, evid_ref, src_art, fp, st_val, rev_by, inj_flg, inj_sc, lyr, ts = row
-                fnd = FIRFinding(
-                    finding_id=f_id,
-                    case_id=c_id,
-                    tenant_id=t_id,
-                    fact=fact or "",
-                    sanitized_fact=s_fact or fact or "",
-                    confidence=float(conf) if conf is not None else 1.0,
-                    severity=str(sev) if sev else "medium",
-                    mitre_mapping=str(mitre) if mitre else None,
-                    evidence_reference=[str(x) for x in evid_ref] if isinstance(evid_ref, (list, tuple)) and evid_ref else [f"ref:{f_id}"],
-                    source_artifact_id=str(src_art) if src_art else f_id,
-                    finding_fingerprint=str(fp) if fp else "",
-                    review_status=ReviewStatus(st_val) if st_val in ReviewStatus.__members__.values() or any(st_val == member.value for member in ReviewStatus) else ReviewStatus.PENDING_REVIEW,
-                    reviewed_by=str(rev_by) if rev_by else None,
-                    injection_flagged=bool(inj_flg) if inj_flg is not None else False,
-                    injection_score=float(inj_sc or 0.0),
-                    layer=str(lyr) if lyr else "unknown",
-                    timestamp=ts or datetime.now(timezone.utc)
-                )
-                self.findings[f_id] = fnd
+                st_parsed = ReviewStatus(st_val) if st_val in ReviewStatus.__members__.values() or any(st_val == member.value for member in ReviewStatus) else ReviewStatus.PENDING_REVIEW
+                if f_id in self.findings:
+                    fnd = self.findings[f_id]
+                    fnd.review_status = st_parsed
+                    fnd.reviewed_by = str(rev_by) if rev_by else None
+                    fnd.fact = fact or ""
+                    fnd.sanitized_fact = s_fact or fact or ""
+                    fnd.confidence = float(conf) if conf is not None else 1.0
+                    fnd.severity = str(sev) if sev else "medium"
+                    fnd.mitre_mapping = str(mitre) if mitre else None
+                    if isinstance(evid_ref, (list, tuple)) and evid_ref:
+                        fnd.evidence_reference = [str(x) for x in evid_ref]
+                    if src_art:
+                        fnd.source_artifact_id = str(src_art)
+                    fnd.finding_fingerprint = str(fp) if fp else ""
+                    fnd.injection_flagged = bool(inj_flg) if inj_flg is not None else False
+                    fnd.injection_score = float(inj_sc or 0.0)
+                    fnd.layer = str(lyr) if lyr else "unknown"
+                    if ts:
+                        fnd.timestamp = ts
+                else:
+                    fnd = FIRFinding(
+                        finding_id=f_id,
+                        case_id=c_id,
+                        tenant_id=t_id,
+                        fact=fact or "",
+                        sanitized_fact=s_fact or fact or "",
+                        confidence=float(conf) if conf is not None else 1.0,
+                        severity=str(sev) if sev else "medium",
+                        mitre_mapping=str(mitre) if mitre else None,
+                        evidence_reference=[str(x) for x in evid_ref] if isinstance(evid_ref, (list, tuple)) and evid_ref else [f"ref:{f_id}"],
+                        source_artifact_id=str(src_art) if src_art else f_id,
+                        finding_fingerprint=str(fp) if fp else "",
+                        review_status=st_parsed,
+                        reviewed_by=str(rev_by) if rev_by else None,
+                        injection_flagged=bool(inj_flg) if inj_flg is not None else False,
+                        injection_score=float(inj_sc or 0.0),
+                        layer=str(lyr) if lyr else "unknown",
+                        timestamp=ts or datetime.now(timezone.utc)
+                    )
+                    self.findings[f_id] = fnd
                 conn.close()
+                FIRRepository._db_unreachable = False
                 return fnd
             conn.close()
+            FIRRepository._db_unreachable = False
         except Exception as e:
             FIRRepository._db_unreachable = True
             logger.debug("Postgres single finding hydration skipped: %s", e)
@@ -292,8 +319,12 @@ class FIRRepository:
 
     def _hydrate_from_postgres(self, case_id: str, tenant_id: str) -> None:
         """Hydrates findings from PostgreSQL 'fir_findings' table."""
+        from infrastructure.repository.evidence_store import _should_attempt_postgres
         if FIRRepository._db_unreachable:
-            return
+            if _should_attempt_postgres():
+                FIRRepository._db_unreachable = False
+            else:
+                return
         try:
             import psycopg2
             from config.settings import settings
@@ -317,9 +348,31 @@ class FIRRepository:
                 (case_id, tenant_id)
             )
             rows = cur.fetchall()
+            db_f_ids = set()
             for r in rows:
                 f_id, c_id, t_id, fact, s_fact, conf, sev, mitre, evid_ref, src_art, fp, st_val, rev_by, inj_flg, inj_sc, lyr, ts = r
-                if f_id not in self.findings:
+                db_f_ids.add(f_id)
+                st_parsed = ReviewStatus(st_val) if st_val in ReviewStatus.__members__.values() or any(st_val == member.value for member in ReviewStatus) else ReviewStatus.PENDING_REVIEW
+                if f_id in self.findings:
+                    existing = self.findings[f_id]
+                    existing.review_status = st_parsed
+                    existing.reviewed_by = str(rev_by) if rev_by else None
+                    existing.fact = fact or ""
+                    existing.sanitized_fact = s_fact or fact or ""
+                    existing.confidence = float(conf) if conf is not None else 1.0
+                    existing.severity = str(sev) if sev else "medium"
+                    existing.mitre_mapping = str(mitre) if mitre else None
+                    if isinstance(evid_ref, (list, tuple)) and evid_ref:
+                        existing.evidence_reference = [str(x) for x in evid_ref]
+                    if src_art:
+                        existing.source_artifact_id = str(src_art)
+                    existing.finding_fingerprint = str(fp) if fp else ""
+                    existing.injection_flagged = bool(inj_flg) if inj_flg is not None else False
+                    existing.injection_score = float(inj_sc or 0.0)
+                    existing.layer = str(lyr) if lyr else "unknown"
+                    if ts:
+                        existing.timestamp = ts
+                else:
                     fnd = FIRFinding(
                         finding_id=f_id,
                         case_id=c_id,
@@ -332,7 +385,7 @@ class FIRRepository:
                         evidence_reference=[str(x) for x in evid_ref] if isinstance(evid_ref, (list, tuple)) and evid_ref else [f"ref:{f_id}"],
                         source_artifact_id=str(src_art) if src_art else f_id,
                         finding_fingerprint=str(fp) if fp else "",
-                        review_status=ReviewStatus(st_val) if st_val in ReviewStatus.__members__.values() or any(st_val == member.value for member in ReviewStatus) else ReviewStatus.PENDING_REVIEW,
+                        review_status=st_parsed,
                         reviewed_by=str(rev_by) if rev_by else None,
                         injection_flagged=bool(inj_flg) if inj_flg is not None else False,
                         injection_score=float(inj_sc or 0.0),
@@ -341,6 +394,17 @@ class FIRRepository:
                     )
                     self.findings[f_id] = fnd
             conn.close()
+            FIRRepository._db_unreachable = False
+
+            # Reconcile deleted records: when PostgreSQL returns authoritative records for this case,
+            # purge in-memory findings for this case & tenant that were removed in PostgreSQL
+            if db_f_ids:
+                stale_keys = [
+                    k for k, f in self.findings.items()
+                    if f.case_id == case_id and f.tenant_id == tenant_id and k not in db_f_ids
+                ]
+                for k in stale_keys:
+                    self.findings.pop(k, None)
         except Exception as e:
             FIRRepository._db_unreachable = True
             logger.debug("Postgres hydration skipped: %s", e)

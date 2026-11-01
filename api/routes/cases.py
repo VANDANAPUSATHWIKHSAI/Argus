@@ -291,7 +291,7 @@ async def get_all_cases(
 
     result = []
     for c in cases:
-        c_name = getattr(c, "name", None) or c.case_id
+        c_name = getattr(c, "name", None) or (f"Case {c.case_id}" if c.case_id.startswith("ARGUS_") else "Legacy Investigation")
         c_desc = getattr(c, "description", None)
         c_analyst_id = getattr(c, "analyst_id", None)
         c_senior_id = getattr(c, "senior_analyst_id", None)
@@ -717,11 +717,11 @@ async def close_case_endpoint(
     except Exception as e:
         print(f"[DB] Error closing case directly: {e}")
         
-    success = close_case(tenant_id=effective_tenant, case_id=clean_case_id)
+    success = close_case(tenant_id=effective_tenant, case_id=clean_case_id, close_reason=close_reason_val)
     if not success and clean_case_id != case_id:
-        success = close_case(tenant_id=effective_tenant, case_id=case_id)
+        success = close_case(tenant_id=effective_tenant, case_id=case_id, close_reason=close_reason_val)
     if not success and effective_tenant != x_tenant_id:
-        success = close_case(tenant_id=x_tenant_id, case_id=clean_case_id)
+        success = close_case(tenant_id=x_tenant_id, case_id=clean_case_id, close_reason=close_reason_val)
     
     if not success and not db_updated:
         raise HTTPException(status_code=404, detail="Case not found or could not be closed.")

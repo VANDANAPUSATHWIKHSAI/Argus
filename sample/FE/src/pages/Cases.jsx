@@ -98,8 +98,21 @@ const Cases = () => {
         senior_analyst_name: c.senior_analyst_id ? (employeeMap[String(c.senior_analyst_id)]?.name || c.senior_analyst_id) : null,
       }));
 
-      // Sort newest first
-      setCases([...enriched].reverse());
+      // Sort newest first: prioritize ARGUS_ sequence number, then created_at
+      const sorted = [...enriched].sort((a, b) => {
+        const seqA = a.case_id?.startsWith('ARGUS_') ? parseInt(a.case_id.split('_')[1], 10) : -1;
+        const seqB = b.case_id?.startsWith('ARGUS_') ? parseInt(b.case_id.split('_')[1], 10) : -1;
+        if (seqA > 0 && seqB > 0 && seqA !== seqB) {
+          return seqB - seqA;
+        }
+        if (seqA > 0 && seqB <= 0) return -1;
+        if (seqB > 0 && seqA <= 0) return 1;
+
+        const timeA = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const timeB = b.created_at ? new Date(b.created_at).getTime() : 0;
+        return timeB - timeA;
+      });
+      setCases(sorted);
     } catch (err) {
       console.error(err);
       if (err.status === 401 || err.status === 403) {
@@ -342,8 +355,21 @@ const Cases = () => {
                     </tr>
                   ) : filteredCases.length > 0 ? (
                     filteredCases.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(c => {
-                      const isActive = activeCaseId === c.case_id;
                       const isOpen = c.status === 'open' || c.status === 'in_progress';
+                      const isActive = activeCaseId === c.case_id && isOpen;
+                      const closeReason = c.close_reason || (typeof localStorage !== 'undefined' ? localStorage.getItem(`argus_case_${c.case_id}_close_reason`) : null);
+                      const hasReport = Boolean(
+                        c.submitted_to_auditor ||
+                        c.submitted_to_senior ||
+                        (typeof localStorage !== 'undefined' && (
+                          localStorage.getItem(`argus_case_${c.case_id}_submitted_to_auditor`) ||
+                          localStorage.getItem(`argus_case_${c.case_id}_submitted_to_senior`) ||
+                          localStorage.getItem(`argus_case_${c.case_id}_report_generated`) === 'true'
+                        ))
+                      ) && !closeReason;
+                      const displayName = (c.name && c.name !== c.case_id) 
+                        ? c.name 
+                        : (c.case_id?.startsWith('ARGUS_') ? `Investigation Case (${c.case_id})` : 'Legacy Case Investigation');
                       return (
                         <tr
                           key={c.case_id}
@@ -383,7 +409,7 @@ const Cases = () => {
                             </div>
                           </td>
                           <td style={{ padding: '16px 24px', color: 'var(--text-main)', fontSize: '14px', fontWeight: 500 }}>
-                            <div style={{ fontWeight: 600 }}>{c.name || 'Unnamed Case'}</div>
+                            <div style={{ fontWeight: 600 }}>{displayName}</div>
                             {c.description && (
                               <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px', maxWidth: '280px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.description}>
                                 {c.description}
@@ -441,56 +467,97 @@ const Cases = () => {
                                   Investigate (Read-Only)
                                 </button>
                               )}
-                              <button
-                                onClick={() => handleViewReport(c)}
-                                disabled={loadingReportId === c.case_id}
-                                style={{
-                                  background: 'rgba(59, 130, 246, 0.1)',
-                                  color: '#3b82f6',
-                                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                                  padding: '6px 12px',
-                                  borderRadius: '6px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  cursor: loadingReportId === c.case_id ? 'wait' : 'pointer'
-                                }}
-                              >
-                                {loadingReportId === c.case_id ? 'Loading...' : 'View Report'}
-                              </button>
-                              {isOpen && (
-                                <button
-                                  onClick={() => handleCloseCase(c.case_id, c.name)}
-                                  style={{
-                                    background: 'rgba(239, 68, 68, 0.1)',
-                                    color: '#ef4444',
-                                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                                    padding: '6px 12px',
-                                    borderRadius: '6px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: 'pointer'
-                                  }}
-                                  title="Close this case"
-                                >
-                                  Close
-                                </button>
+                              {isOpen ? (
+                                <>
+                                  <button
+                                    onClick={() => handleViewReport(c)}
+                                    disabled={loadingReportId === c.case_id}
+                                    style={{
+                                      background: 'rgba(59, 130, 246, 0.1)',
+                                      color: '#3b82f6',
+                                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                                      padding: '6px 12px',
+                                      borderRadius: '6px',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      cursor: loadingReportId === c.case_id ? 'wait' : 'pointer'
+                                    }}
+                                  >
+                                    {loadingReportId === c.case_id ? 'Loading...' : 'View Report'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleCloseCase(c.case_id, c.name)}
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.1)',
+                                      color: '#ef4444',
+                                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                                      padding: '6px 12px',
+                                      borderRadius: '6px',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="Close this case"
+                                  >
+                                    Close
+                                  </button>
+                                  <button
+                                    onClick={() => setSelectedCaseForDetails(c)}
+                                    style={{
+                                      background: 'rgba(56, 189, 248, 0.1)',
+                                      color: '#0284c7',
+                                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                                      padding: '6px 12px',
+                                      borderRadius: '6px',
+                                      fontSize: '12px',
+                                      fontWeight: 600,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="View case description and details"
+                                  >
+                                    Description
+                                  </button>
+                                </>
+                              ) : (
+                                <>
+                                  {/* Closed case: mutually exclusive Report vs Description */}
+                                  {hasReport ? (
+                                    <button
+                                      onClick={() => handleViewReport(c)}
+                                      disabled={loadingReportId === c.case_id}
+                                      style={{
+                                        background: 'rgba(59, 130, 246, 0.1)',
+                                        color: '#3b82f6',
+                                        border: '1px solid rgba(59, 130, 246, 0.3)',
+                                        padding: '6px 12px',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: loadingReportId === c.case_id ? 'wait' : 'pointer'
+                                      }}
+                                    >
+                                      {loadingReportId === c.case_id ? 'Loading...' : 'View Report'}
+                                    </button>
+                                  ) : (
+                                    <button
+                                      onClick={() => setSelectedCaseForDetails(c)}
+                                      style={{
+                                        background: 'rgba(56, 189, 248, 0.1)',
+                                        color: '#0284c7',
+                                        border: '1px solid rgba(56, 189, 248, 0.3)',
+                                        padding: '6px 12px',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer'
+                                      }}
+                                      title="View case description and closure reason"
+                                    >
+                                      Description
+                                    </button>
+                                  )}
+                                </>
                               )}
-                              <button
-                                onClick={() => setSelectedCaseForDetails(c)}
-                                style={{
-                                  background: 'rgba(56, 189, 248, 0.1)',
-                                  color: '#0284c7',
-                                  border: '1px solid rgba(56, 189, 248, 0.3)',
-                                  padding: '6px 12px',
-                                  borderRadius: '6px',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                  cursor: 'pointer'
-                                }}
-                                title="View case description and closure reason"
-                              >
-                                Description
-                              </button>
                               <button
                                 onClick={() => {
                                   setActiveCase(c.case_id, c.name || '');

@@ -253,10 +253,13 @@ const AdminDashboard = () => {
       if (res.ok) {
         const closedId = currentCase.case_id;
         const closedName = currentCase.name || closedId;
+        if (reason) {
+          localStorage.setItem(`argus_case_${closedId}_close_reason`, reason);
+        }
         setShowCloseWithoutReportModal(false);
         setCloseReason('');
         setActiveCase('', '');
-        setCurrentCase(prev => prev ? ({ ...prev, status: 'closed' }) : null);
+        setCurrentCase(null);
         setAgentSummary(null);
         setRefreshTrigger(prev => prev + 1);
         setCustomAlert({
@@ -344,16 +347,18 @@ const AdminDashboard = () => {
             });
             setAllCasesList(sorted);
             
-            // Prefer selected active case; if none or closed, fallback to latest open case
+            // Prefer selected active case ONLY if open/in_progress; if none or closed, fallback to latest open case
             const activeId = localStorage.getItem('active_case_id');
             let active = activeId ? sorted.find(c => c.case_id === activeId) : null;
+            if (active && active.status !== 'open' && active.status !== 'in_progress') {
+              active = null;
+            }
             if (!active) {
               active = sorted.find(c => (c.status === 'open' || c.status === 'in_progress') && c.case_id?.startsWith('ARGUS_')) ||
-                       sorted.find(c => c.status === 'open' || c.status === 'in_progress') ||
-                       sorted[0];
+                       sorted.find(c => (c.status === 'open' || c.status === 'in_progress'));
               if (active) {
                 setActiveCase(active.case_id, active.name || '');
-              } else if (activeId) {
+              } else {
                 setActiveCase('', '');
               }
             }
@@ -602,6 +607,48 @@ const AdminDashboard = () => {
         
         {/* Current Case Dossier Card */}
         <div className="glass-dossier-card">
+          {!currentCase ? (
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '60px 24px',
+              textAlign: 'center',
+              minHeight: '340px'
+            }}>
+              <div style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '20px',
+                background: 'rgba(37, 99, 235, 0.08)',
+                color: 'var(--glass-dash-blue, #2563eb)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '18px'
+              }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+              </div>
+              <h2 style={{ fontSize: '20px', fontWeight: 800, color: 'var(--glass-dash-text-main)', margin: '0 0 8px' }}>
+                {allCasesList.length === 0 ? 'No case is created' : 'No Active Cases'}
+              </h2>
+              <p style={{ fontSize: '13px', color: 'var(--glass-dash-text-muted)', maxWidth: '420px', margin: '0 0 24px', lineHeight: 1.5 }}>
+                {allCasesList.length === 0 
+                  ? 'No forensic investigation cases have been created yet. Click below to initialize your first case.' 
+                  : 'All cases have been solved or closed. Click "+ Create Case" to initiate a new forensic investigation.'}
+              </p>
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="btn-glass-primary"
+                style={{ cursor: 'pointer', opacity: 1, padding: '10px 24px', fontSize: '14px', fontWeight: 700 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                + Create Case
+              </button>
+            </div>
+          ) : (
+            <>
           <div className="glass-card-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
             <div className="glass-case-brand-group" style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: '240px' }}>
               <div className="glass-case-icon-box">
@@ -824,6 +871,8 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
+            </>
+          )}
         </div>
 
         {/* Recent Activity Card */}

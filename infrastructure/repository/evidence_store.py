@@ -522,8 +522,13 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                 if not stored_tenant and tenant_id != "default":
                     return None
                 from datetime import datetime
-                created_at = data.get("created_at")
-                if isinstance(created_at, str):
+                created_at = data.get("created_at") or data.get("closed_at")
+                if not created_at:
+                    try:
+                        created_at = datetime.fromtimestamp(session_file.stat().st_mtime)
+                    except Exception:
+                        created_at = datetime(2026, 8, 1)
+                elif isinstance(created_at, str):
                     try:
                         created_at = datetime.fromisoformat(created_at)
                     except Exception:
@@ -537,7 +542,8 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                     analyst_id=data.get("analyst_id"),
                     senior_analyst_id=data.get("senior_analyst_id"),
                     name=data.get("name"),
-                    description=data.get("description")
+                    description=data.get("description"),
+                    close_reason=data.get("close_reason")
                 )
             except Exception as e:
                 logger.warning(f"Failed to read local case_session.json: {e}")
@@ -666,6 +672,12 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
                         cases.append(session)
                         seen_ids.add(session.case_id)
 
+    cases.sort(key=lambda c: (
+        1 if c.case_id.startswith('ARGUS_') else 0,
+        int(c.case_id.split('_')[1]) if c.case_id.startswith('ARGUS_') and len(c.case_id.split('_')) > 1 and c.case_id.split('_')[1].isdigit() else 0,
+        c.created_at.timestamp() if c.created_at and hasattr(c.created_at, 'timestamp') else 0
+    ), reverse=True)
+
     # If no cases exist yet for tenant 'default', seed default sample cases
     if not cases and tenant_id == "default":
         sample_cases = [
@@ -716,7 +728,7 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
 
     return cases
 
-def close_case(tenant_id: str, case_id: str) -> bool:
+def close_case(tenant_id: str, case_id: str, close_reason: Optional[str] = None) -> bool:
     """
     Updates the status of a CaseSession to 'closed' for the given tenant.
     Guarantees persistence across PostgreSQL and local repository fallback.
@@ -777,6 +789,8 @@ def close_case(tenant_id: str, case_id: str) -> bool:
             data["case_id"] = case_id
             data["status"] = "closed"
             data["closed_at"] = datetime.now(timezone.utc).isoformat()
+            if close_reason:
+                data["close_reason"] = close_reason
             if tenant_id and "tenant_id" not in data:
                 data["tenant_id"] = tenant_id
             with open(session_file, "w", encoding="utf-8") as f:

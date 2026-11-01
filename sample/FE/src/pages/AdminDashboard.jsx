@@ -197,26 +197,30 @@ const AdminDashboard = () => {
 
   // Compute 7 pipeline nodes: 4 detailed investigation nodes from analyst + Review + Audit + Closed
   const pipelineNodes = (() => {
+    const analystRole = currentCase?.analyst_name ? `(${currentCase.analyst_name})` : '(Analyst)';
+    const seniorRole = currentCase?.senior_analyst_name ? `(${currentCase.senior_analyst_name})` : '(Senior Analyst)';
+    const auditRole = `(${currentCase?.auditor_name || 'Not Assigned'})`;
+
     if (!currentCase) {
       return [
-        { key: 'evidence_collection', label: 'Evidence Collection', role: '(Analyst)', metric: 'No files', status: 'pending' },
-        { key: 'analysis', label: 'File Analysis', role: '(Analyst)', metric: 'Pending', status: 'pending' },
-        { key: 'agent_analysis', label: 'Agent Analysis', role: '(Analyst)', metric: 'Pending', status: 'pending' },
-        { key: 'report', label: 'Case Report', role: '(Analyst)', metric: 'Pending', status: 'pending' },
-        { key: 'review', label: 'Review', role: '(Senior Analyst)', metric: null, status: 'pending' },
-        { key: 'audit', label: 'Audit', role: `(${currentCase?.auditor_name || 'Not Assigned'})`, metric: null, status: 'pending' },
+        { key: 'evidence_collection', label: 'Evidence Collection', role: analystRole, metric: 'No files', status: 'pending' },
+        { key: 'analysis', label: 'File Analysis', role: analystRole, metric: 'Pending', status: 'pending' },
+        { key: 'agent_analysis', label: 'Agent Analysis', role: analystRole, metric: 'Pending', status: 'pending' },
+        { key: 'report', label: 'Case Report', role: analystRole, metric: 'Pending', status: 'pending' },
+        { key: 'review', label: 'Review', role: seniorRole, metric: null, status: 'pending' },
+        { key: 'audit', label: 'Audit', role: auditRole, metric: null, status: 'pending' },
         { key: 'closed', label: 'Closed', role: '(Final)', metric: null, status: 'pending' },
       ];
     }
 
     if (isCaseClosed) {
       return [
-        { key: 'evidence_collection', label: 'Evidence Collection', role: '(Analyst)', metric: `${evidenceCount} file${evidenceCount === 1 ? '' : 's'}`, status: 'completed' },
-        { key: 'analysis', label: 'File Analysis', role: '(Analyst)', metric: `${artifactsCount || findingsCount} processed`, status: 'completed' },
-        { key: 'agent_analysis', label: 'Agent Analysis', role: '(Analyst)', metric: `${agentSummary?.claims?.length || 0} claims verified`, status: 'completed' },
-        { key: 'report', label: 'Case Report', role: '(Analyst)', metric: 'Case Closed', status: 'completed' },
-        { key: 'review', label: 'Review', role: '(Senior Analyst)', metric: null, status: 'completed' },
-        { key: 'audit', label: 'Audit', role: `(${currentCase?.auditor_name || 'Not Assigned'})`, metric: null, status: 'completed' },
+        { key: 'evidence_collection', label: 'Evidence Collection', role: analystRole, metric: `${evidenceCount} file${evidenceCount === 1 ? '' : 's'}`, status: 'completed' },
+        { key: 'analysis', label: 'File Analysis', role: analystRole, metric: `${artifactsCount || findingsCount} processed`, status: 'completed' },
+        { key: 'agent_analysis', label: 'Agent Analysis', role: analystRole, metric: `${agentSummary?.claims?.length || 0} claims verified`, status: 'completed' },
+        { key: 'report', label: 'Case Report', role: analystRole, metric: 'Case Closed', status: 'completed' },
+        { key: 'review', label: 'Review', role: seniorRole, metric: null, status: 'completed' },
+        { key: 'audit', label: 'Audit', role: auditRole, metric: null, status: 'completed' },
         { key: 'closed', label: 'Closed', role: '(Resolved)', metric: null, status: 'completed' },
       ];
     }
@@ -254,12 +258,12 @@ const AdminDashboard = () => {
     const clsStatus = 'pending';
 
     return [
-      { key: 'evidence_collection', label: 'Evidence Collection', role: '(Analyst)', metric: evMetric, status: evStatus },
-      { key: 'analysis', label: 'File Analysis', role: '(Analyst)', metric: anMetric, status: anStatus },
-      { key: 'agent_analysis', label: 'Agent Analysis', role: '(Analyst)', metric: agMetric, status: agStatus },
-      { key: 'report', label: 'Case Report', role: '(Analyst)', metric: repMetric, status: repStatus },
-      { key: 'review', label: 'Review', role: '(Senior Analyst)', metric: null, status: revStatus },
-      { key: 'audit', label: 'Audit', role: `(${currentCase?.auditor_name || 'Not Assigned'})`, metric: null, status: audStatus },
+      { key: 'evidence_collection', label: 'Evidence Collection', role: analystRole, metric: evMetric, status: evStatus },
+      { key: 'analysis', label: 'File Analysis', role: analystRole, metric: anMetric, status: anStatus },
+      { key: 'agent_analysis', label: 'Agent Analysis', role: analystRole, metric: agMetric, status: agStatus },
+      { key: 'report', label: 'Case Report', role: analystRole, metric: repMetric, status: repStatus },
+      { key: 'review', label: 'Review', role: seniorRole, metric: null, status: revStatus },
+      { key: 'audit', label: 'Audit', role: auditRole, metric: null, status: audStatus },
       { key: 'closed', label: 'Closed', role: '(Final)', metric: null, status: clsStatus },
     ];
   })();
@@ -509,8 +513,8 @@ const AdminDashboard = () => {
             // Enrich each case with resolved analyst and senior analyst names
             const enriched = cases.map(c => ({
               ...c,
-              analyst_name: c.analyst_id ? (employeeMap[String(c.analyst_id)]?.name || c.analyst_id) : null,
-              senior_analyst_name: c.senior_analyst_id ? (employeeMap[String(c.senior_analyst_id)]?.name || c.senior_analyst_id) : null,
+              analyst_name: employeeMap[String(c.analyst_id)]?.name || c.analyst_name || c.analyst_id || null,
+              senior_analyst_name: employeeMap[String(c.senior_analyst_id)]?.name || c.senior_analyst_name || c.senior_analyst_id || null,
             }));
 
             // Sort newest first by created_at timestamp

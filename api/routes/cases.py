@@ -857,6 +857,7 @@ class AssignAnalystRequest(BaseModel):
 
 
 @router.put("/{case_id}/assign-senior")
+@router.post("/{case_id}/assign-senior")
 async def assign_senior_analyst(
     case_id: str,
     req: AssignSeniorRequest,
@@ -885,6 +886,19 @@ async def assign_senior_analyst(
             conn.close()
             raise HTTPException(status_code=404, detail="Case not found.")
         conn.commit()
+
+        # Update local session file as well
+        try:
+            from infrastructure.repository.evidence_store import REPOSITORY_DIR
+            case_file = Path(REPOSITORY_DIR) / case_id / "case_session.json"
+            if case_file.exists():
+                with open(case_file, "r", encoding="utf-8") as f:
+                    cdata = json.load(f)
+                cdata["senior_analyst_id"] = str(req.senior_analyst_id)
+                with open(case_file, "w", encoding="utf-8") as f:
+                    json.dump(cdata, f, indent=2)
+        except Exception as f_err:
+            logger.warning(f"Could not persist local senior_analyst_id to case_session.json: {f_err}")
         
         # Send assignment email in background
         senior = get_user_by_id(req.senior_analyst_id)
@@ -1237,7 +1251,9 @@ async def get_case(
         from ism.checkpointer import Checkpointer
         checkpointer = Checkpointer()
         cp = checkpointer.get_stage_checkpoint(case_id=case_id, stage="pipeline_job", tenant_id=x_tenant_id)
-        persisted_job = cp.get("checkpoint") if isinstance(cp.get("checkpoint"), dict) else cp if cp else None
+        persisted_job = None
+        if cp:
+            persisted_job = cp.get("checkpoint") if isinstance(cp.get("checkpoint"), dict) else cp
         
         job_source = live_job or persisted_job
         job_status = (job_source.get("status") if job_source else "").upper()

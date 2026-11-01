@@ -938,8 +938,7 @@ def list_evidence_by_case(tenant_id: str, case_id: str) -> list[Evidence]:
             # Authoritative PostgreSQL query succeeded: return DB records directly (even if empty)
             return evidence_list
         except Exception as e:
-            logger.error("Authoritative PostgreSQL list_evidence_by_case failed closed: %s", e)
-            return []
+            logger.warning("PostgreSQL list_evidence_by_case failed, falling back to local storage: %s", e)
 
     # LOCAL FALLBACK: executed ONLY when PostgreSQL is offline or local storage is explicitly configured
     from infrastructure.repository.evidence_store import REPOSITORY_DIR

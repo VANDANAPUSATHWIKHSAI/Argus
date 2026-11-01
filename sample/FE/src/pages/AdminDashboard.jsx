@@ -608,40 +608,8 @@ const AdminDashboard = () => {
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
               </div>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <h2 className="glass-case-id-text" style={{ margin: 0 }}>{currentCase ? currentCase.case_id : 'No Active Case'}</h2>
-                  {allCasesList.length > 1 && (
-                    <select
-                      value={currentCase?.case_id || ''}
-                      onChange={(e) => {
-                        const sel = allCasesList.find(c => c.case_id === e.target.value);
-                        if (sel) {
-                          setCurrentCase(sel);
-                          setActiveCase(sel.case_id, sel.name || '');
-                          loadWorkloadStatus(sel.case_id);
-                          loadCaseSummary(sel.case_id);
-                        }
-                      }}
-                      style={{
-                        padding: '4px 10px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        borderRadius: '8px',
-                        maxWidth: '220px',
-                        background: 'var(--glass-dash-surface-nested)',
-                        border: '1px solid var(--glass-dash-border-subtle)',
-                        color: 'var(--glass-dash-text-main)',
-                        cursor: 'pointer'
-                      }}
-                      title="Switch active case"
-                    >
-                      {allCasesList.map(c => (
-                        <option key={c.case_id} value={c.case_id}>
-                          {c.case_id}: {c.name || 'Unnamed'} ({c.status})
-                        </option>
-                      ))}
-                    </select>
-                  )}
                 </div>
                 <p className="glass-case-desc-text">{currentCase ? currentCase.name : 'Create a case to get started'}</p>
               </div>

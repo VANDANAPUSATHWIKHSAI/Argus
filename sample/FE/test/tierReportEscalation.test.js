@@ -68,3 +68,24 @@ test('tierReportEscalation: AuditorDashboard and AuditorReportWorkspace surface 
   assert.ok(wsContent.includes('SeniorSubmitToAuditorModal'), 'AuditorReportWorkspace must mount SeniorSubmitToAuditorModal for senior analyst review mode');
 });
 
+test('tierReportEscalation: Dashboard and Agents gate report generation behind agent completion', () => {
+  const dashPath = path.join(srcDir, 'pages', 'Dashboard.jsx');
+  const agentsPath = path.join(srcDir, 'pages', 'Agents.jsx');
+  assert.ok(fs.existsSync(dashPath), 'Dashboard.jsx must exist');
+  assert.ok(fs.existsSync(agentsPath), 'Agents.jsx must exist');
+
+  const dashContent = fs.readFileSync(dashPath, 'utf8');
+  const agentsContent = fs.readFileSync(agentsPath, 'utf8');
+
+  // Dashboard header button must be gated on agent completion or prior submission
+  assert.ok(
+    dashContent.includes('!isAdmin && (isAgentComplete || isReportSubmitted || isSubmittedToSenior)'),
+    'Dashboard header Generate Report button must require agent completion or report submission'
+  );
+
+  // Agents handoff banner must be gated on Agent 7 supervisor completion
+  assert.ok(
+    agentsContent.includes("stageStatuses.agent7 === 'COMPLETED'"),
+    'Agents page handoff banner must require Agent 7 completion'
+  );
+});

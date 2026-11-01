@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL, DEFAULT_TENANT_ID, fetchAgentResults } from '../js/api';
+import { API_BASE_URL, DEFAULT_TENANT_ID, fetchAgentResults, fetchCaseSummary } from '../js/api';
 import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import AlertModal from '../components/AlertModal';
 import { safeFormatDateOnly, safeFormatDateTime, safeFormatTime } from '../js/dateUtils';
 import { setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
+
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -20,22 +21,28 @@ const AdminDashboard = () => {
   const [employees, setEmployees] = useState([]);
   const [casesSolved, setCasesSolved] = useState(0);
   const [currentCase, setCurrentCase] = useState(null);
-  const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [allCasesList, setAllCasesList] = useState([]);
   const [agentSummary, setAgentSummary] = useState(null);
+  const [activeSummary, setActiveSummary] = useState(null);
 
   const loadWorkloadStatus = async (caseId) => {
     if (!caseId) {
       setAgentSummary(null);
+      setActiveSummary(null);
       return;
     }
     try {
-      const res = await fetchAgentResults(caseId);
-      setAgentSummary(res);
+      const [agentRes, summaryRes] = await Promise.allSettled([
+        fetchAgentResults(caseId),
+        fetchCaseSummary(caseId)
+      ]);
+      setAgentSummary(agentRes.status === 'fulfilled' ? agentRes.value : null);
+      setActiveSummary(summaryRes.status === 'fulfilled' ? summaryRes.value : null);
     } catch (_) {
       setAgentSummary(null);
+      setActiveSummary(null);
     }
   };
 
@@ -132,6 +139,145 @@ const AdminDashboard = () => {
 
   const caseStageInfo = getCaseStageInfo(currentCase);
 
+  // Detailed Investigation Progress from Analyst View
+  const evidenceCount = activeSummary
+    ? (activeSummary.total_evidence_files || activeSummary.evidence_count || activeSummary.formatted_evidence?.length || 0)
+    : 0;
+
+  const findingsCount = activeSummary
+    ? (activeSummary.total_findings ?? activeSummary.findings_count ?? 0)
+    : 0;
+
+  const artifactsCount = activeSummary
+    ? (activeSummary.total_artifacts ?? 0)
+    : 0;
+
+  const isCaseClosed = Boolean(
+    currentCase && (currentCase.status === 'closed' || currentCase.status === 'completed' || currentCase.status === 'archived')
+  );
+
+  const currentCaseId = currentCase?.case_id;
+
+  const isSubmittedToAuditor = Boolean(
+    (typeof localStorage !== 'undefined' && currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_auditor`)) ||
+    currentCase?.submitted_to_auditor
+  );
+
+  const isSubmittedToSenior = Boolean(
+    (typeof localStorage !== 'undefined' && currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_senior`)) ||
+    currentCase?.submitted_to_senior ||
+    isSubmittedToAuditor
+  );
+
+  const isReportCompleted = isSubmittedToAuditor || isSubmittedToSenior || isCaseClosed;
+
+  const agentStatusUpper = (agentSummary?.status || (typeof activeSummary?.investigation_progress?.agent_analysis === 'object' ? activeSummary?.investigation_progress?.agent_analysis?.status : activeSummary?.investigation_progress?.agent_analysis) || '').toUpperCase();
+  const allDashboardAgentsDone = Boolean(
+    agentSummary?.stage_statuses &&
+    ['agent1', 'agent2', 'agent3', 'agent4', 'agent5a', 'agent5b', 'agent6', 'agent7'].every(k => {
+      const st = (agentSummary?.stage_statuses?.[k] || '').toUpperCase();
+      return st === 'COMPLETED' || st === 'SUCCESS' || st === 'NEEDS_REVIEW';
+    })
+  );
+
+  const isAgentComplete = Boolean(
+    allDashboardAgentsDone &&
+    (agentSummary?.stage_statuses?.agent7 === 'COMPLETED' || agentSummary?.stage_statuses?.agent7 === 'NEEDS_REVIEW' || agentSummary?.stage_statuses?.agent7 === 'SUCCESS') &&
+    (findingsCount > 0 || (agentSummary?.findings_count || 0) > 0 || (agentSummary?.claims?.length || 0) > 0)
+  );
+  const isAgentRunning = Boolean(
+    agentStatusUpper === 'RUNNING' || agentStatusUpper === 'PROCESSING'
+  );
+  const isAgentStopped = Boolean(
+    agentStatusUpper === 'STOPPED' || agentStatusUpper === 'CANCELLED'
+  );
+  const isAgentFailed = Boolean(
+    agentStatusUpper === 'FAILED' || agentStatusUpper === 'ERROR'
+  );
+
+  // Compute 7 pipeline nodes: 4 detailed investigation nodes from analyst + Review + Audit + Closed
+  const pipelineNodes = (() => {
+    if (!currentCase) {
+      return [
+        { key: 'evidence_collection', label: 'Evidence Collection', role: '(Analyst)', metric: 'No files', status: 'pending' },
+        { key: 'analysis', label: 'File Analysis', role: '(Analyst)', metric: 'Pending', status: 'pending' },
+        { key: 'agent_analysis', label: 'Agent Analysis', role: '(Analyst)', metric: 'Pending', status: 'pending' },
+        { key: 'report', label: 'Case Report', role: '(Analyst)', metric: 'Pending', status: 'pending' },
+        { key: 'review', label: 'Review', role: '(Senior Analyst)', metric: null, status: 'pending' },
+        { key: 'audit', label: 'Audit', role: `(${currentCase?.auditor_name || 'Not Assigned'})`, metric: null, status: 'pending' },
+        { key: 'closed', label: 'Closed', role: '(Final)', metric: null, status: 'pending' },
+      ];
+    }
+
+    if (isCaseClosed) {
+      return [
+        { key: 'evidence_collection', label: 'Evidence Collection', role: '(Analyst)', metric: `${evidenceCount} file${evidenceCount === 1 ? '' : 's'}`, status: 'completed' },
+        { key: 'analysis', label: 'File Analysis', role: '(Analyst)', metric: `${artifactsCount || findingsCount} processed`, status: 'completed' },
+        { key: 'agent_analysis', label: 'Agent Analysis', role: '(Analyst)', metric: `${agentSummary?.claims?.length || 0} claims verified`, status: 'completed' },
+        { key: 'report', label: 'Case Report', role: '(Analyst)', metric: 'Case Closed', status: 'completed' },
+        { key: 'review', label: 'Review', role: '(Senior Analyst)', metric: null, status: 'completed' },
+        { key: 'audit', label: 'Audit', role: `(${currentCase?.auditor_name || 'Not Assigned'})`, metric: null, status: 'completed' },
+        { key: 'closed', label: 'Closed', role: '(Resolved)', metric: null, status: 'completed' },
+      ];
+    }
+
+    // Detailed investigation stages statuses
+    const evStatus = (isReportCompleted || evidenceCount > 0) ? 'completed' : 'active';
+    const anStatus = (isReportCompleted || artifactsCount > 0 || findingsCount > 0)
+      ? 'completed'
+      : (evidenceCount > 0 ? 'active' : 'pending');
+    const agStatus = (isReportCompleted || isAgentComplete)
+      ? 'completed'
+      : (isAgentRunning ? 'active' : ((artifactsCount > 0 || findingsCount > 0) ? 'active' : 'pending'));
+    const repStatus = isReportCompleted
+      ? 'completed'
+      : (isAgentComplete ? 'active' : 'pending');
+
+    const evMetric = evidenceCount > 0 ? `${evidenceCount} file${evidenceCount > 1 ? 's' : ''}` : 'No files';
+    const anMetric = (artifactsCount > 0 || findingsCount > 0)
+      ? `${artifactsCount || findingsCount} processed`
+      : (evidenceCount > 0 ? 'Parsing...' : 'Pending');
+    const agMetric = isAgentComplete
+      ? `${agentSummary?.claims?.length || 0} claims verified`
+      : (isAgentRunning ? 'Swarm running...' : (isAgentStopped ? 'Swarm stopped' : (isAgentFailed ? 'Swarm failed' : (findingsCount > 0 ? 'Ready to run' : 'Pending'))));
+    const repMetric = isSubmittedToAuditor
+      ? 'Escalated to Auditor'
+      : isSubmittedToSenior
+      ? 'Submitted to Senior'
+      : (isAgentComplete ? 'Ready for Senior' : 'Pending Agents');
+
+    // Review stage
+    const revStatus = isSubmittedToAuditor ? 'completed' : (isSubmittedToSenior ? 'active' : 'pending');
+    // Audit stage
+    const audStatus = isSubmittedToAuditor ? 'active' : 'pending';
+    // Closed stage
+    const clsStatus = 'pending';
+
+    return [
+      { key: 'evidence_collection', label: 'Evidence Collection', role: '(Analyst)', metric: evMetric, status: evStatus },
+      { key: 'analysis', label: 'File Analysis', role: '(Analyst)', metric: anMetric, status: anStatus },
+      { key: 'agent_analysis', label: 'Agent Analysis', role: '(Analyst)', metric: agMetric, status: agStatus },
+      { key: 'report', label: 'Case Report', role: '(Analyst)', metric: repMetric, status: repStatus },
+      { key: 'review', label: 'Review', role: '(Senior Analyst)', metric: null, status: revStatus },
+      { key: 'audit', label: 'Audit', role: `(${currentCase?.auditor_name || 'Not Assigned'})`, metric: null, status: audStatus },
+      { key: 'closed', label: 'Closed', role: '(Final)', metric: null, status: clsStatus },
+    ];
+  })();
+
+  const pipelineProgressWidth = (() => {
+    if (!currentCase) return '0%';
+    if (isCaseClosed) return 'calc(100% - 56px)';
+    const totalIntervals = pipelineNodes.length - 1; // 6
+    const highestDoneIdx = pipelineNodes.map(n => n.status === 'completed').lastIndexOf(true);
+    const activeIdx = pipelineNodes.findIndex(n => n.status === 'active');
+    const targetStep = activeIdx !== -1 ? activeIdx : Math.max(0, highestDoneIdx);
+    if (highestDoneIdx === -1 && activeIdx <= 0) return '0%';
+    const fillRatio = Math.min(1, targetStep / totalIntervals);
+    return `calc((100% - 56px) * ${fillRatio})`;
+  })();
+
+  const pipelineProgressOpacity = (!currentCase || pipelineProgressWidth === '0%') ? 0 : 1;
+
   useEffect(() => {
     const unsub = subscribeToActiveCase(() => {
       setRefreshTrigger(prev => prev + 1);
@@ -225,6 +371,7 @@ const AdminDashboard = () => {
       };
 
       setCurrentCase(newCaseObj);
+      loadWorkloadStatus(createdId);
       setAllCasesList(prev => [newCaseObj, ...prev]);
 
       setShowCreateModal(false);
@@ -289,6 +436,7 @@ const AdminDashboard = () => {
         localStorage.removeItem('active_case_desc');
         setCurrentCase(null);
         setAgentSummary(null);
+        setActiveSummary(null);
         setRefreshTrigger(prev => prev + 1);
         setCustomAlert({
           isOpen: true,
@@ -397,15 +545,11 @@ const AdminDashboard = () => {
             setAllCasesList([]);
             setCurrentCase(null);
             setAgentSummary(null);
+            setActiveSummary(null);
           }
         }
         
-        // Fetch Recent Activity (Cases & Evidence Uploads)
-        const actRes = await fetch(`${API_BASE_URL}/cases/activity`, { headers });
-        if (actRes.ok) {
-          const actData = await actRes.json();
-          setRecentActivity(actData.data || []);
-        }
+
       } catch (e) {
         console.error('Error fetching admin dashboard data:', e);
       } finally {
@@ -561,7 +705,7 @@ const AdminDashboard = () => {
       </div>
 
       {/* ROW 2: Current Case & Recent Activity */}
-      <div className="glass-split-cards-grid">
+      <div className="glass-split-cards-grid" style={{ gridTemplateColumns: '1fr' }}>
         
         {/* Current Case Dossier Card */}
         <div className="glass-dossier-card">
@@ -625,64 +769,43 @@ const AdminDashboard = () => {
             <div 
               className="glass-pipeline-progress" 
               style={{ 
-                width: caseStageInfo.progressWidth,
-                opacity: caseStageInfo.progressOpacity
+                width: pipelineProgressWidth,
+                opacity: pipelineProgressOpacity
               }} 
             />
             
             <div className="glass-pipeline-nodes">
-              <div 
-                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''} ${caseStageInfo.investigationStatus}`}
-                onClick={() => currentCase && navigate('/agents')}
-                title={currentCase ? 'Investigation: Run agent swarm & review evidence' : 'No active case'}
-              >
-                <span className={`glass-pipeline-dot ${caseStageInfo.investigationStatus}`}>
-                  {caseStageInfo.investigationStatus === 'completed' ? (
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  ) : null}
-                </span>
-                <span className="glass-pipeline-label">Investigation</span>
-                <span className="glass-pipeline-role">(Analyst)</span>
-              </div>
-              <div 
-                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''} ${caseStageInfo.reviewStatus}`}
-                onClick={() => currentCase && navigate('/report')}
-                title={currentCase ? 'Review: Senior analyst report validation' : 'No active case'}
-              >
-                <span className={`glass-pipeline-dot ${caseStageInfo.reviewStatus}`}>
-                  {caseStageInfo.reviewStatus === 'completed' ? (
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  ) : null}
-                </span>
-                <span className="glass-pipeline-label">Review</span>
-                <span className="glass-pipeline-role">(Senior Analyst)</span>
-              </div>
-              <div 
-                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''} ${caseStageInfo.auditStatus}`}
-                onClick={() => currentCase && navigate(`/audit-logs?case_id=${encodeURIComponent(currentCase.case_id)}`)}
-                title={currentCase ? 'Audit: RFC-3161 timestamps & audit logs' : 'No active case'}
-              >
-                <span className={`glass-pipeline-dot ${caseStageInfo.auditStatus}`}>
-                  {caseStageInfo.auditStatus === 'completed' ? (
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  ) : null}
-                </span>
-                <span className="glass-pipeline-label">Audit</span>
-                <span className="glass-pipeline-role">({currentCase?.auditor_name || 'Not Assigned'})</span>
-              </div>
-              <div 
-                className={`glass-pipeline-node ${currentCase ? 'clickable' : ''} ${caseStageInfo.closedStatus}`}
-                onClick={() => currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress') && handleCloseCase()}
-                title={currentCase ? (currentCase.status === 'closed' ? 'Case is closed' : 'Click to close active case') : 'No active case'}
-              >
-                <span className={`glass-pipeline-dot ${caseStageInfo.closedStatus}`}>
-                  {caseStageInfo.closedStatus === 'completed' ? (
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                  ) : null}
-                </span>
-                <span className="glass-pipeline-label">Closed</span>
-                <span className="glass-pipeline-role">{currentCase?.status === 'closed' ? '(Resolved)' : '(Final)'}</span>
-              </div>
+              {pipelineNodes.map((node) => (
+                <div 
+                  key={node.key}
+                  className={`glass-pipeline-node ${node.status}`}
+                  title={`${node.label}${node.metric ? `: ${node.metric}` : ''}`}
+                >
+                  <span className={`glass-pipeline-dot ${node.status}`}>
+                    {node.status === 'completed' ? (
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    ) : null}
+                  </span>
+                  <span className="glass-pipeline-label" style={{ maxWidth: '120px', textAlign: 'center' }}>{node.label}</span>
+                  <span className="glass-pipeline-role">{node.role}</span>
+                  {node.metric && (
+                    <span style={{
+                      fontSize: '10.5px',
+                      fontWeight: 600,
+                      color: node.status === 'completed' ? '#10b981' : node.status === 'active' ? '#2563eb' : 'var(--glass-dash-text-muted, #64748b)',
+                      background: node.status === 'completed' ? 'rgba(16, 185, 129, 0.12)' : node.status === 'active' ? 'rgba(37, 99, 235, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                      border: `1px solid ${node.status === 'completed' ? 'rgba(16, 185, 129, 0.25)' : node.status === 'active' ? 'rgba(37, 99, 235, 0.25)' : 'rgba(100, 116, 139, 0.2)'}`,
+                      padding: '1px 6px',
+                      borderRadius: '4px',
+                      marginTop: '2px',
+                      letterSpacing: '0.2px',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {node.metric}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -752,66 +875,6 @@ const AdminDashboard = () => {
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Recent Activity Card */}
-        <div className="glass-activity-card">
-          <div className="glass-activity-header">
-            <h2 className="glass-activity-title">Recent Activity</h2>
-            <span 
-              onClick={() => navigate(currentCase ? `/audit-logs?case_id=${currentCase.case_id}` : '/audit-logs')} 
-              className="glass-view-all-link"
-            >
-              View All &rsaquo;
-            </span>
-          </div>
-
-          <table className="glass-activity-table">
-            <thead>
-              <tr>
-                <th style={{ width: '130px', whiteSpace: 'nowrap' }}>Date &amp; Time</th>
-                <th style={{ width: '170px' }}>User</th>
-                <th style={{ width: '120px' }}>Action</th>
-                <th>Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentActivity.length > 0 ? recentActivity.slice(0, 5).map((activity, idx) => (
-                <tr key={idx} className="glass-activity-row">
-                  <td className="glass-cell-timestamp" style={{ whiteSpace: 'nowrap' }}>
-                    {safeFormatDateOnly(activity.created_at)}<br/>
-                    {safeFormatTime(activity.created_at, '')}
-                  </td>
-                  <td>
-                    <div className="glass-user-cell">
-                      <div className={`glass-user-bubble ${activity.created_by === 'admin' ? 'admin' : 'analyst'}`}>
-                        {activity.created_by ? activity.created_by.charAt(0).toUpperCase() : 'U'}
-                      </div>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--glass-dash-text-main)', textTransform: 'capitalize' }}>
-                        {activity.created_by || 'Unknown'}
-                      </span>
-                    </div>
-                  </td>
-                  <td>
-                    <span className={`glass-action-badge ${activity.action === 'Created Case' ? 'created' : 'closed'}`}>
-                      {activity.action || 'Unknown Action'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="glass-details-text" title={activity.details}>
-                      {activity.details || '-'}
-                    </div>
-                  </td>
-                </tr>
-              )) : (
-                <tr>
-                  <td colSpan="4" style={{ padding: '24px 0', fontSize: '13px', color: 'var(--glass-dash-text-muted)', textAlign: 'center' }}>
-                    No recent activity
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
         </div>
       </div>
 

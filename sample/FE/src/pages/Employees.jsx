@@ -18,7 +18,7 @@ const Employees = () => {
   const currentUserStr = localStorage.getItem('argus_user');
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
 
-  const closeAlert = () => setCustomAlert({ ...customAlert, isOpen: false });
+  const closeAlert = () => setCustomAlert(prev => ({ ...prev, isOpen: false, onConfirm: null, onClose: null }));
 
   const fetchEmployees = async () => {
     try {
@@ -179,24 +179,51 @@ const Employees = () => {
     }
   };
 
-  const handleDeleteEmployee = async (userid) => {
-    if (!window.confirm(`Are you sure you want to delete employee ${userid}?`)) return;
-    try {
-      const token = localStorage.getItem('argus_token');
-      const res = await fetch(`${API_BASE_URL}/auth/employees/${userid}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+  const PROTECTED_ACCOUNTS = ['admin', 'analyst', 'senior_analyst', 'auditor'];
+
+  const handleDeleteEmployee = (userid) => {
+    if (PROTECTED_ACCOUNTS.includes(String(userid || '').toLowerCase())) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Protected System Account',
+        message: `The account "${userid}" is a core system role and cannot be deleted.`,
+        type: 'warning'
       });
-      
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Failed to delete employee');
-      }
-      
-      fetchEmployees();
-    } catch (err) {
-      setCustomAlert({ isOpen: true, title: 'Error', message: err.message, type: 'error' });
+      return;
     }
+    setCustomAlert({
+      isOpen: true,
+      title: 'Delete Employee',
+      message: `Are you sure you want to delete employee "${userid}"? This action cannot be undone.`,
+      type: 'danger',
+      confirmText: 'Delete Employee',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setCustomAlert(prev => ({ ...prev, isOpen: false, onConfirm: null }));
+        try {
+          const token = localStorage.getItem('argus_token');
+          const res = await fetch(`${API_BASE_URL}/auth/employees/${userid}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to delete employee');
+          }
+          
+          fetchEmployees();
+          setCustomAlert({
+            isOpen: true,
+            title: 'Employee Deleted',
+            message: `Employee "${userid}" has been removed successfully.`,
+            type: 'success'
+          });
+        } catch (err) {
+          setCustomAlert({ isOpen: true, title: 'Error', message: err.message, type: 'error' });
+        }
+      }
+    });
   };
 
   return (
@@ -276,14 +303,24 @@ const Employees = () => {
                           >
                             Edit
                           </button>
-                          <button 
-                            onClick={() => handleDeleteEmployee(emp.id)}
-                            style={{ background: 'var(--glass-dash-red-soft)', border: '1px solid var(--glass-dash-red-border)', color: 'var(--glass-dash-red)', padding: '6px 14px', borderRadius: '9999px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, transition: 'all 0.2s' }}
-                            onMouseOver={(e) => e.target.style.background = 'rgba(239, 68, 68, 0.25)'}
-                            onMouseOut={(e) => e.target.style.background = 'var(--glass-dash-red-soft)'}
-                          >
-                            Delete
-                          </button>
+                          {PROTECTED_ACCOUNTS.includes(String(emp.id || '').toLowerCase()) || emp.id === currentUser?.id ? (
+                            <button 
+                              disabled
+                              title="Core system account is protected"
+                              style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', padding: '6px 14px', borderRadius: '9999px', cursor: 'not-allowed', fontSize: '12px', fontWeight: 600, opacity: 0.6 }}
+                            >
+                              Protected
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={() => handleDeleteEmployee(emp.id)}
+                              style={{ background: 'var(--glass-dash-red-soft)', border: '1px solid var(--glass-dash-red-border)', color: 'var(--glass-dash-red)', padding: '6px 14px', borderRadius: '9999px', cursor: 'pointer', fontSize: '12px', fontWeight: 700, transition: 'all 0.2s' }}
+                              onMouseOver={(e) => e.target.style.background = 'rgba(239, 68, 68, 0.25)'}
+                              onMouseOut={(e) => e.target.style.background = 'var(--glass-dash-red-soft)'}
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

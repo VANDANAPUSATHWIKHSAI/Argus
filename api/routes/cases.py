@@ -15,7 +15,8 @@ import hashlib
 import json
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, Depends, BackgroundTasks
+import copy
+from fastapi import APIRouter, Header, HTTPException, Query, Depends, BackgroundTasks, Response
 from pydantic import BaseModel, Field
 from enum import Enum
 from infrastructure.repository.evidence_store import create_case_session, list_cases, list_evidence_by_case, close_case
@@ -221,8 +222,8 @@ def verify_case_access(case_id: str, current_user: dict, x_tenant_id: str = "def
         with get_db_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT analyst_id, senior_analyst_id FROM cases WHERE case_id = %s",
-                    (case_id,)
+                    "SELECT analyst_id, senior_analyst_id FROM cases WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')))",
+                    (case_id, x_tenant_id, x_tenant_id)
                 )
                 row = cur.fetchone()
                 if row:
@@ -245,7 +246,7 @@ def verify_case_access(case_id: str, current_user: dict, x_tenant_id: str = "def
     if not assigned:
         raise HTTPException(
             status_code=404,
-            detail=f"Case '{case_id}' not found."
+            detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
         )
 
 @router.post("/", response_model=Dict[str, Any])
@@ -404,6 +405,7 @@ async def get_recent_activity(
     current_user: dict = Depends(get_current_user)
 ):
     activity = []
+    target_case_id = str(case_id).strip() if case_id else None
     
     user_map = {"Admin": "Admin User", "analyst_api": "Analyst", "Analyst_api": "Analyst"}
     try:
@@ -417,25 +419,25 @@ async def get_recent_activity(
                 # 1. Case Creation
                 cur.execute("SELECT case_id, created_by, created_at, closed_at, closed_by FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team'))", (x_tenant_id, x_tenant_id))
                 for row in cur.fetchall():
-                    case_id, c_by, created_at, closed_at, closed_by = row
+                    c_id, c_by, created_at, closed_at, closed_by = row
                     mapped_name = user_map.get(c_by, c_by)
                     activity.append({
                         "action": "Created Case",
-                        "case_id": case_id,
+                        "case_id": c_id,
                         "created_by": mapped_name,
                         "created_by_id": c_by,
                         "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
-                        "details": case_id
+                        "details": c_id
                     })
                     if closed_at:
                         c_by_name = user_map.get(closed_by, closed_by) if closed_by else "Admin User"
                         activity.append({
                             "action": "Closed Case",
-                            "case_id": case_id,
+                            "case_id": c_id,
                             "created_by": c_by_name,
                             "created_by_id": closed_by if closed_by else c_by,
-                            "created_at": closed_at.isoformat() if hasattr(closed_at, "isoformat") else str(closed_at),
-                            "details": f"Case {case_id} was closed"
+                            "created_at": closed_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
+                            "details": f"Case {c_id} was closed"
                         })
 
                 # 2. Uploaded Evidence
@@ -474,7 +476,7 @@ async def get_recent_activity(
                 # Deduplicate findings by action, case, user, and approximate minute
                 finding_events = {}
                 for row in cur.fetchall():
-                    case_id, created_at, fact, source_engine, reviewed_by, review_status, review_time = row
+                    f_cid, created_at, fact, source_engine, reviewed_by, review_status, review_time = row
                     
                     action_name = None
                     evt_time = None
@@ -489,12 +491,12 @@ async def get_recent_activity(
                         # Group by minute
                         minute_key = evt_time.replace(second=0, microsecond=0)
                         user_name = user_map.get(reviewed_by, reviewed_by) if reviewed_by else "Analyst"
-                        group_key = (action_name, case_id, user_name, minute_key)
+                        group_key = (action_name, f_cid, user_name, minute_key)
                         
                         if group_key not in finding_events:
                             finding_events[group_key] = {
                                 "action": action_name,
-                                "case_id": case_id,
+                                "case_id": f_cid,
                                 "created_by": user_name,
                                 "created_by_id": reviewed_by if reviewed_by else "system",
                                 "created_at": evt_time,
@@ -521,10 +523,10 @@ async def get_recent_activity(
                     (x_tenant_id, x_tenant_id)
                 )
                 for row in cur.fetchall():
-                    note_id, case_id, created_by, created_at, title, note_type = row
+                    note_id, n_cid, created_by, created_at, title, note_type = row
                     activity.append({
                         "action": "Created Note",
-                        "case_id": case_id,
+                        "case_id": n_cid,
                         "created_by": user_map.get(created_by, created_by),
                         "created_by_id": created_by,
                         "created_at": created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at),
@@ -535,7 +537,7 @@ async def get_recent_activity(
                 try:
                     cur.execute(
                         """
-                        SELECT id, case_id, action, actor, timestamp, details
+                        SELECT id, case_id, event, actor, timestamp, detail
                         FROM audit_log
                         WHERE (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))
                         ORDER BY timestamp DESC
@@ -543,31 +545,76 @@ async def get_recent_activity(
                         """,
                         (x_tenant_id,)
                     )
+                    existing_evidence_timestamps = {a.get("created_at") for a in activity if a.get("action") == "Uploaded Evidence"}
+                    existing_evidence_names = {f"{a.get('case_id')}:{a.get('details')}" for a in activity if a.get("action") == "Uploaded Evidence"}
+                    
                     for row in cur.fetchall():
-                        log_id, log_case_id, log_action, log_actor, log_ts, log_details = row
+                        log_id, log_case_id, log_event, log_actor, log_ts, log_details = row
+                        
+                        # Humanize event names
+                        action_name = log_event or "Audit Event"
+                        if log_event == "evidence_stored":
+                            action_name = "Uploaded Evidence"
+                        elif log_event == "evidence_deleted":
+                            action_name = "Deleted Evidence"
+                        elif log_event == "finding_reviewed":
+                            action_name = "Reviewed Finding"
+                        elif log_event == "finding_review_rolled_back":
+                            action_name = "Review Rolled Back"
+                        elif log_event == "Triggered Multi-Agent Analysis":
+                            action_name = "Triggered Multi-Agent Analysis"
+                        elif log_event == "Restarted Multi-Agent Analysis":
+                            action_name = "Restarted Multi-Agent Analysis"
+
+                        # Extract clean readable details
                         details_str = ""
+                        actor_resolved = log_actor
                         if isinstance(log_details, dict):
-                            details_str = log_details.get("description") or log_details.get("event") or json.dumps(log_details)
+                            actor_resolved = actor_resolved or log_details.get("deleted_by") or log_details.get("uploaded_by") or log_details.get("actor")
+                            if log_details.get("filename"):
+                                details_str = log_details["filename"]
+                            elif log_details.get("repository_path"):
+                                details_str = os.path.basename(log_details["repository_path"])
+                            elif log_details.get("description"):
+                                details_str = log_details["description"]
+                            elif log_details.get("reason"):
+                                details_str = log_details["reason"]
+                            elif log_details.get("event"):
+                                details_str = log_details["event"]
+                            elif log_details.get("sha256"):
+                                details_str = f"SHA-256: {log_details['sha256'][:16]}..."
+                            else:
+                                details_str = json.dumps(log_details)
                         elif log_details:
                             details_str = str(log_details)
+
+                        ts_iso = log_ts.isoformat() if hasattr(log_ts, "isoformat") and log_ts else str(log_ts)
+                        
+                        # Avoid duplicates for Uploaded Evidence
+                        if action_name == "Uploaded Evidence":
+                            if ts_iso in existing_evidence_timestamps or f"{log_case_id}:{details_str}" in existing_evidence_names:
+                                continue
+
+                        actor_name = user_map.get(str(actor_resolved), str(actor_resolved)) if actor_resolved else "System"
+
                         activity.append({
-                            "action": log_action or "Audit Event",
+                            "action": action_name,
                             "case_id": log_case_id,
-                            "created_by": user_map.get(str(log_actor), str(log_actor)) if log_actor else "System",
-                            "created_by_id": log_actor or "system",
-                            "created_at": log_ts.isoformat() if hasattr(log_ts, "isoformat") and log_ts else str(log_ts),
+                            "created_by": actor_name,
+                            "created_by_id": actor_resolved or "system",
+                            "created_at": ts_iso,
                             "details": details_str
                         })
                 except Exception as al_err:
-                    logger.debug(f"Audit log fetch note: {al_err}")
+                    logger.warning(f"Audit log fetch note: {al_err}")
     except Exception as e:
         print(f"[DB WARNING] Could not fetch comprehensive activity: {e}")
         
     activity.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
 
-    if case_id:
-        clean_cid = str(case_id).strip()
-        activity = [a for a in activity if str(a.get("case_id") or "").strip() == clean_cid]
+    if target_case_id:
+        clean_cid = target_case_id.lower()
+        activity = [a for a in activity if str(a.get("case_id") or "").strip().lower() == clean_cid]
 
     return {
         "status": "SUCCESS",
@@ -776,6 +823,10 @@ async def close_case_endpoint(
         raise HTTPException(status_code=404, detail="Case not found or could not be closed.")
         
     return {"status": "SUCCESS", "message": f"Case {case_id} closed."}
+
+
+
+
 
 
 class AssignSeniorRequest(BaseModel):
@@ -1152,14 +1203,43 @@ async def get_case(
         an_status = InvestigationStageStatus.COMPLETED
         cor_status = InvestigationStageStatus.COMPLETED
         
-    # 4. Findings
+    # 4. Findings & Agent Analysis verification
     if cor_status != InvestigationStageStatus.COMPLETED:
         find_status = InvestigationStageStatus.NOT_STARTED
+        agent_status = InvestigationStageStatus.NOT_STARTED
     else:
         find_status = InvestigationStageStatus.COMPLETED
         
-    # 5. Report
-    if find_status != InvestigationStageStatus.COMPLETED:
+        # Verify whether the multi-agent swarm actually executed and succeeded for this case
+        with _agent_jobs_lock:
+            mem_job = _agent_jobs.get(case_id)
+            live_job = mem_job if (mem_job and mem_job.get("tenant_id") == x_tenant_id) else None
+
+        from ism.checkpointer import Checkpointer
+        checkpointer = Checkpointer()
+        cp = checkpointer.get_stage_checkpoint(case_id=case_id, stage="pipeline_job", tenant_id=x_tenant_id)
+        persisted_job = cp.get("checkpoint") if isinstance(cp.get("checkpoint"), dict) else cp if cp else None
+        
+        job_source = live_job or persisted_job
+        job_status = (job_source.get("status") if job_source else "").upper()
+
+        stored_pipeline_results = None
+        for ev in (evidence_list or []):
+            meta = ev.metadata or {}
+            if meta.get("agent_results"):
+                stored_pipeline_results = meta.get("agent_results")
+                break
+        stored_status = (stored_pipeline_results.get("execution_status") if stored_pipeline_results else "").upper()
+
+        if job_status in ("COMPLETED", "SUCCESS") or stored_status in ("COMPLETED", "SUCCESS"):
+            agent_status = InvestigationStageStatus.COMPLETED
+        elif job_status in ("RUNNING", "PROCESSING") or stored_status in ("RUNNING", "PROCESSING"):
+            agent_status = InvestigationStageStatus.IN_PROGRESS
+        else:
+            agent_status = InvestigationStageStatus.NOT_STARTED
+        
+    # 5. Report (Must NOT be ready or in-progress if Agent Analysis has not completed!)
+    if agent_status != InvestigationStageStatus.COMPLETED:
         rep_status = InvestigationStageStatus.NOT_STARTED
     else:
         # Check case status for closure or report submission
@@ -1191,7 +1271,7 @@ async def get_case(
         analysis=an_status,
         correlation=cor_status,
         findings=find_status,
-        agent_analysis=find_status,
+        agent_analysis=agent_status,
         report=rep_status
     )
 
@@ -1243,15 +1323,42 @@ async def get_case(
         lock=lock_dict
     )
 
+from collections import OrderedDict
+
+# In-memory thread-safe LRU cache for sanitized findings to avoid expensive repeated regex/NFKC/XML passes
+_FINDINGS_SANITIZATION_CACHE: OrderedDict[str, Dict[str, Any]] = OrderedDict()
+_FINDINGS_CACHE_LOCK = threading.Lock()
+_MAX_FINDINGS_CACHE_SIZE = 5000
+
+def invalidate_findings_cache(tenant_id: str, case_id: Optional[str] = None, finding_id: Optional[str] = None):
+    """Evict cached sanitization contexts when findings are updated or reviewed."""
+    with _FINDINGS_CACHE_LOCK:
+        if not case_id and not finding_id:
+            keys_to_del = [k for k in _FINDINGS_SANITIZATION_CACHE if k.startswith(f"{tenant_id}:")]
+        elif case_id and not finding_id:
+            prefix = f"{tenant_id}:{case_id}:"
+            keys_to_del = [k for k in _FINDINGS_SANITIZATION_CACHE if k.startswith(prefix)]
+        else:
+            prefix = f"{tenant_id}:{case_id}:{finding_id}:"
+            keys_to_del = [k for k in _FINDINGS_SANITIZATION_CACHE if k.startswith(prefix)]
+        for k in keys_to_del:
+            _FINDINGS_SANITIZATION_CACHE.pop(k, None)
+
 @router.get("/{case_id}/findings")
 async def get_case_findings(
     case_id: str,
+    response: Response,
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    limit: Optional[int] = Query(None, ge=1, le=10000, description="Maximum number of findings to return"),
+    skip: int = Query(0, ge=0, description="Number of findings to skip for pagination"),
+    ids: Optional[str] = Query(None, description="Comma-separated finding IDs to filter (e.g. for graph nodes)")
 ):
     """
-    Retrieve all parsed output findings for a specific case.
+    Retrieve parsed output findings for a specific case.
     Access restricted: only assigned analyst, senior analyst, or admin.
+    Supports optional pagination/limits, ID filtering for correlated graphs,
+    and high-performance in-memory sanitization caching with fail-closed semantics.
     """
     if not case_id or not case_id.strip():
         raise HTTPException(status_code=400, detail="case_id path parameter cannot be empty.")
@@ -1259,24 +1366,96 @@ async def get_case_findings(
     verify_case_access(case_id, current_user, x_tenant_id)
     
     findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
+
+    # Optional ID-based filtering (for graph correlation without unbounded payload retrieval)
+    if ids and ids.strip():
+        target_ids = {item.strip() for item in ids.split(",") if item.strip()}
+        findings = [
+            f for f in findings
+            if str(getattr(f, 'finding_id', None) or (f.get('finding_id') if isinstance(f, dict) else '') or '') in target_ids
+        ]
     
-    # Inject demonstration findings if empty
-    # Demonstration findings injection has been removed so it only shows present case ones
+    total_count = len(findings)
+
+    # Apply pagination slice before heavy sanitization if limit/skip is specified
+    if skip > 0 or limit is not None:
+        if limit is not None:
+            paginated_findings = findings[skip:skip + limit]
+        else:
+            paginated_findings = findings[skip:]
+    else:
+        paginated_findings = findings
+
+    # Populate explicit RFC-compatible pagination headers to preserve flat JSON array schema
+    response.headers["X-Total-Count"] = str(total_count)
+    response.headers["X-Page-Limit"] = str(limit if limit is not None else total_count)
+    response.headers["X-Page-Skip"] = str(skip)
+    response.headers["X-Has-More"] = "true" if (skip + len(paginated_findings) < total_count) else "false"
+
     gateway = SanitizationGateway()
     sanitized_results = []
-    for f in findings:
+    for f in paginated_findings:
         f_dict = f.model_dump(mode='json') if hasattr(f, 'model_dump') else dict(f)
-        try:
-            sanitized_ctx = gateway.sanitize_finding(f)
-            # Serialize the full SanitizedAgentContext as a structured JSON object,
-            # not just plain text fields. This preserves all sanitization metadata
-            # (sanitization_actions, redaction_metadata, xml_evidence_block, confidence, etc.)
-            f_dict["sanitized_context"] = sanitized_ctx.model_dump(mode='json')
-            # Keep top-level convenience aliases for backwards compatibility
-            f_dict["sanitized_fact"] = sanitized_ctx.sanitized_fact
-            f_dict["injection_flagged"] = sanitized_ctx.injection_flagged
-        except Exception as e:
-            logger.error(f"Failed to sanitize finding: {e}")
+        f_id = str(getattr(f, 'finding_id', None) or f_dict.get('finding_id') or f_dict.get('id', ''))
+        fact_val = str(getattr(f, 'fact', None) or f_dict.get('fact', ''))
+        s_fact_val = str(getattr(f, 'sanitized_fact', None) or f_dict.get('sanitized_fact', ''))
+        sev_val = str(getattr(f, 'severity', None) or f_dict.get('severity', ''))
+        layer_val = str(getattr(f, 'layer', None) or f_dict.get('layer', ''))
+        mitre_val = str(getattr(f, 'mitre_mapping', None) or f_dict.get('mitre_mapping', ''))
+        status_val = str(getattr(f, 'review_status', None) or f_dict.get('review_status', ''))
+        conf_val = str(getattr(f, 'confidence', None) or f_dict.get('confidence', ''))
+        src_art = str(getattr(f, 'source_artifact_id', None) or f_dict.get('source_artifact_id', ''))
+        ev_ref = str(getattr(f, 'evidence_reference', None) or f_dict.get('evidence_reference', ''))
+        ts_val = str(getattr(f, 'timestamp', None) or f_dict.get('timestamp', ''))
+        inj_flg = str(getattr(f, 'injection_flagged', None) or f_dict.get('injection_flagged', ''))
+
+        sig = f"{fact_val}|{s_fact_val}|{sev_val}|{layer_val}|{mitre_val}|{status_val}|{conf_val}|{src_art}|{ev_ref}|{ts_val}|{inj_flg}"
+        cache_key = f"{x_tenant_id}:{case_id}:{f_id}:{hashlib.sha256(sig.encode('utf-8', errors='ignore')).hexdigest()}"
+
+        cached = None
+        with _FINDINGS_CACHE_LOCK:
+            if cache_key in _FINDINGS_SANITIZATION_CACHE:
+                cached = _FINDINGS_SANITIZATION_CACHE[cache_key]
+                _FINDINGS_SANITIZATION_CACHE.move_to_end(cache_key)
+
+        if cached is not None:
+            # Defensive copy prevents callers and downstream mutators from altering cache state
+            f_dict["sanitized_context"] = copy.deepcopy(cached["sanitized_context"])
+            f_dict["sanitized_fact"] = cached["sanitized_fact"]
+            f_dict["injection_flagged"] = cached["injection_flagged"]
+        else:
+            try:
+                sanitized_ctx = gateway.sanitize_finding(f)
+                ctx_dict = sanitized_ctx.model_dump(mode='json')
+                f_dict["sanitized_context"] = ctx_dict
+                f_dict["sanitized_fact"] = sanitized_ctx.sanitized_fact
+                f_dict["injection_flagged"] = sanitized_ctx.injection_flagged
+
+                with _FINDINGS_CACHE_LOCK:
+                    if len(_FINDINGS_SANITIZATION_CACHE) >= _MAX_FINDINGS_CACHE_SIZE:
+                        _FINDINGS_SANITIZATION_CACHE.popitem(last=False)
+                    _FINDINGS_SANITIZATION_CACHE[cache_key] = {
+                        "sanitized_context": copy.deepcopy(ctx_dict),
+                        "sanitized_fact": sanitized_ctx.sanitized_fact,
+                        "injection_flagged": sanitized_ctx.injection_flagged
+                    }
+            except Exception as e:
+                # FAIL-CLOSED: Never return raw untrusted text or flag as safe when sanitization fails
+                logger.error(f"Failed to sanitize finding '{f_id}' in case '{case_id}': {type(e).__name__}: {e}")
+                safe_fallback_placeholder = "[SANITISED: Content blocked due to processing failure]"
+                f_dict["sanitized_fact"] = safe_fallback_placeholder
+                f_dict["injection_flagged"] = True
+                f_dict["sanitization_error"] = True
+                f_dict["sanitized_context"] = {
+                    "finding_id": f_id,
+                    "case_id": case_id,
+                    "tenant_id": x_tenant_id,
+                    "sanitized_fact": safe_fallback_placeholder,
+                    "injection_flagged": True,
+                    "injection_score": 1.0,
+                    "sanitization_actions": ["sanitization_exception_fail_closed"],
+                    "error_type": type(e).__name__
+                }
         sanitized_results.append(f_dict)
         
     return sanitized_results
@@ -1658,7 +1837,7 @@ async def get_case_agent_results(
     if not case_exists:
         try:
             session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
-            if session:
+            if session and getattr(session, "tenant_id", None) == x_tenant_id:
                 case_exists = True
         except Exception:
             pass
@@ -1770,23 +1949,32 @@ async def get_case_agent_results(
         results_data = stored_pipeline_results
         stage_statuses = results_data.get("stage_statuses", {})
     elif db_claims:
-        status_val = "COMPLETED"
-        results_data = {}
+        claim_agents = {c.get("agent_id") for c in db_claims}
         stage_statuses = {
-            "agent1": "COMPLETED", "agent2": "COMPLETED", "agent3": "COMPLETED",
-            "agent4": "COMPLETED", "agent5a": "COMPLETED", "agent5b": "COMPLETED",
-            "agent6": "COMPLETED", "agent7": "COMPLETED"
+            "agent1": "COMPLETED" if ("agent1" in claim_agents or "agent1_evidence_intelligence" in claim_agents) else "PENDING",
+            "agent2": "COMPLETED" if "agent2" in claim_agents else "PENDING",
+            "agent3": "COMPLETED" if "agent3" in claim_agents else "PENDING",
+            "agent4": "COMPLETED" if "agent4" in claim_agents else "PENDING",
+            "agent5a": "COMPLETED" if "agent5a" in claim_agents else "PENDING",
+            "agent5b": "COMPLETED" if "agent5b" in claim_agents else "PENDING",
+            "agent6": "COMPLETED" if ("agent6" in claim_agents or "agent_6" in claim_agents) else "PENDING",
+            "agent7": "COMPLETED" if "agent7" in claim_agents else "PENDING",
         }
+        all_done = all(v == "COMPLETED" for v in stage_statuses.values())
+        status_val = "COMPLETED" if all_done else "PARTIAL"
+        results_data = {}
     else:
         status_val = "READY"
         results_data = {}
-        has_evidence = bool(evidence_list)
         stage_statuses = {
-            "agent1": "COMPLETED" if has_evidence else "PENDING",
-            "agent2": "COMPLETED" if (has_evidence and findings) else "PENDING",
-            "agent3": "COMPLETED" if (has_evidence and findings) else "PENDING",
-            "agent4": "PENDING", "agent5a": "PENDING", "agent5b": "PENDING",
-            "agent6": "PENDING", "agent7": "PENDING"
+            "agent1": "PENDING",
+            "agent2": "PENDING",
+            "agent3": "PENDING",
+            "agent4": "PENDING",
+            "agent5a": "PENDING",
+            "agent5b": "PENDING",
+            "agent6": "PENDING",
+            "agent7": "PENDING"
         }
 
     # Extract per-agent intelligence from real results (never fabricated)
@@ -2542,6 +2730,8 @@ async def review_finding_endpoint(
             status_code=500,
             detail=f"Durable audit persistence failure: review decision rolled back because audit record could not be written ({audit_err})."
         )
+
+    invalidate_findings_cache(clean_tenant, target_case_id, finding_id)
 
     return ReviewFindingResponse(
         status="SUCCESS",

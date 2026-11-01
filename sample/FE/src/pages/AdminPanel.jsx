@@ -24,7 +24,7 @@ const AdminPanel = () => {
     localStorage.setItem('argus_theme', nextTheme);
   };
 
-  const closeAlert = () => setCustomAlert({ ...customAlert, isOpen: false });
+  const closeAlert = () => setCustomAlert(prev => ({ ...prev, isOpen: false, onConfirm: null, onClose: null }));
 
   const fetchEmployees = async () => {
     try {
@@ -111,24 +111,51 @@ const AdminPanel = () => {
     }
   };
 
-  const handleDeleteEmployee = async (userid) => {
-    if (!window.confirm(`Are you sure you want to delete employee ${userid}?`)) return;
-    try {
-      const token = localStorage.getItem('argus_token');
-      const res = await fetch(`${API_BASE_URL}/auth/employees/${userid}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
+  const PROTECTED_ACCOUNTS = ['admin', 'analyst', 'senior_analyst', 'auditor'];
+
+  const handleDeleteEmployee = (userid) => {
+    if (PROTECTED_ACCOUNTS.includes(String(userid || '').toLowerCase())) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Protected System Account',
+        message: `The account "${userid}" is a core system role and cannot be deleted.`,
+        type: 'warning'
       });
-      
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || 'Failed to delete employee');
-      }
-      
-      fetchEmployees();
-    } catch (err) {
-      setCustomAlert({ isOpen: true, title: 'Error', message: err.message, type: 'error' });
+      return;
     }
+    setCustomAlert({
+      isOpen: true,
+      title: 'Delete Employee',
+      message: `Are you sure you want to delete employee "${userid}"? This action cannot be undone.`,
+      type: 'danger',
+      confirmText: 'Delete Employee',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        setCustomAlert(prev => ({ ...prev, isOpen: false, onConfirm: null }));
+        try {
+          const token = localStorage.getItem('argus_token');
+          const res = await fetch(`${API_BASE_URL}/auth/employees/${userid}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            throw new Error(errData.detail || 'Failed to delete employee');
+          }
+          
+          fetchEmployees();
+          setCustomAlert({
+            isOpen: true,
+            title: 'Employee Deleted',
+            message: `Employee "${userid}" has been removed successfully.`,
+            type: 'success'
+          });
+        } catch (err) {
+          setCustomAlert({ isOpen: true, title: 'Error', message: err.message, type: 'error' });
+        }
+      }
+    });
   };
 
   return (

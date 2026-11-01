@@ -230,6 +230,9 @@ export async function fetchReport(caseId, format = 'html', allowUnreviewed = fal
   return fetchWithAuth(`/reports/${encodeURIComponent(caseId)}/report?format=${cleanFormat}&allow_unreviewed=${allowFlag}`);
 }
 
+
+
+
 export async function closeCase(caseId) {
   return fetchWithAuth(`/cases/${caseId}/close`, {
     method: 'PUT',

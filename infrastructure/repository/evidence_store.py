@@ -462,12 +462,6 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                             (case_id, tenant_id)
                         )
                         row = cur.fetchone()
-                        if not row:
-                            cur.execute(
-                                "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE case_id = %s;",
-                                (case_id,)
-                            )
-                            row = cur.fetchone()
             except Exception:
                 import psycopg2
                 from config.settings import settings
@@ -485,15 +479,12 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                     (case_id, tenant_id)
                 )
                 row = cur.fetchone()
-                if not row:
-                    cur.execute(
-                        "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE case_id = %s;",
-                        (case_id,)
-                    )
-                    row = cur.fetchone()
                 conn.close()
 
             if row:
+                # Strictly enforce that row tenant_id matches requested tenant_id
+                if row[1] != tenant_id:
+                    return None
                 return CaseSession(
                     case_id=str(row[0]),
                     tenant_id=row[1],
@@ -916,16 +907,6 @@ def list_evidence_by_case(tenant_id: str, case_id: str) -> list[Evidence]:
                 (case_id, tenant_id)
             )
             rows = cur.fetchall()
-            if not rows:
-                cur.execute(
-                    """
-                    SELECT e.evidence_id, e.case_id, e.filename, e.repository_path, e.uploaded_by, e.upload_timestamp, e.status, e.sha256_hash, e.encrypted, e.rfc3161_timestamp, e.metadata
-                    FROM evidence e
-                    WHERE e.case_id = %s;
-                    """,
-                    (case_id,)
-                )
-                rows = cur.fetchall()
             conn.close()
             for row in rows:
                 ev = reconstruct_evidence_from_row(row)

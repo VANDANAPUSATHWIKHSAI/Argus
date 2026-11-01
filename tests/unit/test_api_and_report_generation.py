@@ -25,16 +25,23 @@ from api.routes.auth import get_current_user
 
 client = TestClient(app)
 
-app.dependency_overrides[get_current_user] = lambda: {"username": "test_user", "role": "admin"}
 
 class TestApiAndReportGeneration:
 
-    def setup_method(self):
-        """Set up clean repository state before each test."""
+    @pytest.fixture(autouse=True)
+    def setup_auth_and_repo(self):
+        """Ensure auth dependency override is active only during this test class."""
+        prior_override = app.dependency_overrides.get(get_current_user)
+        app.dependency_overrides[get_current_user] = lambda: {"id": "test_user", "username": "test_user", "role": "admin"}
         self.fir_repo = FIRRepository()
         self.fir_repo.findings.clear()
         self.fir_repo._fingerprints.clear()
         self.service = AnalystFindingService(fir_repo=self.fir_repo)
+        yield
+        if prior_override is not None:
+            app.dependency_overrides[get_current_user] = prior_override
+        else:
+            app.dependency_overrides.pop(get_current_user, None)
 
     def test_post_evidence_upload(self):
         """Test POST /evidence/upload with a text log evidence file."""

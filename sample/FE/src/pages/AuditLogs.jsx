@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
-import { fetchActivity } from '../js/api';
+import { fetchActivity, fetchEmployees } from '../js/api';
 import { setActiveCase } from '../js/caseEvents';
 
 import { safeFormatDateTime } from '../js/dateUtils';
@@ -42,9 +42,10 @@ const AuditLogs = () => {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const queryCaseId = queryParams.get('case_id') || '';
-  const [activeCaseId, setActiveCaseId] = useState(queryCaseId || localStorage.getItem('active_case_id') || '');
+  const [activeCaseId, setActiveCaseId] = useState(queryCaseId || '');
 
   const [logs, setLogs] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUser, setFilterUser] = useState('');
   
@@ -59,22 +60,32 @@ const AuditLogs = () => {
   }, [searchTerm, filterUser, itemsPerPage, activeCaseId]);
 
   useEffect(() => {
-    const cid = queryCaseId || localStorage.getItem('active_case_id') || '';
+    fetchEmployees()
+      .then(data => {
+        if (Array.isArray(data)) setEmployees(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const cid = queryCaseId || '';
     setActiveCaseId(cid);
-    if (queryCaseId && queryCaseId !== localStorage.getItem('active_case_id')) {
-      setActiveCase(queryCaseId);
+    if (cid && cid !== localStorage.getItem('active_case_id')) {
+      setActiveCase(cid);
     }
   }, [location.search, queryCaseId]);
 
   const loadData = async (targetId) => {
     try {
       const caseToFetch = targetId !== undefined ? targetId : activeCaseId;
-      const res = await fetchActivity(caseToFetch);
-      if (res.status === 'SUCCESS' && res.data) {
+      const res = await fetchActivity(caseToFetch || null);
+      if (res && res.status === 'SUCCESS' && Array.isArray(res.data)) {
         const now = new Date();
         
         // Audit Logs filtered for active case, or all logs if none specified
-        const caseLogs = caseToFetch ? res.data.filter(item => item.case_id === caseToFetch) : res.data;
+        const caseLogs = caseToFetch 
+          ? res.data.filter(item => String(item.case_id || '').toLowerCase() === String(caseToFetch).toLowerCase()) 
+          : res.data;
 
         let tTotal = caseLogs.length;
         let tToday = 0;
@@ -152,6 +163,8 @@ const AuditLogs = () => {
   const clearFilters = () => {
     setSearchTerm('');
     setFilterUser('');
+    setActiveCaseId('');
+    navigate('/audit-logs', { replace: true });
   };
 
   const filteredLogs = logs.filter(log => {
@@ -171,12 +184,38 @@ const AuditLogs = () => {
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / itemsPerPage));
   const currentLogs = filteredLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-const uniqueUsers = Array.from(
-    new Map(logs.map(l => [l.user.name, l.user])).values()
-  );
+  const allKnownUsers = new Map();
+  allKnownUsers.set('System', { name: 'System', id: 'system', role: 'System' });
+
+  employees.forEach(emp => {
+    const displayName = emp.name || emp.userid || emp.id;
+    if (displayName) {
+      allKnownUsers.set(displayName, {
+        name: displayName,
+        id: emp.userid || emp.id || '',
+        role: emp.role || 'Analyst'
+      });
+    }
+  });
+
+  logs.forEach(l => {
+    if (l.user?.name && !allKnownUsers.has(l.user.name)) {
+      allKnownUsers.set(l.user.name, l.user);
+    }
+  });
+
+  const uniqueCases = Array.from(new Set(logs.map(l => l.case_id).filter(Boolean))).sort();
+  const caseOptions = [
+    { label: 'All Cases', value: '' },
+    ...uniqueCases.map(cid => ({ label: `Case: ${cid}`, value: cid }))
+  ];
+
   const userOptions = [
     { label: 'All Users', value: '' },
-    ...uniqueUsers.map(u => ({ label: `${u.name} ${u.id ? `(${u.id})` : ''}`, value: u.name }))
+    ...Array.from(allKnownUsers.values()).map(u => ({
+      label: `${u.name}${u.id ? ` (${u.id})` : ''}`,
+      value: u.name
+    }))
   ];
 
   return (
@@ -247,7 +286,7 @@ const uniqueUsers = Array.from(
             </div>
           </div>
 
-          <div className="panel-card" style={{ overflow: 'hidden', borderRadius: '16px', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)' }}>
+          <div className="panel-card" style={{ borderRadius: '16px', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)', overflow: 'visible' }}>
             {/* Table Toolbar & Filters */}
             <div style={{
               padding: '16px 24px',
@@ -304,6 +343,23 @@ const uniqueUsers = Array.from(
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 150 }}>
+                  <SearchableSelect
+                    value={activeCaseId}
+                    onChange={(val) => {
+                      setActiveCaseId(val);
+                      if (val) {
+                        navigate(`/audit-logs?case_id=${encodeURIComponent(val)}`, { replace: true });
+                      } else {
+                        navigate('/audit-logs', { replace: true });
+                      }
+                    }}
+                    options={caseOptions}
+                    placeholder="All Cases"
+                    size="small"
+                  />
+                </div>
+
                 <div style={{ minWidth: 160 }}>
                   <SearchableSelect
                     value={filterUser}
@@ -311,10 +367,11 @@ const uniqueUsers = Array.from(
                     options={userOptions}
                     placeholder="All Users"
                     size="small"
+                    align="right"
                   />
                 </div>
 
-                {(searchTerm || filterUser) && (
+                {(searchTerm || filterUser || activeCaseId) && (
                   <button
                     onClick={clearFilters}
                     style={{

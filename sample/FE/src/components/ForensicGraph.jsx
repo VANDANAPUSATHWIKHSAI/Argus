@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID || 'default';
@@ -19,6 +19,7 @@ export default function ForensicGraph({ caseId }) {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [scale, setScale] = useState(1.0);
   const [loading, setLoading] = useState(false);
+  const [isGraphPartial, setIsGraphPartial] = useState(false);
 
   let currentUser = null;
   try {
@@ -31,6 +32,7 @@ export default function ForensicGraph({ caseId }) {
       setNodes([]);
       setEdges([]);
       setSelectedNodeId(null);
+      setIsGraphPartial(false);
       return;
     }
 
@@ -45,21 +47,72 @@ export default function ForensicGraph({ caseId }) {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         };
 
-        const [findingsRes, evidenceRes] = await Promise.all([
-          fetch(`${baseUrl}/cases/${caseId}/findings`, { headers }).catch(() => null),
-          fetch(`${baseUrl}/evidence/case/${caseId}`, { headers }).catch(() => null)
+        // Fetch evidence and agents first to quickly verify if correlation is available
+        const [evidenceRes, agentsRes] = await Promise.all([
+          fetch(`${baseUrl}/evidence/case/${caseId}`, { headers }).catch(() => null),
+          fetch(`${baseUrl}/cases/${caseId}/agents`, { headers }).catch(() => null)
         ]);
-
-        let rawFindings = [];
-        if (findingsRes && findingsRes.ok) {
-          const data = await findingsRes.json();
-          rawFindings = Array.isArray(data) ? data : (data.data || []);
-        }
 
         let rawEvidence = [];
         if (evidenceRes && evidenceRes.ok) {
           const data = await evidenceRes.json();
           rawEvidence = Array.isArray(data) ? data : (data.data || []);
+        }
+
+        let agentData = null;
+        if (agentsRes && agentsRes.ok) {
+          agentData = await agentsRes.json();
+        }
+
+        if (!isMounted) return;
+
+        // Verify if Agent Swarm (Agent 02) has actually produced correlation data
+        const agentStatus = (agentData?.status || '').toUpperCase();
+        const a2Status = (agentData?.stage_statuses?.agent2 || '').toUpperCase();
+        const agent2Signals = agentData?.agent2?.signals || {};
+        const agentRels = agent2Signals.relationships || [];
+        const agentCommunities = agent2Signals.graph_communities || [];
+        const claims = agentData?.claims || [];
+
+        const isAgentCorrelated = Boolean(
+          (agentStatus === 'COMPLETED' || agentStatus === 'SUCCESS' || a2Status === 'COMPLETED') &&
+          (agentRels.length > 0 || agentCommunities.length > 0 || claims.some(c => (c.evidence_ids?.length > 1 || c.cited_evidence_ids?.length > 1)))
+        );
+
+        // Extract finding IDs evaluated or cited by agents
+        const relevantFindingIds = new Set();
+        agentRels.forEach(r => {
+          if (r.source) relevantFindingIds.add(String(r.source));
+          if (r.target) relevantFindingIds.add(String(r.target));
+        });
+        claims.forEach(c => {
+          (c.evidence_ids || []).forEach(id => relevantFindingIds.add(String(id)));
+          (c.cited_evidence_ids || []).forEach(id => relevantFindingIds.add(String(id)));
+        });
+
+        let rawFindings = [];
+        let partialFlag = false;
+
+        // If agents have not correlated findings, skip finding query to prevent lag but keep evidence nodes
+        if (!isAgentCorrelated) {
+          rawFindings = [];
+        } else if (relevantFindingIds.size > 0) {
+          // Explicit graph query targeting the exact findings correlated by the agents (bounded to 50)
+          const targetIds = Array.from(relevantFindingIds).slice(0, 50);
+          if (relevantFindingIds.size > 50) partialFlag = true;
+          const idsQuery = encodeURIComponent(targetIds.join(','));
+          const findingsRes = await fetch(`${baseUrl}/cases/${caseId}/findings?ids=${idsQuery}`, { headers }).catch(() => null);
+          if (findingsRes && findingsRes.ok) {
+            const data = await findingsRes.json();
+            rawFindings = Array.isArray(data) ? data : (data.data || []);
+          }
+        } else {
+          // Correlated swarm completed with no specific cross-finding claims: fetch initial bounded findings
+          const findingsRes = await fetch(`${baseUrl}/cases/${caseId}/findings?limit=15`, { headers }).catch(() => null);
+          if (findingsRes && findingsRes.ok) {
+            const data = await findingsRes.json();
+            rawFindings = Array.isArray(data) ? data : (data.data || []);
+          }
         }
 
         if (!isMounted) return;
@@ -68,23 +121,20 @@ export default function ForensicGraph({ caseId }) {
         const generatedEdges = [];
         const evidenceMap = new Map();
 
+        // 1. Evidence nodes ALWAYS render even if agents have not yet run!
         evidenceListToNodes(rawEvidence, generatedNodes, evidenceMap);
-        findingsToNodesAndEdges(rawFindings, generatedNodes, generatedEdges, evidenceMap);
 
-        // Calculate positions
-        const total = generatedNodes.length;
-        if (total > 0) {
-          generatedNodes.forEach((n, i) => {
-            const col = i % 4;
-            const row = Math.floor(i / 4);
-            const maxCols = Math.min(total, 4);
-            n.x = maxCols > 1 ? Math.round(15 + (70 / (maxCols - 1)) * col) : 50;
-            n.y = total === 1 ? 50 : Math.round(25 + row * 30);
-          });
+        // 2. Correlated finding nodes and relationships
+        if (rawFindings.length > 0) {
+          buildAgentDrivenGraph(rawFindings, agentData, generatedNodes, generatedEdges, evidenceMap);
         }
+
+        // 3. Position nodes dynamically avoiding overlap
+        positionGraphNodes(generatedNodes, generatedEdges);
 
         setNodes(generatedNodes);
         setEdges(generatedEdges);
+        setIsGraphPartial(partialFlag);
         if (generatedNodes.length > 0) {
           setSelectedNodeId(generatedNodes[0].id);
         } else {
@@ -96,6 +146,7 @@ export default function ForensicGraph({ caseId }) {
           setNodes([]);
           setEdges([]);
           setSelectedNodeId(null);
+          setIsGraphPartial(false);
         }
       } finally {
         if (isMounted) setLoading(false);
@@ -106,21 +157,32 @@ export default function ForensicGraph({ caseId }) {
     return () => { isMounted = false; };
   }, [caseId]);
 
-  const selectedNode = nodes.find(n => n.id === selectedNodeId);
+  const nodeMap = useMemo(() => {
+    const map = new Map();
+    for (let i = 0; i < nodes.length; i++) {
+      map.set(nodes[i].id, nodes[i]);
+    }
+    return map;
+  }, [nodes]);
+
+  const selectedNode = selectedNodeId ? (nodeMap.get(selectedNodeId) || null) : null;
 
   // Directly connected neighbors
-  const activeNodeIds = new Set();
-  const activeEdgeIds = new Set();
-  if (selectedNodeId) {
-    activeNodeIds.add(selectedNodeId);
-    edges.forEach(e => {
-      if (e.source === selectedNodeId || e.target === selectedNodeId) {
-        activeNodeIds.add(e.source);
-        activeNodeIds.add(e.target);
-        activeEdgeIds.add(`edge-${e.source}-${e.target}`);
-      }
-    });
-  }
+  const { activeNodeIds, activeEdgeIds } = useMemo(() => {
+    const aNodeIds = new Set();
+    const aEdgeIds = new Set();
+    if (selectedNodeId) {
+      aNodeIds.add(selectedNodeId);
+      edges.forEach(e => {
+        if (e.source === selectedNodeId || e.target === selectedNodeId) {
+          aNodeIds.add(e.source);
+          aNodeIds.add(e.target);
+          aEdgeIds.add(`edge-${e.source}-${e.target}`);
+        }
+      });
+    }
+    return { activeNodeIds: aNodeIds, activeEdgeIds: aEdgeIds };
+  }, [selectedNodeId, edges]);
 
   return (
     <div className={`main-grid ${selectedNode ? 'has-selection' : ''}`} style={{ flexShrink: 0 }}>
@@ -152,6 +214,11 @@ export default function ForensicGraph({ caseId }) {
             <div className="legend-item"><div className="legend-dot legend-process"></div> Process</div>
             <div className="legend-item"><div className="legend-dot legend-network"></div> Network</div>
             <div className="legend-item"><div className="legend-dot legend-finding"></div> Finding</div>
+            {isGraphPartial && (
+              <div className="legend-item" style={{ color: 'var(--orange)', fontWeight: 600 }}>
+                • Showing 50 correlated findings
+              </div>
+            )}
           </div>
 
           <div className="graph-controls" onClick={(e) => e.stopPropagation()}>
@@ -186,9 +253,9 @@ export default function ForensicGraph({ caseId }) {
               </marker>
             </defs>
 
-            {edges.map(edge => {
-              const srcNode = nodes.find(n => n.id === edge.source);
-              const tgtNode = nodes.find(n => n.id === edge.target);
+            {edges.map((edge, idx) => {
+              const srcNode = nodeMap.get(edge.source);
+              const tgtNode = nodeMap.get(edge.target);
               if (!srcNode || !tgtNode) return null;
 
               const x1 = srcNode.x * 10;
@@ -202,8 +269,8 @@ export default function ForensicGraph({ caseId }) {
               const cy = y1 + dy * 0.5 + dx * 0.2;
               const pathData = `M ${x1} ${y1} Q ${cx} ${cy} ${x2} ${y2}`;
 
-              const edgeId = `edge-${edge.source}-${edge.target}`;
-              const isHighlighted = activeEdgeIds.has(edgeId);
+              const edgeId = `edge-${edge.source}-${edge.target}-${idx}`;
+              const isHighlighted = activeEdgeIds.has(`edge-${edge.source}-${edge.target}`);
               const isDimmed = selectedNodeId && !isHighlighted;
 
               let markerName = 'arrow';
@@ -368,9 +435,21 @@ export default function ForensicGraph({ caseId }) {
 
 function evidenceListToNodes(evidenceList, nodes, evidenceMap) {
   evidenceList.forEach((ev, idx) => {
-    const evName = ev.filename || ev.id || `evidence-${idx}`;
+    const evId = String(ev.id || ev.evidence_id || `evidence-${idx}`);
+    const evName = String(ev.filename || evId);
     const evNodeId = `ev-${idx}`;
-    evidenceMap.set(evName.toLowerCase(), evNodeId);
+
+    // Map canonical ID first
+    evidenceMap.set(evId.toLowerCase(), evNodeId);
+    if (ev.id) evidenceMap.set(String(ev.id).toLowerCase(), evNodeId);
+    if (ev.evidence_id) evidenceMap.set(String(ev.evidence_id).toLowerCase(), evNodeId);
+    // Filename fallback (only if not already registered)
+    if (ev.filename) {
+      const fnKey = String(ev.filename).toLowerCase();
+      if (!evidenceMap.has(fnKey)) {
+        evidenceMap.set(fnKey, evNodeId);
+      }
+    }
 
     nodes.push({
       id: evNodeId,
@@ -396,9 +475,31 @@ function evidenceListToNodes(evidenceList, nodes, evidenceMap) {
   });
 }
 
-function findingsToNodesAndEdges(findings, nodes, edges, evidenceMap) {
-  findings.forEach((f, idx) => {
+function buildAgentDrivenGraph(findings, agentData, nodes, edges, evidenceMap) {
+  const findingMap = new Map();
+  const agent2Signals = agentData?.agent2?.signals || {};
+  const agentRels = agent2Signals.relationships || [];
+  const claims = agentData?.claims || [];
+
+  // Extract set of finding IDs actually cited or correlated by the agents
+  const relevantFindingIds = new Set();
+  agentRels.forEach(r => {
+    if (r.source) relevantFindingIds.add(String(r.source));
+    if (r.target) relevantFindingIds.add(String(r.target));
+  });
+  claims.forEach(c => {
+    (c.evidence_ids || []).forEach(id => relevantFindingIds.add(String(id)));
+    (c.cited_evidence_ids || []).forEach(id => relevantFindingIds.add(String(id)));
+  });
+
+  // Filter to findings evaluated by the agents
+  const candidateFindings = relevantFindingIds.size > 0
+    ? findings.filter(f => relevantFindingIds.has(String(f.finding_id || f.id)))
+    : findings.slice(0, 12);
+
+  candidateFindings.forEach((f, idx) => {
     const fId = f.finding_id || f.id || `f-${idx}`;
+    findingMap.set(fId, f);
     const layer = (f.layer || 'finding').toLowerCase();
     const nodeType = ['device', 'user', 'network', 'process', 'evidence'].includes(layer) ? layer : 'finding';
     const sev = (f.severity || 'medium').toLowerCase();
@@ -433,7 +534,8 @@ function findingsToNodesAndEdges(findings, nodes, edges, evidenceMap) {
       : (f.evidence_reference ? [f.evidence_reference] : []);
     evRefs.forEach(ref => {
       if (typeof ref === 'string') {
-        const targetEvNodeId = evidenceMap.get(ref.toLowerCase());
+        const cleanRef = ref.replace(/^ref:/i, '').trim().toLowerCase();
+        const targetEvNodeId = evidenceMap.get(cleanRef) || evidenceMap.get(ref.toLowerCase());
         if (targetEvNodeId) {
           edges.push({
             source: fId,
@@ -444,15 +546,71 @@ function findingsToNodesAndEdges(findings, nodes, edges, evidenceMap) {
         }
       }
     });
+  });
 
-    if (idx > 0) {
-      const prevFId = findings[idx - 1].finding_id || findings[idx - 1].id || `f-${idx - 1}`;
+  // Real Agent 2 deterministic relationships
+  agentRels.forEach(rel => {
+    if (rel.source && rel.target && findingMap.has(rel.source) && findingMap.has(rel.target)) {
       edges.push({
-        source: prevFId,
-        target: fId,
-        label: 'correlated with',
-        color: isCritical ? 'var(--red)' : 'var(--orange)'
+        source: rel.source,
+        target: rel.target,
+        label: rel.relationship_type || 'correlated with',
+        color: 'var(--purple)'
       });
     }
   });
+
+  // Real Claim co-citations: connect findings proved to belong to the same attack claim
+  claims.forEach(c => {
+    const fIds = (c.evidence_ids || []).filter(id => findingMap.has(id));
+    for (let i = 0; i < fIds.length - 1; i++) {
+      edges.push({
+        source: fIds[i],
+        target: fIds[i + 1],
+        label: c.agent_id ? `${c.agent_id} correlation` : 'correlated with',
+        color: 'var(--orange)'
+      });
+    }
+  });
+}
+
+function positionGraphNodes(nodes, edges) {
+  const total = nodes.length;
+  if (total === 0) return;
+  if (total === 1) {
+    nodes[0].x = 50;
+    nodes[0].y = 50;
+    return;
+  }
+
+  const evidenceNodes = nodes.filter(n => n.type === 'evidence');
+  const otherNodes = nodes.filter(n => n.type !== 'evidence');
+
+  if (evidenceNodes.length > 0) {
+    evidenceNodes.forEach((n, i) => {
+      n.x = Math.round(20 + (60 / Math.max(1, evidenceNodes.length - 1)) * i);
+      n.y = otherNodes.length === 0 ? 50 : 20;
+    });
+  }
+
+  if (otherNodes.length > 0) {
+    const centerX = 50;
+    const centerY = evidenceNodes.length === 0 ? 50 : 58;
+    const useMultiRing = otherNodes.length > 12;
+
+    otherNodes.forEach((n, i) => {
+      const angle = (2 * Math.PI * i) / otherNodes.length;
+      let radiusX = 35;
+      let radiusY = 28;
+
+      if (useMultiRing) {
+        const isOuter = i % 2 === 1;
+        radiusX = isOuter ? 38 : 24;
+        radiusY = isOuter ? 30 : 19;
+      }
+
+      n.x = Math.round(centerX + radiusX * Math.cos(angle));
+      n.y = Math.round(centerY + radiusY * Math.sin(angle));
+    });
+  }
 }

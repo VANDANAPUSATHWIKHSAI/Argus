@@ -375,25 +375,11 @@ const Profile = () => {
                       </span>
                     </div>
 
-                    <p style={{ margin: '6px 0 12px', fontSize: 15, color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>
+                    <p style={{ margin: '6px 0 0', fontSize: 15, color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>
                       {roleDisplayTitle}
                     </p>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13, color: 'var(--glass-dash-text-dim)' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--glass-dash-text-secondary)' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>
-                        {department}
-                      </span>
-                      <span>•</span>
-                      <span
-                        onClick={() => copyToClipboard(badgeId)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: 'var(--glass-dash-blue)' }}
-                        title="Click to copy Badge ID"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                        Badge: {badgeId} {copiedBadge && <span style={{ color: 'var(--glass-dash-green)', fontSize: 11 }}>✓ Copied</span>}
-                      </span>
-                    </div>
+
                   </div>
                 </div>
 
@@ -693,78 +679,7 @@ const Profile = () => {
                       </div>
                     </div>
 
-                    {/* Quick navigation links */}
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--glass-dash-text-muted)', marginBottom: 10 }}>
-                        Quick Navigation
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        <button
-                          onClick={() => navigate('/dashboard')}
-                          style={{
-                            background: 'var(--glass-dash-blue-soft, rgba(59, 130, 246, 0.1))',
-                            border: '1px solid var(--glass-dash-blue-border, rgba(59, 130, 246, 0.3))',
-                            color: 'var(--glass-dash-blue, #2563eb)',
-                            padding: '6px 14px',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Dashboard →
-                        </button>
-                        {profile?.role === 'admin' && (
-                          <button
-                            onClick={() => navigate('/cases')}
-                            style={{
-                              background: 'var(--glass-dash-surface-nested)',
-                              border: '1px solid var(--glass-dash-border-subtle)',
-                              color: 'var(--glass-dash-text-main)',
-                              padding: '6px 14px',
-                              borderRadius: 8,
-                              fontSize: 13,
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Cases →
-                          </button>
-                        )}
-                        {(profile?.role === 'analyst' || profile?.role === 'senior_analyst') && (
-                          <button
-                            onClick={() => navigate('/evidence')}
-                            style={{
-                              background: 'var(--glass-dash-surface-nested)',
-                              border: '1px solid var(--glass-dash-border-subtle)',
-                              color: 'var(--glass-dash-text-main)',
-                              padding: '6px 14px',
-                              borderRadius: 8,
-                              fontSize: 13,
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Evidence →
-                          </button>
-                        )}
-                        <button
-                          onClick={() => navigate('/settings')}
-                          style={{
-                            background: 'var(--glass-dash-surface-nested)',
-                            border: '1px solid var(--glass-dash-border-subtle)',
-                            color: 'var(--glass-dash-text-main)',
-                            padding: '6px 14px',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Settings →
-                        </button>
-                      </div>
-                    </div>
+
                   </div>
                 </div>
               </div>

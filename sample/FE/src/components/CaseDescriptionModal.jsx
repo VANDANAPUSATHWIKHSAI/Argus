@@ -1,22 +1,35 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { safeFormatDateTime } from '../js/dateUtils';
 
 const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !caseData) return null;
+
+  const currentTheme =
+    (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme')) ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('argus_theme')) ||
+    'dark';
+  const isDark = currentTheme === 'dark';
 
   const isOpenStatus = caseData.status === 'open' || caseData.status === 'in_progress';
   const displayName = caseData.name && caseData.name !== caseData.case_id ? caseData.name : 'Unnamed Case';
 
   return (
     <div
+      className="modal-overlay"
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
+        inset: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.65)',
-        backdropFilter: 'blur(6px)',
+        backdropFilter: 'blur(8px)',
         zIndex: 9999,
         display: 'flex',
         alignItems: 'center',
@@ -28,41 +41,48 @@ const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
       }}
     >
       <div
-        className="panel-card"
+        className="modal-content"
         style={{
           width: '100%',
-          maxWidth: '560px',
-          background: 'var(--bg-card, #1e222b)',
-          borderRadius: '16px',
-          border: '1px solid var(--border-strong, rgba(255, 255, 255, 0.12))',
-          boxShadow: '0 20px 40px rgba(0, 0, 0, 0.45)',
+          maxWidth: '540px',
+          height: 'auto',
+          maxHeight: '90vh',
+          background: isDark ? '#181a20' : '#ffffff',
+          borderRadius: '20px',
+          border: isDark ? '1px solid rgba(255, 255, 255, 0.14)' : '1px solid rgba(0, 0, 0, 0.1)',
+          boxShadow: isDark
+            ? '0 25px 60px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.05)'
+            : '0 20px 50px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.05)',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',
           animation: 'fadeIn 0.2s ease-out',
+          color: isDark ? '#f8fafc' : '#0f172a',
+          padding: 0,
         }}
       >
         {/* Header */}
         <div
           style={{
-            padding: '20px 24px',
-            borderBottom: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+            padding: '18px 24px',
+            borderBottom: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.08)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div
               style={{
-                width: '36px',
-                height: '36px',
-                borderRadius: '10px',
-                background: 'rgba(59, 130, 246, 0.15)',
-                color: '#3b82f6',
+                width: '38px',
+                height: '38px',
+                borderRadius: '11px',
+                background: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(37, 99, 235, 0.1)',
+                color: isDark ? '#60a5fa' : '#2563eb',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
+                flexShrink: 0,
               }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -74,57 +94,115 @@ const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
               </svg>
             </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: 'var(--text-main, #ffffff)' }}>
+              <h3 style={{ margin: 0, fontSize: '17px', fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a' }}>
                 Case Dossier Details
               </h3>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted, #94a3b8)' }}>
+              <span
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  fontFamily: 'monospace',
+                  color: isDark ? '#94a3b8' : '#64748b',
+                }}
+              >
                 {caseData.case_id}
               </span>
             </div>
           </div>
           <button
             onClick={onClose}
+            aria-label="Close"
             style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--text-muted, #94a3b8)',
-              fontSize: '20px',
+              background: isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)',
+              border: isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(0, 0, 0, 0.08)',
+              color: isDark ? '#94a3b8' : '#64748b',
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
               cursor: 'pointer',
-              padding: '4px 8px',
-              borderRadius: '6px',
-              lineHeight: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 0,
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.1)';
+              e.currentTarget.style.color = isDark ? '#ffffff' : '#0f172a';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(15, 23, 42, 0.05)';
+              e.currentTarget.style.color = isDark ? '#94a3b8' : '#64748b';
             }}
             title="Close"
           >
-            ✕
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
           </button>
         </div>
 
-        {/* Body */}
-        <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        {/* Scrollable Body */}
+        <div
+          style={{
+            padding: '22px 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '18px',
+            overflowY: 'auto',
+            maxHeight: 'calc(90vh - 130px)',
+          }}
+        >
           {/* Title & Status */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
             <div>
-              <div style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted, #94a3b8)', fontWeight: 600 }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.6px',
+                  color: isDark ? '#94a3b8' : '#64748b',
+                  fontWeight: 700,
+                }}
+              >
                 Case Name
               </div>
-              <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-main, #ffffff)', marginTop: '2px' }}>
+              <div
+                style={{
+                  fontSize: '17px',
+                  fontWeight: 700,
+                  color: isDark ? '#f8fafc' : '#0f172a',
+                  marginTop: '3px',
+                }}
+              >
                 {displayName}
               </div>
             </div>
             <span
               style={{
-                background: isOpenStatus ? 'rgba(16, 185, 129, 0.15)' : 'rgba(148, 163, 184, 0.15)',
-                color: isOpenStatus ? '#10b981' : '#94a3b8',
-                border: `1px solid ${isOpenStatus ? 'rgba(16, 185, 129, 0.35)' : 'rgba(148, 163, 184, 0.35)'}`,
-                padding: '4px 10px',
+                background: isOpenStatus ? 'rgba(16, 185, 129, 0.12)' : 'rgba(148, 163, 184, 0.12)',
+                color: isOpenStatus ? '#10b981' : (isDark ? '#94a3b8' : '#64748b'),
+                border: `1px solid ${isOpenStatus ? 'rgba(16, 185, 129, 0.3)' : (isDark ? 'rgba(148, 163, 184, 0.3)' : 'rgba(100, 116, 139, 0.25)')}`,
+                padding: '5px 12px',
                 borderRadius: '999px',
                 fontSize: '11px',
                 fontWeight: 700,
                 textTransform: 'uppercase',
-                letterSpacing: '0.4px',
+                letterSpacing: '0.5px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
               }}
             >
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: isOpenStatus ? '#10b981' : '#94a3b8',
+                }}
+              />
               {caseData.status || 'open'}
             </span>
           </div>
@@ -134,34 +212,34 @@ const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
             style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '12px',
-              background: 'var(--bg-app, rgba(0, 0, 0, 0.2))',
-              padding: '14px',
-              borderRadius: '10px',
-              border: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.05))',
+              gap: '14px',
+              background: isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(241, 245, 249, 0.75)',
+              padding: '16px',
+              borderRadius: '14px',
+              border: isDark ? '1px solid rgba(255, 255, 255, 0.07)' : '1px solid rgba(226, 232, 240, 0.9)',
             }}
           >
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted, #94a3b8)' }}>Lead Analyst</div>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-main, #fff)', marginTop: '2px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Lead Analyst</div>
+              <div style={{ fontSize: '13.5px', fontWeight: 600, color: isDark ? '#f1f5f9' : '#1e293b', marginTop: '3px' }}>
                 {caseData.analyst_name || caseData.analyst_id || caseData.created_by || 'Unassigned'}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted, #94a3b8)' }}>Senior Analyst</div>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-main, #fff)', marginTop: '2px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Senior Analyst</div>
+              <div style={{ fontSize: '13.5px', fontWeight: 600, color: isDark ? '#f1f5f9' : '#1e293b', marginTop: '3px' }}>
                 {caseData.senior_analyst_name || caseData.senior_analyst_id || 'Unassigned'}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted, #94a3b8)' }}>Created Timestamp</div>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-main, #fff)', marginTop: '2px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Created Timestamp</div>
+              <div style={{ fontSize: '13.5px', fontWeight: 600, color: isDark ? '#f1f5f9' : '#1e293b', marginTop: '3px' }}>
                 {safeFormatDateTime(caseData.created_at)}
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '11px', color: 'var(--text-muted, #94a3b8)' }}>Tenant Isolation</div>
-              <div style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-main, #fff)', marginTop: '2px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 600, color: isDark ? '#94a3b8' : '#64748b', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Tenant Isolation</div>
+              <div style={{ fontSize: '13.5px', fontWeight: 600, color: isDark ? '#f1f5f9' : '#1e293b', marginTop: '3px' }}>
                 {caseData.tenant_id || 'default'}
               </div>
             </div>
@@ -169,20 +247,30 @@ const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
 
           {/* Description / Closure Reason Box */}
           <div>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted, #94a3b8)', marginBottom: '6px' }}>
+            <div
+              style={{
+                fontSize: '12px',
+                fontWeight: 700,
+                color: isDark ? '#cbd5e1' : '#334155',
+                marginBottom: '8px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.4px',
+              }}
+            >
               {!isOpenStatus ? 'Case Description & Closure Rationale' : 'Case Description & Investigation Scope'}
             </div>
             <div
               style={{
-                padding: '14px 16px',
-                borderRadius: '10px',
-                background: 'var(--bg-app, rgba(0, 0, 0, 0.2))',
-                border: '1px solid var(--border-strong, rgba(255, 255, 255, 0.1))',
+                padding: '16px 18px',
+                borderRadius: '14px',
+                background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(248, 250, 252, 0.85)',
+                border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(226, 232, 240, 0.9)',
                 fontSize: '13.5px',
-                lineHeight: '1.6',
-                color: caseData.description ? 'var(--text-main, #ffffff)' : 'var(--text-muted, #94a3b8)',
+                lineHeight: '1.65',
+                color: caseData.description ? (isDark ? '#f1f5f9' : '#1e293b') : (isDark ? '#94a3b8' : '#64748b'),
+                fontStyle: caseData.description ? 'normal' : 'italic',
                 whiteSpace: 'pre-wrap',
-                maxHeight: '200px',
+                maxHeight: '220px',
                 overflowY: 'auto',
               }}
             >
@@ -195,20 +283,31 @@ const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
         <div
           style={{
             padding: '14px 24px',
-            borderTop: '1px solid var(--border-subtle, rgba(255, 255, 255, 0.08))',
+            borderTop: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(0, 0, 0, 0.07)',
             display: 'flex',
             justifyContent: 'flex-end',
-            background: 'var(--bg-app, rgba(0, 0, 0, 0.1))',
+            background: isDark ? 'rgba(0, 0, 0, 0.15)' : 'rgba(248, 250, 252, 0.85)',
           }}
         >
           <button
             onClick={onClose}
-            className="btn btn-secondary"
+            type="button"
             style={{
-              padding: '8px 20px',
+              padding: '8px 22px',
               fontSize: '13px',
-              borderRadius: '8px',
+              fontWeight: 600,
+              borderRadius: '10px',
               cursor: 'pointer',
+              background: isDark ? 'rgba(255, 255, 255, 0.08)' : '#ffffff',
+              border: isDark ? '1px solid rgba(255, 255, 255, 0.15)' : '1px solid #cbd5e1',
+              color: isDark ? '#f8fafc' : '#1e293b',
+              transition: 'all 0.15s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.14)' : '#f1f5f9';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = isDark ? 'rgba(255, 255, 255, 0.08)' : '#ffffff';
             }}
           >
             Close

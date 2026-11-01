@@ -422,7 +422,7 @@ const Cases = () => {
                           <td style={{ padding: '16px 24px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
 
-                              {/* 1. Open Cases: Set Active, View Report, Close, Description, Audit Log */}
+                              {/* 1. Open Cases: Set Active, View Report, Close, Description */}
                               {isOpen && (
                                 <>
                                   <button
@@ -492,7 +492,7 @@ const Cases = () => {
                                 </>
                               )}
 
-                              {/* 2. Closed Cases With Report: View Report only (+ Audit Log) */}
+                              {/* 2. Closed Cases With Report: View Report only */}
                               {!isOpen && hasReport && (
                                 <button
                                   onClick={() => handleViewReport(c)}
@@ -512,7 +512,7 @@ const Cases = () => {
                                 </button>
                               )}
 
-                              {/* 3. Closed Cases Without Report: Description only (+ Audit Log) */}
+                              {/* 3. Closed Cases Without Report: Description only */}
                               {!isOpen && !hasReport && (
                                 <button
                                   onClick={() => setDescModal({ isOpen: true, caseData: c })}
@@ -531,26 +531,6 @@ const Cases = () => {
                                   Description
                                 </button>
                               )}
-
-                              {/* Audit Log available for all cases */}
-                              <button
-                                onClick={() => {
-                                  setActiveCase(c.case_id, c.name || '');
-                                  navigate(`/audit-logs?case_id=${encodeURIComponent(c.case_id)}`);
-                                }}
-                                style={{
-                                  background: 'var(--bg-app)',
-                                  color: 'var(--text-main)',
-                                  border: '1px solid var(--border-subtle)',
-                                  padding: '6px 12px',
-                                  borderRadius: '6px',
-                                  fontSize: '12px',
-                                  fontWeight: 500,
-                                  cursor: 'pointer'
-                                }}
-                              >
-                                Audit Log
-                              </button>
                             </div>
                           </td>
                         </tr>

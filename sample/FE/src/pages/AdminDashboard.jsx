@@ -72,13 +72,21 @@ const AdminDashboard = () => {
       };
     }
     const isClosed = caseObj.status === 'closed' || caseObj.status === 'completed' || caseObj.status === 'archived';
+    const cId = caseObj.case_id;
+    const isAuditCertified = Boolean(
+      (typeof localStorage !== 'undefined' && cId && localStorage.getItem(`argus_audit_certified_${cId}`)) ||
+      caseObj.audit_certified ||
+      caseObj.is_certified
+    );
     const isSubmittedToAuditor = Boolean(
-      (typeof localStorage !== 'undefined' && localStorage.getItem(`argus_case_${caseObj.case_id}_submitted_to_auditor`)) ||
-      caseObj.submitted_to_auditor
+      (typeof localStorage !== 'undefined' && cId && localStorage.getItem(`argus_case_${cId}_submitted_to_auditor`)) ||
+      caseObj.submitted_to_auditor ||
+      isAuditCertified
     );
     const isSubmittedToSenior = Boolean(
-      (typeof localStorage !== 'undefined' && localStorage.getItem(`argus_case_${caseObj.case_id}_submitted_to_senior`)) ||
+      (typeof localStorage !== 'undefined' && cId && localStorage.getItem(`argus_case_${cId}_submitted_to_senior`)) ||
       caseObj.submitted_to_senior ||
+      caseObj.has_report ||
       isSubmittedToAuditor
     );
 
@@ -87,7 +95,7 @@ const AdminDashboard = () => {
         stage: 'closed',
         statusLabel: 'Closed',
         pillClass: 'closed',
-        progressWidth: 'calc(100% - 56px)',
+        progressWidth: '100%',
         progressOpacity: 1,
         investigationStatus: 'completed',
         reviewStatus: 'completed',
@@ -96,12 +104,26 @@ const AdminDashboard = () => {
       };
     }
 
+    if (isAuditCertified) {
+      return {
+        stage: 'certified',
+        statusLabel: 'Audit Certified',
+        pillClass: 'audit',
+        progressWidth: 'calc((100% - (100% / 7)) * 0.833)',
+        progressOpacity: 1,
+        investigationStatus: 'completed',
+        reviewStatus: 'completed',
+        auditStatus: 'completed',
+        closedStatus: 'active'
+      };
+    }
+
     if (isSubmittedToAuditor) {
       return {
         stage: 'audit',
         statusLabel: 'In Audit',
         pillClass: 'audit',
-        progressWidth: 'calc((100% - 56px) * 0.666)',
+        progressWidth: 'calc((100% - (100% / 7)) * 0.833)',
         progressOpacity: 1,
         investigationStatus: 'completed',
         reviewStatus: 'completed',
@@ -115,7 +137,7 @@ const AdminDashboard = () => {
         stage: 'review',
         statusLabel: 'Under Review',
         pillClass: 'review',
-        progressWidth: 'calc((100% - 56px) * 0.333)',
+        progressWidth: 'calc((100% - (100% / 7)) * 0.666)',
         progressOpacity: 1,
         investigationStatus: 'completed',
         reviewStatus: 'active',
@@ -139,9 +161,9 @@ const AdminDashboard = () => {
 
   const caseStageInfo = getCaseStageInfo(currentCase);
 
-  // Detailed Investigation Progress from Analyst View
+  // Detailed Investigation Progress from Analyst View & Backend Summary
   const evidenceCount = activeSummary
-    ? (activeSummary.total_evidence_files || activeSummary.evidence_count || activeSummary.formatted_evidence?.length || 0)
+    ? (activeSummary.total_evidence_files ?? activeSummary.evidence_files?.length ?? activeSummary.evidence_count ?? activeSummary.formatted_evidence?.length ?? 0)
     : 0;
 
   const findingsCount = activeSummary
@@ -149,7 +171,7 @@ const AdminDashboard = () => {
     : 0;
 
   const artifactsCount = activeSummary
-    ? (activeSummary.total_artifacts ?? 0)
+    ? (activeSummary.total_artifacts ?? activeSummary.source_artifact_count ?? 0)
     : 0;
 
   const isCaseClosed = Boolean(
@@ -158,20 +180,35 @@ const AdminDashboard = () => {
 
   const currentCaseId = currentCase?.case_id;
 
+  const isAuditCertified = Boolean(
+    (typeof localStorage !== 'undefined' && currentCaseId && localStorage.getItem(`argus_audit_certified_${currentCaseId}`)) ||
+    currentCase?.audit_certified ||
+    currentCase?.is_certified
+  );
+
   const isSubmittedToAuditor = Boolean(
     (typeof localStorage !== 'undefined' && currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_auditor`)) ||
-    currentCase?.submitted_to_auditor
+    currentCase?.submitted_to_auditor ||
+    isAuditCertified
   );
 
   const isSubmittedToSenior = Boolean(
     (typeof localStorage !== 'undefined' && currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_senior`)) ||
     currentCase?.submitted_to_senior ||
+    currentCase?.has_report ||
     isSubmittedToAuditor
   );
 
-  const isReportCompleted = isSubmittedToAuditor || isSubmittedToSenior || isCaseClosed;
+  const isReportCompleted = isSubmittedToAuditor || isSubmittedToSenior || isCaseClosed || activeSummary?.investigation_progress?.report === 'completed';
 
-  const agentStatusUpper = (agentSummary?.status || (typeof activeSummary?.investigation_progress?.agent_analysis === 'object' ? activeSummary?.investigation_progress?.agent_analysis?.status : activeSummary?.investigation_progress?.agent_analysis) || '').toUpperCase();
+  const agentStatusUpper = (
+    agentSummary?.status ||
+    (typeof activeSummary?.investigation_progress?.agent_analysis === 'object'
+      ? activeSummary?.investigation_progress?.agent_analysis?.status
+      : activeSummary?.investigation_progress?.agent_analysis) ||
+    ''
+  ).toUpperCase();
+
   const allDashboardAgentsDone = Boolean(
     agentSummary?.stage_statuses &&
     ['agent1', 'agent2', 'agent3', 'agent4', 'agent5a', 'agent5b', 'agent6', 'agent7'].every(k => {
@@ -181,12 +218,18 @@ const AdminDashboard = () => {
   );
 
   const isAgentComplete = Boolean(
-    allDashboardAgentsDone &&
-    (agentSummary?.stage_statuses?.agent7 === 'COMPLETED' || agentSummary?.stage_statuses?.agent7 === 'NEEDS_REVIEW' || agentSummary?.stage_statuses?.agent7 === 'SUCCESS') &&
-    (findingsCount > 0 || (agentSummary?.findings_count || 0) > 0 || (agentSummary?.claims?.length || 0) > 0)
+    (allDashboardAgentsDone &&
+      (agentSummary?.stage_statuses?.agent7 === 'COMPLETED' || agentSummary?.stage_statuses?.agent7 === 'NEEDS_REVIEW' || agentSummary?.stage_statuses?.agent7 === 'SUCCESS') &&
+      (findingsCount > 0 || (agentSummary?.findings_count || 0) > 0 || (agentSummary?.claims?.length || 0) > 0)) ||
+    agentStatusUpper === 'COMPLETED' ||
+    agentStatusUpper === 'SUCCESS' ||
+    activeSummary?.investigation_progress?.agent_analysis === 'completed'
   );
+
   const isAgentRunning = Boolean(
-    agentStatusUpper === 'RUNNING' || agentStatusUpper === 'PROCESSING'
+    agentStatusUpper === 'RUNNING' ||
+    agentStatusUpper === 'PROCESSING' ||
+    activeSummary?.investigation_progress?.agent_analysis === 'in_progress'
   );
   const isAgentStopped = Boolean(
     agentStatusUpper === 'STOPPED' || agentStatusUpper === 'CANCELLED'
@@ -207,9 +250,9 @@ const AdminDashboard = () => {
         { key: 'analysis', label: 'File Analysis', role: analystRole, metric: 'Pending', status: 'pending' },
         { key: 'agent_analysis', label: 'Agent Analysis', role: analystRole, metric: 'Pending', status: 'pending' },
         { key: 'report', label: 'Case Report', role: analystRole, metric: 'Pending', status: 'pending' },
-        { key: 'review', label: 'Review', role: seniorRole, metric: null, status: 'pending' },
-        { key: 'audit', label: 'Audit', role: auditRole, metric: null, status: 'pending' },
-        { key: 'closed', label: 'Closed', role: '(Final)', metric: null, status: 'pending' },
+        { key: 'review', label: 'Review', role: seniorRole, metric: 'Pending', status: 'pending' },
+        { key: 'audit', label: 'Audit', role: auditRole, metric: 'Pending', status: 'pending' },
+        { key: 'closed', label: 'Closed', role: '(Final)', metric: 'Pending', status: 'pending' },
       ];
     }
 
@@ -217,67 +260,99 @@ const AdminDashboard = () => {
       return [
         { key: 'evidence_collection', label: 'Evidence Collection', role: analystRole, metric: `${evidenceCount} file${evidenceCount === 1 ? '' : 's'}`, status: 'completed' },
         { key: 'analysis', label: 'File Analysis', role: analystRole, metric: `${artifactsCount || findingsCount} processed`, status: 'completed' },
-        { key: 'agent_analysis', label: 'Agent Analysis', role: analystRole, metric: `${agentSummary?.claims?.length || 0} claims verified`, status: 'completed' },
+        { key: 'agent_analysis', label: 'Agent Analysis', role: analystRole, metric: `${agentSummary?.claims?.length || findingsCount || 0} claims verified`, status: 'completed' },
         { key: 'report', label: 'Case Report', role: analystRole, metric: 'Case Closed', status: 'completed' },
-        { key: 'review', label: 'Review', role: seniorRole, metric: null, status: 'completed' },
-        { key: 'audit', label: 'Audit', role: auditRole, metric: null, status: 'completed' },
-        { key: 'closed', label: 'Closed', role: '(Resolved)', metric: null, status: 'completed' },
+        { key: 'review', label: 'Review', role: seniorRole, metric: 'Reviewed', status: 'completed' },
+        { key: 'audit', label: 'Audit', role: auditRole, metric: 'Audited', status: 'completed' },
+        { key: 'closed', label: 'Closed', role: '(Resolved)', metric: 'Resolved', status: 'completed' },
       ];
     }
 
     // Detailed investigation stages statuses
-    const evStatus = (isReportCompleted || evidenceCount > 0) ? 'completed' : 'active';
-    const anStatus = (isReportCompleted || artifactsCount > 0 || findingsCount > 0)
-      ? 'completed'
-      : (evidenceCount > 0 ? 'active' : 'pending');
+    const evComplete = isReportCompleted || evidenceCount > 0 || activeSummary?.investigation_progress?.evidence_collection === 'completed';
+    const evStatus = evComplete ? 'completed' : 'active';
+
+    const anComplete = isReportCompleted || artifactsCount > 0 || findingsCount > 0 || activeSummary?.investigation_progress?.analysis === 'completed';
+    const anStatus = anComplete ? 'completed' : (evComplete ? 'active' : 'pending');
+
     const agStatus = (isReportCompleted || isAgentComplete)
       ? 'completed'
-      : (isAgentRunning ? 'active' : ((artifactsCount > 0 || findingsCount > 0) ? 'active' : 'pending'));
+      : (isAgentRunning ? 'active' : (anComplete ? 'active' : 'pending'));
+
     const repStatus = isReportCompleted
       ? 'completed'
       : (isAgentComplete ? 'active' : 'pending');
 
-    const evMetric = evidenceCount > 0 ? `${evidenceCount} file${evidenceCount > 1 ? 's' : ''}` : 'No files';
+    const revStatus = (isSubmittedToAuditor || isAuditCertified)
+      ? 'completed'
+      : ((isSubmittedToSenior || currentCase?.has_report) ? 'active' : 'pending');
+
+    const audStatus = isAuditCertified
+      ? 'completed'
+      : (isSubmittedToAuditor ? 'active' : 'pending');
+
+    const clsStatus = isCaseClosed
+      ? 'completed'
+      : (isAuditCertified ? 'active' : 'pending');
+
+    // Contextual telemetry metrics
+    const evMetric = evidenceCount > 0
+      ? `${evidenceCount} file${evidenceCount > 1 ? 's' : ''}`
+      : 'Awaiting files';
+
     const anMetric = (artifactsCount > 0 || findingsCount > 0)
       ? `${artifactsCount || findingsCount} processed`
-      : (evidenceCount > 0 ? 'Parsing...' : 'Pending');
+      : (evComplete ? 'Parsing...' : 'Pending');
+
     const agMetric = isAgentComplete
-      ? `${agentSummary?.claims?.length || 0} claims verified`
-      : (isAgentRunning ? 'Swarm running...' : (isAgentStopped ? 'Swarm stopped' : (isAgentFailed ? 'Swarm failed' : (findingsCount > 0 ? 'Ready to run' : 'Pending'))));
+      ? `${agentSummary?.claims?.length || findingsCount || 0} claims verified`
+      : (isAgentRunning
+          ? 'Swarm running...'
+          : (isAgentStopped
+              ? 'Swarm stopped'
+              : (isAgentFailed
+                  ? 'Swarm failed'
+                  : (anComplete ? 'Ready to run' : 'Pending'))));
+
     const repMetric = isSubmittedToAuditor
       ? 'Escalated to Auditor'
-      : isSubmittedToSenior
+      : (isSubmittedToSenior || currentCase?.has_report)
       ? 'Submitted to Senior'
       : (isAgentComplete ? 'Ready for Senior' : 'Pending Agents');
 
-    // Review stage
-    const revStatus = isSubmittedToAuditor ? 'completed' : (isSubmittedToSenior ? 'active' : 'pending');
-    // Audit stage
-    const audStatus = isSubmittedToAuditor ? 'active' : 'pending';
-    // Closed stage
-    const clsStatus = 'pending';
+    const revMetric = (isSubmittedToAuditor || isAuditCertified)
+      ? 'Reviewed & Escalated'
+      : ((isSubmittedToSenior || currentCase?.has_report) ? 'Under Review' : 'Pending');
+
+    const audMetric = isAuditCertified
+      ? 'Audit Certified'
+      : (isSubmittedToAuditor ? 'In Audit' : 'Pending');
+
+    const clsMetric = isCaseClosed
+      ? 'Resolved'
+      : (isAuditCertified ? 'Ready to Close' : 'Pending');
 
     return [
       { key: 'evidence_collection', label: 'Evidence Collection', role: analystRole, metric: evMetric, status: evStatus },
       { key: 'analysis', label: 'File Analysis', role: analystRole, metric: anMetric, status: anStatus },
       { key: 'agent_analysis', label: 'Agent Analysis', role: analystRole, metric: agMetric, status: agStatus },
       { key: 'report', label: 'Case Report', role: analystRole, metric: repMetric, status: repStatus },
-      { key: 'review', label: 'Review', role: seniorRole, metric: null, status: revStatus },
-      { key: 'audit', label: 'Audit', role: auditRole, metric: null, status: audStatus },
-      { key: 'closed', label: 'Closed', role: '(Final)', metric: null, status: clsStatus },
+      { key: 'review', label: 'Review', role: seniorRole, metric: revMetric, status: revStatus },
+      { key: 'audit', label: 'Audit', role: auditRole, metric: audMetric, status: audStatus },
+      { key: 'closed', label: 'Closed', role: '(Final)', metric: clsMetric, status: clsStatus },
     ];
   })();
 
   const pipelineProgressWidth = (() => {
     if (!currentCase) return '0%';
-    if (isCaseClosed) return 'calc(100% - 56px)';
+    if (isCaseClosed) return 'calc(100% - (100% / 7))';
     const totalIntervals = pipelineNodes.length - 1; // 6
     const highestDoneIdx = pipelineNodes.map(n => n.status === 'completed').lastIndexOf(true);
     const activeIdx = pipelineNodes.findIndex(n => n.status === 'active');
     const targetStep = activeIdx !== -1 ? activeIdx : Math.max(0, highestDoneIdx);
     if (highestDoneIdx === -1 && activeIdx <= 0) return '0%';
     const fillRatio = Math.min(1, targetStep / totalIntervals);
-    return `calc((100% - 56px) * ${fillRatio})`;
+    return `calc((100% - (100% / 7)) * ${fillRatio})`;
   })();
 
   const pipelineProgressOpacity = (!currentCase || pipelineProgressWidth === '0%') ? 0 : 1;
@@ -287,7 +362,7 @@ const AdminDashboard = () => {
       setRefreshTrigger(prev => prev + 1);
     });
     const handleStorage = (e) => {
-      if (!e.key || e.key.includes('submitted_to_senior') || e.key.includes('submitted_to_auditor') || e.key.includes('active_case')) {
+      if (!e.key || e.key.includes('submitted_to_senior') || e.key.includes('submitted_to_auditor') || e.key.includes('audit_certified') || e.key.includes('active_case')) {
         setRefreshTrigger(prev => prev + 1);
       }
     };
@@ -636,28 +711,6 @@ const AdminDashboard = () => {
             <span>&middot;</span>
             <span>{new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric' })}</span>
           </div>
-          <button
-            onClick={() => {
-              if (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) {
-                setCustomAlert({
-                  isOpen: true,
-                  title: 'Notice',
-                  message: `Active case "${currentCase.name || currentCase.case_id}" is currently open. Please close it before creating a new case.`,
-                  type: 'warning'
-                });
-              } else {
-                setShowCreateModal(true);
-              }
-            }}
-            className="btn-glass-primary"
-            style={{ 
-              cursor: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 'not-allowed' : 'pointer', 
-              opacity: (currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress')) ? 0.6 : 1 
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Create Case
-          </button>
         </div>
       </div>
 
@@ -732,7 +785,7 @@ const AdminDashboard = () => {
                 style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 22px', fontSize: 14, fontWeight: 600 }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                + Create Case
+                Create Case
               </button>
             </div>
           ) : (
@@ -808,46 +861,101 @@ const AdminDashboard = () => {
           </div>
 
           {/* Progress Timeline Pipeline */}
-          <div className="glass-pipeline-container">
-            <div className="glass-pipeline-track" />
+          <div className="glass-pipeline-container" style={{ position: 'relative', marginBottom: '36px', padding: '0 12px' }}>
+            <div 
+              className="glass-pipeline-track" 
+              style={{
+                left: 'calc(100% / 14)',
+                right: 'calc(100% / 14)'
+              }}
+            />
             <div 
               className="glass-pipeline-progress" 
               style={{ 
+                left: 'calc(100% / 14)',
                 width: pipelineProgressWidth,
                 opacity: pipelineProgressOpacity
               }} 
             />
             
-            <div className="glass-pipeline-nodes">
+            <div 
+              className="glass-pipeline-nodes"
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(7, 1fr)',
+                width: '100%',
+                position: 'relative',
+                zIndex: 2
+              }}
+            >
               {pipelineNodes.map((node) => (
                 <div 
                   key={node.key}
                   className={`glass-pipeline-node ${node.status}`}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    textAlign: 'center',
+                    width: '100%',
+                    minWidth: 0,
+                    padding: '0 4px',
+                    boxSizing: 'border-box',
+                    gap: '8px'
+                  }}
                   title={`${node.label}${node.metric ? `: ${node.metric}` : ''}`}
                 >
                   <span className={`glass-pipeline-dot ${node.status}`}>
                     {node.status === 'completed' ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    ) : node.status === 'active' ? (
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#ffffff', display: 'block' }} />
                     ) : null}
                   </span>
-                  <span className="glass-pipeline-label" style={{ maxWidth: '120px', textAlign: 'center' }}>{node.label}</span>
-                  <span className="glass-pipeline-role">{node.role}</span>
-                  {node.metric && (
-                    <span style={{
-                      fontSize: '10.5px',
-                      fontWeight: 600,
-                      color: node.status === 'completed' ? '#10b981' : node.status === 'active' ? '#2563eb' : 'var(--glass-dash-text-muted, #64748b)',
-                      background: node.status === 'completed' ? 'rgba(16, 185, 129, 0.12)' : node.status === 'active' ? 'rgba(37, 99, 235, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-                      border: `1px solid ${node.status === 'completed' ? 'rgba(16, 185, 129, 0.25)' : node.status === 'active' ? 'rgba(37, 99, 235, 0.25)' : 'rgba(100, 116, 139, 0.2)'}`,
-                      padding: '1px 6px',
-                      borderRadius: '4px',
-                      marginTop: '2px',
-                      letterSpacing: '0.2px',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {node.metric}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
+                    <span 
+                      className="glass-pipeline-label" 
+                      style={{ 
+                        fontSize: '12.5px', 
+                        fontWeight: 700, 
+                        lineHeight: '1.25',
+                        wordBreak: 'break-word',
+                        maxWidth: '100%'
+                      }}
+                    >
+                      {node.label}
                     </span>
-                  )}
+                    <span 
+                      className="glass-pipeline-role" 
+                      style={{ 
+                        fontSize: '11px', 
+                        opacity: 0.85, 
+                        marginTop: '2px',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        maxWidth: '100%'
+                      }}
+                    >
+                      {node.role}
+                    </span>
+                    {node.metric && (
+                      <span style={{
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        color: node.status === 'completed' ? '#10b981' : node.status === 'active' ? '#2563eb' : 'var(--glass-dash-text-muted, #64748b)',
+                        background: node.status === 'completed' ? 'rgba(16, 185, 129, 0.12)' : node.status === 'active' ? 'rgba(37, 99, 235, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                        border: `1px solid ${node.status === 'completed' ? 'rgba(16, 185, 129, 0.25)' : node.status === 'active' ? 'rgba(37, 99, 235, 0.25)' : 'rgba(100, 116, 139, 0.2)'}`,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        marginTop: '4px',
+                        letterSpacing: '0.2px',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        {node.metric}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

@@ -693,78 +693,7 @@ const Profile = () => {
                       </div>
                     </div>
 
-                    {/* Quick navigation links */}
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--glass-dash-text-muted)', marginBottom: 10 }}>
-                        Quick Navigation
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        <button
-                          onClick={() => navigate('/dashboard')}
-                          style={{
-                            background: 'var(--glass-dash-blue-soft, rgba(59, 130, 246, 0.1))',
-                            border: '1px solid var(--glass-dash-blue-border, rgba(59, 130, 246, 0.3))',
-                            color: 'var(--glass-dash-blue, #2563eb)',
-                            padding: '6px 14px',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Dashboard →
-                        </button>
-                        {profile?.role === 'admin' && (
-                          <button
-                            onClick={() => navigate('/cases')}
-                            style={{
-                              background: 'var(--glass-dash-surface-nested)',
-                              border: '1px solid var(--glass-dash-border-subtle)',
-                              color: 'var(--glass-dash-text-main)',
-                              padding: '6px 14px',
-                              borderRadius: 8,
-                              fontSize: 13,
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Cases →
-                          </button>
-                        )}
-                        {(profile?.role === 'analyst' || profile?.role === 'senior_analyst') && (
-                          <button
-                            onClick={() => navigate('/evidence')}
-                            style={{
-                              background: 'var(--glass-dash-surface-nested)',
-                              border: '1px solid var(--glass-dash-border-subtle)',
-                              color: 'var(--glass-dash-text-main)',
-                              padding: '6px 14px',
-                              borderRadius: 8,
-                              fontSize: 13,
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Evidence →
-                          </button>
-                        )}
-                        <button
-                          onClick={() => navigate('/settings')}
-                          style={{
-                            background: 'var(--glass-dash-surface-nested)',
-                            border: '1px solid var(--glass-dash-border-subtle)',
-                            color: 'var(--glass-dash-text-main)',
-                            padding: '6px 14px',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Settings →
-                        </button>
-                      </div>
-                    </div>
+
                   </div>
                 </div>
               </div>
@@ -836,68 +765,7 @@ const Profile = () => {
                     </div>
                   )}
 
-                  <form onSubmit={handlePasswordSubmit}>
-                    <div style={{ marginBottom: 18 }}>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--glass-dash-text-muted)', marginBottom: 6 }}>
-                        Current Password
-                      </label>
-                      <input
-                        type="password"
-                        className="glass-profile-input"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        placeholder="Enter current password"
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: 18 }}>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--glass-dash-text-muted)', marginBottom: 6 }}>
-                        New Password (minimum 6 characters)
-                      </label>
-                      <input
-                        type="password"
-                        className="glass-profile-input"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Enter new password"
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: 24 }}>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--glass-dash-text-muted)', marginBottom: 6 }}>
-                        Confirm New Password
-                      </label>
-                      <input
-                        type="password"
-                        className="glass-profile-input"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Confirm new password"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={pwdLoading}
-                      style={{
-                        background: 'var(--glass-dash-blue, #3b82f6)',
-                        border: 'none',
-                        color: '#ffffff',
-                        padding: '12px 28px',
-                        borderRadius: 10,
-                        fontSize: 14,
-                        fontWeight: 600,
-                        cursor: pwdLoading ? 'not-allowed' : 'pointer',
-                        opacity: pwdLoading ? 0.7 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.28)'
-                      }}
-                    >
-                      {pwdLoading ? 'Updating Password...' : 'Update Password'}
-                    </button>
-                  </form>
+                  
                 </div>
               </div>
             )}

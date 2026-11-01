@@ -601,27 +601,20 @@ const Upload = () => {
 
     setUploading(true);
 
-    setQueue(prev => prev.map(i => (i.status === 'ready' || i.status === 'error') ? { ...i, status: 'uploading' } : i));
-
-
-
     let successCount = 0;
 
     let failedCount = 0;
 
     let lastErrorMsg = '';
 
-
-
-    const itemsToUpload = queue.filter(item => item.status === 'ready' || item.status === 'uploading' || item.status === 'error');
-
-
+    const itemsToUpload = queue.filter(item => item.status === 'ready' || item.status === 'error');
 
     for (const item of itemsToUpload) {
+      setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'uploading' } : i));
 
       try {
 
-        const res = await uploadEvidenceFile(item.file, caseId);
+        const res = await uploadEvidenceFile(item.file, caseId, true);
 
         if (res && (res.status === 'FAILED' || res.status === 'ERROR' || res.status === 'validation_failed' || res.error)) {
 
@@ -959,7 +952,7 @@ const Upload = () => {
 
                 <div style={{ padding: '16px 20px', fontWeight: 600, fontSize: 14, color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'pointer' }}>Upload Evidence</div>
 
-                <div style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer' }}>Coverage</div>
+                
 
               </div>
 

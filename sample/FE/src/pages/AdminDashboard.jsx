@@ -602,13 +602,13 @@ const AdminDashboard = () => {
         
         {/* Current Case Dossier Card */}
         <div className="glass-dossier-card">
-          <div className="glass-card-header-row">
-            <div className="glass-case-brand-group">
+          <div className="glass-card-header-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '16px', marginBottom: '24px' }}>
+            <div className="glass-case-brand-group" style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap', flex: '1 1 auto', minWidth: '240px' }}>
               <div className="glass-case-icon-box">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
               </div>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
                   <h2 className="glass-case-id-text" style={{ margin: 0 }}>{currentCase ? currentCase.case_id : 'No Active Case'}</h2>
                   {allCasesList.length > 1 && (
                     <select
@@ -623,10 +623,11 @@ const AdminDashboard = () => {
                         }
                       }}
                       style={{
-                        padding: '3px 8px',
-                        fontSize: '11.5px',
+                        padding: '4px 10px',
+                        fontSize: '12px',
                         fontWeight: 600,
                         borderRadius: '8px',
+                        maxWidth: '220px',
                         background: 'var(--glass-dash-surface-nested)',
                         border: '1px solid var(--glass-dash-border-subtle)',
                         color: 'var(--glass-dash-text-main)',
@@ -646,7 +647,7 @@ const AdminDashboard = () => {
               </div>
             </div>
             
-            <div className="glass-header-badge-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <div className="glass-header-badge-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
               <span className={`glass-status-pill ${isCaseClosed ? 'closed' : isSubmittedToAuditor ? 'audit' : isSubmittedToSenior ? 'review' : currentCase ? 'active' : 'inactive'}`}>
                 &bull; {
                   !currentCase 
@@ -691,10 +692,23 @@ const AdminDashboard = () => {
                 <button 
                   onClick={handleCloseCase}
                   className="btn-glass-outline-danger"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: 600, padding: '6px 14px', cursor: 'pointer' }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontWeight: 700,
+                    padding: '8px 18px',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    background: 'rgba(239, 68, 68, 0.12)',
+                    color: '#ef4444',
+                    border: '1.5px solid rgba(239, 68, 68, 0.4)',
+                    fontSize: '13px',
+                    boxShadow: '0 2px 8px rgba(239, 68, 68, 0.15)'
+                  }}
                   title="Close this case"
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M18 6L6 18M6 6l12 12"></path></svg>
                   Close Case
                 </button>
               )}

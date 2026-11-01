@@ -947,6 +947,30 @@
   border: 1px solid var(--glass-dash-blue-border);
 }
 
+.glass-status-pill.active {
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.glass-status-pill.audit {
+  background: rgba(245, 158, 11, 0.12);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.glass-status-pill.closed {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.glass-status-pill.inactive {
+  background: rgba(148, 163, 184, 0.1);
+  color: #64748b;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
 /* Stepper Pipeline */
 .glass-pipeline-container {
   position: relative;

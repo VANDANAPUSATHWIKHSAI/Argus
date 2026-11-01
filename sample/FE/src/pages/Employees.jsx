@@ -179,7 +179,7 @@ const Employees = () => {
     }
   };
 
-  const PROTECTED_ACCOUNTS = ['admin', 'analyst', 'senior_analyst', 'auditor'];
+  const PROTECTED_ACCOUNTS = ['admin'];
 
   const handleDeleteEmployee = (userid) => {
     if (PROTECTED_ACCOUNTS.includes(String(userid || '').toLowerCase())) {

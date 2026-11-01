@@ -6,7 +6,6 @@ import '../css/style.css';
 
 import Sidebar from '../components/Sidebar';
 
-import ProfileModal from '../components/ProfileModal';
 
 import AlertModal from '../components/AlertModal';
 
@@ -59,7 +58,6 @@ const Dashboard = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
 
-  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const [newCaseName, setNewCaseName] = useState('');
 
@@ -1648,7 +1646,6 @@ const Dashboard = () => {
 
 
 
-      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
 
 
 

@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import ProfileModal from '../components/ProfileModal';
 
 const SEVERITY_STYLES = {
   critical: { bg: '#fee2e2', color: '#dc2626' },
@@ -39,7 +38,6 @@ const SanitizedDetail = () => {
   const location  = useLocation();
   const navigate  = useNavigate();
   const [tab, setTab] = useState('output');
-  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const item = location.state?.item;
 
@@ -74,7 +72,7 @@ const SanitizedDetail = () => {
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
                 Back
               </button>
-              <div className="glass-profile-pill user-profile" onClick={() => setShowProfileModal(true)}>
+              <div className="glass-profile-pill user-profile" onClick={() => navigate('/profile')}>
                 <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
                 <span className="glass-profile-name" style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
               </div>
@@ -229,7 +227,6 @@ const SanitizedDetail = () => {
           </div>
         </main>
       </div>
-      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </>
   );
 };

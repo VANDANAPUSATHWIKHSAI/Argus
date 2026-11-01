@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import AlertModal from '../components/AlertModal';
-import ProfileModal from '../components/ProfileModal';
 import NotificationMenu from '../components/NotificationMenu';
 import GeneratedReportModal from '../components/GeneratedReportModal';
 import CaseDescriptionModal from '../components/CaseDescriptionModal';
@@ -22,7 +21,6 @@ const Cases = () => {
   const [loadingReportId, setLoadingReportId] = useState(null);
   const [reportModal, setReportModal] = useState({ isOpen: false, caseId: '', reportHtml: '', reportData: null });
   const [descModal, setDescModal] = useState({ isOpen: false, caseData: null });
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   const currentUserStr = localStorage.getItem('argus_user');
@@ -206,7 +204,6 @@ const Cases = () => {
   return (
     <div id="app-shell">
       <AlertModal {...customAlert} onClose={closeAlert} />
-      {showProfileModal && <ProfileModal onClose={() => setShowProfileModal(false)} />}
       <GeneratedReportModal
         isOpen={reportModal.isOpen}
         onClose={() => setReportModal(prev => ({ ...prev, isOpen: false }))}

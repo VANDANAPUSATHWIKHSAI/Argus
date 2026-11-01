@@ -96,7 +96,6 @@ const Evidence = () => {
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-  const [_showProfileModal, _setShowProfileModal] = useState(false);
 
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
 

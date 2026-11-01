@@ -14,7 +14,6 @@ import { syncCaseLock, subscribeToCaseLock } from '../js/caseLockService';
 
 import Sidebar from '../components/Sidebar';
 
-import ProfileModal from '../components/ProfileModal';
 
 import AlertModal from '../components/AlertModal';
 
@@ -42,7 +41,6 @@ const Upload = () => {
 
   const folderInputRef = useRef(null);
 
-  const modalFileInputRef = useRef(null);
 
 
 
@@ -58,7 +56,6 @@ const Upload = () => {
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
 
@@ -1703,7 +1700,6 @@ const Upload = () => {
 
 
 
-      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
 
     </>
 

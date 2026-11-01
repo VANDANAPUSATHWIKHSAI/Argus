@@ -35,7 +35,6 @@ import { fetchFindings, closeCase, API_BASE_URL } from '../js/api';
 import { getActiveCaseId, getActiveCaseName, setActiveCase } from '../js/caseEvents';
 import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
-import ProfileModal from '../components/ProfileModal';
 
 const syntaxHighlight = (json) => {
   if (typeof json != 'string') {
@@ -75,7 +74,6 @@ const Sanitized = () => {
   const [detailTab, setDetailTab] = useState('overview');
   const [showModal, setShowModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
   const perPage = 6;
 
@@ -568,7 +566,6 @@ const Sanitized = () => {
         </div>
       )}
 
-      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </>
   );
 };

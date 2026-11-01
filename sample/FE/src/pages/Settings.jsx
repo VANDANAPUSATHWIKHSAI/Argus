@@ -36,22 +36,6 @@ const Settings = () => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [theme, setTheme] = useState(() => localStorage.getItem('argus_theme') || 'dark');
-  const [keepActive, setKeepActive] = useState(() => localStorage.getItem('argus_keep_active') !== 'false');
-
-  const handleToggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setTheme(nextTheme);
-    localStorage.setItem('argus_theme', nextTheme);
-    document.documentElement.setAttribute('data-theme', nextTheme);
-  };
-
-  const handleToggleKeepActive = () => {
-    const nextState = !keepActive;
-    setKeepActive(nextState);
-    localStorage.setItem('argus_keep_active', String(nextState));
-  };
-
   const handlePasswordUpdate = async (e) => {
     e.preventDefault();
     setPasswordError('');
@@ -124,68 +108,6 @@ const Settings = () => {
           }}
         >
           <div style={{ maxWidth: 940, width: '100%', margin: '0 auto', padding: '0 16px', boxSizing: 'border-box' }}>
-            {/* System & Session Preferences Card */}
-            <div className="panel-card" style={{ padding: '36px 48px', borderRadius: 24, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)', marginBottom: 28 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--glass-dash-border-subtle)' }}>
-                <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--glass-dash-blue-soft)', color: 'var(--glass-dash-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                </div>
-                <div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--glass-dash-text-main)', margin: 0 }}>System & Session Preferences</h3>
-                  <p style={{ fontSize: 13, color: 'var(--glass-dash-text-muted)', margin: 0, marginTop: 4 }}>Configure appearance and workstation session persistence.</p>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
-                {/* Theme Toggle Card */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderRadius: 14, background: 'var(--bg-app)', border: '1px solid var(--border-subtle)' }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-main)', marginBottom: 2 }}>Workspace Theme</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Currently set to {theme === 'dark' ? 'Dark Mode' : 'Light Mode'}</div>
-                  </div>
-                  <button
-                    onClick={handleToggleTheme}
-                    className="btn btn-secondary"
-                    style={{ padding: '8px 16px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
-                  >
-                    {theme === 'dark' ? (
-                      <>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-                        Light Mode
-                      </>
-                    ) : (
-                      <>
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-                        Dark Mode
-                      </>
-                    )}
-                  </button>
-                </div>
-
-                {/* Session Keep Active Toggle Card */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderRadius: 14, background: 'var(--bg-app)', border: '1px solid var(--border-subtle)' }}>
-                  <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-main)', marginBottom: 2 }}>Session Keep Active</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{keepActive ? 'Keep session alive across tabs' : 'Tab-scoped session'}</div>
-                  </div>
-                  <button
-                    onClick={handleToggleKeepActive}
-                    className="btn btn-secondary"
-                    style={{
-                      padding: '8px 16px',
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      background: keepActive ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-card)',
-                      color: keepActive ? '#10b981' : 'var(--text-muted)',
-                      border: keepActive ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid var(--border-strong)'
-                    }}
-                  >
-                    {keepActive ? 'Enabled' : 'Disabled'}
-                  </button>
-                </div>
-              </div>
-            </div>
-
             {/* Settings Content Card - Change Password */}
             <div className="panel-card" style={{ padding: '52px 56px', borderRadius: 24, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid var(--glass-dash-border-subtle)' }}>

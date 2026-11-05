@@ -96,7 +96,6 @@ const Evidence = () => {
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-  const [_showProfileModal, _setShowProfileModal] = useState(false);
 
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
 
@@ -111,6 +110,9 @@ const Evidence = () => {
   const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
 
   const [workloadStatus, setWorkloadStatus] = useState(null);
+  const prevWorkloadStatusRef = useRef(null);
+  const lastPolledCaseRef = useRef(null);
+  const loadEvidenceRef = useRef(null);
 
   const [stoppingWorkload, setStoppingWorkload] = useState(false);
 
@@ -119,37 +121,53 @@ const Evidence = () => {
   const loadWorkload = useCallback(async (caseId) => {
     if (!caseId) {
       setWorkloadStatus(null);
+      prevWorkloadStatusRef.current = null;
       return;
     }
     try {
       const data = await fetchAgentResults(caseId);
-      if (data && data.status) {
-        setWorkloadStatus(data.status);
-      } else {
-        setWorkloadStatus('READY');
+      const nextStatus = (data && data.status) ? data.status : 'READY';
+      const prev = prevWorkloadStatusRef.current;
+      prevWorkloadStatusRef.current = nextStatus;
+      setWorkloadStatus(prev => (prev === nextStatus ? prev : nextStatus));
+
+      // Auto-refresh evidence table when multi-agent processing finishes
+      if ((prev === 'RUNNING' || prev === 'PROCESSING') && (nextStatus === 'COMPLETED' || nextStatus === 'SUCCESS' || nextStatus === 'READY')) {
+        if (loadEvidenceRef.current) {
+          loadEvidenceRef.current(true);
+        }
       }
-    } catch (_) {
-      setWorkloadStatus('READY');
+    } catch (err) {
+      // Transient network errors must NOT reset genuinely active workloads to READY
+      console.debug('Agent results poll failed (retaining active state):', err);
     }
   }, []);
 
   useEffect(() => {
     let isCancelled = false;
     if (activeCaseId) {
-      loadWorkload(activeCaseId);
+      // Only execute immediate load on initial mount or genuine case switch
+      if (lastPolledCaseRef.current !== activeCaseId) {
+        lastPolledCaseRef.current = activeCaseId;
+        loadWorkload(activeCaseId);
+      }
+      // Adaptive polling: 4s while running, 30s when idle to eliminate constant re-renders
+      const isRunning = workloadStatus === 'RUNNING' || workloadStatus === 'PROCESSING';
+      const pollInterval = isRunning ? 4000 : 30000;
       const interval = setInterval(() => {
         if (!isCancelled && document.visibilityState === 'visible') {
           loadWorkload(activeCaseId);
         }
-      }, 4000);
+      }, pollInterval);
       return () => {
         isCancelled = true;
         clearInterval(interval);
       };
     } else {
+      lastPolledCaseRef.current = null;
       setWorkloadStatus(null);
     }
-  }, [activeCaseId, loadWorkload]);
+  }, [activeCaseId, workloadStatus, loadWorkload]);
 
   const handleStopWorkload = async () => {
     if (!activeCaseId || stoppingWorkload) return;
@@ -483,6 +501,8 @@ const Evidence = () => {
     }
 
   }, [activeCaseId]);
+
+  loadEvidenceRef.current = loadEvidence;
 
 
 

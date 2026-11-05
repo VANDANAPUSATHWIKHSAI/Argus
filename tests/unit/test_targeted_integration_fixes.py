@@ -26,7 +26,15 @@ from api.routes.auth import get_current_user
 
 client = TestClient(app)
 
-app.dependency_overrides[get_current_user] = lambda: {"username": "test_user"}
+@pytest.fixture(autouse=True)
+def setup_auth():
+    prior_override = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_current_user] = lambda: {"id": "test_user", "username": "test_user", "role": "admin"}
+    yield
+    if prior_override is not None:
+        app.dependency_overrides[get_current_user] = prior_override
+    else:
+        app.dependency_overrides.pop(get_current_user, None)
 
 
 

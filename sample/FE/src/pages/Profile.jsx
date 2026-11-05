@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import NotificationMenu from '../components/NotificationMenu';
-import { fetchCurrentUserProfile, updateCurrentUserProfile, updatePassword, getActiveTenantId } from '../js/api';
+import { fetchCurrentUserProfile, updateCurrentUserProfile, getActiveTenantId } from '../js/api';
 import { getAuthUser } from '../js/authSession';
 import '../css/style.css';
 
@@ -34,13 +34,7 @@ const Profile = () => {
   const [saveSuccess, setSaveSuccess] = useState('');
   const [saveError, setSaveError] = useState('');
 
-  // Password update state
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [pwdLoading, setPwdLoading] = useState(false);
-  const [pwdSuccess, setPwdSuccess] = useState('');
-  const [pwdError, setPwdError] = useState('');
+
 
   // Active tab in profile: 'overview' | 'permissions' | 'security'
   const [activeTab, setActiveTab] = useState('overview');
@@ -151,39 +145,6 @@ const Profile = () => {
     }
   };
 
-  // Handle Password Update
-  const handlePasswordSubmit = async (e) => {
-    e.preventDefault();
-    setPwdError('');
-    setPwdSuccess('');
-
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setPwdError('All fields are required.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      setPwdError('New password and confirmation do not match.');
-      return;
-    }
-    if (newPassword.length < 6) {
-      setPwdError('New password must be at least 6 characters.');
-      return;
-    }
-
-    try {
-      setPwdLoading(true);
-      const res = await updatePassword(currentPassword, newPassword);
-      setPwdSuccess(res.message || 'Password successfully updated!');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-      setTimeout(() => setPwdSuccess(''), 4000);
-    } catch (err) {
-      setPwdError(err.message || 'Failed to update password');
-    } finally {
-      setPwdLoading(false);
-    }
-  };
 
   const copyToClipboard = (text) => {
     if (navigator.clipboard) {
@@ -375,25 +336,11 @@ const Profile = () => {
                       </span>
                     </div>
 
-                    <p style={{ margin: '6px 0 12px', fontSize: 15, color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>
+                    <p style={{ margin: '6px 0 0', fontSize: 15, color: 'var(--glass-dash-text-muted)', fontWeight: 500 }}>
                       {roleDisplayTitle}
                     </p>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap', fontSize: 13, color: 'var(--glass-dash-text-dim)' }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--glass-dash-text-secondary)' }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>
-                        {department}
-                      </span>
-                      <span>•</span>
-                      <span
-                        onClick={() => copyToClipboard(badgeId)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: 'var(--glass-dash-blue)' }}
-                        title="Click to copy Badge ID"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                        Badge: {badgeId} {copiedBadge && <span style={{ color: 'var(--glass-dash-green)', fontSize: 11 }}>✓ Copied</span>}
-                      </span>
-                    </div>
+
                   </div>
                 </div>
 
@@ -499,24 +446,15 @@ const Profile = () => {
               </div>
             )}
 
-            {/* ── 2. TAB NAVIGATION ── */}
+            {/* ── 2. SECTION HEADER ── */}
             <div className="glass-profile-tab-bar">
-              <button
-                onClick={() => setActiveTab('overview')}
-                className={`glass-profile-tab-btn ${activeTab === 'overview' ? 'active' : ''}`}
+              <div
+                className="glass-profile-tab-btn active"
+                style={{ cursor: 'default' }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
                 Personal Credentials
-              </button>
-
-
-              <button
-                onClick={() => setActiveTab('security')}
-                className={`glass-profile-tab-btn ${activeTab === 'security' ? 'active' : ''}`}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-                Security & Password
-              </button>
+              </div>
             </div>
 
             {/* ── TAB 1: PERSONAL CREDENTIALS / OVERVIEW ── */}
@@ -693,211 +631,8 @@ const Profile = () => {
                       </div>
                     </div>
 
-                    {/* Quick navigation links */}
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--glass-dash-text-muted)', marginBottom: 10 }}>
-                        Quick Navigation
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                        <button
-                          onClick={() => navigate('/dashboard')}
-                          style={{
-                            background: 'var(--glass-dash-blue-soft, rgba(59, 130, 246, 0.1))',
-                            border: '1px solid var(--glass-dash-blue-border, rgba(59, 130, 246, 0.3))',
-                            color: 'var(--glass-dash-blue, #2563eb)',
-                            padding: '6px 14px',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Dashboard →
-                        </button>
-                        {profile?.role === 'admin' && (
-                          <button
-                            onClick={() => navigate('/cases')}
-                            style={{
-                              background: 'var(--glass-dash-surface-nested)',
-                              border: '1px solid var(--glass-dash-border-subtle)',
-                              color: 'var(--glass-dash-text-main)',
-                              padding: '6px 14px',
-                              borderRadius: 8,
-                              fontSize: 13,
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Cases →
-                          </button>
-                        )}
-                        {(profile?.role === 'analyst' || profile?.role === 'senior_analyst') && (
-                          <button
-                            onClick={() => navigate('/evidence')}
-                            style={{
-                              background: 'var(--glass-dash-surface-nested)',
-                              border: '1px solid var(--glass-dash-border-subtle)',
-                              color: 'var(--glass-dash-text-main)',
-                              padding: '6px 14px',
-                              borderRadius: 8,
-                              fontSize: 13,
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Evidence →
-                          </button>
-                        )}
-                        <button
-                          onClick={() => navigate('/settings')}
-                          style={{
-                            background: 'var(--glass-dash-surface-nested)',
-                            border: '1px solid var(--glass-dash-border-subtle)',
-                            color: 'var(--glass-dash-text-main)',
-                            padding: '6px 14px',
-                            borderRadius: 8,
-                            fontSize: 13,
-                            fontWeight: 600,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Settings →
-                        </button>
-                      </div>
-                    </div>
+
                   </div>
-                </div>
-              </div>
-            )}
-
-
-            {/* ── TAB 3: SECURITY & PASSWORD MANAGEMENT ── */}
-            {activeTab === 'security' && (
-              <div style={{ maxWidth: 640, margin: '0 auto' }}>
-                <div className="glass-profile-section-card" style={{ padding: 32 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--glass-dash-border-subtle)' }}>
-                    <div style={{
-                      width: 44,
-                      height: 44,
-                      borderRadius: 12,
-                      background: 'var(--glass-dash-blue-soft, rgba(59, 130, 246, 0.15))',
-                      color: 'var(--glass-dash-blue, #2563eb)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center'
-                    }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
-                    </div>
-                    <div>
-                      <h3 className="glass-profile-heading" style={{ fontSize: 18 }}>
-                        Update Access Credentials
-                      </h3>
-                      <p style={{ fontSize: 13, color: 'var(--glass-dash-text-muted)', margin: 0, marginTop: 2 }}>
-                        Ensure your investigator account password adheres to security protocols.
-                      </p>
-                    </div>
-                  </div>
-
-                  {pwdSuccess && (
-                    <div style={{
-                      background: 'var(--glass-dash-green-soft, rgba(16, 185, 129, 0.15))',
-                      border: '1px solid var(--glass-dash-green-border, rgba(16, 185, 129, 0.4))',
-                      color: 'var(--glass-dash-green, #10b981)',
-                      padding: '12px 16px',
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      marginBottom: 20,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10
-                    }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5" /></svg>
-                      {pwdSuccess}
-                    </div>
-                  )}
-
-                  {pwdError && (
-                    <div style={{
-                      background: 'var(--glass-dash-red-soft, rgba(239, 68, 68, 0.15))',
-                      border: '1px solid var(--glass-dash-red-border, rgba(239, 68, 68, 0.4))',
-                      color: 'var(--glass-dash-red, #ef4444)',
-                      padding: '12px 16px',
-                      borderRadius: 10,
-                      fontSize: 13,
-                      fontWeight: 600,
-                      marginBottom: 20,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10
-                    }}>
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-                      {pwdError}
-                    </div>
-                  )}
-
-                  <form onSubmit={handlePasswordSubmit}>
-                    <div style={{ marginBottom: 18 }}>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--glass-dash-text-muted)', marginBottom: 6 }}>
-                        Current Password
-                      </label>
-                      <input
-                        type="password"
-                        className="glass-profile-input"
-                        value={currentPassword}
-                        onChange={(e) => setCurrentPassword(e.target.value)}
-                        placeholder="Enter current password"
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: 18 }}>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--glass-dash-text-muted)', marginBottom: 6 }}>
-                        New Password (minimum 6 characters)
-                      </label>
-                      <input
-                        type="password"
-                        className="glass-profile-input"
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Enter new password"
-                      />
-                    </div>
-
-                    <div style={{ marginBottom: 24 }}>
-                      <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--glass-dash-text-muted)', marginBottom: 6 }}>
-                        Confirm New Password
-                      </label>
-                      <input
-                        type="password"
-                        className="glass-profile-input"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        placeholder="Confirm new password"
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={pwdLoading}
-                      style={{
-                        background: 'var(--glass-dash-blue, #3b82f6)',
-                        border: 'none',
-                        color: '#ffffff',
-                        padding: '12px 28px',
-                        borderRadius: 10,
-                        fontSize: 14,
-                        fontWeight: 600,
-                        cursor: pwdLoading ? 'not-allowed' : 'pointer',
-                        opacity: pwdLoading ? 0.7 : 1,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                        boxShadow: '0 4px 14px rgba(37, 99, 235, 0.28)'
-                      }}
-                    >
-                      {pwdLoading ? 'Updating Password...' : 'Update Password'}
-                    </button>
-                  </form>
                 </div>
               </div>
             )}

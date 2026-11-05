@@ -18,7 +18,7 @@ from fastapi.testclient import TestClient
 from unittest.mock import patch
 
 from api.main import app
-from api.routes.auth import create_access_token
+from api.routes.auth import create_access_token, get_current_user
 from api.routes.cases import _agent_jobs, _agent_jobs_lock
 from infrastructure.repository.evidence_store import create_case_session, store_evidence
 
@@ -46,7 +46,13 @@ def cleanup_test_cases():
         "CASE-EP-RESULTS-01",
         "CASE-EP-ENCODED%22-01",
     ]
+    prior_override = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides.pop(get_current_user, None)
     yield
+    if prior_override is not None:
+        app.dependency_overrides[get_current_user] = prior_override
+    else:
+        app.dependency_overrides.pop(get_current_user, None)
     # Cleanup memory and disk after test runs
     with _agent_jobs_lock:
         for cid in test_case_ids:
@@ -148,7 +154,7 @@ def test_empty_case_run_agents_rejected_with_400(client, auth_headers):
     case_id = "CASE-EP-EMPTY-01"
     tenant_id = "default"
 
-    create_case_session(case_id=case_id, tenant_id=tenant_id, created_by="analyst")
+    create_case_session(case_id=case_id, tenant_id=tenant_id, created_by="analyst", analyst_id="EMP-002")
 
     # POST run-agents must refuse execution
     resp = client.post(
@@ -179,7 +185,7 @@ def test_duplicate_execution_prevention(client, auth_headers):
     case_id = "CASE-EP-DUP-01"
     tenant_id = "default"
 
-    create_case_session(case_id=case_id, tenant_id=tenant_id, created_by="analyst")
+    create_case_session(case_id=case_id, tenant_id=tenant_id, created_by="analyst", analyst_id="EMP-002")
 
     # Simulate an active running job in state tracker
     with _agent_jobs_lock:
@@ -208,7 +214,7 @@ def test_failure_handling_and_error_reporting(client, auth_headers):
     case_id = "CASE-EP-FAIL-01"
     tenant_id = "default"
 
-    create_case_session(case_id=case_id, tenant_id=tenant_id, created_by="analyst")
+    create_case_session(case_id=case_id, tenant_id=tenant_id, created_by="analyst", analyst_id="EMP-002")
 
     # Set up failed state with explicit error details
     error_msg = "Agent 4 deterministic signature engine failed: syntax error in custom rule."
@@ -251,7 +257,7 @@ def test_result_retrieval_and_structured_intelligence(client, auth_headers):
     case_id = "CASE-EP-RESULTS-01"
     tenant_id = "default"
 
-    create_case_session(case_id=case_id, tenant_id=tenant_id, created_by="analyst")
+    create_case_session(case_id=case_id, tenant_id=tenant_id, created_by="analyst", analyst_id="EMP-002")
 
     # Populate job with structured agent outputs conforming to schemas
     mock_pipeline_results = {

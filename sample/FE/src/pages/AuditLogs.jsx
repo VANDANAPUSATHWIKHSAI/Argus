@@ -3,8 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
-import { fetchActivity } from '../js/api';
-import { setActiveCase } from '../js/caseEvents';
+import { fetchActivity, fetchEmployees, fetchCases } from '../js/api';
+import { setActiveCase, getActiveCaseId } from '../js/caseEvents';
 
 import { safeFormatDateTime } from '../js/dateUtils';
 
@@ -42,9 +42,12 @@ const AuditLogs = () => {
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const queryCaseId = queryParams.get('case_id') || '';
-  const [activeCaseId, setActiveCaseId] = useState(queryCaseId || localStorage.getItem('active_case_id') || '');
+  const initialCaseId = queryCaseId || getActiveCaseId() || (typeof localStorage !== 'undefined' ? localStorage.getItem('active_case_id') : '') || '';
+  const [activeCaseId, setActiveCaseId] = useState(initialCaseId);
+  const [availableCases, setAvailableCases] = useState([]);
 
   const [logs, setLogs] = useState([]);
+  const [employees, setEmployees] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterUser, setFilterUser] = useState('');
   
@@ -59,22 +62,56 @@ const AuditLogs = () => {
   }, [searchTerm, filterUser, itemsPerPage, activeCaseId]);
 
   useEffect(() => {
-    const cid = queryCaseId || localStorage.getItem('active_case_id') || '';
-    setActiveCaseId(cid);
-    if (queryCaseId && queryCaseId !== localStorage.getItem('active_case_id')) {
-      setActiveCase(queryCaseId);
+    fetchEmployees()
+      .then(data => {
+        if (Array.isArray(data)) setEmployees(data);
+      })
+      .catch(() => {});
+
+    fetchCases()
+      .then(res => {
+        if (res && res.data && Array.isArray(res.data)) {
+          setAvailableCases(res.data);
+          // If no activeCaseId yet, initialize with active case or first case
+          setActiveCaseId(prev => {
+            if (prev) return prev;
+            const stored = (typeof localStorage !== 'undefined' ? localStorage.getItem('active_case_id') : '') || getActiveCaseId();
+            const found = stored && res.data.find(c => c.case_id === stored);
+            const target = found ? stored : (res.data[0]?.case_id || '');
+            if (target) {
+              navigate(`/audit-logs?case_id=${encodeURIComponent(target)}`, { replace: true });
+            }
+            return target;
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const cid = queryCaseId || getActiveCaseId() || (typeof localStorage !== 'undefined' ? localStorage.getItem('active_case_id') : '') || '';
+    if (cid && cid !== activeCaseId) {
+      setActiveCaseId(cid);
     }
   }, [location.search, queryCaseId]);
 
   const loadData = async (targetId) => {
+    const caseToFetch = targetId !== undefined ? targetId : activeCaseId;
+    if (!caseToFetch) {
+      setLogs([]);
+      setStats({ total: 0, today: 0, users: 0, system: 0 });
+      return;
+    }
+
     try {
-      const caseToFetch = targetId !== undefined ? targetId : activeCaseId;
       const res = await fetchActivity(caseToFetch);
-      if (res.status === 'SUCCESS' && res.data) {
+      if (res && res.status === 'SUCCESS' && Array.isArray(res.data)) {
         const now = new Date();
         
-        // Audit Logs filtered for active case, or all logs if none specified
-        const caseLogs = caseToFetch ? res.data.filter(item => item.case_id === caseToFetch) : res.data;
+        // Audit Logs filtered strictly for the active case only
+        const caseLogs = res.data.filter(item => 
+          String(item.case_id || '').trim().toLowerCase() === String(caseToFetch).trim().toLowerCase()
+        );
 
         let tTotal = caseLogs.length;
         let tToday = 0;
@@ -106,9 +143,14 @@ const AuditLogs = () => {
         
         setLogs(formatted);
         setStats({ total: tTotal, today: tToday, users: tUsers, system: tSystem });
+      } else {
+        setLogs([]);
+        setStats({ total: 0, today: 0, users: 0, system: 0 });
       }
     } catch (e) {
       console.error("Failed to fetch activity:", e);
+      setLogs([]);
+      setStats({ total: 0, today: 0, users: 0, system: 0 });
     }
   };
 
@@ -143,7 +185,7 @@ const AuditLogs = () => {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `argus_audit_logs_${activeCaseId || 'all'}.csv`);
+    link.setAttribute('download', `argus_audit_logs_${activeCaseId || 'case'}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -171,12 +213,37 @@ const AuditLogs = () => {
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / itemsPerPage));
   const currentLogs = filteredLogs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-const uniqueUsers = Array.from(
-    new Map(logs.map(l => [l.user.name, l.user])).values()
-  );
+  const allKnownUsers = new Map();
+  allKnownUsers.set('System', { name: 'System', id: 'system', role: 'System' });
+
+  employees.forEach(emp => {
+    const displayName = emp.name || emp.userid || emp.id;
+    if (displayName) {
+      allKnownUsers.set(displayName, {
+        name: displayName,
+        id: emp.userid || emp.id || '',
+        role: emp.role || 'Analyst'
+      });
+    }
+  });
+
+  logs.forEach(l => {
+    if (l.user?.name && !allKnownUsers.has(l.user.name)) {
+      allKnownUsers.set(l.user.name, l.user);
+    }
+  });
+
+  const caseOptions = (availableCases.length > 0 ? availableCases : Array.from(new Set(logs.map(l => l.case_id).filter(Boolean))).map(id => ({ case_id: id, name: id }))).map(c => ({
+    label: `${c.case_id}${c.name && c.name !== c.case_id ? ` — ${c.name}` : ''}`,
+    value: c.case_id
+  }));
+
   const userOptions = [
     { label: 'All Users', value: '' },
-    ...uniqueUsers.map(u => ({ label: `${u.name} ${u.id ? `(${u.id})` : ''}`, value: u.name }))
+    ...Array.from(allKnownUsers.values()).map(u => ({
+      label: `${u.name}${u.id ? ` (${u.id})` : ''}`,
+      value: u.name
+    }))
   ];
 
   return (
@@ -188,29 +255,10 @@ const uniqueUsers = Array.from(
             <h2 className="glass-welcome-title">Audit Logs</h2>
             <p className="glass-welcome-sub">
               {activeCaseId ? (
-                <>
-                  Case: <strong style={{ color: 'var(--blue)' }}>{activeCaseId}</strong>
-                  <button
-                    onClick={() => {
-                      navigate('/audit-logs');
-                      setActiveCaseId('');
-                    }}
-                    style={{
-                      marginLeft: '12px',
-                      background: 'rgba(59, 130, 246, 0.1)',
-                      border: '1px solid rgba(59, 130, 246, 0.3)',
-                      color: '#3b82f6',
-                      padding: '2px 8px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    View All Cases
-                  </button>
-                </>
-              ) : 'Viewing All System Audit Events'}
+                <>Case Audit Trail: <strong style={{ color: 'var(--blue)' }}>{activeCaseId}</strong></>
+              ) : (
+                'Select a case to view its forensic audit trail'
+              )}
             </p>
           </div>
           <div className="glass-topbar-right topbar-actions">
@@ -247,7 +295,7 @@ const uniqueUsers = Array.from(
             </div>
           </div>
 
-          <div className="panel-card" style={{ overflow: 'hidden', borderRadius: '16px', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)' }}>
+          <div className="panel-card" style={{ borderRadius: '16px', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)', boxShadow: '0 4px 20px rgba(0, 0, 0, 0.06)', overflow: 'visible' }}>
             {/* Table Toolbar & Filters */}
             <div style={{
               padding: '16px 24px',
@@ -304,6 +352,22 @@ const uniqueUsers = Array.from(
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 150 }}>
+                  <SearchableSelect
+                    value={activeCaseId}
+                    onChange={(val) => {
+                      if (val) {
+                        setActiveCaseId(val);
+                        setActiveCase(val);
+                        navigate(`/audit-logs?case_id=${encodeURIComponent(val)}`);
+                      }
+                    }}
+                    options={caseOptions}
+                    placeholder="Select Case..."
+                    size="small"
+                  />
+                </div>
+
                 <div style={{ minWidth: 160 }}>
                   <SearchableSelect
                     value={filterUser}
@@ -311,10 +375,11 @@ const uniqueUsers = Array.from(
                     options={userOptions}
                     placeholder="All Users"
                     size="small"
+                    align="right"
                   />
                 </div>
 
-                {(searchTerm || filterUser) && (
+                {(searchTerm || filterUser || activeCaseId) && (
                   <button
                     onClick={clearFilters}
                     style={{
@@ -370,7 +435,7 @@ const uniqueUsers = Array.from(
                   )) : (
                     <tr>
                       <td colSpan="6" style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>
-                        {activeCaseId ? "No audit events match the search." : "No active case selected. Create or open a case to view its audit logs."}
+                        {activeCaseId ? `No audit trail events match the filter for case ${activeCaseId}.` : "No case selected. Please choose a case to inspect its audit logs."}
                       </td>
                     </tr>
                   )}

@@ -6,7 +6,6 @@ import '../css/style.css';
 
 import Sidebar from '../components/Sidebar';
 
-import ProfileModal from '../components/ProfileModal';
 
 import AlertModal from '../components/AlertModal';
 
@@ -58,9 +57,7 @@ const Dashboard = () => {
 
   const [showCreateModal, setShowCreateModal] = useState(false);
 
-  const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const [newCaseName, setNewCaseName] = useState('');
 
@@ -591,110 +588,71 @@ const Dashboard = () => {
 
 
 
-  // Comprehensive forensic stage integration:
+  // Real Agent Swarm Execution & Workload Status Verification
+  const agentStatusUpper = (agentSummary?.status || (typeof activeSummary?.investigation_progress?.agent_analysis === 'object' ? activeSummary?.investigation_progress?.agent_analysis?.status : activeSummary?.investigation_progress?.agent_analysis) || '').toUpperCase();
+  const allDashboardAgentsDone = Boolean(
+    agentSummary?.stage_statuses &&
+    ['agent1', 'agent2', 'agent3', 'agent4', 'agent5a', 'agent5b', 'agent6', 'agent7'].every(k => {
+      const st = (agentSummary?.stage_statuses?.[k] || '').toUpperCase();
+      return st === 'COMPLETED' || st === 'SUCCESS' || st === 'NEEDS_REVIEW';
+    })
+  );
 
-  if (evidenceCount > 0) {
+  const isAgentComplete = Boolean(
+    allDashboardAgentsDone &&
+    (agentSummary?.stage_statuses?.agent7 === 'COMPLETED' || agentSummary?.stage_statuses?.agent7 === 'NEEDS_REVIEW' || agentSummary?.stage_statuses?.agent7 === 'SUCCESS') &&
+    (findingsCount > 0 || (agentSummary?.findings_count || 0) > 0 || (agentSummary?.claims?.length || 0) > 0)
+  );
+  const isAgentRunning = Boolean(
+    agentStatusUpper === 'RUNNING' || agentStatusUpper === 'PROCESSING'
+  );
+  const isAgentStopped = Boolean(
+    agentStatusUpper === 'STOPPED' || agentStatusUpper === 'CANCELLED'
+  );
+  const isAgentFailed = Boolean(
+    agentStatusUpper === 'FAILED' || agentStatusUpper === 'ERROR'
+  );
 
-    rawStageStatuses[0] = 'completed';
+  // Stage 1: Evidence Collection
+  rawStageStatuses[0] = evidenceCount > 0 ? 'completed' : 'not_started';
 
-    // Stage 2 (File Analysis) is dynamic: completed when artifacts extracted, in-progress when files uploaded but parsing
+  // Stage 2: File Analysis (complete if artifacts or findings extracted)
+  rawStageStatuses[1] = (artifactsCount > 0 || findingsCount > 0)
+    ? 'completed'
+    : (evidenceCount > 0 ? 'in_progress' : 'not_started');
 
-    rawStageStatuses[1] = artifactsCount > 0 ? 'completed' : 'in_progress';
+  // Stage 3: Agent Analysis (requires actual agent completion!)
+  rawStageStatuses[2] = isAgentComplete
+    ? 'completed'
+    : (isAgentRunning ? 'in_progress' : 'not_started');
 
-    rawStageStatuses[2] = findingsCount > 0 ? 'completed' : (artifactsCount > 0 ? 'in_progress' : 'not_started');
-
-    rawStageStatuses[3] = isReportCompleted ? 'completed' : (findingsCount > 0 ? 'in_progress' : 'not_started');
-
-  } else {
-
-    rawStageStatuses[0] = 'not_started';
-
-    rawStageStatuses[1] = 'not_started';
-
-    rawStageStatuses[2] = 'not_started';
-
-    rawStageStatuses[3] = 'not_started';
-
-  }
-
-
-
-  if (artifactsCount > 0) {
-
-    rawStageStatuses[0] = 'completed';
-
-    rawStageStatuses[1] = 'completed';
-
-    if (rawStageStatuses[2] === 'not_started') {
-
-      rawStageStatuses[2] = 'in_progress';
-
-    }
-
-  }
-
-
-
-  if (findingsCount > 0) {
-
-    rawStageStatuses[0] = 'completed';
-
-    rawStageStatuses[1] = 'completed';
-
-    rawStageStatuses[2] = 'completed';
-
-    rawStageStatuses[3] = isReportCompleted ? 'completed' : 'in_progress';
-
-  }
-
-
-
-  if (isReportCompleted) {
-
-    rawStageStatuses[0] = 'completed';
-
-    rawStageStatuses[1] = 'completed';
-
-    rawStageStatuses[2] = 'completed';
-
-    rawStageStatuses[3] = 'completed';
-
-  }
-
-
+  // Stage 4: Case Report (requires completed agents before it is ready for senior!)
+  rawStageStatuses[3] = isReportCompleted
+    ? 'completed'
+    : ((isAgentComplete && (isSubmittedToSenior || isSubmittedToAuditor)) ? 'in_progress' : 'not_started');
 
   // Contextual telemetry metrics under each stage
-
   const stageTelemetry = [
-
     evidenceCount > 0 ? `${evidenceCount} file${evidenceCount > 1 ? 's' : ''}` : 'No files',
-
-    artifactsCount > 0
-
-      ? `${artifactsCount} parsed`
-
+    (artifactsCount > 0 || findingsCount > 0)
+      ? `${artifactsCount || findingsCount} processed`
       : (evidenceCount > 0 ? 'Parsing...' : 'Pending'),
-
-    findingsCount > 0
-
-      ? `${findingsCount} finding${findingsCount > 1 ? 's' : ''}`
-
-      : (artifactsCount > 0 ? 'Ready to run' : 'Pending'),
-
+    isAgentComplete
+      ? `${agentSummary?.claims?.length || 0} claims verified`
+      : (isAgentRunning
+          ? 'Swarm running...'
+          : (isAgentStopped
+              ? 'Swarm stopped'
+              : (isAgentFailed
+                  ? 'Swarm failed'
+                  : (findingsCount > 0 ? 'Ready to run' : 'Pending')))),
     isSubmittedToAuditor
-
       ? 'Escalated to Auditor'
-
       : isSubmittedToSenior
-
       ? 'Submitted to Senior'
-
       : isCaseClosed
-
       ? 'Case Closed'
-
-      : (findingsCount > 0 ? 'Ready for Senior' : 'Pending')
-
+      : (isAgentComplete ? 'Ready for Senior' : 'Pending Agents')
   ];
 
 
@@ -805,76 +763,6 @@ const Dashboard = () => {
 
                 <div className="glass-topbar-right topbar-actions">
 
-                  <button
-
-                    id="btn-admin-topbar-create-case"
-
-                    className="btn btn-primary"
-
-                    onClick={() => {
-
-                      const activeId = localStorage.getItem('active_case_id');
-
-                      const activeName = localStorage.getItem('active_case_name');
-
-                      if (activeId && activeName && activeId !== '00000000-0000-0000-0000-000000000001') {
-
-                        setCustomAlert({
-
-                          isOpen: true,
-
-                          title: 'Notice',
-
-                          message: `Active case "${activeName}" is currently open. You cannot create a new case until the active case is closed.`,
-
-                          type: 'warning'
-
-                        });
-
-                        return;
-
-                      }
-
-                      setShowCreateModal(true);
-
-                    }}
-
-                    style={{
-
-                      display: 'flex',
-
-                      alignItems: 'center',
-
-                      gap: '6px',
-
-                      padding: '7px 16px',
-
-                      fontSize: '13px',
-
-                      fontWeight: 600,
-
-                      borderRadius: '10px',
-
-                      background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-
-                      color: '#ffffff',
-
-                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
-
-                      border: 'none',
-
-                      cursor: 'pointer'
-
-                    }}
-
-                  >
-
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-
-                    Create Case
-
-                  </button>
-
                   <button className="glass-icon-btn icon-btn" onClick={toggleTheme} title="Toggle Theme">
 
                     {theme === 'dark' ? (
@@ -891,38 +779,9 @@ const Dashboard = () => {
 
                   <NotificationMenu />
 
-                  <div className="glass-profile-pill user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
-
-                    <div className="glass-profile-avatar-dark avatar">A</div>
-
+                  <div className="glass-profile-pill user-profile" style={{ cursor: 'default' }}>
+                    <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'A'}</div>
                     <span className="glass-profile-name">{currentUser?.name || 'Admin'}</span>
-
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-
-                    {showUserDropdown && (
-
-                      <div className="user-dropdown" style={{ display: 'block' }}>
-
-                        <div className="user-dropdown-header">
-
-                          <div className="ud-name">{currentUser?.name || 'Admin'}</div>
-
-                          <div className="ud-role">System Administrator</div>
-
-                        </div>
-
-                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/profile'); setShowUserDropdown(false); }}>
-
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-
-                          My Profile
-
-                        </button>
-
-                      </div>
-
-                    )}
-
                   </div>
 
                 </div>
@@ -1002,39 +861,9 @@ const Dashboard = () => {
 
 
                   {/* User profile */}
-
-                  <div className="glass-profile-pill user-profile" onClick={() => setShowUserDropdown(!showUserDropdown)}>
-
+                  <div className="glass-profile-pill user-profile" style={{ cursor: 'default' }}>
                     <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
-
                     <span className="glass-profile-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
-
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
-
-                    {showUserDropdown && (
-
-                      <div className="user-dropdown" style={{ display: 'block' }}>
-
-                        <div className="user-dropdown-header">
-
-                          <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</div>
-
-                          <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
-
-                        </div>
-
-                        <button className="user-dropdown-item" onClick={(e) => { e.stopPropagation(); navigate('/profile'); setShowUserDropdown(false); }}>
-
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-
-                          My Profile
-
-                        </button>
-
-                      </div>
-
-                    )}
-
                   </div>
 
                 </div>
@@ -1161,7 +990,7 @@ const Dashboard = () => {
 
                       {/* Analyst Report Generation Option */}
 
-                      {!isAdmin && (
+                      {!isAdmin && (isAgentComplete || isReportSubmitted || isSubmittedToSenior) && (
 
                         <div className="header-actions-wrap" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0, marginTop: '8px' }}>
 
@@ -1169,7 +998,18 @@ const Dashboard = () => {
 
                             type="button"
 
-                            onClick={() => setSubmitModalOpen(true)}
+                            onClick={() => {
+                              if (!isAgentComplete) {
+                                setCustomAlert({
+                                  isOpen: true,
+                                  title: 'Agent Analysis Incomplete',
+                                  message: 'Cannot generate or submit report yet. Please run the Multi-Agent Swarm (Stage 3) first so findings can be verified and correlated.',
+                                  type: 'warning'
+                                });
+                                return;
+                              }
+                              setSubmitModalOpen(true);
+                            }}
 
                             id="btn-analyst-generate-report"
 
@@ -1187,13 +1027,13 @@ const Dashboard = () => {
 
                               borderRadius: '12px',
 
-                              background: isReportSubmitted
-
+                              background: !isAgentComplete
+                                ? 'var(--border-subtle, #334155)'
+                                : isReportSubmitted
                                 ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
-
                                 : 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
 
-                              color: '#ffffff',
+                              color: !isAgentComplete ? 'var(--text-muted, #94a3b8)' : '#ffffff',
 
                               fontSize: '13px',
 
@@ -1201,12 +1041,12 @@ const Dashboard = () => {
 
                               border: 'none',
 
-                              cursor: 'pointer',
+                              cursor: !isAgentComplete ? 'not-allowed' : 'pointer',
 
-                              boxShadow: isReportSubmitted
-
+                              boxShadow: !isAgentComplete
+                                ? 'none'
+                                : isReportSubmitted
                                 ? '0 4px 14px rgba(16, 185, 129, 0.35)'
-
                                 : '0 4px 14px rgba(37, 99, 235, 0.35)',
 
                               transition: 'all 0.2s ease',
@@ -1215,7 +1055,7 @@ const Dashboard = () => {
 
                             }}
 
-                            title="Compile multi-agent findings and hand off report to Senior Analyst for validation"
+                            title={!isAgentComplete ? "Agent analysis must be run before report generation is unlocked." : "Compile multi-agent findings and hand off report to Senior Analyst for validation"}
 
                           >
 
@@ -1231,7 +1071,7 @@ const Dashboard = () => {
 
                             </svg>
 
-                            <span>{isReportSubmitted ? '✓ Report Submitted to Senior' : '📑 Generate Report for Senior'}</span>
+                            <span>{!isAgentComplete ? '🔒 Report Locked (Run Swarm)' : (isReportSubmitted ? '✓ Report Submitted to Senior' : '📑 Generate Report for Senior')}</span>
 
                           </button>
 
@@ -1603,7 +1443,18 @@ const Dashboard = () => {
 
                                   key={stage.key}
 
-                                  onClick={() => setSubmitModalOpen(true)}
+                                  onClick={() => {
+                                    if (!isAgentComplete) {
+                                      setCustomAlert({
+                                        isOpen: true,
+                                        title: 'Agent Analysis Incomplete',
+                                        message: 'Cannot generate or submit report yet. Please run the Multi-Agent Swarm (Stage 3) first so findings can be verified and correlated.',
+                                        type: 'warning'
+                                      });
+                                      return;
+                                    }
+                                    setSubmitModalOpen(true);
+                                  }}
 
                                   title="Click to generate and submit report to Senior Analyst"
 
@@ -1795,7 +1646,6 @@ const Dashboard = () => {
 
 
 
-      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
 
 
 
@@ -1812,6 +1662,8 @@ const Dashboard = () => {
         caseName={activeSummary?.name || localStorage.getItem('active_case_name') || ''}
 
         activeSummary={activeSummary}
+
+        isAgentComplete={isAgentComplete}
 
         onSuccess={() => {
 

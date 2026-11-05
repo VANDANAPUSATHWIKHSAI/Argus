@@ -653,6 +653,10 @@ async def delete_employee(userid: str, current_user: dict = Depends(get_current_
         raise HTTPException(status_code=403, detail="Not authorized")
     if userid == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    
+    PROTECTED_SYSTEM_ROLES = {"admin"}
+    if userid.strip().lower() in PROTECTED_SYSTEM_ROLES:
+        raise HTTPException(status_code=400, detail=f"Cannot delete protected core system role account '{userid}'.")
     try:
         if db_pool:
             with get_db_connection() as conn:

@@ -456,6 +456,7 @@ const Agents = () => {
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
+
   const [theme, setTheme] = useState(() => localStorage.getItem('argus_theme') || 'dark');
 
   const [submitReportModalOpen, setSubmitReportModalOpen] = useState(false);
@@ -1149,7 +1150,29 @@ const Agents = () => {
 
 
 
-  // Enhanced Status Pill with high-visibility icon & crystal glass style
+  
+  const allAgentsCompleted = Boolean(
+    completedCount === totalAgents &&
+    runningCount === 0 &&
+    !runningAgents &&
+    (stageStatuses.agent7 === 'COMPLETED' || stageStatuses.agent7 === 'SUCCESS' || stageStatuses.agent7 === 'NEEDS_REVIEW')
+  );
+
+  const hasFindings = Boolean(
+    (agentData?.findings_count || 0) > 0 ||
+    (agentData?.claims?.length || 0) > 0 ||
+    (caseDetails?.findings?.length || 0) > 0
+  );
+
+  const isAgentWorkComplete = Boolean(allAgentsCompleted && hasFindings);
+
+  const canSubmitReport = Boolean(isAgentWorkComplete);
+
+  const isReportSubmitted = Boolean(
+    isAgentWorkComplete && activeCaseId && localStorage.getItem(`argus_case_${activeCaseId}_submitted_to_senior`)
+  );
+
+// Enhanced Status Pill with high-visibility icon & crystal glass style
 
   const renderStatusPill = (agentId) => {
 
@@ -1713,6 +1736,42 @@ const Agents = () => {
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                     <span>{restartingWorkload ? 'Restarting...' : 'Restart Workload'}</span>
+                  </button>
+                )}
+
+                {canSubmitReport && (
+                  <button
+                    id="btn-ai-generate-report"
+                    onClick={() => setSubmitReportModalOpen(true)}
+                    className="btn btn-primary"
+                    style={{
+                      fontSize: '12.5px',
+                      padding: '7px 16px',
+                      borderRadius: '10px',
+                      background: isReportSubmitted
+                        ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
+                        : 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                      color: '#fff',
+                      fontWeight: 700,
+                      border: 'none',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      boxShadow: isReportSubmitted
+                        ? '0 4px 12px rgba(16, 185, 129, 0.35)'
+                        : '0 4px 12px rgba(37, 99, 235, 0.35)',
+                      whiteSpace: 'nowrap'
+                    }}
+                    title="All multi-agent stages and findings complete. Compile and hand off report to Senior Analyst."
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                      <polyline points="14 2 14 8 20 8"></polyline>
+                      <line x1="16" y1="13" x2="8" y2="13"></line>
+                      <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    <span>{isReportSubmitted ? '✓ Report Submitted to Senior' : '📑 Generate Report for Senior'}</span>
                   </button>
                 )}
               </>
@@ -2896,9 +2955,9 @@ const Agents = () => {
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-                    {/* Senior Analyst Handoff Banner */}
-
-                    <div style={{
+                    {/* Senior Analyst Handoff Banner (Only after ALL agents completed & findings obtained) */}
+                    {canSubmitReport ? (
+                      <div style={{
 
                       display: 'flex',
 
@@ -2977,10 +3036,29 @@ const Agents = () => {
                         <span>📑 Generate Report for Senior Analyst</span>
 
                         <span>&rarr;</span>
-
                       </button>
-
-                    </div>
+                      </div>
+                    ) : (
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        background: 'rgba(59, 130, 246, 0.05)',
+                        border: '1px dashed rgba(59, 130, 246, 0.3)',
+                        borderRadius: 8,
+                        padding: '14px 18px',
+                        color: 'var(--text-muted)',
+                        fontSize: '12.5px'
+                      }}>
+                        <span style={{ fontSize: '20px' }}>⏳</span>
+                        <div>
+                          <strong style={{ color: 'var(--text-main)', display: 'block', marginBottom: '2px', fontSize: '13px' }}>
+                            Report Generation Locked &mdash; Awaiting Full Agent Pipeline &amp; Findings
+                          </strong>
+                          The report submit option becomes available once all 8 reasoning agents complete analysis and findings are verified ({completedCount} of {totalAgents} agents ready, {agentData?.findings_count || 0} findings).
+                        </div>
+                      </div>
+                    )}
 
 
 
@@ -4735,6 +4813,8 @@ const Agents = () => {
           caseName={activeCaseName}
 
           activeSummary={caseDetails}
+
+          isAgentComplete={canSubmitReport}
 
           onSuccess={() => {
 

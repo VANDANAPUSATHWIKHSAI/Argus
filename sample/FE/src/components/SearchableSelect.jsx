@@ -17,8 +17,25 @@ const SearchableSelect = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [effectiveAlign, setEffectiveAlign] = useState(align);
   const wrapperRef = useRef(null);
   const searchInputRef = useRef(null);
+
+  const currentTheme = (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme')) || (typeof localStorage !== 'undefined' && localStorage.getItem('argus_theme')) || 'dark';
+  const isDark = currentTheme === 'dark';
+
+  useEffect(() => {
+    if (isOpen && wrapperRef.current && typeof window !== 'undefined') {
+      const rect = wrapperRef.current.getBoundingClientRect();
+      if (align === 'right' || (window.innerWidth - rect.right < 120)) {
+        setEffectiveAlign('right');
+      } else {
+        setEffectiveAlign('left');
+      }
+    } else {
+      setEffectiveAlign(align);
+    }
+  }, [isOpen, align]);
 
   // Close when clicking outside
   useEffect(() => {
@@ -148,24 +165,27 @@ const SearchableSelect = ({
         </svg>
       </div>
 
-      {/* Glassmorphic Dropdown Menu */}
-      {isOpen && (
+      {/* Solid Opaque Dropdown Menu with Shadow and Sharp Contrast */}
+      {isOpen && (() => {
+        const isRight = align === 'right' || effectiveAlign === 'right';
+        return (
         <div
           role="listbox"
           style={{
             position: 'absolute',
             top: 'calc(100% + 6px)',
-            [align === 'right' ? 'right' : 'left']: 0,
+            right: isRight ? 0 : 'auto',
+            left: isRight ? 'auto' : 0,
             minWidth: '100%',
             width: 'max-content',
-            maxWidth: '280px',
-            background: 'var(--glass-dash-surface-gradient, var(--bg-card-modal, #181a20))',
-            backdropFilter: 'blur(32px) saturate(200%)',
-            WebkitBackdropFilter: 'blur(32px) saturate(200%)',
-            border: '1px solid var(--glass-dash-border, var(--border-strong, rgba(255, 255, 255, 0.16)))',
-            borderRadius: '14px',
-            boxShadow: 'var(--glass-dash-shadow-card, 0 16px 40px rgba(0, 0, 0, 0.35))',
-            zIndex: 1100,
+            maxWidth: '260px',
+            background: isDark ? '#181a20' : '#ffffff',
+            border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.15)' : '#cbd5e1'}`,
+            borderRadius: '12px',
+            boxShadow: isDark
+              ? '0 16px 40px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08)'
+              : '0 16px 36px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06)',
+            zIndex: 9999,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -174,26 +194,26 @@ const SearchableSelect = ({
           }}
         >
           {!noSearch && (
-            <div style={{ padding: '2px 4px 6px' }}>
+            <div style={{ padding: '4px 4px 6px' }}>
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
-                  background: 'var(--glass-dash-surface-nested, rgba(255, 255, 255, 0.05))',
-                  border: '1px solid var(--glass-dash-border-subtle, rgba(255, 255, 255, 0.1))',
+                  gap: '8px',
+                  background: isDark ? 'rgba(255, 255, 255, 0.06)' : '#f1f5f9',
+                  border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.12)' : '#e2e8f0'}`,
                   borderRadius: '8px',
-                  padding: '5px 8px'
+                  padding: '6px 10px'
                 }}
               >
                 <svg
-                  width="12"
-                  height="12"
+                  width="13"
+                  height="13"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  strokeWidth="2"
-                  style={{ color: 'var(--text-muted, #94a3b8)' }}
+                  strokeWidth="2.2"
+                  style={{ color: isDark ? '#94a3b8' : '#64748b', flexShrink: 0 }}
                 >
                   <circle cx="11" cy="11" r="8" />
                   <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -210,8 +230,8 @@ const SearchableSelect = ({
                     background: 'transparent',
                     border: 'none',
                     outline: 'none',
-                    fontSize: '12px',
-                    color: 'var(--text-main, #f8fafc)',
+                    fontSize: '12.5px',
+                    color: isDark ? '#f8fafc' : '#0f172a',
                     boxSizing: 'border-box'
                   }}
                 />
@@ -311,7 +331,8 @@ const SearchableSelect = ({
             )}
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 };

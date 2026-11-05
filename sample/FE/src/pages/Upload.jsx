@@ -14,7 +14,6 @@ import { syncCaseLock, subscribeToCaseLock } from '../js/caseLockService';
 
 import Sidebar from '../components/Sidebar';
 
-import ProfileModal from '../components/ProfileModal';
 
 import AlertModal from '../components/AlertModal';
 
@@ -42,7 +41,6 @@ const Upload = () => {
 
   const folderInputRef = useRef(null);
 
-  const modalFileInputRef = useRef(null);
 
 
 
@@ -58,7 +56,6 @@ const Upload = () => {
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
-  const [showProfileModal, setShowProfileModal] = useState(false);
 
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
 
@@ -629,41 +626,45 @@ const Upload = () => {
 
     const itemsToUpload = queue.filter(item => item.status === 'ready' || item.status === 'uploading' || item.status === 'error');
 
-
-
-    for (const item of itemsToUpload) {
-
-      try {
-
-        const res = await uploadEvidenceFile(item.file, caseId);
-
-        if (res && (res.status === 'FAILED' || res.status === 'ERROR' || res.status === 'validation_failed' || res.error)) {
-
-          const errDetail = res.message || res.detail || res.error || 'Upload validation failed';
-
-          throw new Error(errDetail);
-
-        }
-
-        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', error: null } : i));
-
-        successCount++;
-
-      } catch (err) {
-
-        console.error(`Upload failed for ${item.name}:`, err);
-
-        lastErrorMsg = err.message || 'Upload failed';
-
-        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: lastErrorMsg } : i));
-
-        failedCount++;
-
-      }
-
+    if (itemsToUpload.length === 0) {
+      setUploading(false);
+      return;
     }
 
+    // Set all queued items to uploading status immediately
+    setQueue(prev => prev.map(i => (i.status === 'ready' || i.status === 'error') ? { ...i, status: 'uploading' } : i));
 
+    // Parallel asynchronous upload for all selected evidence files
+    const uploadTasks = itemsToUpload.map(async (item) => {
+      try {
+        const res = await uploadEvidenceFile(item.file, caseId, { asyncMode: true });
+        if (res && (res.status === 'FAILED' || res.status === 'ERROR' || res.status === 'validation_failed' || res.error)) {
+          const errDetail = res.message || res.detail || res.error || 'Upload validation failed';
+          throw new Error(errDetail);
+        }
+        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', error: null, evidenceId: res?.evidence_id } : i));
+        return { success: true, item };
+      } catch (err) {
+        console.error(`Upload failed for ${item.name}:`, err);
+        const errDetail = err.message || 'Upload failed';
+        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: errDetail } : i));
+        return { success: false, item, error: errDetail };
+      }
+    });
+
+    const settled = await Promise.allSettled(uploadTasks);
+    settled.forEach(r => {
+      if (r.status === 'fulfilled' && r.value.success) {
+        successCount++;
+      } else {
+        failedCount++;
+        if (r.status === 'fulfilled' && r.value.error) {
+          lastErrorMsg = r.value.error;
+        } else if (r.status === 'rejected') {
+          lastErrorMsg = r.reason?.message || 'Upload failed';
+        }
+      }
+    });
 
     setUploading(false);
 
@@ -943,14 +944,6 @@ const Upload = () => {
 
                     )}
 
-                    <div className="badge-danger">
-
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-
-                      High Risk
-
-                    </div>
-
                     {isCaseReadOnly && <CaseLockBanner compact lockState={caseLock} />}
 
                   </div>
@@ -973,7 +966,6 @@ const Upload = () => {
 
                 <div style={{ padding: '16px 20px', fontWeight: 600, fontSize: 14, color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'pointer' }}>Upload Evidence</div>
 
-                <div style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', cursor: 'pointer' }}>Coverage</div>
 
               </div>
 
@@ -1700,7 +1692,6 @@ const Upload = () => {
 
 
 
-      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
 
     </>
 

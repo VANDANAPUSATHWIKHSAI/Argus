@@ -6,11 +6,11 @@ import '../css/style.css';
 
 const inputStyle = {
   width: '100%',
-  padding: '12px 16px',
+  padding: '16px 20px',
   border: '1px solid var(--border-strong)',
-  borderRadius: 8,
+  borderRadius: 12,
   fontFamily: 'inherit',
-  fontSize: 14,
+  fontSize: 15,
   background: 'var(--bg-app)',
   color: 'var(--text-main)',
   outline: 'none',
@@ -20,13 +20,13 @@ const inputStyle = {
 
 const labelStyle = {
   display: 'block',
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 600,
   color: 'var(--text-muted)',
-  marginBottom: 8,
+  marginBottom: 10,
 };
 
-const formGroup = { marginBottom: 24 };
+const formGroup = { marginBottom: 26 };
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -36,7 +36,6 @@ const Settings = () => {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-
   const handlePasswordUpdate = async (e) => {
     e.preventDefault();
     setPasswordError('');
@@ -95,62 +94,29 @@ const Settings = () => {
           </div>
         </header>
 
-        <div className="dashboard-scroll">
-          <div style={{ maxWidth: 760, margin: '0 auto', width: '100%' }}>
-            {/* Quick Profile Link Card */}
-            <div 
-              style={{ 
-                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(30, 41, 59, 0.4) 100%)',
-                border: '1px solid rgba(59, 130, 246, 0.3)',
-                borderRadius: 16,
-                padding: '16px 20px',
-                marginBottom: 20,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 12
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--blue, #3b82f6)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700 }}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                </div>
-                <div>
-                  <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-main, #f8fafc)' }}>
-                    Personnel Profile & Security Clearance
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted, #94a3b8)' }}>
-                    Manage personal details, contact number, and view your verified capabilities.
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => navigate('/profile')}
-                style={{
-                  background: 'var(--blue, #3b82f6)',
-                  border: 'none',
-                  color: '#fff',
-                  padding: '8px 16px',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                Open My Profile →
-              </button>
-            </div>
-
+        <div 
+          className="dashboard-scroll" 
+          style={{ 
+            display: 'flex', 
+            flexDirection: 'column', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            minHeight: 'calc(100vh - 160px)', 
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: '20px 0'
+          }}
+        >
+          <div style={{ maxWidth: 940, width: '100%', margin: '0 auto', padding: '0 16px', boxSizing: 'border-box' }}>
             {/* Settings Content Card - Change Password */}
-            <div className="panel-card" style={{ padding: 36, borderRadius: 22 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, paddingBottom: 16, borderBottom: '1px solid var(--glass-dash-border-subtle)' }}>
-                <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--glass-dash-blue-soft)', color: 'var(--glass-dash-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <div className="panel-card" style={{ padding: '52px 56px', borderRadius: 24, boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28, paddingBottom: 20, borderBottom: '1px solid var(--glass-dash-border-subtle)' }}>
+                <div style={{ width: 48, height: 48, borderRadius: 14, background: 'var(--glass-dash-blue-soft)', color: 'var(--glass-dash-blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 </div>
                 <div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, color: 'var(--glass-dash-text-main)', margin: 0 }}>Change Password</h3>
-                  <p style={{ fontSize: 13, color: 'var(--glass-dash-text-muted)', margin: 0, marginTop: 2 }}>Ensure your account stays secure by using a strong password.</p>
+                  <h3 style={{ fontSize: 20, fontWeight: 700, color: 'var(--glass-dash-text-main)', margin: 0 }}>Change Password</h3>
+                  <p style={{ fontSize: 14, color: 'var(--glass-dash-text-muted)', margin: 0, marginTop: 4 }}>Ensure your account stays secure by using a strong password.</p>
                 </div>
               </div>
 
@@ -202,22 +168,24 @@ const Settings = () => {
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginTop: 32 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', marginTop: 36 }}>
                 <button
                   type="submit"
                   className="btn btn-primary"
                   disabled={isUpdatingPassword}
                   style={{
                     background: 'var(--blue)',
-                    padding: '12px 28px',
+                    padding: '14px 34px',
                     borderRadius: 9999,
                     fontWeight: 600,
-                    fontSize: 14,
+                    fontSize: 15,
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 8,
+                    gap: 10,
                     cursor: isUpdatingPassword ? 'not-allowed' : 'pointer',
                     opacity: isUpdatingPassword ? 0.7 : 1,
+                    boxShadow: '0 4px 16px rgba(37, 99, 235, 0.35)',
+                    transition: 'all 0.2s ease',
                   }}
                 >
                   {isUpdatingPassword ? 'Updating Password...' : 'Update Password'}

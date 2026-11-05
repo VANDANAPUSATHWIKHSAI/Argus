@@ -486,6 +486,10 @@ const AdminDashboard = () => {
         body: JSON.stringify({ senior_analyst_id: assigningSenior })
       });
       if (!res.ok) throw new Error(await res.text());
+      const assignedSeniorObj = employees.find(emp => String(emp.id) === String(assigningSenior));
+      const seniorName = assignedSeniorObj ? assignedSeniorObj.name : `Senior Analyst ${assigningSenior}`;
+      setCurrentCase(prev => prev ? { ...prev, senior_analyst_id: assigningSenior, senior_analyst_name: seniorName } : prev);
+      setAllCasesList(prev => prev.map(c => c.case_id === currentCase.case_id ? { ...c, senior_analyst_id: assigningSenior, senior_analyst_name: seniorName } : c));
       setShowAssignSeniorModal(false);
       setAssigningSenior('');
       setRefreshTrigger(prev => prev + 1);

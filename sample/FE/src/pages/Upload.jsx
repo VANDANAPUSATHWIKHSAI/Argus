@@ -16,6 +16,8 @@ import Sidebar from '../components/Sidebar';
 
 
 import AlertModal from '../components/AlertModal';
+import CloseCaseReasonModal from '../components/CloseCaseReasonModal';
+import { isCaseReportGenerated } from '../js/caseUtils';
 
 import NotificationMenu from '../components/NotificationMenu';
 
@@ -45,6 +47,8 @@ const Upload = () => {
 
 
   const [queue, setQueue] = useState([]);
+  const [closeReasonModal, setCloseReasonModal] = useState({ isOpen: false, caseId: '', caseName: '' });
+  const [closingCaseLoading, setClosingCaseLoading] = useState(false);
 
   const [dragOver, setDragOver] = useState(false);
 
@@ -402,72 +406,61 @@ const Upload = () => {
 
 
 
-  const handleCloseCase = async () => {
-
-    if (isCaseReadOnly) {
-
-      setCustomAlert({
-
-        isOpen: true,
-
-        title: '🔒 Case Locked — Read-Only Mode',
-
-        message: `Cannot close case: Case is currently locked by analyst ${caseLock.lockedBy?.name || 'another user'}. You have Read-Only access.`,
-
-        type: 'warning'
-
-      });
-
-      return;
-
-    }
-
-    const curName = activeCaseName || getActiveCaseName() || 'Current case';
-
-    const curId = activeCaseId || getActiveCaseId();
-
-    if (!curId && !localStorage.getItem('active_case_name')) {
-
-      setCustomAlert({ isOpen: true, title: 'Notice', message: "There is no active case currently open.", type: 'warning' });
-
-      return;
-
-    }
-
+  const executeCloseCase = async (curId, curName, reason = null) => {
+    setClosingCaseLoading(true);
     try {
-
       if (curId) {
-
-        await closeCase(curId);
-
+        await closeCase(curId, reason);
       }
-
     } catch (e) {
-
       console.error("Failed to close case:", e);
-
+    } finally {
+      setClosingCaseLoading(false);
     }
 
     setActiveCase('', '');
-
     setActiveCaseId('');
-
     setActiveCaseName('');
 
+    setCloseReasonModal({ isOpen: false, caseId: '', caseName: '' });
     setCustomAlert({
-
        isOpen: true,
-
        title: 'Success',
-
        message: `${curName} has been closed successfully.`,
-
        type: 'success',
-
        onClose: () => window.location.reload()
-
     });
+  };
 
+  const handleCloseCase = async () => {
+    if (isCaseReadOnly) {
+      setCustomAlert({
+        isOpen: true,
+        title: '🔒 Case Locked — Read-Only Mode',
+        message: `Cannot close case: Case is currently locked by analyst ${caseLock.lockedBy?.name || 'another user'}. You have Read-Only access.`,
+        type: 'warning'
+      });
+      return;
+    }
+
+    const curName = activeCaseName || getActiveCaseName() || 'Current case';
+    const curId = activeCaseId || getActiveCaseId();
+    if (!curId && !localStorage.getItem('active_case_name')) {
+      setCustomAlert({ isOpen: true, title: 'Notice', message: "There is no active case currently open.", type: 'warning' });
+      return;
+    }
+
+    const hasReport = isCaseReportGenerated(curId);
+    if (!hasReport) {
+      setCloseReasonModal({
+        isOpen: true,
+        caseId: curId,
+        caseName: curName
+      });
+      return;
+    }
+
+    await executeCloseCase(curId, curName, null);
   };
 
 
@@ -774,6 +767,14 @@ const Upload = () => {
 
           onClose={closeAlert} 
 
+        />
+        <CloseCaseReasonModal
+          isOpen={closeReasonModal.isOpen}
+          caseId={closeReasonModal.caseId}
+          caseName={closeReasonModal.caseName}
+          isSubmitting={closingCaseLoading}
+          onClose={() => setCloseReasonModal({ isOpen: false, caseId: '', caseName: '' })}
+          onConfirm={(reason) => executeCloseCase(closeReasonModal.caseId, closeReasonModal.caseName, reason)}
         />
 
         <Sidebar active="upload" />

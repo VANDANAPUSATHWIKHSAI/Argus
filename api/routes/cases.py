@@ -299,6 +299,8 @@ async def create_case(
                 cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS description TEXT")
                 cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ")
                 cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_by TEXT")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE")
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT")
                 cur.execute(
                     "UPDATE cases SET name = %s, analyst_id = %s, senior_analyst_id = %s WHERE case_id = %s", 
                     (req.name, req.analyst_id, req.senior_analyst_id, session.case_id)
@@ -385,6 +387,22 @@ async def get_all_cases(
             getattr(c, "submitted_to_auditor", False) or
             getattr(c, "has_report", False)
         )
+        if not has_report:
+            try:
+                from pathlib import Path
+                from infrastructure.repository.evidence_store import REPOSITORY_DIR
+                from api.routes.evidence import sanitize_uuid
+                for cid in (c.case_id, sanitize_uuid(c.case_id)):
+                    case_dir = Path(REPOSITORY_DIR) / cid
+                    if (case_dir / "report.json").exists() or (case_dir / "report.html").exists():
+                        has_report = True
+                        break
+            except Exception:
+                pass
+
+        closed_reason = getattr(c, "closed_reason", None)
+        if not closed_reason and getattr(c, "status", "") == "closed":
+            closed_reason = c_desc
 
         result.append({
             "case_id": c.case_id,
@@ -400,6 +418,7 @@ async def get_all_cases(
             "assigned_to_you": assigned,
             "lock": lock_info,
             "has_report": has_report,
+            "closed_reason": closed_reason,
         })
 
     return {"status": "SUCCESS", "data": result}
@@ -779,6 +798,63 @@ async def close_case_endpoint(
     from api.routes.evidence import sanitize_uuid
     clean_case_id = sanitize_uuid(case_id)
 
+    # Gating: Closing a case before report generation requires an explicit reason
+    has_report = False
+    try:
+        from pathlib import Path
+        import json
+        from infrastructure.repository.evidence_store import REPOSITORY_DIR
+        for cid in (clean_case_id, case_id):
+            case_dir = Path(REPOSITORY_DIR) / cid
+            if case_dir.exists() and case_dir.is_dir():
+                s_file = case_dir / "case_session.json"
+                if s_file.exists():
+                    try:
+                        with open(s_file, "r", encoding="utf-8") as f:
+                            s_data = json.load(f)
+                        if (
+                            s_data.get("has_report")
+                            or s_data.get("submitted_to_senior")
+                            or s_data.get("submitted_to_auditor")
+                            or (case_dir / "report.json").exists()
+                            or (case_dir / "report.html").exists()
+                        ):
+                            has_report = True
+                            break
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    if not has_report:
+        try:
+            from api.routes.auth import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT has_report FROM cases WHERE case_id = %s OR case_id = %s LIMIT 1;",
+                        (clean_case_id, case_id)
+                    )
+                    r = cur.fetchone()
+                    if r and r[0]:
+                        has_report = True
+                    else:
+                        cur.execute(
+                            "SELECT 1 FROM case_notes WHERE (case_id = %s OR case_id = %s) AND (title ILIKE %s OR title ILIKE %s) LIMIT 1;",
+                            (clean_case_id, case_id, "%Report Submitted%", "%Escalation to Auditor%")
+                        )
+                        if cur.fetchone():
+                            has_report = True
+        except Exception:
+            pass
+
+    reason_str = str(reason).strip() if reason else ""
+    if not has_report and not reason_str:
+        raise HTTPException(
+            status_code=400,
+            detail="A reason is required to close a case before report generation."
+        )
+
     # Enforce case lock
     user_id = str(current_user.get("id", ""))
     is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
@@ -815,10 +891,12 @@ async def close_case_endpoint(
         if row and row[0]:
             effective_tenant = row[0]
 
+        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
+        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
         if reason:
             cur.execute(
-                "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s, description = COALESCE(%s, description) WHERE case_id = %s;",
-                (str(current_user.get("id", current_user.get("name", "admin"))), reason, clean_case_id)
+                "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s, closed_reason = %s, description = COALESCE(%s, description) WHERE case_id = %s;",
+                (str(current_user.get("id", current_user.get("name", "admin"))), reason, reason, clean_case_id)
             )
         else:
             cur.execute(

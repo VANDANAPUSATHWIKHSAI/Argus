@@ -26,7 +26,7 @@ import CaseNotAssigned from '../components/CaseNotAssigned';
 import { fetchCases, fetchCaseSummary, fetchAgentResults, stopWorkload, restartWorkload, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
 import { safeFormatDateTime } from '../js/dateUtils';
-
+import { isCaseReportGenerated } from '../js/caseUtils';
 import { setActiveCase } from '../js/caseEvents';
 
 
@@ -386,7 +386,7 @@ const Dashboard = () => {
 
 
 
-  const handleCloseCase = async () => {
+  const handleCloseCase = async (reason = null) => {
 
     const activeCaseName = localStorage.getItem('active_case_name') || 'Current case';
 
@@ -407,6 +407,7 @@ const Dashboard = () => {
       if (activeCaseId) {
 
         const token = localStorage.getItem('argus_token');
+        const payload = reason ? { reason } : undefined;
 
         await fetch(`${API_BASE_URL}/cases/${activeCaseId}/close`, {
 
@@ -416,9 +417,11 @@ const Dashboard = () => {
 
             'X-Tenant-ID': DEFAULT_TENANT_ID,
 
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${token}`,
+            ...(payload ? { 'Content-Type': 'application/json' } : {})
 
-          }
+          },
+          ...(payload ? { body: JSON.stringify(payload) } : {})
 
         });
 

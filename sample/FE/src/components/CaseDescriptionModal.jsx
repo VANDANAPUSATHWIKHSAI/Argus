@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { safeFormatDateTime } from '../js/dateUtils';
+import { isCaseReportGenerated } from '../js/caseUtils';
 
 const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
   useEffect(() => {
@@ -21,6 +22,14 @@ const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
 
   const isOpenStatus = caseData.status === 'open' || caseData.status === 'in_progress';
   const displayName = caseData.name && caseData.name !== caseData.case_id ? caseData.name : 'Unnamed Case';
+
+  const closureReason =
+    caseData.closed_reason ||
+    caseData.closure_reason ||
+    (typeof localStorage !== 'undefined' && caseData.case_id && localStorage.getItem(`argus_case_${caseData.case_id}_closed_reason`)) ||
+    (!isOpenStatus && caseData.description ? caseData.description : null);
+
+  const hasReport = isCaseReportGenerated(caseData);
 
   return (
     <div
@@ -245,38 +254,143 @@ const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
             </div>
           </div>
 
-          {/* Description / Closure Reason Box */}
-          <div>
-            <div
-              style={{
-                fontSize: '12px',
-                fontWeight: 700,
-                color: isDark ? '#cbd5e1' : '#334155',
-                marginBottom: '8px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.4px',
-              }}
-            >
-              {!isOpenStatus ? 'Case Description & Closure Rationale' : 'Case Description & Investigation Scope'}
+          {/* If Closed: Prominent Closure Reason Section */}
+          {!isOpenStatus && (
+            <div>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px',
+                  gap: '8px'
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 700,
+                    color: isDark ? '#f87171' : '#dc2626',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                  </svg>
+                  Closure Reason
+                </div>
+                {!hasReport && (
+                  <span
+                    style={{
+                      fontSize: '10.5px',
+                      fontWeight: 700,
+                      color: '#f59e0b',
+                      background: isDark ? 'rgba(245, 158, 11, 0.15)' : 'rgba(245, 158, 11, 0.12)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.3px'
+                    }}
+                  >
+                    Closed Before Report Generation
+                  </span>
+                )}
+              </div>
+              <div
+                style={{
+                  padding: '16px 18px',
+                  borderRadius: '14px',
+                  background: isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.05)',
+                  border: isDark ? '1px solid rgba(239, 68, 68, 0.25)' : '1px solid rgba(239, 68, 68, 0.2)',
+                  fontSize: '13.5px',
+                  lineHeight: '1.65',
+                  color: closureReason ? (isDark ? '#f8fafc' : '#0f172a') : (isDark ? '#94a3b8' : '#64748b'),
+                  fontWeight: closureReason ? 500 : 400,
+                  fontStyle: closureReason ? 'normal' : 'italic',
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: '180px',
+                  overflowY: 'auto'
+                }}
+              >
+                {closureReason || 'No closure rationale was recorded for this case.'}
+              </div>
             </div>
-            <div
-              style={{
-                padding: '16px 18px',
-                borderRadius: '14px',
-                background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(248, 250, 252, 0.85)',
-                border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(226, 232, 240, 0.9)',
-                fontSize: '13.5px',
-                lineHeight: '1.65',
-                color: caseData.description ? (isDark ? '#f1f5f9' : '#1e293b') : (isDark ? '#94a3b8' : '#64748b'),
-                fontStyle: caseData.description ? 'normal' : 'italic',
-                whiteSpace: 'pre-wrap',
-                maxHeight: '220px',
-                overflowY: 'auto',
-              }}
-            >
-              {caseData.description || 'No detailed case description or closure rationale was provided for this case.'}
+          )}
+
+          {/* Case Scope / Initial Description */}
+          {isOpenStatus ? (
+            <div>
+              <div
+                style={{
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  color: isDark ? '#cbd5e1' : '#334155',
+                  marginBottom: '8px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.4px',
+                }}
+              >
+                Case Description &amp; Investigation Scope
+              </div>
+              <div
+                style={{
+                  padding: '16px 18px',
+                  borderRadius: '14px',
+                  background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(248, 250, 252, 0.85)',
+                  border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(226, 232, 240, 0.9)',
+                  fontSize: '13.5px',
+                  lineHeight: '1.65',
+                  color: caseData.description ? (isDark ? '#f1f5f9' : '#1e293b') : (isDark ? '#94a3b8' : '#64748b'),
+                  fontStyle: caseData.description ? 'normal' : 'italic',
+                  whiteSpace: 'pre-wrap',
+                  maxHeight: '220px',
+                  overflowY: 'auto',
+                }}
+              >
+                {caseData.description || 'No detailed case description was provided for this case.'}
+              </div>
             </div>
-          </div>
+          ) : (
+            caseData.description && caseData.description !== closureReason && (
+              <div>
+                <div
+                  style={{
+                    fontSize: '11.5px',
+                    fontWeight: 700,
+                    color: isDark ? '#94a3b8' : '#64748b',
+                    marginBottom: '6px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.4px',
+                  }}
+                >
+                  Initial Scope &amp; Background
+                </div>
+                <div
+                  style={{
+                    padding: '14px 16px',
+                    borderRadius: '12px',
+                    background: isDark ? 'rgba(255, 255, 255, 0.02)' : 'rgba(248, 250, 252, 0.85)',
+                    border: isDark ? '1px solid rgba(255, 255, 255, 0.08)' : '1px solid rgba(226, 232, 240, 0.9)',
+                    fontSize: '13px',
+                    lineHeight: '1.6',
+                    color: isDark ? '#cbd5e1' : '#334155',
+                    whiteSpace: 'pre-wrap',
+                    maxHeight: '140px',
+                    overflowY: 'auto'
+                  }}
+                >
+                  {caseData.description}
+                </div>
+              </div>
+            )
+          )}
         </div>
 
         {/* Footer */}

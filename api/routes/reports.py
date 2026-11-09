@@ -152,6 +152,36 @@ async def get_report(
         logger.error(f"Report generation error for case {case_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
 
+    # Mark case as having report generated in repository and database
+    try:
+        from pathlib import Path
+        import json
+        from infrastructure.repository.evidence_store import REPOSITORY_DIR
+        for cid in (clean_case_id, case_id):
+            case_dir = Path(REPOSITORY_DIR) / cid
+            if case_dir.exists() and case_dir.is_dir():
+                s_file = case_dir / "case_session.json"
+                if s_file.exists():
+                    try:
+                        with open(s_file, "r", encoding="utf-8") as f:
+                            s_data = json.load(f)
+                        s_data["has_report"] = True
+                        with open(s_file, "w", encoding="utf-8") as f:
+                            json.dump(s_data, f, indent=2)
+                    except Exception:
+                        pass
+    except Exception as rep_err:
+        logger.warning(f"Could not update local session has_report: {rep_err}")
+
+    try:
+        from api.routes.auth import get_db_connection
+        with get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
+                cur.execute("UPDATE cases SET has_report = TRUE WHERE case_id = %s OR case_id = %s;", (clean_case_id, case_id))
+    except Exception:
+        pass
+
     # 4. Return HTTP Response with appropriate media type and Content-Disposition header
     fmt = (format or "html").lower().strip()
     filename = f"argus_report_{case_id}.{fmt}"

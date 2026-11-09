@@ -91,6 +91,8 @@ class CaseSession(BaseModel):
     senior_analyst_id: Optional[str] = None
     name:              Optional[str] = None
     description:       Optional[str] = None
+    has_report:        bool          = False
+    closed_reason:     Optional[str] = None
 
 
 class Evidence(BaseModel):

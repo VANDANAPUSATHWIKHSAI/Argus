@@ -1,4 +1,7 @@
 import { logout, isTokenExpired, getAuthToken, getAuthTenantId } from './authSession.js';
+import { isCaseReportGenerated } from './caseUtils.js';
+
+export { isCaseReportGenerated };
 
 export const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) || 'http://127.0.0.1:8000';
 export const DEFAULT_TENANT_ID = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_TENANT_ID) || 'default';
@@ -228,7 +231,13 @@ export async function queryCase(caseId, queryText) {
 export async function fetchReport(caseId, format = 'html', allowUnreviewed = false) {
   const cleanFormat = encodeURIComponent(format || 'html');
   const allowFlag = Boolean(allowUnreviewed);
-  return fetchWithAuth(`/reports/${encodeURIComponent(caseId)}/report?format=${cleanFormat}&allow_unreviewed=${allowFlag}`);
+  const data = await fetchWithAuth(`/reports/${encodeURIComponent(caseId)}/report?format=${cleanFormat}&allow_unreviewed=${allowFlag}`);
+  if (data && typeof localStorage !== 'undefined' && caseId) {
+    try {
+      localStorage.setItem(`argus_case_${caseId}_report_completed`, 'true');
+    } catch (_) {}
+  }
+  return data;
 }
 
 

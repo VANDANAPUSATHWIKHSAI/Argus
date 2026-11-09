@@ -528,7 +528,9 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                     analyst_id=data.get("analyst_id"),
                     senior_analyst_id=data.get("senior_analyst_id"),
                     name=data.get("name"),
-                    description=data.get("description")
+                    description=data.get("description"),
+                    has_report=bool(data.get("has_report") or data.get("submitted_to_senior") or data.get("submitted_to_auditor") or (case_dir / "report.json").exists() or (case_dir / "report.html").exists()),
+                    closed_reason=data.get("closed_reason")
                 )
             except Exception as e:
                 logger.warning(f"Failed to read local case_session.json: {e}")
@@ -594,8 +596,13 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
                 from api.routes.auth import get_db_connection
                 with get_db_connection() as conn:
                     with conn.cursor() as cur:
+                        try:
+                            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
+                            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
+                        except Exception:
+                            pass
                         cur.execute(
-                            "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
+                            "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description, has_report, closed_reason FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
                             (tenant_id, tenant_id)
                         )
                         rows = cur.fetchall()
@@ -611,8 +618,13 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
                     connect_timeout=2
                 )
                 cur = conn.cursor()
+                try:
+                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
+                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
+                except Exception:
+                    pass
                 cur.execute(
-                    "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
+                    "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description, has_report, closed_reason FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
                     (tenant_id, tenant_id)
                 )
                 rows = cur.fetchall()
@@ -630,7 +642,9 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
                     analyst_id=row[5] if len(row) > 5 else None,
                     senior_analyst_id=row[6] if len(row) > 6 else None,
                     name=row[7] if len(row) > 7 else None,
-                    description=row[8] if len(row) > 8 else None
+                    description=row[8] if len(row) > 8 else None,
+                    has_report=row[9] if len(row) > 9 and row[9] is not None else False,
+                    closed_reason=row[10] if len(row) > 10 else None
                 ))
             pg_success = True
         except Exception as e:
@@ -751,9 +765,10 @@ def close_case(tenant_id: str, case_id: str, reason: Optional[str] = None) -> bo
             cur = conn.cursor()
             if tenant_id:
                 if reason:
+                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
                     cur.execute(
-                        "UPDATE cases SET status = 'closed', closed_at = NOW(), description = COALESCE(%s, description) WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')));",
-                        (reason, case_id, tenant_id, tenant_id)
+                        "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_reason = %s, description = COALESCE(%s, description) WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')));",
+                        (reason, reason, case_id, tenant_id, tenant_id)
                     )
                 else:
                     cur.execute(

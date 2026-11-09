@@ -4,13 +4,17 @@ import { API_BASE_URL, DEFAULT_TENANT_ID, fetchAgentResults, fetchCaseSummary } 
 import SearchableSelect from '../components/SearchableSelect';
 import '../css/style.css';
 import AlertModal from '../components/AlertModal';
+import CloseCaseReasonModal from '../components/CloseCaseReasonModal';
 import { safeFormatDateOnly, safeFormatDateTime, safeFormatTime } from '../js/dateUtils';
 import { setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
+import { isCaseReportGenerated } from '../js/caseUtils';
 
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
+  const [closeReasonModal, setCloseReasonModal] = useState({ isOpen: false });
+  const [closingCaseLoading, setClosingCaseLoading] = useState(false);
 
   const closeAlert = () => {
     if (customAlert.onClose) customAlert.onClose();
@@ -501,16 +505,30 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleCloseCase = async () => {
+  const initiateCloseCase = () => {
     if (!currentCase) return;
+    const hasReport = isCaseReportGenerated(currentCase);
+    if (!hasReport) {
+      setCloseReasonModal({ isOpen: true });
+      return;
+    }
+    handleCloseCase(null);
+  };
+
+  const handleCloseCase = async (reason = null) => {
+    if (!currentCase) return;
+    setClosingCaseLoading(true);
     try {
       const token = localStorage.getItem('argus_token');
+      const payload = reason ? { reason } : undefined;
       const res = await fetch(`${API_BASE_URL}/cases/${currentCase.case_id}/close`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
-          'X-Tenant-ID': DEFAULT_TENANT_ID
-        }
+          'X-Tenant-ID': DEFAULT_TENANT_ID,
+          ...(payload ? { 'Content-Type': 'application/json' } : {})
+        },
+        ...(payload ? { body: JSON.stringify(payload) } : {})
       });
       if (res.ok) {
         const closedId = currentCase.case_id;
@@ -520,6 +538,7 @@ const AdminDashboard = () => {
         setCurrentCase(null);
         setAgentSummary(null);
         setActiveSummary(null);
+        setCloseReasonModal({ isOpen: false });
         setRefreshTrigger(prev => prev + 1);
         setCustomAlert({
           isOpen: true,
@@ -549,6 +568,8 @@ const AdminDashboard = () => {
         message: 'An error occurred.',
         type: 'error'
       });
+    } finally {
+      setClosingCaseLoading(false);
     }
   };
 
@@ -675,6 +696,14 @@ const AdminDashboard = () => {
         message={customAlert.message} 
         type={customAlert.type} 
         onClose={closeAlert} 
+      />
+      <CloseCaseReasonModal
+        isOpen={closeReasonModal.isOpen}
+        caseId={currentCase?.case_id}
+        caseName={currentCase?.name}
+        isSubmitting={closingCaseLoading}
+        onClose={() => setCloseReasonModal({ isOpen: false })}
+        onConfirm={(reason) => handleCloseCase(reason)}
       />
       
       {/* ACTION BAR & BREADCRUMB */}
@@ -838,7 +867,7 @@ const AdminDashboard = () => {
 
               {currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress') && (
                 <button 
-                  onClick={handleCloseCase}
+                  onClick={initiateCloseCase}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',

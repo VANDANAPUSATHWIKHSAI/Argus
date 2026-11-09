@@ -34,6 +34,8 @@ import Sidebar from '../components/Sidebar';
 import { fetchFindings, closeCase, API_BASE_URL } from '../js/api';
 import { getActiveCaseId, getActiveCaseName, setActiveCase } from '../js/caseEvents';
 import AlertModal from '../components/AlertModal';
+import CloseCaseReasonModal from '../components/CloseCaseReasonModal';
+import { isCaseReportGenerated } from '../js/caseUtils';
 import NotificationMenu from '../components/NotificationMenu';
 
 const syntaxHighlight = (json) => {
@@ -75,6 +77,8 @@ const Sanitized = () => {
   const [showModal, setShowModal] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning', onClose: null });
+  const [closeReasonModal, setCloseReasonModal] = useState({ isOpen: false, caseId: '', caseName: '' });
+  const [closingCaseLoading, setClosingCaseLoading] = useState(false);
   const perPage = 6;
 
   const closeAlert = () => {
@@ -191,21 +195,19 @@ const Sanitized = () => {
     setShowModal(true);
   };
 
-  const handleCloseCase = async () => {
-    const activeCaseName = getActiveCaseName() || localStorage.getItem('active_case_name') || 'Current case';
-    const activeCaseId = getActiveCaseId() || localStorage.getItem('active_case_id');
-    if (!activeCaseId && !localStorage.getItem('active_case_name')) {
-      setCustomAlert({ isOpen: true, title: 'Notice', message: "There is no active case currently open.", type: 'warning' });
-      return;
-    }
+  const executeCloseCase = async (activeCaseId, activeCaseName, reason = null) => {
+    setClosingCaseLoading(true);
     try {
       if (activeCaseId) {
-        await closeCase(activeCaseId);
+        await closeCase(activeCaseId, reason);
       }
     } catch (e) {
       console.error("Failed to close case:", e);
+    } finally {
+      setClosingCaseLoading(false);
     }
     setActiveCase('', '');
+    setCloseReasonModal({ isOpen: false, caseId: '', caseName: '' });
     setCustomAlert({
        isOpen: true,
        title: 'Success',
@@ -213,6 +215,27 @@ const Sanitized = () => {
        type: 'success',
        onClose: () => window.location.reload()
     });
+  };
+
+  const handleCloseCase = async () => {
+    const activeCaseName = getActiveCaseName() || localStorage.getItem('active_case_name') || 'Current case';
+    const activeCaseId = getActiveCaseId() || localStorage.getItem('active_case_id');
+    if (!activeCaseId && !localStorage.getItem('active_case_name')) {
+      setCustomAlert({ isOpen: true, title: 'Notice', message: "There is no active case currently open.", type: 'warning' });
+      return;
+    }
+
+    const hasReport = isCaseReportGenerated(activeCaseId);
+    if (!hasReport) {
+      setCloseReasonModal({
+        isOpen: true,
+        caseId: activeCaseId,
+        caseName: activeCaseName
+      });
+      return;
+    }
+
+    await executeCloseCase(activeCaseId, activeCaseName, null);
   };
 
   const statsTotal = data.length;
@@ -226,6 +249,14 @@ const Sanitized = () => {
         <AlertModal 
           {...customAlert} 
           onClose={closeAlert} 
+        />
+        <CloseCaseReasonModal
+          isOpen={closeReasonModal.isOpen}
+          caseId={closeReasonModal.caseId}
+          caseName={closeReasonModal.caseName}
+          isSubmitting={closingCaseLoading}
+          onClose={() => setCloseReasonModal({ isOpen: false, caseId: '', caseName: '' })}
+          onConfirm={(reason) => executeCloseCase(closeReasonModal.caseId, closeReasonModal.caseName, reason)}
         />
         <Sidebar active="evidence" />
 

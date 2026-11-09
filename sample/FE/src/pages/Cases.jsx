@@ -5,7 +5,9 @@ import AlertModal from '../components/AlertModal';
 import NotificationMenu from '../components/NotificationMenu';
 import GeneratedReportModal from '../components/GeneratedReportModal';
 import CaseDescriptionModal from '../components/CaseDescriptionModal';
+import CloseCaseReasonModal from '../components/CloseCaseReasonModal';
 import { fetchCases, fetchEmployees, fetchReport, closeCase } from '../js/api';
+import { isCaseReportGenerated } from '../js/caseUtils';
 import { safeFormatDateOnly } from '../js/dateUtils';
 import { getActiveCaseId, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
@@ -21,6 +23,8 @@ const Cases = () => {
   const [loadingReportId, setLoadingReportId] = useState(null);
   const [reportModal, setReportModal] = useState({ isOpen: false, caseId: '', reportHtml: '', reportData: null });
   const [descModal, setDescModal] = useState({ isOpen: false, caseData: null });
+  const [closeReasonModal, setCloseReasonModal] = useState({ isOpen: false, caseId: '', caseName: '' });
+  const [closingCaseLoading, setClosingCaseLoading] = useState(false);
   const [showUserDropdown, setShowUserDropdown] = useState(false);
 
   const currentUserStr = localStorage.getItem('argus_user');
@@ -154,6 +158,44 @@ const Cases = () => {
     fetchCasesData();
   };
 
+  const executeCloseCase = async (caseId, caseName, reason = null) => {
+    setClosingCaseLoading(true);
+    try {
+      await closeCase(caseId, reason);
+      if (reason && typeof localStorage !== 'undefined') {
+        try {
+          localStorage.setItem(`argus_case_${caseId}_closed_reason`, reason);
+        } catch (_) {}
+      }
+      if (activeCaseId === caseId) {
+        setActiveCase('', '');
+      }
+      setCloseReasonModal({ isOpen: false, caseId: '', caseName: '' });
+      setCustomAlert({
+        isOpen: true,
+        title: 'Success',
+        message: `Case ${caseName || caseId} was closed successfully.`,
+        type: 'success'
+      });
+      setCases(prevCases => prevCases.map(c => {
+        if (c.case_id === caseId) {
+          return {
+            ...c,
+            status: 'closed',
+            closed_reason: reason || c.closed_reason || c.description,
+            description: reason || c.description
+          };
+        }
+        return c;
+      }));
+      fetchCasesData();
+    } catch (err) {
+      setCustomAlert({ isOpen: true, title: 'Error', message: err.message || 'Failed to close case', type: 'error' });
+    } finally {
+      setClosingCaseLoading(false);
+    }
+  };
+
   const handleCloseCase = async (caseId, caseName) => {
     const targetCase = cases.find(c => c.case_id === caseId);
     if (targetCase?.lock?.is_locked && targetCase?.lock?.read_only) {
@@ -165,21 +207,18 @@ const Cases = () => {
       });
       return;
     }
-    try {
-      await closeCase(caseId);
-      if (activeCaseId === caseId) {
-        setActiveCase('', '');
-      }
-      setCustomAlert({
+
+    const hasReport = isCaseReportGenerated(targetCase || caseId);
+    if (!hasReport) {
+      setCloseReasonModal({
         isOpen: true,
-        title: 'Success',
-        message: `Case ${caseName || caseId} was closed successfully.`,
-        type: 'success'
+        caseId,
+        caseName: caseName || caseId
       });
-      fetchCasesData();
-    } catch (err) {
-      setCustomAlert({ isOpen: true, title: 'Error', message: err.message || 'Failed to close case', type: 'error' });
+      return;
     }
+
+    await executeCloseCase(caseId, caseName, null);
   };
 
   const filteredCases = cases.filter(c => {
@@ -215,6 +254,14 @@ const Cases = () => {
         isOpen={descModal.isOpen}
         onClose={() => setDescModal({ isOpen: false, caseData: null })}
         caseData={descModal.caseData}
+      />
+      <CloseCaseReasonModal
+        isOpen={closeReasonModal.isOpen}
+        caseId={closeReasonModal.caseId}
+        caseName={closeReasonModal.caseName}
+        isSubmitting={closingCaseLoading}
+        onClose={() => setCloseReasonModal({ isOpen: false, caseId: '', caseName: '' })}
+        onConfirm={(reason) => executeCloseCase(closeReasonModal.caseId, closeReasonModal.caseName, reason)}
       />
       
       <Sidebar />
@@ -341,16 +388,7 @@ const Cases = () => {
                       const isOpen = c.status === 'open' || c.status === 'in_progress';
                       // Removed ACTIVE badge from closed cases
                       const isActive = isOpen && activeCaseId === c.case_id;
-                      const hasReport = Boolean(
-                        c.has_report ||
-                        c.submitted_to_senior ||
-                        c.submitted_to_auditor ||
-                        (typeof localStorage !== 'undefined' && (
-                          localStorage.getItem(`argus_case_${c.case_id}_submitted_to_senior`) ||
-                          localStorage.getItem(`argus_case_${c.case_id}_submitted_to_auditor`) ||
-                          localStorage.getItem(`argus_case_${c.case_id}_report_completed`)
-                        ))
-                      );
+                      const hasReport = isCaseReportGenerated(c);
                       const displayName = c.name && c.name !== c.case_id ? c.name : 'Unnamed Case';
 
                       return (
@@ -422,43 +460,50 @@ const Cases = () => {
                           <td style={{ padding: '16px 24px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
 
-                              {/* 1. Open Cases: View Report, Close, Description (and Read-Only Investigation when locked) */}
+                              {/* Lock Read-Only button for locked open cases */}
+                              {isOpen && c.lock?.is_locked && c.lock?.read_only && (
+                                <button
+                                  onClick={() => handleSetActiveCase(c)}
+                                  style={{
+                                    background: 'rgba(245, 158, 11, 0.15)',
+                                    color: '#f59e0b',
+                                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                  }}
+                                  title="Open case in read-only mode"
+                                >
+                                  Investigate (Read-Only)
+                                </button>
+                              )}
+
+                              {/* 1. Report Generated Cases: MUST have View Report button */}
+                              {hasReport && (
+                                <button
+                                  onClick={() => handleViewReport(c)}
+                                  disabled={loadingReportId === c.case_id}
+                                  style={{
+                                    background: 'rgba(59, 130, 246, 0.1)',
+                                    color: '#3b82f6',
+                                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                                    padding: '6px 12px',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    cursor: loadingReportId === c.case_id ? 'wait' : 'pointer'
+                                  }}
+                                  title="View forensic report"
+                                >
+                                  {loadingReportId === c.case_id ? 'Loading...' : 'View Report'}
+                                </button>
+                              )}
+
+                              {/* 2. Open Cases: Close button (and Description for scope if no report yet) */}
                               {isOpen && (
                                 <>
-                                  {c.lock?.is_locked && c.lock?.read_only && (
-                                    <button
-                                      onClick={() => handleSetActiveCase(c)}
-                                      style={{
-                                        background: 'rgba(245, 158, 11, 0.15)',
-                                        color: '#f59e0b',
-                                        border: '1px solid rgba(245, 158, 11, 0.4)',
-                                        padding: '6px 12px',
-                                        borderRadius: '6px',
-                                        fontSize: '12px',
-                                        fontWeight: 600,
-                                        cursor: 'pointer'
-                                      }}
-                                      title="Open case in read-only mode"
-                                    >
-                                      Investigate (Read-Only)
-                                    </button>
-                                  )}
-                                  <button
-                                    onClick={() => handleViewReport(c)}
-                                    disabled={loadingReportId === c.case_id}
-                                    style={{
-                                      background: 'rgba(59, 130, 246, 0.1)',
-                                      color: '#3b82f6',
-                                      border: '1px solid rgba(59, 130, 246, 0.3)',
-                                      padding: '6px 12px',
-                                      borderRadius: '6px',
-                                      fontSize: '12px',
-                                      fontWeight: 600,
-                                      cursor: loadingReportId === c.case_id ? 'wait' : 'pointer'
-                                    }}
-                                  >
-                                    {loadingReportId === c.case_id ? 'Loading...' : 'View Report'}
-                                  </button>
                                   <button
                                     onClick={() => handleCloseCase(c.case_id, c.name)}
                                     style={{
@@ -475,46 +520,28 @@ const Cases = () => {
                                   >
                                     Close
                                   </button>
-                                  <button
-                                    onClick={() => setDescModal({ isOpen: true, caseData: c })}
-                                    style={{
-                                      background: 'rgba(59, 130, 246, 0.08)',
-                                      color: 'var(--text-main)',
-                                      border: '1px solid var(--border-subtle)',
-                                      padding: '6px 12px',
-                                      borderRadius: '6px',
-                                      fontSize: '12px',
-                                      fontWeight: 500,
-                                      cursor: 'pointer'
-                                    }}
-                                    title="View case scope & description"
-                                  >
-                                    Description
-                                  </button>
+                                  {!hasReport && (
+                                    <button
+                                      onClick={() => setDescModal({ isOpen: true, caseData: c })}
+                                      style={{
+                                        background: 'rgba(59, 130, 246, 0.08)',
+                                        color: 'var(--text-main)',
+                                        border: '1px solid var(--border-subtle)',
+                                        padding: '6px 12px',
+                                        borderRadius: '6px',
+                                        fontSize: '12px',
+                                        fontWeight: 500,
+                                        cursor: 'pointer'
+                                      }}
+                                      title="View case scope & description"
+                                    >
+                                      Description
+                                    </button>
+                                  )}
                                 </>
                               )}
 
-                              {/* 2. Closed Cases With Report: View Report only */}
-                              {!isOpen && hasReport && (
-                                <button
-                                  onClick={() => handleViewReport(c)}
-                                  disabled={loadingReportId === c.case_id}
-                                  style={{
-                                    background: 'rgba(59, 130, 246, 0.1)',
-                                    color: '#3b82f6',
-                                    border: '1px solid rgba(59, 130, 246, 0.3)',
-                                    padding: '6px 12px',
-                                    borderRadius: '6px',
-                                    fontSize: '12px',
-                                    fontWeight: 600,
-                                    cursor: loadingReportId === c.case_id ? 'wait' : 'pointer'
-                                  }}
-                                >
-                                  {loadingReportId === c.case_id ? 'Loading...' : 'View Report'}
-                                </button>
-                              )}
-
-                              {/* 3. Closed Cases Without Report: Description only */}
+                              {/* 3. Closed Cases Without Report: Description button showing the reason */}
                               {!isOpen && !hasReport && (
                                 <button
                                   onClick={() => setDescModal({ isOpen: true, caseData: c })}
@@ -528,7 +555,7 @@ const Cases = () => {
                                     fontWeight: 500,
                                     cursor: 'pointer'
                                   }}
-                                  title="View case closure description"
+                                  title="View case closure reason & description"
                                 >
                                   Description
                                 </button>

@@ -244,6 +244,48 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
             injection_score=gate_res.injection_score
         )
 
+    # Time / Date / Clock queries (< 0.1ms)
+    time_triggers = (
+        "what is the time", "what time is it", "current time", "what's the time",
+        "tell me the time", "time now", "what time is it now", "whats the time"
+    )
+    date_triggers = (
+        "what is today's date", "what's the date", "what is the date", "today's date",
+        "current date", "what day is it", "whats the date", "today date"
+    )
+    is_time_query = (
+        clean_q in time_triggers or
+        clean_q == "time" or
+        (any(clean_q.startswith(t) for t in ("what time", "what is the time", "tell me the time", "current time")) and not any(k in clean_q for k in ("attack", "incident", "breach", "c2", "beacon", "malware", "event", "case")))
+    )
+    is_date_query = (
+        clean_q in date_triggers or
+        clean_q == "date" or
+        clean_q == "today" or
+        (any(clean_q.startswith(d) for d in ("what is the date", "what's the date", "today's date", "what day")) and not any(k in clean_q for k in ("attack", "incident", "breach", "event", "case")))
+    )
+
+    if is_time_query or is_date_query:
+        from datetime import datetime, timezone
+        now_local = datetime.now()
+        now_utc = datetime.now(timezone.utc)
+        local_str = now_local.strftime("%I:%M %p").lstrip("0")
+        utc_str = now_utc.strftime("%H:%M UTC")
+        date_str = now_local.strftime("%A, %B %d, %Y")
+
+        if is_time_query and not is_date_query:
+            resp_str = f"The current system time is **{local_str}** ({utc_str})."
+        elif is_date_query and not is_time_query:
+            resp_str = f"Today's date is **{date_str}**."
+        else:
+            resp_str = f"The current system time is **{local_str}** ({utc_str}) on **{date_str}**."
+
+        return QueryResponse(
+            response=resp_str,
+            injection_flagged=gate_res.injection_flagged,
+            injection_score=gate_res.injection_score
+        )
+
     # 2. Pull all findings for the case from FIRRepository
     findings = _fir_repo.get_by_case(x_tenant_id, clean_case_id)
     if not findings and case_id != clean_case_id:
@@ -297,14 +339,18 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
             history_str = "<conversation_history>\n" + "\n".join(history_lines) + "\n</conversation_history>\n\n"
 
     # 4.1 Construct prompt structurally separating analyst query, history, and evidence context
+    from datetime import datetime, timezone
+    now_local_str = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+    now_utc_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     prompt = (
         f"SYSTEM INSTRUCTION:\n"
         f"You are the ARGUS AI Forensic Assistant analyzing Case {clean_case_id}.\n"
+        f"Current Real-Time Clock: {now_local_str} ({now_utc_str})\n"
         f"Strict Guidelines:\n"
         f"1. Answer ONLY what the analyst directly asks in <analyst_query>.\n"
         f"2. NEVER append unsolicited 'Next steps', 'Containment', or 'Remediation' checklists unless the analyst explicitly asks for actions, containment, or mitigation.\n"
         f"3. If the analyst asks a follow-up question (e.g., 'why', 'check once more', 'explain that'), refer to <conversation_history> to understand the context.\n"
-        f"4. If the analyst asks a general or calculation question (such as math, definition, or verification), answer directly and concisely without bringing in unprompted case evidence.\n"
+        f"4. If the analyst asks a general or calculation question (such as math, time, date, definition, or verification), answer directly and concisely without bringing in unprompted case evidence.\n"
         f"5. Always finish your thoughts completely.\n\n"
         f"{history_str}"
         f"<analyst_query>\n{req.query}\n</analyst_query>\n\n"
@@ -317,7 +363,7 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
     is_action = any(k in clean_q for k in ("action", "contain", "mitigat", "remediat", "what to do", "what should i do", "next step", "recommend", "recommen", "recom", "isolate", "step"))
     is_victim = any(k in clean_q for k in ("victim", "target", "affected", "workstation", "who was attacked"))
     is_ioc = any(k in clean_q for k in ("ioc", "indicator", "c2 address", "c2 domain", "indicators of compromise"))
-    is_timeline = any(k in clean_q for k in ("timeline", "chronological", "sequence of events", "reconstruct", "attack timeline"))
+    is_timeline = any(k in clean_q for k in ("timeline", "chronological", "sequence of events", "reconstruct", "attack timeline", "attack time", "incident time", "when did the attack", "time of the attack", "time of incident", "when did it happen", "event time", "timestamp"))
     is_process = any(k in clean_q for k in ("process", "execution tree", "parent-child", "spawning", "cmd.exe", "powershell"))
     is_actor = any(k in clean_q for k in ("threat actor", "attribution", "group", "apt", "mitre", "attack mapping", "ttp"))
     is_malware = any(k in clean_q for k in ("malware", "virus", "trojan", "payload", "infect", "compromise"))

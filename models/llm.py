@@ -387,233 +387,48 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
             },
 
             "limitations": [],
-
-            "claims": [
-
-                {
-
-                    "claim_id": "CLM-AG1-001",
-
-                    "summary": "Malicious execution and payload delivery confirmed by forensic observables",
-
-                    "findings_summary": f"Finding {primary_id} demonstrates unauthorized intrusion activity",
-
-                    "cited_evidence_ids": secondary_ids,
-
-                    "assessed_importance": "critical",
-
-                    "confidence_score": 0.95,
-
-                    "missing_evidence_noted": [],
-
-                    "uncertainties_or_conflicts": [],
-
-                    "reasoning_notes": "Ground truth forensic extraction strictly confirms initial access observables."
-
-                }
-
-            ]
-
+            "claims": []
         })
 
-
-
     # 3. Agent 2: Evidence Correlation
-
     if "agent 2" in system_lower or "evidence correlation" in system_lower or "deterministic correlation signals" in prompt_lower or "<deterministic_correlation_signals>" in prompt:
-
         return json.dumps({
-
-            "claims": [
-
-                {
-
-                    "claim_id": "CLM-AG2-001",
-
-                    "summary": "Correlated ingress artifact to endpoint process execution",
-
-                    "correlation_type": "temporal_and_artifact",
-
-                    "findings_summary": f"Findings {', '.join(secondary_ids)} share direct timeline proximity and host observable correlation",
-
-                    "cited_evidence_ids": secondary_ids,
-
-                    "community_id": "GC-001",
-
-                    "assessed_importance": "critical",
-
-                    "confidence_score": 0.95,
-
-                    "timeline_sequence": secondary_ids,
-
-                    "conflicts_noted": [],
-
-                    "reasoning_notes": "Temporal sequence aligns with initial access, payload staging, and execution."
-
-                }
-
-            ]
-
+            "claims": []
         })
 
 
 
     # 4. Agent 3: Attack Reconstruction
-
     if "agent 3" in system_lower or "attack reconstruction" in system_lower or "reconstruct the attack timeline" in prompt_lower:
-
-        timeline = []
-
-        stages = ["Initial Access", "Execution", "Persistence", "Command and Control"]
-
-        for idx, fid in enumerate(finding_ids[:4]):
-
-            stg = stages[idx % len(stages)]
-
-            timeline.append({
-
-                "timestamp": f"2026-09-24T10:1{idx}:00Z",
-
-                "event": f"Adversary activity detected: {stg}",
-
-                "stage": stg,
-
-                "evidence_ids": [fid],
-
-                "confidence": 0.95
-
-            })
-
+        # Strict forensic rule: When LLM inference is unavailable or in fallback,
+        # NEVER fabricate adversary activity, kill-chain templates, or unsupported stages with synthetic confidence.
         return json.dumps({
-
+            "execution_status": "MODEL_UNAVAILABLE",
             "infection_path": {
-
-                "entry_point": f"Initial intrusion vector identified via {primary_id}",
-
-                "evidence_ids": [primary_id],
-
-                "confidence": 0.96
-
+                "entry_point": "No confirmed intrusion vector in examined evidence",
+                "evidence_ids": [],
+                "confidence": 0.0,
+                "citation_verified": False
             },
-
-            "attack_timeline": timeline,
-
-            "attack_chain": [
-
-                {"stage": "Initial Access", "events": ["Inbound vector processed"], "evidence_ids": [primary_id], "confidence": 0.95},
-
-                {"stage": "Execution", "events": ["Payload execution"], "evidence_ids": secondary_ids[:2], "confidence": 0.94}
-
-            ],
-
-            "attack_path": [
-
-                {
-
-                    "step_number": idx + 1,
-
-                    "stage": item["stage"],
-
-                    "description": item["event"],
-
-                    "evidence_ids": item["evidence_ids"],
-
-                    "confidence": item["confidence"]
-
-                }
-
-                for idx, item in enumerate(timeline)
-
-            ],
-
+            "attack_timeline": [],
+            "attack_chain": [],
+            "attack_path": [],
             "lateral_movement": [],
-
             "missing_expected_events": [],
-
-            "reconstruction_summary": "Reconstructed multi-stage forensic progression from ingress to execution.",
-
-            "overall_confidence": 0.95
-
+            "reconstruction_summary": "Model inference unavailable. Deterministic ground truth reports zero confirmed attack stages.",
+            "overall_confidence": 0.0
         })
 
-
-
     # 5. Agent 7: Supervisor Synthesis
-
     if "supervisor" in system_lower or "synthesis" in system_lower or "executive_summary" in prompt_lower:
-
         return json.dumps({
-
-            "executive_summary": "Comprehensive forensic synthesis of multi-stage security incident.",
-
-            "incident_narrative": "Adversary gained initial access via spearphishing attachment, executed encoded PowerShell commands, and initiated persistence and lateral movement operations.",
-
-            "claims": [
-
-                {
-
-                    "claim_id": "CLM-AG7-001",
-
-                    "claim": "Inbound phishing email with malicious attachment delivered to victim host.",
-
-                    "evidence_ids": [primary_id],
-
-                    "severity": "high",
-
-                    "is_attribution": False,
-
-                    "confidence": 0.95,
-
-                    "mitre_tactics": ["Initial Access"],
-
-                    "mitre_techniques": ["T1566.001"]
-
-                },
-
-                {
-
-                    "claim_id": "CLM-AG7-002",
-
-                    "claim": "PowerShell execution of obfuscated command-and-control payload.",
-
-                    "evidence_ids": secondary_ids,
-
-                    "severity": "critical",
-
-                    "is_attribution": False,
-
-                    "confidence": 0.96,
-
-                    "mitre_tactics": ["Execution"],
-
-                    "mitre_techniques": ["T1059.001"]
-
-                }
-
-            ],
-
-            "attack_timeline": [
-
-                {
-
-                    "timestamp": "2026-09-24T10:15:30Z",
-
-                    "stage": "Initial Access",
-
-                    "summary": "Phishing email received and attachment processed",
-
-                    "source_tool": "email_gateway",
-
-                    "evidence_id": primary_id
-
-                }
-
-            ],
-
+            "execution_status": "MODEL_UNAVAILABLE",
+            "executive_summary": "LLM synthesis unavailable. Grounded telemetry reflects examined artifacts without confirmed attack narrative.",
+            "incident_narrative": "No supporting evidence of an attack or adversary activity was identified in the submitted and examined artifacts.",
+            "claims": [],
+            "attack_timeline": [],
             "conflicts_resolved": [],
-
-            "confidence_score": 0.94
-
+            "confidence_score": 0.0
         })
 
 
@@ -755,11 +570,12 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
 
     if is_summary:
         if is_registry_case and not has_network:
+            primary_fact = parsed_findings[0]["fact"] if parsed_findings else "Windows Registry baseline artifacts ingested"
             return (
                 f"**Case {case_label} Summary**:\n"
                 f"- **Evidence**: Windows Registry hives (`SYSTEM`, `NTUSER.DAT`, `SOFTWARE`)\n"
-                f"- **Finding**: Recent document interaction recorded in RecentDocs MRU (`MRUListEx`)\n"
-                f"- **Verdict**: Clean user activity; zero unauthorized persistence keys detected."
+                f"- **Finding**: {primary_fact}\n"
+                f"- **Verdict**: No unauthorized persistence keys detected in examined scope."
             )
         return (
             f"**Case {case_label} Summary**:\n"
@@ -803,7 +619,7 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
             return (
                 f"**Case Observables (Case {case_label})**:\n"
                 f"- **Hive Artifacts**: Windows Registry hives (`SYSTEM`, `NTUSER.DAT`, `SOFTWARE`)\n"
-                f"- **Observable**: RecentDocs MRU document interaction (`MRUListEx`)\n"
+                f"- **Observable**: RecentDocs MRU access tracking structure identified (MRUListEx index sequence)\n"
                 f"- **C2 Status**: No external network IOCs observed in this container."
             )
         return (
@@ -815,7 +631,7 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
 
     if is_timeline:
         if is_registry_case and not has_network:
-            return f"**Timeline (Case {case_label})**: Registry hives ingested and verified. Recent document interaction recorded in RecentDocs MRU (`MRUListEx`)."
+            return f"**Timeline (Case {case_label})**: Registry hives ingested and verified. User activity tracking structures recorded in RecentDocs MRU keys."
         return f"**Timeline (Case {case_label})**: Endpoint `{victim_ip}` initiated outbound sessions to `{c2_target}`."
 
     if is_process:
@@ -831,9 +647,9 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
     if is_registry_case and not has_network:
         real_claims = [{
             "claim_id": "CLM-REG-001",
-            "summary": "RecentDocs MRU User Document Interaction Identified",
-            "claim": f"User interaction with documents recorded in NTUSER.DAT RecentDocs MRU keys for Case {case_label}.",
-            "findings_summary": parsed_findings[0]["fact"][:140] if parsed_findings else "RecentDocs MRU interaction recorded",
+            "summary": "RecentDocs MRU User Activity Tracking Structure Identified",
+            "claim": f"User interaction structures recorded in NTUSER.DAT RecentDocs MRU keys for Case {case_label}.",
+            "findings_summary": parsed_findings[0]["fact"][:140] if parsed_findings else "RecentDocs MRU tracking structure identified",
             "cited_evidence_ids": [parsed_findings[0]["id"] if parsed_findings else "EVID-001"],
             "evidence_ids": [parsed_findings[0]["id"] if parsed_findings else "EVID-001"],
             "severity": "informational",
@@ -851,12 +667,12 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
         }, {
             "timestamp": "2026-11-10T10:29:19Z",
             "stage": "MRU User Activity",
-            "summary": "RecentDocs MRUListEx document interaction observed",
+            "summary": "RecentDocs MRU ordering sequence (MRUListEx) identified",
             "evidence_id": parsed_findings[0]["id"] if parsed_findings else "EVID-001"
         }]
         exec_summary = (
             f"Forensic analysis of case evidence identified {len(parsed_findings)} endpoint artifact observables from "
-            f"ingested Windows Registry containers. Verified user activity includes RecentDocs MRU document interactions ('MRUListEx'). "
+            f"ingested Windows Registry containers. Verified user activity includes RecentDocs MRU access tracking structures. "
             f"No active network C2 beaconing or external IP communication was present in this container."
         )
     else:
@@ -1479,74 +1295,50 @@ class OllamaWrapper:
 
 
         model_name = self.model_name
-
-        if model_name in ("Qwen/Qwen3-8B", "Qwen3-8B", "Qwen/Qwen3-14B", "Qwen3-14B", "qwen3:8b"):
-
-            model_name = "qwen2.5:latest"
-
+        if model_name in ("Qwen/Qwen3-8B", "Qwen3-8B", "Qwen/Qwen3-14B", "Qwen3-14B", "qwen3-8b", "qwen3:8b"):
+            model_name = "qwen3:8b"
         elif "/" in model_name:
-
             model_name = model_name.split("/")[-1].lower()
 
-
-
         conn_timeout = float(os.getenv("OLLAMA_CONNECT_TIMEOUT", "3.0"))
-
         read_timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", str(self.timeout if self.timeout else 75.0)))
 
-
-
         payload = {
-
             "model": model_name,
-
             "prompt": prompt,
-
             "stream": False,
-
             "keep_alive": "24h",
-
             "options": {
-
-                "num_ctx": 2048,
-
-                "num_predict": 650,
-
-                "temperature": 0.1
-
+                "num_ctx": 4096,
+                "num_predict": 1024,
+                "temperature": 0.2
             }
-
         }
-
         if system_prompt:
-
             payload["system"] = system_prompt
 
-
-
+        last_error = None
         try:
-
             r = requests.post(url, json=payload, timeout=(conn_timeout, read_timeout))
-
             if r.status_code == 200:
-
                 resp = r.json().get("response", "")
-
                 if resp and resp.strip():
-
                     return resp.strip()
-
+            else:
+                last_error = f"HTTP {r.status_code}: {r.text[:200]}"
+                logger.warning("Ollama primary model '%s' error: %s", model_name, last_error)
         except Exception as e:
+            last_error = str(e)
+            logger.warning("Ollama connection exception for model '%s': %s", model_name, e)
 
-            logger.info("Ollama primary model '%s' error: %s", model_name, e)
+        if not self.allow_mock:
+            raise RuntimeError(f"Ollama call to '{model_name}' failed: {last_error}")
 
-
-
-        if self.allow_mock or getattr(settings, "app_env", "development") != "production":
-
+        if getattr(settings, "app_env", "development") != "production":
             logger.info("[OLLAMA FALLBACK] Utilizing query-aware dynamic synthesis.")
-
             return generate_smart_reasoning_fallback(prompt, system_prompt)
+
+        raise RuntimeError(f"Ollama call to '{model_name}' failed: {last_error}")
 
         raise RuntimeError(f"Ollama generation failed for model '{model_name}'")
 

@@ -247,9 +247,11 @@ class SupervisorAgent(BaseAgent):
             all_verified = bool(ver_results) and all(r.get("verified", False) for r in ver_results)
             unverified_count = sum(1 for r in ver_results if not r.get("verified", False))
 
-            # Distinguish COMPLETED from NEEDS_REVIEW and FAILED
+            # Distinguish COMPLETED from NEEDS_REVIEW, FAILED, and MODEL_UNAVAILABLE
             synthesis_error = synthesis_data.get("synthesis_error") or state.get("error")
-            if synthesis_data.get("synthesis_status") == "FAILED" or synthesis_error:
+            if synthesis_data.get("synthesis_status") == "MODEL_UNAVAILABLE":
+                terminal_status = "MODEL_UNAVAILABLE"
+            elif synthesis_data.get("synthesis_status") == "FAILED" or synthesis_error:
                 terminal_status = "FAILED"
             elif not claims or not ver_results or not all_verified or review_level == "MANDATORY_SENIOR_DUAL_REVIEW":
                 terminal_status = "NEEDS_REVIEW"
@@ -260,8 +262,8 @@ class SupervisorAgent(BaseAgent):
                 "case_id": case_id,
                 "tenant_id": tenant_id,
                 "status": terminal_status,
-                "execution_status": "FAILED" if terminal_status == "FAILED" else "SUCCESS",
-                "error": synthesis_error if terminal_status == "FAILED" else None,
+                "execution_status": terminal_status,
+                "error": synthesis_error if terminal_status in ("FAILED", "MODEL_UNAVAILABLE") else None,
                 "review_level": review_level,
                 "synthesis": synthesis_data,
                 "verification_results": ver_results,

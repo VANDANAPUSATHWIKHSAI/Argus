@@ -42,27 +42,58 @@ class AttackPathGraphWriter:
         tenant_id = output.tenant_id
 
         try:
-            # 1. Clear pre-existing AttackStep nodes for this case_id & tenant_id
-            self._exec_cypher(
-                "MATCH (s:AttackStep {case_id: $case_id, tenant_id: $tenant_id}) DETACH DELETE s",
-                {"case_id": case_id, "tenant_id": tenant_id}
-            )
+            # Preserve existing graph state when execution failed or model was unavailable
+            if output.execution_status in ("MODEL_UNAVAILABLE", "EXECUTION_FAILED", "VALIDATION_FAILED"):
+                logger.info(
+                    "Agent 3: Execution status is '%s'; skipping attack path graph sync for case %s to preserve historical state.",
+                    output.execution_status, case_id
+                )
+                return True
 
-            # 2. Write AttackStep nodes & SUPPORTED_BY evidence links
             steps = output.attack_path or []
+            if not steps:
+                logger.info("Agent 3: No attack path steps to synchronize for case %s. Preserving graph state.", case_id)
+                return True
+
             previous_step_id = None
 
             for step in sorted(steps, key=lambda x: x.step_number):
                 step_id = f"STEP-{case_id}-{step.step_number:02d}"
 
-                # Create AttackStep node
+                # Determine explicit provenance based on citation verification
+                prov_type = getattr(step, "provenance_type", None)
+                has_validated_citations = bool(step.evidence_ids and getattr(step, "citation_verified", False))
+
+                if not prov_type:
+                    prov_type = "EVIDENCE_CORRELATED" if has_validated_citations else "HYPOTHESIS"
+
+                # Mandatory constraint: Cannot write OBSERVED or EVIDENCE_CORRELATED without validated citations
+                if prov_type in ("OBSERVED", "EVIDENCE_CORRELATED") and not has_validated_citations:
+                    logger.warning(
+                        "Forensic constraint enforcement: Attack step %s claims %s "
+                        "without validated evidence references. Demoting to HYPOTHESIS.",
+                        step_id, prov_type
+                    )
+                    prov_type = "HYPOTHESIS"
+
+                status_val = "CONFIRMED" if prov_type in ("OBSERVED", "EVIDENCE_CORRELATED") else "UNCONFIRMED_HYPOTHESIS"
+                reasoning_text = getattr(step, "reasoning_basis", None) or (
+                    step.description if prov_type in ("OBSERVED", "EVIDENCE_CORRELATED")
+                    else f"Analytical hypothesis (unverified citations): {step.description}"
+                )
+                step_conf = step.confidence if prov_type in ("OBSERVED", "EVIDENCE_CORRELATED") else min(step.confidence or 0.35, 0.35)
+
+                # Create or update AttackStep node preserving historical identities
                 self._exec_cypher(
                     """
                     MERGE (s:AttackStep {id: $step_id, case_id: $case_id, tenant_id: $tenant_id})
                     SET s.step_number = $step_number,
                         s.stage = $stage,
                         s.description = $description,
-                        s.confidence = $confidence
+                        s.confidence = $confidence,
+                        s.provenance_type = $provenance_type,
+                        s.status = $status,
+                        s.reasoning_basis = $reasoning_basis
                     """,
                     {
                         "step_id": step_id,
@@ -71,7 +102,10 @@ class AttackPathGraphWriter:
                         "step_number": step.step_number,
                         "stage": step.stage,
                         "description": step.description,
-                        "confidence": step.confidence
+                        "confidence": step_conf,
+                        "provenance_type": prov_type,
+                        "status": status_val,
+                        "reasoning_basis": reasoning_text
                     }
                 )
 
@@ -92,21 +126,22 @@ class AttackPathGraphWriter:
                     )
                 previous_step_id = step_id
 
-                # Link SUPPORTED_BY relationships to Artifact nodes in Evidence Graph
-                for eid in step.evidence_ids:
-                    self._exec_cypher(
-                        """
-                        MATCH (s:AttackStep {id: $step_id, case_id: $case_id, tenant_id: $tenant_id})
-                        MERGE (a:Artifact {id: $eid, case_id: $case_id, tenant_id: $tenant_id})
-                        MERGE (s)-[r:SUPPORTED_BY {case_id: $case_id, tenant_id: $tenant_id}]->(a)
-                        """,
-                        {
-                            "step_id": step_id,
-                            "eid": eid,
-                            "case_id": case_id,
-                            "tenant_id": tenant_id
-                        }
-                    )
+                # Link SUPPORTED_BY relationships to Artifact nodes ONLY for evidence-correlated steps
+                if prov_type in ("OBSERVED", "EVIDENCE_CORRELATED") and has_validated_citations:
+                    for eid in step.evidence_ids:
+                        self._exec_cypher(
+                            """
+                            MATCH (s:AttackStep {id: $step_id, case_id: $case_id, tenant_id: $tenant_id})
+                            MERGE (a:Artifact {id: $eid, case_id: $case_id, tenant_id: $tenant_id})
+                            MERGE (s)-[r:SUPPORTED_BY {case_id: $case_id, tenant_id: $tenant_id}]->(a)
+                            """,
+                            {
+                                "step_id": step_id,
+                                "eid": eid,
+                                "case_id": case_id,
+                                "tenant_id": tenant_id
+                            }
+                        )
 
             # 3. Write Lateral Movement Host nodes & LATERAL_MOVEMENT edges
             for lm in output.lateral_movement or []:

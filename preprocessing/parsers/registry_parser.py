@@ -706,13 +706,16 @@ def _make_artifact(
     elif p_lower in ("recentdocs", "runmru", "typedpaths", "office") or "\\recentdocs" in kp_lower:
         artifact_type = "recentdocs"
         timestamp_type = "accessed"
+        is_mru_index = bool(value_name and value_name.lower() in ("mrulistex", "mrulist"))
+        # MRUListEx is an ordering structure index array, NOT a document filename
+        doc_filename = None if is_mru_index else (value_data if (value_data and not value_data.startswith("{") and len(value_data) < 260) else value_name)
         norm = NormalizedFields(
-            file_name=value_name,
+            file_name=doc_filename,
             file_path=display_path,
             registry_key=key_path,
             registry_value=value_name,
             registry_value_data=value_data,
-            rule_name=plugin,
+            rule_name="RecentDocs_Index" if is_mru_index else plugin,
         )
 
     elif p_lower in ("bam", "dam") or "\\services\\bam\\" in kp_lower or "\\services\\dam\\" in kp_lower:

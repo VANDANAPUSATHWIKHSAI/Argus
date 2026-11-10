@@ -114,24 +114,36 @@ class UserActivityAnalyzer:
             elif art_type in ("endpoint.recentdocs") or (
                 art_type == "registry_key" and "recentdocs" in (norm.registry_key or "").lower()
             ):
+                reg_val = (norm.registry_value or str(raw.get("value_name", ""))).lower()
                 doc_name = norm.file_name or norm.file_path or str(raw.get("value_data", "")) or str(raw.get("value", ""))
-                if doc_name:
+                is_mru_index = reg_val in ("mrulistex", "mrulist") or doc_name.lower() in ("mrulistex", "mrulist")
+
+                if is_mru_index:
+                    fact_msg = "User document access tracking structure identified in RecentDocs MRU (MRUListEx ordering sequence index)."
+                    doc_ident = "MRUListEx_Index"
+                elif doc_name:
                     fact_msg = f"Recent document interaction recorded in RecentDocs MRU: document '{doc_name}'."
-                    findings.append(Finding(
-                        case_id=case_id,
-                        fact=fact_msg,
-                        confidence=0.85,
-                        severity="informational",
-                        mitre_mapping=None,
-                        timestamp=ts,
-                        evidence_reference=fcr_ref or artifact.artifact_id,
-                        source_artifact_id=artifact.artifact_id,
-                        layer="endpoint.user_activity_analyzer",
-                        metadata={
-                            "document_name": doc_name,
-                            "artifact_id": artifact.artifact_id,
-                        }
-                    ))
+                    doc_ident = doc_name
+                else:
+                    fact_msg = "Recent document interaction recorded in RecentDocs MRU."
+                    doc_ident = "Unknown_Document"
+
+                findings.append(Finding(
+                    case_id=case_id,
+                    fact=fact_msg,
+                    confidence=0.85,
+                    severity="informational",
+                    mitre_mapping=None,
+                    timestamp=ts,
+                    evidence_reference=fcr_ref or artifact.artifact_id,
+                    source_artifact_id=artifact.artifact_id,
+                    layer="endpoint.user_activity_analyzer",
+                    metadata={
+                        "document_name": doc_ident,
+                        "is_ordering_index": is_mru_index,
+                        "artifact_id": artifact.artifact_id,
+                    }
+                ))
 
             # 4. SRUM (Resource Usage)
             elif art_type in ("srum_entry", "endpoint.srum"):

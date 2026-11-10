@@ -155,7 +155,9 @@ class AttackReconstructionAgent(BaseAgent):
             llm_response = ""
 
         # 5. Parse output with robust fallback generator
-        valid_finding_ids, valid_lineage_ids = self.validator.extract_valid_id_universe(fir_findings)
+        valid_finding_ids, valid_lineage_ids = self.validator.extract_valid_id_universe(
+            fir_findings, case_id=case_id, tenant_id=tenant_id
+        )
         valid_universe = valid_finding_ids.union(valid_lineage_ids)
 
         output = self._parse_json_to_output(
@@ -188,9 +190,15 @@ class AttackReconstructionAgent(BaseAgent):
         # 9. Deterministic Neo4j Attack Path Graph Sync
         try:
             writer = AttackPathGraphWriter(neo4j_client=self.path_builder.neo4j_client)
-            writer.sync_attack_path(output)
+            graph_synced = writer.sync_attack_path(output)
+            if graph_synced is False and output.execution_status == "COMPLETED_WITH_FINDINGS":
+                output.execution_status = "NEEDS_REVIEW"
+                output.error_message = "Graph persistence was not completed."
         except Exception as exc:
-            logger.debug("Agent 3 Neo4j graph sync note: %s", exc)
+            logger.warning("Agent 3 Neo4j graph sync note: %s", exc)
+            if output.execution_status == "COMPLETED_WITH_FINDINGS":
+                output.execution_status = "NEEDS_REVIEW"
+                output.error_message = f"Graph persistence failed: {exc}"
 
         return output.model_dump()
 
@@ -206,6 +214,7 @@ class AttackReconstructionAgent(BaseAgent):
         llm_error: Optional[str] = None
     ) -> Agent3Output:
         parsed_dict = None
+        json_parse_error = False
         if llm_response:
             cleaned = llm_response.strip()
             if "```json" in cleaned:
@@ -216,9 +225,26 @@ class AttackReconstructionAgent(BaseAgent):
             try:
                 parsed_dict = json.loads(cleaned)
             except Exception as err:
+                json_parse_error = True
                 logger.debug("Agent 3: Could not parse LLM output as JSON (%s). Using fallback synthesis.", err)
+        elif llm_error:
+            pass
+        else:
+            json_parse_error = True
 
         if parsed_dict and isinstance(parsed_dict, dict):
+            # Check upstream status
+            upstream_status = parsed_dict.get("execution_status")
+            if upstream_status == "MODEL_UNAVAILABLE" or (llm_error and "MODEL_UNAVAILABLE" in str(llm_error)):
+                target_status = "MODEL_UNAVAILABLE"
+                err_msg = "MODEL_UNAVAILABLE: Model inference was offline or unavailable."
+            elif upstream_status == "EXECUTION_FAILED":
+                target_status = "EXECUTION_FAILED"
+                err_msg = parsed_dict.get("error_message") or "Model execution failed upstream."
+            else:
+                target_status = None
+                err_msg = None
+
             try:
                 norm_data = self.validator.normalize_raw_dict(parsed_dict, valid_universe)
                 
@@ -230,10 +256,17 @@ class AttackReconstructionAgent(BaseAgent):
                         existing_missing_events.append(det.model_dump(mode="json"))
                 norm_data["missing_expected_events"] = existing_missing_events
 
+                if not target_status:
+                    has_steps = bool(norm_data.get("attack_path") or norm_data.get("attack_timeline"))
+                    if has_steps:
+                        target_status = "COMPLETED_WITH_FINDINGS"
+                    else:
+                        target_status = "COMPLETED_WITH_NO_FINDINGS"
+
                 return Agent3Output(
                     agent_id="agent_3",
-                    execution_status="SUCCESS",
-                    error_message=None,
+                    execution_status=target_status,
+                    error_message=err_msg,
                     total_findings_processed=len(fir_findings),
                     case_id=case_id,
                     tenant_id=tenant_id,
@@ -245,12 +278,30 @@ class AttackReconstructionAgent(BaseAgent):
                     lateral_movement=[LateralMovement(**x) for x in norm_data["lateral_movement"]],
                     missing_expected_events=[MissingExpectedEvent(**x) for x in norm_data["missing_expected_events"]],
                     reconstruction_summary=norm_data["reconstruction_summary"],
-                    overall_confidence=norm_data["overall_confidence"]
+                    overall_confidence=0.0 if target_status in ("MODEL_UNAVAILABLE", "EXECUTION_FAILED", "VALIDATION_FAILED") else norm_data["overall_confidence"]
                 )
             except Exception as exc:
-                logger.warning("Agent 3: Normalization error (%s). Synthesizing deterministic output.", exc)
+                logger.warning("Agent 3: Normalization/Validation error (%s).", exc)
+                return Agent3Output(
+                    agent_id="agent_3",
+                    execution_status="VALIDATION_FAILED",
+                    error_message=f"VALIDATION_FAILED: Schema or citation normalization error: {exc}",
+                    total_findings_processed=len(fir_findings),
+                    case_id=case_id,
+                    tenant_id=tenant_id,
+                    model_used=self.model_name,
+                    infection_path=InfectionPath(entry_point="Validation failure", confidence=0.0),
+                    attack_path=[],
+                    attack_timeline=[],
+                    attack_chain=[],
+                    lateral_movement=[],
+                    missing_expected_events=[],
+                    reconstruction_summary=f"Agent 3 output validation failed: {exc}",
+                    overall_confidence=0.0
+                )
 
         # Fallback Deterministic Generator
+        fallback_err = llm_error or ("JSON_PARSE_ERROR: Response unparseable as JSON" if json_parse_error else "EXECUTION_FAILED: No response received")
         return self._generate_deterministic_fallback(
             case_id=case_id,
             tenant_id=tenant_id,
@@ -258,7 +309,7 @@ class AttackReconstructionAgent(BaseAgent):
             candidate_paths_res=candidate_paths_res,
             detected_missing_events=detected_missing_events,
             valid_universe=valid_universe,
-            llm_error=llm_error
+            llm_error=fallback_err
         )
 
     def _generate_deterministic_fallback(
@@ -273,19 +324,20 @@ class AttackReconstructionAgent(BaseAgent):
     ) -> Agent3Output:
         valid_ids = list(valid_universe)[:5] if valid_universe else [str(self._get_val(f, "finding_id")) for f in fir_findings if self._get_val(f, "finding_id")][:5]
         
-        # Determine infection path from earliest finding
-        earliest_fact = "Initial forensic artifact detection"
+        # Determine infection path only if verified malicious indicators exist
+        has_malicious = any(self._get_val(f, "severity") in ("high", "critical") for f in fir_findings)
+        earliest_fact = "No confirmed malicious intrusion vector in examined findings"
         earliest_id = valid_ids[0] if valid_ids else "unknown"
-        if fir_findings:
+        if fir_findings and has_malicious:
             f0 = fir_findings[0]
-            earliest_fact = self._get_val(f0, "fact") or self._get_val(f0, "event_summary") or earliest_fact
+            earliest_fact = f"Potential entry indicator: {self._get_val(f0, 'fact') or self._get_val(f0, 'event_summary') or 'Observable'}"
             earliest_id = str(self._get_val(f0, "finding_id") or earliest_id)
 
         inf_path = InfectionPath(
-            entry_point=f"Infection entry supported by: {earliest_fact[:120]}",
-            evidence_ids=[earliest_id] if earliest_id != "unknown" else [],
-            confidence=0.0 if llm_error else 0.70,
-            citation_verified=bool(earliest_id in valid_universe)
+            entry_point=earliest_fact[:120],
+            evidence_ids=[earliest_id] if (earliest_id != "unknown" and has_malicious) else [],
+            confidence=0.0 if (llm_error or not has_malicious) else 0.40,
+            citation_verified=bool(earliest_id in valid_universe and has_malicious)
         )
 
         # Construct attack timeline from findings
@@ -295,15 +347,17 @@ class AttackReconstructionAgent(BaseAgent):
             fact = str(self._get_val(f, "fact") or self._get_val(f, "event_summary") or f"Finding {idx}")
             ts = str(self._get_val(f, "timestamp") or "2026-10-03T10:00:00Z")
             stage = self.path_builder._classify_stage(fact)
+            if not has_malicious and stage in ("Initial Access", "Execution", "Persistence", "Command and Control"):
+                stage = "User Activity Observation"
             
             timeline_events.append(
                 AttackTimelineEvent(
                     timestamp=ts,
                     event=fact[:150],
                     stage=stage,
-                    evidence_ids=[fid],
-                    confidence=0.0 if llm_error else 0.75,
-                    citation_verified=bool(fid in valid_universe)
+                    evidence_ids=[fid] if fid in valid_universe else [],
+                    confidence=0.0 if (llm_error or not has_malicious) else 0.40,
+                    citation_verified=bool(fid in valid_universe and has_malicious)
                 )
             )
 
@@ -311,18 +365,18 @@ class AttackReconstructionAgent(BaseAgent):
         chain_stages = []
         stage_groups = {}
         for te in timeline_events:
-            stage_groups.setdefault(te.stage, []).append((te.event, te.evidence_ids[0]))
+            stage_groups.setdefault(te.stage, []).append((te.event, te.evidence_ids[0] if te.evidence_ids else "unknown"))
 
         for stage, items in stage_groups.items():
             evts = [it[0] for it in items]
-            eids = list({it[1] for it in items if it[1] != "unknown"})
+            eids = list({it[1] for it in items if it[1] != "unknown" and it[1] in valid_universe})
             chain_stages.append(
                 AttackChainStage(
                     stage=stage,
                     events=evts,
                     evidence_ids=eids,
-                    confidence=0.0 if llm_error else 0.70,
-                    citation_verified=bool(all(eid in valid_universe for eid in eids))
+                    confidence=0.0 if (llm_error or not has_malicious) else 0.40,
+                    citation_verified=bool(all(eid in valid_universe for eid in eids) and bool(eids))
                 )
             )
 
@@ -339,24 +393,32 @@ class AttackReconstructionAgent(BaseAgent):
                         source_host=src,
                         destination_host=dst,
                         method="Network Session",
-                        evidence_ids=[fid],
-                        confidence=0.0 if llm_error else 0.70,
-                        citation_verified=bool(fid in valid_universe)
+                        evidence_ids=[fid] if fid in valid_universe else [],
+                        confidence=0.0 if (llm_error or not has_malicious) else 0.40,
+                        citation_verified=bool(fid in valid_universe and has_malicious)
                     )
                 )
 
-        if llm_error:
-            exec_status = "FAILED"
+        if llm_error and ("MODEL_UNAVAILABLE" in str(llm_error) or "unavailable" in str(llm_error).lower()):
+            exec_status = "MODEL_UNAVAILABLE"
             err_msg = f"MODEL_UNAVAILABLE: {llm_error}"
             conf = 0.0
             summary = (
-                f"Attack reconstruction model inference failed: {llm_error}. "
+                f"Attack reconstruction model inference unavailable: {llm_error}. "
+                f"Constructed deterministic fallback baseline from {len(fir_findings)} evidence findings."
+            )
+        elif llm_error:
+            exec_status = "EXECUTION_FAILED"
+            err_msg = f"EXECUTION_FAILED: {llm_error}"
+            conf = 0.0
+            summary = (
+                f"Attack reconstruction model execution failed: {llm_error}. "
                 f"Constructed deterministic fallback baseline from {len(fir_findings)} evidence findings."
             )
         else:
-            exec_status = "PARTIAL_SUCCESS"
+            exec_status = "NEEDS_REVIEW"
             err_msg = "SYNTHESIS_DEGRADED: Model response unparseable as JSON; synthesized deterministic timeline"
-            conf = round(min(0.70, max(0.20, len(fir_findings) / 20.0)), 2)
+            conf = 0.0 if not has_malicious else round(min(0.50, max(0.10, len(fir_findings) / 20.0)), 2)
             summary = (
                 f"Attack reconstruction for case {case_id} synthesized {len(fir_findings)} evidence findings. "
                 f"Candidate attack paths linked {candidate_paths_res.get('path_count', 0)} correlation nodes. "

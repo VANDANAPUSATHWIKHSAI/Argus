@@ -239,7 +239,14 @@ class SupervisorSynthesis(BaseAgent):
             except (ValueError, TypeError):
                 confidence_score = 0.0
 
-        status = "FAILED" if synthesis_error else ("COMPLETED" if normalized_claims else "NO_CLAIMS")
+        if data.get("execution_status") == "MODEL_UNAVAILABLE":
+            status = "MODEL_UNAVAILABLE"
+        elif synthesis_error:
+            status = "FAILED"
+        elif normalized_claims:
+            status = "COMPLETED"
+        else:
+            status = "NO_CLAIMS"
 
         return {
             "case_id": case_id,

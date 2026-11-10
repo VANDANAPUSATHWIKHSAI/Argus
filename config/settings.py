@@ -5,9 +5,10 @@ from typing import Optional
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     # ── LLM ──────────────────────────────────────
-    llm_model_name: str = "Qwen/Qwen3-8B"
-    llm_fallback_model: str = "Qwen/Qwen3-8B"
-    embedding_model: str = "Qwen/Qwen3-Embedding-4B"
+    llm_model_name: str = "qwen3:8b"
+    llm_fallback_model: str = "qwen3:8b"
+    embedding_model: str = "batiai/qwen3-embedding:4b"
+    ollama_base_url: str = "http://127.0.0.1:11434"
 
     # ── PostgreSQL (structured data) ─────────────
     # FIR findings, case sessions, audit logs,

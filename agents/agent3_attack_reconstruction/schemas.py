@@ -77,6 +77,10 @@ class Agent3Output(BaseModel):
     
     total_findings_processed: int = 0
     sanitization_summary: Dict[str, Any] = Field(default_factory=dict)
-    execution_status: Literal["SUCCESS", "PARTIAL_SUCCESS", "FAILED"] = "SUCCESS"
+    execution_status: Literal[
+        "SUCCESS", "PARTIAL_SUCCESS", "FAILED",
+        "MODEL_UNAVAILABLE", "EXECUTION_FAILED", "VALIDATION_FAILED",
+        "COMPLETED_WITH_FINDINGS", "COMPLETED_WITH_NO_FINDINGS", "NEEDS_REVIEW"
+    ] = "COMPLETED_WITH_FINDINGS"
     error_message: Optional[str] = None
     investigator_report: Optional[str] = Field(None, description="Human readable forensic report")

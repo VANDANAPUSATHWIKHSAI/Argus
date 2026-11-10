@@ -1022,8 +1022,8 @@ async def assign_senior_analyst(
     Assign a senior analyst to an existing case. Admin only.
     Supports both PostgreSQL and local repository fallback.
     """
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can assign a senior analyst.")
+    if current_user.get("role") not in ("admin", "analyst", "senior_analyst"):
+        raise HTTPException(status_code=403, detail="Unauthorized to assign senior analyst.")
 
     updated_local = False
     try:

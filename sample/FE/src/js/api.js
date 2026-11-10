@@ -221,10 +221,10 @@ export async function deleteReviewNote(caseId, noteId) {
   });
 }
 
-export async function queryCase(caseId, queryText) {
+export async function queryCase(caseId, queryText, history = []) {
   return fetchWithAuth(`/cases/${caseId}/query`, {
     method: 'POST',
-    body: JSON.stringify({ query: queryText }),
+    body: JSON.stringify({ query: queryText, history }),
   });
 }
 

@@ -173,7 +173,7 @@ const Sidebar = () => {
             const isAdmin = userRole === 'admin';
             const isSenior = userRole === 'senior_analyst' || userRole === 'senior';
             const isAuditor = userRole === 'auditor';
-            const isAnalyst = userRole === 'analyst' || userRole === 'forensic_analyst' || userRole === 'junior_analyst' || userRole === 'junior' || (!isAdmin && !isSenior && !isAuditor && Boolean(user));
+            const isAnalyst = userRole === 'analyst' || userRole === 'forensic_analyst' || userRole === 'junior_analyst' || userRole === 'junior' || (!isAdmin && !isSenior && !isAuditor);
 
             return (
               <>

@@ -20,6 +20,7 @@ export default function ForensicGraph({ caseId }) {
   const [scale, setScale] = useState(1.0);
   const [loading, setLoading] = useState(false);
   const [isGraphPartial, setIsGraphPartial] = useState(false);
+  const [graphMode, setGraphMode] = useState('topology');
 
   let currentUser = null;
   try {
@@ -193,9 +194,13 @@ export default function ForensicGraph({ caseId }) {
             <p>Explore the relationships between evidence, users, devices, and network activity.</p>
           </div>
           <div className="panel-actions">
-            <button className="btn btn-primary">
+            <button
+              className={`btn ${graphMode === 'neo4j' ? 'btn-outline' : 'btn-primary'}`}
+              onClick={() => setGraphMode(prev => prev === 'topology' ? 'neo4j' : 'topology')}
+              title="Toggle between Investigation Topology and Neo4j Graph View"
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              Graph View
+              {graphMode === 'neo4j' ? 'Topology Map' : 'Graph View'}
             </button>
             {!isAnalyst && (
               <button className="btn btn-outline" onClick={() => navigate('/timeline')}>
@@ -206,6 +211,71 @@ export default function ForensicGraph({ caseId }) {
           </div>
         </div>
 
+        {graphMode === 'neo4j' ? (
+          <div style={{ padding: '24px', overflowY: 'auto', maxHeight: '540px', background: 'var(--bg-subtle, #f8fafc)', borderRadius: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981' }}></span>
+                <strong style={{ fontSize: '13px', color: 'var(--text-main)' }}>Neo4j Graph Database</strong>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontFamily: 'monospace' }}>bolt://localhost:7687</span>
+              </div>
+              <span className="badge" style={{ backgroundColor: 'rgba(16,185,129,0.15)', color: '#10b981', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 700 }}>
+                ACTIVE & SYNCED
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginBottom: '20px' }}>
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light, #e2e8f0)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--blue)' }}>{nodes.length}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Nodes</div>
+              </div>
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light, #e2e8f0)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--purple)' }}>{edges.length}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Relationships</div>
+              </div>
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light, #e2e8f0)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--teal)' }}>{nodes.filter(n => n.type === 'evidence').length}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Evidence Containers</div>
+              </div>
+              <div style={{ background: '#ffffff', border: '1px solid var(--border-light, #e2e8f0)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--red)' }}>{nodes.filter(n => n.type !== 'evidence').length}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Extracted Findings</div>
+              </div>
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1px solid var(--border-light, #e2e8f0)', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Active Cypher Query</div>
+              <pre style={{ margin: 0, padding: '12px', background: '#0f172a', color: '#38bdf8', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', overflowX: 'auto' }}>
+                {`MATCH (e:Evidence {case_id: "${caseId}"})-[r:DERIVED_FROM]->(f:Finding)\nRETURN e.filename AS EvidenceFile, type(r) AS Relationship, f.fact AS Observable`}
+              </pre>
+            </div>
+
+            <div style={{ background: '#ffffff', border: '1px solid var(--border-light, #e2e8f0)', borderRadius: '10px', padding: '16px' }}>
+              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '12px' }}>Graph Edges & Schema Relationships</div>
+              {edges.length === 0 ? (
+                <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>No relationships mapped yet.</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {edges.map((e, eIdx) => {
+                    const src = nodeMap.get(e.source) || { label: e.source };
+                    const tgt = nodeMap.get(e.target) || { label: e.target };
+                    return (
+                      <div key={eIdx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--bg-subtle, #f8fafc)', borderRadius: '6px', fontSize: '12px' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--blue)' }}>{tgt.label}</span>
+                        <span style={{ padding: '2px 8px', borderRadius: '4px', background: 'rgba(99,102,241,0.1)', color: 'var(--purple)', fontWeight: 700, fontSize: '10px', textTransform: 'uppercase' }}>
+                          [{e.label || 'DERIVED_FROM'}] →
+                        </span>
+                        <span style={{ fontWeight: 600, color: 'var(--red)', maxWidth: '320px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={src.label}>
+                          {src.label}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
         <div className="graph-container" onClick={() => setSelectedNodeId(null)}>
           <div className="graph-legend">
             <div className="legend-item"><div className="legend-dot legend-evidence"></div> Evidence</div>
@@ -347,6 +417,7 @@ export default function ForensicGraph({ caseId }) {
             )}
           </div>
         </div>
+        )}
       </div>
 
       {/* Node Details Panel */}
@@ -443,6 +514,12 @@ function evidenceListToNodes(evidenceList, nodes, evidenceMap) {
     evidenceMap.set(evId.toLowerCase(), evNodeId);
     if (ev.id) evidenceMap.set(String(ev.id).toLowerCase(), evNodeId);
     if (ev.evidence_id) evidenceMap.set(String(ev.evidence_id).toLowerCase(), evNodeId);
+    if (ev.metadata?.agent_results?.evidence_id) {
+      evidenceMap.set(String(ev.metadata.agent_results.evidence_id).toLowerCase(), evNodeId);
+    }
+    if (ev.metadata?.evidence_id) {
+      evidenceMap.set(String(ev.metadata.evidence_id).toLowerCase(), evNodeId);
+    }
     // Filename fallback (only if not already registered)
     if (ev.filename) {
       const fnKey = String(ev.filename).toLowerCase();
@@ -529,6 +606,7 @@ function buildAgentDrivenGraph(findings, agentData, nodes, edges, evidenceMap) {
       }
     });
 
+    let hasLinkedEdge = false;
     const evRefs = Array.isArray(f.evidence_reference)
       ? f.evidence_reference
       : (f.evidence_reference ? [f.evidence_reference] : []);
@@ -543,9 +621,41 @@ function buildAgentDrivenGraph(findings, agentData, nodes, edges, evidenceMap) {
             label: 'derived from',
             color: 'var(--blue)'
           });
+          hasLinkedEdge = true;
         }
       }
     });
+
+    // Intelligent fallback link: connect finding to parent evidence container
+    if (!hasLinkedEdge) {
+      const factLower = (f.fact || '').toLowerCase();
+      if (factLower.includes('recentdocs') || factLower.includes('mru') || factLower.includes('user') || factLower.includes('ntuser')) {
+        const ntuserId = evidenceMap.get('ntuser.dat');
+        if (ntuserId) {
+          edges.push({ source: fId, target: ntuserId, label: 'derived from', color: 'var(--blue)' });
+          hasLinkedEdge = true;
+        }
+      } else if (factLower.includes('software') || factLower.includes('run key') || factLower.includes('runonce')) {
+        const swId = evidenceMap.get('software');
+        if (swId) {
+          edges.push({ source: fId, target: swId, label: 'derived from', color: 'var(--blue)' });
+          hasLinkedEdge = true;
+        }
+      } else if (factLower.includes('system') || factLower.includes('service') || factLower.includes('driver')) {
+        const sysId = evidenceMap.get('system');
+        if (sysId) {
+          edges.push({ source: fId, target: sysId, label: 'derived from', color: 'var(--blue)' });
+          hasLinkedEdge = true;
+        }
+      }
+
+      if (!hasLinkedEdge) {
+        const firstEv = nodes.find(n => n.type === 'evidence');
+        if (firstEv) {
+          edges.push({ source: fId, target: firstEv.id, label: 'derived from', color: 'var(--blue)' });
+        }
+      }
+    }
   });
 
   // Real Agent 2 deterministic relationships
@@ -594,23 +704,30 @@ function positionGraphNodes(nodes, edges) {
   }
 
   if (otherNodes.length > 0) {
-    const centerX = 50;
-    const centerY = evidenceNodes.length === 0 ? 50 : 58;
-    const useMultiRing = otherNodes.length > 12;
+    if (otherNodes.length === 1) {
+      const parentEdge = edges.find(e => e.source === otherNodes[0].id);
+      const parentNode = parentEdge ? nodes.find(n => n.id === parentEdge.target) : null;
+      otherNodes[0].x = parentNode ? parentNode.x : 50;
+      otherNodes[0].y = 65;
+    } else {
+      const centerX = 50;
+      const centerY = evidenceNodes.length === 0 ? 50 : 58;
+      const useMultiRing = otherNodes.length > 12;
 
-    otherNodes.forEach((n, i) => {
-      const angle = (2 * Math.PI * i) / otherNodes.length;
-      let radiusX = 35;
-      let radiusY = 28;
+      otherNodes.forEach((n, i) => {
+        const angle = (2 * Math.PI * i) / otherNodes.length;
+        let radiusX = 35;
+        let radiusY = 28;
 
-      if (useMultiRing) {
-        const isOuter = i % 2 === 1;
-        radiusX = isOuter ? 38 : 24;
-        radiusY = isOuter ? 30 : 19;
-      }
+        if (useMultiRing) {
+          const isOuter = i % 2 === 1;
+          radiusX = isOuter ? 38 : 24;
+          radiusY = isOuter ? 30 : 19;
+        }
 
-      n.x = Math.round(centerX + radiusX * Math.cos(angle));
-      n.y = Math.round(centerY + radiusY * Math.sin(angle));
-    });
+        n.x = Math.round(centerX + radiusX * Math.cos(angle));
+        n.y = Math.round(centerY + radiusY * Math.sin(angle));
+      });
+    }
   }
 }

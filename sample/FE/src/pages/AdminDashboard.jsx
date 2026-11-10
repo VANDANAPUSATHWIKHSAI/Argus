@@ -490,8 +490,11 @@ const AdminDashboard = () => {
         body: JSON.stringify({ senior_analyst_id: assigningSenior })
       });
       if (!res.ok) throw new Error(await res.text());
-      const assignedSeniorObj = employees.find(emp => String(emp.id) === String(assigningSenior));
-      const seniorName = assignedSeniorObj ? assignedSeniorObj.name : `Senior Analyst ${assigningSenior}`;
+      const assignedSeniorObj = (seniorSelectOptions || []).find(opt => String(opt.value) === String(assigningSenior)) ||
+                                (employees || []).find(emp => String(emp.id) === String(assigningSenior));
+      const seniorName = assignedSeniorObj
+        ? (assignedSeniorObj.label ? assignedSeniorObj.label.replace(/\s*\([^)]*\)$/, '') : (assignedSeniorObj.name || `Senior Analyst ${assigningSenior}`))
+        : `Senior Analyst ${assigningSenior}`;
       setCurrentCase(prev => prev ? { ...prev, senior_analyst_id: assigningSenior, senior_analyst_name: seniorName } : prev);
       setAllCasesList(prev => prev.map(c => c.case_id === currentCase.case_id ? { ...c, senior_analyst_id: assigningSenior, senior_analyst_name: seniorName } : c));
       setShowAssignSeniorModal(false);
@@ -1023,9 +1026,21 @@ const AdminDashboard = () => {
                     + Assign
                   </button>
                 ) : (
-                  <span className="glass-staff-name-val">
-                    {currentCase ? (currentCase.senior_analyst_name || currentCase.senior_analyst_id) : '-'}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span className="glass-staff-name-val">
+                      {currentCase ? (currentCase.senior_analyst_name || currentCase.senior_analyst_id) : '-'}
+                    </span>
+                    {currentCase && (
+                      <button
+                        onClick={() => setShowAssignSeniorModal(true)}
+                        className="btn-glass-primary"
+                        style={{ padding: '2px 8px', fontSize: '10px', width: 'fit-content', borderRadius: '4px' }}
+                        title="Change Senior Analyst"
+                      >
+                        Change
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

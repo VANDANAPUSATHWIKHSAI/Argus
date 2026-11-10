@@ -13,7 +13,8 @@ import logging
 import uuid
 import hashlib
 import json
-from typing import List, Dict, Any, Optional
+from pathlib import Path
+from typing import List, Dict, Any, Optional, Union
 
 import copy
 from fastapi import APIRouter, Header, HTTPException, Query, Depends, BackgroundTasks, Response, Body
@@ -930,8 +931,14 @@ class AssignSeniorRequest(BaseModel):
     senior_analyst_id: Union[int, str]
 
 
+AssignSeniorRequest.model_rebuild()
+
+
 class AssignAnalystRequest(BaseModel):
     analyst_id: Union[int, str]
+
+
+AssignAnalystRequest.model_rebuild()
 
 
 @router.put("/{case_id}/assign-senior")
@@ -944,9 +951,26 @@ async def assign_senior_analyst(
 ):
     """
     Assign a senior analyst to an existing case. Admin only.
+    Supports both PostgreSQL and local repository fallback.
     """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only admins can assign a senior analyst.")
+
+    updated_local = False
+    try:
+        from infrastructure.repository.evidence_store import REPOSITORY_DIR
+        case_file = Path(REPOSITORY_DIR) / case_id / "case_session.json"
+        if case_file.exists():
+            with open(case_file, "r", encoding="utf-8") as f:
+                cdata = json.load(f)
+            cdata["senior_analyst_id"] = str(req.senior_analyst_id)
+            with open(case_file, "w", encoding="utf-8") as f:
+                json.dump(cdata, f, indent=2)
+            updated_local = True
+    except Exception as f_err:
+        logger.warning(f"Could not persist local senior_analyst_id to case_session.json: {f_err}")
+
+    updated_db = False
     try:
         from config.settings import settings
         import psycopg2
@@ -960,45 +984,34 @@ async def assign_senior_analyst(
             "UPDATE cases SET senior_analyst_id = %s WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
             (str(req.senior_analyst_id), case_id, x_tenant_id)
         )
-        if cur.rowcount == 0:
-            conn.close()
-            raise HTTPException(status_code=404, detail="Case not found.")
+        if cur.rowcount > 0:
+            updated_db = True
         conn.commit()
 
-        # Update local session file as well
-        try:
-            from infrastructure.repository.evidence_store import REPOSITORY_DIR
-            case_file = Path(REPOSITORY_DIR) / case_id / "case_session.json"
-            if case_file.exists():
-                with open(case_file, "r", encoding="utf-8") as f:
-                    cdata = json.load(f)
-                cdata["senior_analyst_id"] = str(req.senior_analyst_id)
-                with open(case_file, "w", encoding="utf-8") as f:
-                    json.dump(cdata, f, indent=2)
-        except Exception as f_err:
-            logger.warning(f"Could not persist local senior_analyst_id to case_session.json: {f_err}")
-        
-        # Send assignment email in background
+        # Send assignment email in background if configured
         senior = get_user_by_id(req.senior_analyst_id)
         if senior and senior.get("email"):
             case_name = case_id
             try:
                 cur.execute("SELECT name FROM cases WHERE case_id = %s", (case_id,))
                 row = cur.fetchone()
-                if row and row[0]: case_name = row[0]
-            except Exception: pass
+                if row and row[0]:
+                    case_name = row[0]
+            except Exception:
+                pass
             try:
                 send_assignment_email(senior["email"], case_id, case_name, "Senior Analyst")
             except Exception as email_err:
                 logger.warning(f"Could not send assignment email: {email_err}")
-        
+
         conn.close()
-        return {"status": "SUCCESS", "message": f"Senior Analyst {req.senior_analyst_id} assigned to {case_id}."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to assign senior analyst: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as db_err:
+        logger.warning(f"Database update for senior analyst assignment: {db_err}")
+
+    if not updated_db and not updated_local:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
+    return {"status": "SUCCESS", "message": f"Senior Analyst {req.senior_analyst_id} assigned to {case_id}."}
 
 
 @router.put("/{case_id}/assign-analyst")
@@ -1010,9 +1023,26 @@ async def assign_analyst(
 ):
     """
     Assign an analyst to an existing case. Admin only.
+    Supports both PostgreSQL and local repository fallback.
     """
     if current_user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Only admins can assign an analyst.")
+
+    updated_local = False
+    try:
+        from infrastructure.repository.evidence_store import REPOSITORY_DIR
+        case_file = Path(REPOSITORY_DIR) / case_id / "case_session.json"
+        if case_file.exists():
+            with open(case_file, "r", encoding="utf-8") as f:
+                cdata = json.load(f)
+            cdata["analyst_id"] = str(req.analyst_id)
+            with open(case_file, "w", encoding="utf-8") as f:
+                json.dump(cdata, f, indent=2)
+            updated_local = True
+    except Exception as f_err:
+        logger.warning(f"Could not persist local analyst_id to case_session.json: {f_err}")
+
+    updated_db = False
     try:
         from config.settings import settings
         import psycopg2
@@ -1026,22 +1056,9 @@ async def assign_analyst(
             "UPDATE cases SET analyst_id = %s WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
             (str(req.analyst_id), case_id, x_tenant_id)
         )
-        if cur.rowcount == 0:
-            conn.close()
-            raise HTTPException(status_code=404, detail="Case not found.")
+        if cur.rowcount > 0:
+            updated_db = True
         conn.commit()
-
-        try:
-            from infrastructure.repository.evidence_store import REPOSITORY_DIR
-            case_file = Path(REPOSITORY_DIR) / case_id / "case_session.json"
-            if case_file.exists():
-                with open(case_file, "r", encoding="utf-8") as f:
-                    cdata = json.load(f)
-                cdata["analyst_id"] = str(req.analyst_id)
-                with open(case_file, "w", encoding="utf-8") as f:
-                    json.dump(cdata, f, indent=2)
-        except Exception:
-            pass
 
         analyst = get_user_by_id(req.analyst_id)
         if analyst and analyst.get("email"):
@@ -1049,17 +1066,23 @@ async def assign_analyst(
             try:
                 cur.execute("SELECT name FROM cases WHERE case_id = %s", (case_id,))
                 row = cur.fetchone()
-                if row and row[0]: case_name = row[0]
-            except Exception: pass
-            send_assignment_email(analyst["email"], case_id, case_name, "Analyst")
+                if row and row[0]:
+                    case_name = row[0]
+            except Exception:
+                pass
+            try:
+                send_assignment_email(analyst["email"], case_id, case_name, "Analyst")
+            except Exception as email_err:
+                logger.warning(f"Could not send assignment email: {email_err}")
 
         conn.close()
-        return {"status": "SUCCESS", "message": f"Analyst {req.analyst_id} assigned to {case_id}."}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to assign analyst: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as db_err:
+        logger.warning(f"Database update for analyst assignment: {db_err}")
+
+    if not updated_db and not updated_local:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
+    return {"status": "SUCCESS", "message": f"Analyst {req.analyst_id} assigned to {case_id}."}
 
 
 @router.get("/locks/active", response_model=Dict[str, Any])

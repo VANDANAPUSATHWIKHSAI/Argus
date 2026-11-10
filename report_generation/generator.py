@@ -2058,11 +2058,17 @@ class ReportGenerator:
         pipeline_steps = []
         if ctx and ctx.attack_steps:
             for s in ctx.attack_steps:
+                prov_t = s.get("provenance_type", "HYPOTHESIS")
+                is_step_confirmed = (
+                    str(s.get("status", "")).lower() == "confirmed"
+                    and prov_t in ("OBSERVED", "EVIDENCE_CORRELATED")
+                    and float(s.get("confidence", 0.0)) > 0.35
+                )
                 pipeline_steps.append({
-                    "stage_label": f"Stage {s.get('step', len(pipeline_steps)+1)}",
-                    "title": s.get("name", "Attack Step"),
+                    "stage_label": f"Stage {s.get('step_number', s.get('step', len(pipeline_steps)+1))}",
+                    "title": f"[{prov_t}] {s.get('stage') or s.get('name', 'Attack Step')}",
                     "desc": s.get("description", "Reconstructed attack action"),
-                    "confirmed": s.get("status", "").lower() == "confirmed" or True,
+                    "confirmed": is_step_confirmed,
                 })
         elif clusters and clusters[0].get("finding_id") != "F-NONE":
             pipeline_steps.append({
@@ -2166,6 +2172,29 @@ class ReportGenerator:
         prov = ctx.get_evidence_provenance_summary() if ctx else {}
         uncollected = prov.get("uncollected_evidence", [])
         unconfirmed_stages = []
+
+        # Grounding & Historical Hypothesis Enforcement:
+        # Attack steps marked HYPOTHESIS or lacking supporting evidence must strictly land in unconfirmed_stages
+        if ctx and ctx.attack_steps:
+            for s in ctx.attack_steps:
+                prov_t = s.get("provenance_type", "HYPOTHESIS")
+                status_s = str(s.get("status", "")).lower()
+                conf_f = float(s.get("confidence", 0.35))
+                if prov_t in ("OBSERVED", "EVIDENCE_CORRELATED") and status_s == "confirmed" and conf_f > 0.35:
+                    confirmed_stages.append({
+                        "step_number": len(confirmed_stages) + 1,
+                        "stage": f"Stage {len(confirmed_stages) + 1} — {s.get('stage', 'Attack Progression')}",
+                        "description": s.get("description") or s.get("reasoning_basis") or "Verified attack telemetry.",
+                        "evidence_refs": ", ".join(s.get("supported_evidence_ids") or []) or "Case Telemetry",
+                        "confidence_pct": int(round(conf_f * 100)),
+                    })
+                elif prov_t == "HYPOTHESIS" or conf_f <= 0.35:
+                    unconfirmed_stages.append({
+                        "stage": f"Hypothesis H-{len(unconfirmed_stages)+1}: {s.get('stage', 'Analytical Stage')} (Conf: {int(round(conf_f*100))}%)",
+                        "description": s.get("description") or s.get("reasoning_basis") or "Analytical kill-chain hypothesis without confirmed evidence.",
+                        "missing_telemetry": "Missing Exploit / Ingress Telemetry",
+                    })
+
         for idx, u in enumerate(uncollected[:4]):
             unconfirmed_stages.append({
                 "stage": f"Hypothesis H-{idx+1}: {u.get('source', 'Uncollected Telemetry')}",

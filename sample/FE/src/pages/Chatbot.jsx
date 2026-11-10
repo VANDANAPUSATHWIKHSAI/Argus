@@ -8265,20 +8265,6 @@ Select a quick prompt below or type your forensic query to begin querying Case *
                         </span>
                       )}
 
-
-
-                            : (msg.execution_mode === 'MODEL_UNAVAILABLE' ? 'Grounded Retrieval (Ollama Offline)' : 'Deterministic Retrieval')}
-
-
-
-                        </span>
-
-
-
-                      )}
-
-
-
                       {msg.isOfflineFallback && !msg.execution_mode && (
 
 

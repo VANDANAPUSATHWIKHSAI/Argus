@@ -29,6 +29,10 @@ import logging
 from typing import Dict, Any, List, Optional
 from agents.base_agent import BaseAgent
 from fir.schemas import ReviewStatus
+from forensic_analysis.evidence_reference_validator import (
+    EvidenceReferenceValidator,
+    ReferenceDefectType,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -112,64 +116,84 @@ class SupervisorVerification(BaseAgent):
         active_case = case_id or claim.get("case_id", "")
 
         # ── CHECK 1: Deterministic Existence & Scoped Retrieval ──────────
+        ref_validator = EvidenceReferenceValidator(fir_repo=self.fir)
         if not evidence_ids:
             existence_passed = False
             flags.append(f"Claim [{claim_id}] cites zero evidence IDs")
         else:
             for fid in evidence_ids:
-                finding = None
-                if hasattr(self.fir, "get_by_id"):
-                    try:
-                        finding = self.fir.get_by_id(t_id, fid)
-                    except Exception as lookup_err:
-                        logger.warning(f"Error querying FIR for evidence {fid}: {lookup_err}")
+                val_res = ref_validator.verify_reference(fid, case_id=active_case, tenant_id=t_id)
+                if not val_res.is_valid:
+                    # Fallback check for transient fir_records passed in memory
+                    fallback_finding = None
+                    if fir_records:
+                        for r in fir_records:
+                            r_fid = r.get("finding_id") if isinstance(r, dict) else getattr(r, "finding_id", None)
+                            if str(r_fid) == str(fid):
+                                fallback_finding = r
+                                break
 
-                if finding is None and fir_records:
-                    for r in fir_records:
-                        r_fid = r.get("finding_id") if isinstance(r, dict) else getattr(r, "finding_id", None)
-                        r_tenant = r.get("tenant_id") if isinstance(r, dict) else getattr(r, "tenant_id", None)
-                        r_case = r.get("case_id") if isinstance(r, dict) else getattr(r, "case_id", None)
-                        if str(r_fid) == str(fid):
-                            finding = r
-                            break
+                    if fallback_finding is not None:
+                        f_tenant = fallback_finding.get("tenant_id") if isinstance(fallback_finding, dict) else getattr(fallback_finding, "tenant_id", None)
+                        f_case = fallback_finding.get("case_id") if isinstance(fallback_finding, dict) else getattr(fallback_finding, "case_id", None)
+                        if f_tenant and t_id != "default" and str(f_tenant) != str(t_id):
+                            existence_passed = False
+                            flags.append(f"Tenant boundary violation: Evidence ID [{fid}] does not match authorized tenant '{t_id}'")
+                            continue
+                        if f_case and active_case and str(f_case) != str(active_case):
+                            existence_passed = False
+                            flags.append(f"Cross-case access violation: Evidence ID [{fid}] belongs to case '{f_case}', not active case '{active_case}'")
+                            continue
+                        clean_fact = (fallback_finding.get("sanitized_fact") if isinstance(fallback_finding, dict) else getattr(fallback_finding, "sanitized_fact", None)) or (fallback_finding.get("fact") if isinstance(fallback_finding, dict) else getattr(fallback_finding, "fact", ""))
+                        evidence_details.append({
+                            "finding_id": fid,
+                            "fact": clean_fact,
+                            "severity": fallback_finding.get("severity", "medium") if isinstance(fallback_finding, dict) else getattr(fallback_finding, "severity", "medium"),
+                            "confidence": fallback_finding.get("confidence", 0.9) if isinstance(fallback_finding, dict) else getattr(fallback_finding, "confidence", 0.9),
+                            "review_status": str(fallback_finding.get("review_status", ReviewStatus.PENDING_REVIEW) if isinstance(fallback_finding, dict) else getattr(fallback_finding, "review_status", ReviewStatus.PENDING_REVIEW)),
+                            "tenant_id": f_tenant or t_id,
+                            "case_id": f_case or active_case,
+                        })
+                        fir_objects.append(fallback_finding)
+                        continue
 
-                if finding is None:
                     existence_passed = False
-                    flags.append(f"Evidence ID [{fid}] not found in FIR for tenant '{t_id}'")
+                    if val_res.defect_type == ReferenceDefectType.CROSS_CASE_VIOLATION:
+                        flags.append(f"Cross-case access violation: Evidence ID [{fid}] belongs to case '{val_res.case_id}', not active case '{active_case}'")
+                    elif val_res.defect_type == ReferenceDefectType.CROSS_TENANT_VIOLATION:
+                        flags.append(f"Tenant boundary violation: Evidence ID [{fid}] does not match authorized tenant '{t_id}'")
+                    elif val_res.defect_type == ReferenceDefectType.DELETED_REFERENCE:
+                        flags.append(f"Deleted reference violation: Evidence ID [{fid}] has been deleted from evidence store")
+                    elif val_res.defect_type == ReferenceDefectType.MISMATCHED_PROVENANCE:
+                        flags.append(f"Mismatched provenance violation: Evidence ID [{fid}] has broken provenance to original evidence")
+                    elif val_res.defect_type == ReferenceDefectType.INVALID_ARTIFACT_ID:
+                        flags.append(f"Invalid artifact ID: Evidence ID [{fid}] does not exist in repository")
+                    else:
+                        flags.append(f"Evidence ID [{fid}] not found in FIR for tenant '{t_id}'")
+                    continue
+
+                # Passed verification via EvidenceReferenceValidator
+                rec_details = val_res.record_details
+                if val_res.record_type == "evidence":
+                    clean_fact = f"Direct evidence container: {rec_details.get('filename', fid)} ({rec_details.get('status', 'stored')})"
+                    sev = "medium"
+                    conf = 1.0
+                    status = ReviewStatus.PENDING_REVIEW
                 else:
-                    # Every evidence record must be verified against authorized tenant and active case.
-                    # Legacy or missing tenant metadata must not automatically authorize the record.
-                    finding_tenant = getattr(finding, "tenant_id", None)
-                    if not finding_tenant or (t_id and str(finding_tenant) != str(t_id)):
-                        existence_passed = False
-                        flags.append(
-                            f"Tenant boundary violation: Evidence ID [{fid}] does not match authorized tenant '{t_id}'"
-                        )
-                        continue
+                    clean_fact = rec_details.get("fact", "")
+                    sev = rec_details.get("severity", "medium")
+                    conf = rec_details.get("confidence", 1.0)
+                    status = rec_details.get("review_status", ReviewStatus.PENDING_REVIEW)
 
-                    # Validate case boundary if finding specifies case_id or active_case is provided
-                    finding_case = getattr(finding, "case_id", None)
-                    if active_case and (not finding_case or str(finding_case) != str(active_case)):
-                        existence_passed = False
-                        flags.append(
-                            f"Cross-case access violation: Evidence ID [{fid}] belongs to case '{finding_case}', not active case '{active_case}'"
-                        )
-                        continue
-
-                    fir_objects.append(finding)
-                    clean_fact = finding.sanitized_fact or finding.fact
-                    sev = getattr(finding, "severity", "medium")
-                    conf = getattr(finding, "confidence", None)
-                    status = getattr(finding, "review_status", ReviewStatus.PENDING_REVIEW)
-                    evidence_details.append({
-                        "finding_id": fid,
-                        "fact": clean_fact,
-                        "severity": sev,
-                        "confidence": conf,
-                        "review_status": str(status),
-                        "tenant_id": getattr(finding, "tenant_id", t_id),
-                        "case_id": finding_case,
-                    })
+                evidence_details.append({
+                    "finding_id": fid,
+                    "fact": clean_fact,
+                    "severity": sev,
+                    "confidence": conf,
+                    "review_status": str(status),
+                    "tenant_id": val_res.tenant_id or t_id,
+                    "case_id": val_res.case_id or active_case,
+                })
 
         # ── CHECK 2: Semantic Support Check (DeBERTa-v3-large-MNLI) ───────
         support_passed = False

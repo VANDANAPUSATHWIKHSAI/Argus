@@ -25,6 +25,9 @@ logger = logging.getLogger(__name__)
 # Base repository directory (local dev). In production this is MinIO.
 REPOSITORY_DIR = os.getenv("ARGUS_REPOSITORY_DIR", "data/repository")
 
+# In-memory tombstone registry for defensible tracking of deleted evidence IDs
+DELETED_EVIDENCE_IDS: set[str] = set()
+
 
 _PG_LAST_CHECK_TIME = 0.0
 _PG_LAST_CHECK_RESULT = False
@@ -1068,6 +1071,9 @@ def delete_evidence(
         raise ValueError("tenant_id is required to delete evidence.")
     if not evidence_id:
         raise ValueError("evidence_id is required to delete evidence.")
+
+    # Tombstone ID to prevent resurrection or dangling citations
+    DELETED_EVIDENCE_IDS.add(str(evidence_id).strip())
 
     deleted = False
     resolved_case_id = case_id

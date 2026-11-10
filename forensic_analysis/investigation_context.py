@@ -318,9 +318,6 @@ class CaseInvestigationContext:
                 ).data()
 
                 # Calibrate confidence and explicit provenance for attack steps
-                has_confirmed_malicious = any(
-                    str(f.get("severity", "")).lower() in ("critical", "high") for f in self.findings
-                )
                 normalized_steps = []
                 for s in step_res:
                     prov = s.get("provenance_type")
@@ -328,22 +325,32 @@ class CaseInvestigationContext:
                     conf = float(s.get("confidence") or 0.35)
                     desc = s.get("description") or ""
                     basis = s.get("reasoning_basis")
+                    supported_eids = [x for x in (s.get("supported_evidence_ids") or []) if x]
+                    has_step_evidence = len(supported_eids) > 0
 
-                    # Rectify unclassified, generic, or legacy synthetic seeded stages
-                    if not prov or prov in (AttackStageProvenance.SYNTHETIC_SEED, AttackStageProvenance.HYPOTHESIS, AttackStageProvenance.AGENT_INFERRED):
-                        if not has_confirmed_malicious and "Adversary activity detected" in desc:
+                    # Historical hypothesis node enforcement:
+                    # Synthetic seeds, hypotheses, or steps lacking verified evidence grounding
+                    # must strictly remain HYPOTHESIS with confidence capped at 0.35.
+                    if prov in (AttackStageProvenance.SYNTHETIC_SEED, AttackStageProvenance.HYPOTHESIS) or not prov:
+                        prov = AttackStageProvenance.HYPOTHESIS
+                        status = "UNCONFIRMED_HYPOTHESIS"
+                        conf = min(conf, 0.35)
+                        basis = basis or "Candidate kill-chain stage; unconfirmed hypothesis due to absence of supporting exploit or execution telemetry."
+                    elif prov in (AttackStageProvenance.OBSERVED, AttackStageProvenance.EVIDENCE_CORRELATED):
+                        if not has_step_evidence:
+                            # Demote to hypothesis: claims confirmed status without supporting evidence
                             prov = AttackStageProvenance.HYPOTHESIS
                             status = "UNCONFIRMED_HYPOTHESIS"
-                            conf = min(conf, 0.35)  # Generic unconfirmed hypothesis capped at 0.35
-                            basis = basis or "Candidate kill-chain stage inferred by Agent 3 from user activity metadata; unconfirmed due to absence of exploit or execution telemetry."
-                        elif has_confirmed_malicious:
-                            prov = AttackStageProvenance.EVIDENCE_CORRELATED
-                            status = "EVIDENCE_SUPPORTED"
+                            conf = min(conf, 0.35)
+                            basis = basis or "Unconfirmed hypothesis (demoted): no direct forensic evidence citations support this stage."
                         else:
-                            prov = AttackStageProvenance.AGENT_INFERRED
-                            status = status or "UNCONFIRMED_HYPOTHESIS"
-                            conf = min(conf, 0.40)
-                            basis = basis or desc
+                            status = "CONFIRMED"
+                            conf = max(conf, 0.70)
+                    else:
+                        prov = AttackStageProvenance.HYPOTHESIS
+                        status = "UNCONFIRMED_HYPOTHESIS"
+                        conf = min(conf, 0.35)
+                        basis = basis or desc
 
                     normalized_steps.append({
                         "id": s.get("id"),
@@ -352,7 +359,7 @@ class CaseInvestigationContext:
                         "description": desc,
                         "confidence": conf,
                         "provenance_type": prov,
-                        "status": status or "UNCONFIRMED_HYPOTHESIS",
+                        "status": status,
                         "reasoning_basis": basis or desc
                     })
 

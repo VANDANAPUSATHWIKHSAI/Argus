@@ -11,6 +11,7 @@ from typing import List, Set, Tuple, Any, Dict, Optional
 from agents.agent3_attack_reconstruction.schemas import (
     Agent3Output, InfectionPath, AttackPathStep, AttackTimelineEvent, AttackChainStage, LateralMovement, MissingExpectedEvent
 )
+from infrastructure.repository.evidence_store import DELETED_EVIDENCE_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -80,22 +81,24 @@ class Agent3Validator:
                     continue
 
             fid = _get_val(f, "finding_id")
-            if fid:
+            if fid and str(fid).strip() not in DELETED_EVIDENCE_IDS:
                 finding_ids.add(str(fid).strip())
 
             src_art = _get_val(f, "source_artifact_id")
-            if src_art:
+            if src_art and str(src_art).strip() not in DELETED_EVIDENCE_IDS:
                 lineage_ids.add(str(src_art).strip())
 
             ev_ref = _get_val(f, "evidence_reference", [])
             if isinstance(ev_ref, str):
                 for item in ev_ref.split(","):
-                    if item.strip():
-                        lineage_ids.add(item.strip())
+                    clean_item = item.strip()
+                    if clean_item and clean_item not in DELETED_EVIDENCE_IDS:
+                        lineage_ids.add(clean_item)
             elif isinstance(ev_ref, list):
                 for item in ev_ref:
-                    if item and str(item).strip():
-                        lineage_ids.add(str(item).strip())
+                    clean_item = str(item).strip() if item else ""
+                    if clean_item and clean_item not in DELETED_EVIDENCE_IDS:
+                        lineage_ids.add(clean_item)
 
         return finding_ids, lineage_ids
 

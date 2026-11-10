@@ -73,7 +73,8 @@ RULES:
 2. Resolve any contradictory timing, malware attribution, or event sequences.
 3. If threat actor attribution is claimed, set is_attribution to true.
 4. Confidence score must strictly reflect the evidence grounding (0.0 to 1.0).
-5. Output ONLY valid JSON. No surrounding markdown fences or conversation.
+5. Attack stages marked [HYPOTHESIS] (such as unevidenced Initial Access or Execution) are analytical kill-chain hypotheses (confidence <= 0.35) and MUST NEVER be synthesized as confirmed adversary activities. Only promote when valid evidence IDs and proven lineage directly substantiate the stage.
+6. Output ONLY valid JSON. No surrounding markdown fences or conversation.
 """
 
 

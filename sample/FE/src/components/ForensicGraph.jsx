@@ -246,7 +246,7 @@ export default function ForensicGraph({ caseId }) {
             <div style={{ background: '#ffffff', border: '1px solid var(--border-light, #e2e8f0)', borderRadius: '10px', padding: '16px', marginBottom: '16px' }}>
               <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Active Cypher Query</div>
               <pre style={{ margin: 0, padding: '12px', background: '#0f172a', color: '#38bdf8', borderRadius: '6px', fontSize: '12px', fontFamily: 'monospace', overflowX: 'auto' }}>
-                {`MATCH (e:Evidence {case_id: "${caseId}"})-[r:DERIVED_FROM]->(f:Finding)\nRETURN e.filename AS EvidenceFile, type(r) AS Relationship, f.fact AS Observable`}
+                {`// Provenance-enforced Query: Distinguishes OBSERVED, EVIDENCE_CORRELATED, and HYPOTHESIS\nMATCH (s:AttackStep {case_id: "${caseId}"})\nRETURN s.stage AS Stage, s.provenance_type AS Provenance, s.status AS Status, s.confidence AS Confidence\nORDER BY s.step_number ASC`}
               </pre>
             </div>
 
@@ -579,25 +579,28 @@ function buildAgentDrivenGraph(findings, agentData, nodes, edges, evidenceMap) {
     findingMap.set(fId, f);
     const layer = (f.layer || 'finding').toLowerCase();
     const nodeType = ['device', 'user', 'network', 'process', 'evidence'].includes(layer) ? layer : 'finding';
+    const isHypothesis = f.provenance_type === 'HYPOTHESIS' || f.status === 'UNCONFIRMED_HYPOTHESIS';
     const sev = (f.severity || 'medium').toLowerCase();
-    const isCritical = sev === 'critical' || sev === 'high';
-    const conf = Math.round((f.confidence > 1 ? f.confidence : f.confidence * 100) || 75);
+    const isCritical = (sev === 'critical' || sev === 'high') && !isHypothesis;
+    const rawConf = Math.round((f.confidence > 1 ? f.confidence : f.confidence * 100) || 75);
+    const conf = isHypothesis ? Math.min(rawConf, 35) : rawConf;
 
     nodes.push({
       id: fId,
       type: nodeType,
       label: f.fact ? (f.fact.length > 30 ? f.fact.substring(0, 27) + '...' : f.fact) : fId,
-      sublabel: `${sev.toUpperCase()} · ${conf}% conf`,
+      sublabel: isHypothesis ? `HYPOTHESIS · ${conf}% conf` : `${sev.toUpperCase()} · ${conf}% conf`,
       critical: isCritical,
       details: {
         title: f.fact || fId,
-        subtitle: `Finding · ${f.layer ? f.layer.toUpperCase() : 'GENERAL'}`,
+        subtitle: isHypothesis ? 'Analytical Hypothesis · UNCONFIRMED' : `Finding · ${f.layer ? f.layer.toUpperCase() : 'GENERAL'}`,
         desc: f.fact || 'No description recorded.',
-        badge: sev.toUpperCase(),
-        badgeColor: isCritical ? 'var(--red)' : (sev === 'medium' ? 'var(--orange)' : 'var(--blue)'),
-        badgeBg: isCritical ? 'var(--red-light)' : (sev === 'medium' ? 'var(--orange-light)' : 'var(--blue-light)'),
+        badge: isHypothesis ? 'HYPOTHESIS' : sev.toUpperCase(),
+        badgeColor: isHypothesis ? 'var(--purple)' : (isCritical ? 'var(--red)' : (sev === 'medium' ? 'var(--orange)' : 'var(--blue)')),
+        badgeBg: isHypothesis ? 'rgba(168, 85, 247, 0.15)' : (isCritical ? 'var(--red-light)' : (sev === 'medium' ? 'var(--orange-light)' : 'var(--blue-light)')),
         list: [
           { k: 'Finding ID', v: fId },
+          { k: 'Classification', v: isHypothesis ? 'HYPOTHESIS (Unconfirmed)' : 'CONFIRMED OBSERVABLE' },
           { k: 'Layer', v: f.layer || 'N/A' },
           { k: 'MITRE Mapping', v: f.mitre_mapping || 'None' },
           { k: 'Evidence Reference', v: f.evidence_reference || 'N/A' }
@@ -649,12 +652,7 @@ function buildAgentDrivenGraph(findings, agentData, nodes, edges, evidenceMap) {
         }
       }
 
-      if (!hasLinkedEdge) {
-        const firstEv = nodes.find(n => n.type === 'evidence');
-        if (firstEv) {
-          edges.push({ source: fId, target: firstEv.id, label: 'derived from', color: 'var(--blue)' });
-        }
-      }
+      // Do not invent false edges to arbitrary evidence containers without provenance
     }
   });
 

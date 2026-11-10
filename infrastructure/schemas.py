@@ -33,6 +33,7 @@ class EvidenceStatus(str, Enum):
     METADATA_EXTRACTED = "metadata_extracted" # after Stage 4 metadata extraction
     STORED             = "stored"             # after Stage 5 permanent store -- Infrastructure Layer DONE
     FAILED             = "failed"             # any unrecoverable error, any stage
+    DELETED            = "deleted"            # marked deleted or tombstoned
 
 
 class CustodyLogEntry(BaseModel):

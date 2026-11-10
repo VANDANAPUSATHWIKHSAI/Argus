@@ -6,10 +6,12 @@ produced by Agent 2 strictly cite valid FIR finding IDs and carry valid confiden
 """
 
 import logging
-from typing import List, Set, Tuple, Any, Dict
+from typing import List, Set, Tuple, Any, Dict, Optional
 from agents.agent2_evidence_correlation.schemas import (
     Agent2Claim, Agent2Output, TimelineEvent, DeterministicRelationship, CorrelationConflict, QwenInterpretation
 )
+
+from infrastructure.repository.evidence_store import DELETED_EVIDENCE_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -19,15 +21,29 @@ class Agent2Validator:
     Deterministic validation gate for Agent 2 evidence correlation output.
     """
 
-    def extract_valid_id_universe(self, findings: List[Any]) -> Tuple[Set[str], Set[str]]:
+    def extract_valid_id_universe(
+        self,
+        findings: List[Any],
+        case_id: Optional[str] = None,
+        tenant_id: Optional[str] = None
+    ) -> Tuple[Set[str], Set[str]]:
         """
         Extracts valid finding IDs and evidence reference lineage IDs from input findings.
+        Enforces tenant and case boundary filtering and excludes deleted/tombstoned evidence.
         Returns: (set_of_finding_ids, set_of_lineage_ids)
         """
         valid_finding_ids: Set[str] = set()
         valid_lineage_ids: Set[str] = set()
 
         for finding in findings:
+            f_tenant = finding.get("tenant_id") if isinstance(finding, dict) else getattr(finding, "tenant_id", None)
+            if tenant_id and f_tenant and f_tenant != tenant_id and tenant_id != "default":
+                continue
+
+            f_case = finding.get("case_id") if isinstance(finding, dict) else getattr(finding, "case_id", None)
+            if case_id and f_case and str(f_case) != str(case_id):
+                continue
+
             fid = None
             ev_refs = []
 
@@ -41,15 +57,16 @@ class Agent2Validator:
                 fid = getattr(finding, "id")
                 ev_refs = getattr(finding, "evidence_reference", [])
 
-            if fid:
+            if fid and str(fid).strip() not in DELETED_EVIDENCE_IDS:
                 valid_finding_ids.add(str(fid).strip())
 
             if isinstance(ev_refs, str):
                 ev_refs = [x.strip() for x in ev_refs.split(",") if x.strip()]
             if isinstance(ev_refs, list):
                 for ref in ev_refs:
-                    if ref:
-                        valid_lineage_ids.add(str(ref).strip())
+                    clean_ref = str(ref).strip()
+                    if clean_ref and clean_ref not in DELETED_EVIDENCE_IDS:
+                        valid_lineage_ids.add(clean_ref)
 
         return valid_finding_ids, valid_lineage_ids
 

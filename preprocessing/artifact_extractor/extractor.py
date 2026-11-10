@@ -29,6 +29,7 @@ from preprocessing.artifact_extractor.resolver import CommandLineSpanResolver
 from preprocessing.artifact_extractor.registry import SystemObjectRegistry
 
 logger = logging.getLogger(__name__)
+logging.getLogger("ioc_finder").setLevel(logging.WARNING)
 
 # Pinned model configurations
 NER_MODEL_ID = "PranavaKailash/CyNER-2.0-DeBERTa-v3-base"
@@ -158,6 +159,9 @@ class YaraScanner:
                         try:
                             str_val = string_data.decode('utf-8', errors='replace')
                         except Exception:
+                            continue
+                        
+                        if not any(c in str_val for c in ('.', '/', '\\', '@', ':')) and len(str_val) < 32:
                             continue
                         
                         found = ioc_finder.find_iocs(str_val)
@@ -654,6 +658,10 @@ class ArtifactExtractor:
                     field_path = f"raw_fields.{k}"
                     policy = self.get_field_extraction_policy(field_path)
                     if policy == "neither":
+                        continue
+
+                    # Fast bypass
+                    if not any(c in v for c in ('.', '/', '\\', '@', ':')) and len(v) < 32:
                         continue
 
                     # Run ioc-finder
@@ -1691,31 +1699,35 @@ def is_ipv4_version_number(text: str, start_offset: int) -> bool:
 
 def extract_regex(text: str, source_field: str, artifact_id: str, evidence_id: str) -> List[ExtractedEntity]:
     """Compatible wrapper running both ioc-finder and the legacy path/registry patterns."""
+    if not text or not isinstance(text, str) or len(text) < 4:
+        return []
+
     entities = []
     
-    # 1. ioc-finder categories
-    found = ioc_finder.find_iocs(text)
-    for cat, val_list in found.items():
-        ioc_type = map_category_to_type(cat)
-        if not ioc_type or not val_list:
-            continue
-        for val in val_list:
-            # Check version number for IPv4
-            spans = find_raw_spans(val, text, ioc_type)
-            for raw_match, start, end in spans:
-                if ioc_type == "ipv4" and is_ipv4_version_number(text, start):
-                    continue
-                entities.append(ExtractedEntity(
-                    artifact_id=artifact_id,
-                    evidence_id=evidence_id,
-                    entity_type=ioc_type,
-                    value=raw_match,
-                    source_field=source_field,
-                    char_start=start,
-                    char_end=end,
-                    extraction_method="regex:" + ioc_type,
-                    confidence=1.0,
-                ))
+    # 1. ioc-finder categories (run only if string contains indicator characters or is hash length)
+    if any(c in text for c in ('.', '/', '\\', '@', ':')) or len(text) >= 32:
+        found = ioc_finder.find_iocs(text)
+        for cat, val_list in found.items():
+            ioc_type = map_category_to_type(cat)
+            if not ioc_type or not val_list:
+                continue
+            for val in val_list:
+                # Check version number for IPv4
+                spans = find_raw_spans(val, text, ioc_type)
+                for raw_match, start, end in spans:
+                    if ioc_type == "ipv4" and is_ipv4_version_number(text, start):
+                        continue
+                    entities.append(ExtractedEntity(
+                        artifact_id=artifact_id,
+                        evidence_id=evidence_id,
+                        entity_type=ioc_type,
+                        value=raw_match,
+                        source_field=source_field,
+                        char_start=start,
+                        char_end=end,
+                        extraction_method="regex:" + ioc_type,
+                        confidence=1.0,
+                    ))
 
     # 2. Compatibility regexes (paths, registry keys, MITRE codes)
     for name, entity_type, compiled in _COMPAT_PATTERNS:

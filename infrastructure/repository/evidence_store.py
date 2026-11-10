@@ -512,13 +512,15 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                     return None
                 if not stored_tenant and tenant_id != "default":
                     return None
-                from datetime import datetime
+                from datetime import datetime, timezone
                 created_at = data.get("created_at")
                 if isinstance(created_at, str):
                     try:
                         created_at = datetime.fromisoformat(created_at)
                     except Exception:
                         pass
+                if not created_at or not isinstance(created_at, datetime):
+                    created_at = datetime.fromtimestamp(session_file.stat().st_mtime, tz=timezone.utc)
                 return CaseSession(
                     case_id=str(data.get("case_id", case_id)),
                     tenant_id=stored_tenant or tenant_id,

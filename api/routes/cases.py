@@ -359,6 +359,9 @@ async def get_all_cases(
     is_auditor = user_role == "auditor"
 
     result = []
+    from infrastructure.repository.evidence_store import REPOSITORY_DIR
+    repo_dir_path = Path(REPOSITORY_DIR)
+
     for c in cases:
         c_name = getattr(c, "name", None)
         c_desc = getattr(c, "description", None)
@@ -390,14 +393,9 @@ async def get_all_cases(
         )
         if not has_report:
             try:
-                from pathlib import Path
-                from infrastructure.repository.evidence_store import REPOSITORY_DIR
-                from api.routes.evidence import sanitize_uuid
-                for cid in (c.case_id, sanitize_uuid(c.case_id)):
-                    case_dir = Path(REPOSITORY_DIR) / cid
-                    if (case_dir / "report.json").exists() or (case_dir / "report.html").exists():
-                        has_report = True
-                        break
+                case_dir = repo_dir_path / c.case_id
+                if (case_dir / "report.json").is_file() or (case_dir / "report.html").is_file():
+                    has_report = True
             except Exception:
                 pass
 
@@ -1453,21 +1451,21 @@ async def get_case(
         rep_status = InvestigationStageStatus.NOT_STARTED
     else:
         # Check case status for closure or report submission
-        cases = list_cases(tenant_id=x_tenant_id)
-        current_case = next((c for c in cases if c.case_id == case_id), None)
-        is_closed = current_case and current_case.status == "closed"
+        is_closed = getattr(session, "status", "") == "closed"
         
         has_report_note = False
         try:
-            from api.routes.auth import get_db_connection
-            with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT 1 FROM case_notes WHERE case_id = %s AND (title ILIKE %s OR title ILIKE %s) LIMIT 1",
-                        (case_id, "%Report Submitted%", "%Escalation to Auditor%")
-                    )
-                    if cur.fetchone():
-                        has_report_note = True
+            from infrastructure.repository.evidence_store import _should_attempt_postgres
+            if _should_attempt_postgres():
+                from api.routes.auth import get_db_connection
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT 1 FROM case_notes WHERE case_id = %s AND (title ILIKE %s OR title ILIKE %s) LIMIT 1",
+                            (case_id, "%Report Submitted%", "%Escalation to Auditor%")
+                        )
+                        if cur.fetchone():
+                            has_report_note = True
         except Exception:
             pass
 
@@ -1488,27 +1486,31 @@ async def get_case(
     # Fetch name and description from session or DB
     case_name = getattr(session, "name", None) or "Unnamed Case"
     case_desc = getattr(session, "description", None) or "No description provided."
-    try:
-        from config.settings import settings
-        import psycopg2
-        conn = psycopg2.connect(
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            database=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-            connect_timeout=2
-        )
-        cur = conn.cursor()
-        cur.execute("SELECT name, description FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
-        row = cur.fetchone()
-        if row:
-            if row[0]:
-                case_name = row[0]
-            if len(row) > 1 and row[1]:
-                case_desc = row[1]
-    except Exception as e:
-        logger.warning(f"Could not fetch case name for summary: {e}")
+    if case_name == "Unnamed Case":
+        try:
+            from infrastructure.repository.evidence_store import _should_attempt_postgres
+            if _should_attempt_postgres():
+                from config.settings import settings
+                import psycopg2
+                conn = psycopg2.connect(
+                    host=settings.postgres_host,
+                    port=settings.postgres_port,
+                    database=settings.postgres_db,
+                    user=settings.postgres_user,
+                    password=settings.postgres_password,
+                    connect_timeout=1
+                )
+                cur = conn.cursor()
+                cur.execute("SELECT name, description FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
+                row = cur.fetchone()
+                if row:
+                    if row[0]:
+                        case_name = row[0]
+                    if len(row) > 1 and row[1]:
+                        case_desc = row[1]
+                conn.close()
+        except Exception as e:
+            logger.warning(f"Could not fetch case name for summary: {e}")
 
     user_id = str(current_user.get("id", ""))
     is_authorized = is_user_authorized_for_case_modification(case_id, current_user, x_tenant_id)

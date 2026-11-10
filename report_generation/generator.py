@@ -1869,9 +1869,9 @@ class ReportGenerator:
         for f in findings:
             txt = (f.get("sanitized_fact") or f.get("fact") or "").lower()
             layer = (f.get("layer") or "").lower()
-            if any(k in txt or k in layer for k in ("registry", "recentdocs", "mru", "user_activity", "hive", "run key", "software", "system")):
+            if any(k in txt or k in layer for k in ("search", "indexed", "windows search", "user activity", "user_activity", "registry", "recentdocs", "mru", "hive", "run key", "software", "system", "edb")):
                 reg_facts.append(f)
-            elif any(k in txt or k in layer for k in ("dns", "http", "c2", "beacon", "pcap", "stream", "packet", "suricata", "ids", "alert", "retransmission", "flow")):
+            elif any(k in txt or k in layer for k in ("firewall", "pfirewall", "connection", "drop", "dropped", "allowed", "blocked", "traffic", "dns", "http", "c2", "beacon", "pcap", "stream", "packet", "suricata", "ids", "alert", "retransmission", "flow", "port")):
                 net_facts.append(f)
             elif any(k in txt or k in layer for k in ("memory", "ram", "process", "thread", "handle", "eprocess", "injection")):
                 mem_facts.append(f)
@@ -1912,9 +1912,11 @@ class ReportGenerator:
             }
 
         if reg_facts:
-            clusters.append(_make_cluster(reg_facts, "Windows Registry & User Activity Artifacts", "Host workstation registry telemetry extracted and verified against forensic baselines."))
+            default_t = "Host Endpoint, Search Index & User Activity Artifacts" if any("search" in (f.get("fact") or "").lower() for f in reg_facts) else "Windows Registry & User Activity Artifacts"
+            clusters.append(_make_cluster(reg_facts, default_t, "Host workstation search history and endpoint telemetry extracted and verified against forensic baselines."))
         if net_facts:
-            clusters.append(_make_cluster(net_facts, "Network Traffic & Perimeter IDS Detections", "Network flow packets and protocol indicators correlated against threat intelligence signatures."))
+            default_net = "Network Firewall & Perimeter Connection Logs" if any("firewall" in (f.get("fact") or "").lower() for f in net_facts) else "Network Traffic & Perimeter IDS Detections"
+            clusters.append(_make_cluster(net_facts, default_net, "Network flow packets, firewall connection records, and perimeter indicators correlated against threat intelligence signatures."))
         if mem_facts:
             clusters.append(_make_cluster(mem_facts, "Volatile Memory & Runtime Process Artifacts", "Process allocations, thread handles, and runtime execution state triaged from memory structures."))
         if evtx_facts:

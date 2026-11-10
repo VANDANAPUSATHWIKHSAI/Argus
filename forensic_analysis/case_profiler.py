@@ -106,10 +106,14 @@ def profile_case_evidence(raw_evidence: Optional[List[Any]] = None, raw_findings
     registry_keys = list(dict.fromkeys(registry_keys))
 
     # 6. Detect Evidence Modalities
-    has_pcap = any(ext in ('.pcap', '.pcapng', '.cap') for ext in ev_exts) or any("pcap" in fn.lower() for fn in ev_files) or bool(external_ips or clean_domains)
+    has_pcap = any(ext in ('.pcap', '.pcapng', '.cap') for ext in ev_exts) or any("pcap" in fn.lower() or "firewall" in fn.lower() or "pfirewall" in fn.lower() for fn in ev_files) or bool(external_ips or clean_domains)
     has_registry = (
         any(any(k in fn.upper() for k in ("SYSTEM", "NTUSER", "SOFTWARE", "SAM", "SECURITY", ".REG")) for fn in ev_files)
         or any(k in corpus.lower() for k in ("mru", "registry", "mrulistex", "recentdocs", "run key", "userassist"))
+    )
+    has_search = (
+        any(ext in ('.edb', '.db') or "windows.edb" in fn.lower() or "search" in fn.lower() for fn in ev_files)
+        or any(k in corpus.lower() for k in ("windows search", "search-ms", "indexed search", "search record", "search index"))
     )
     has_memory = (
         any(ext in ('.raw', '.dmp', '.vmem', '.mem') for ext in ev_exts)
@@ -126,6 +130,7 @@ def profile_case_evidence(raw_evidence: Optional[List[Any]] = None, raw_findings
     has_binary = any(ext in ('.exe', '.dll', '.bin', '.elf', '.ps1', '.bat') for ext in ev_exts)
 
     active_modalities: List[str] = []
+    if has_search: active_modalities.append("SEARCH_INDEX")
     if has_registry: active_modalities.append("REGISTRY")
     if has_pcap: active_modalities.append("NETWORK")
     if has_memory: active_modalities.append("MEMORY")
@@ -141,13 +146,18 @@ def profile_case_evidence(raw_evidence: Optional[List[Any]] = None, raw_findings
         primary_category = "GENERIC"
 
     # 7. Descriptive Contexts
-    victim_node = internal_ips[0] if internal_ips else ("Workstation Endpoint (Local Host)" if has_registry or has_memory or has_evtx else "Internal System")
+    victim_node = internal_ips[0] if internal_ips else ("Workstation Endpoint (Local Host)" if has_search or has_registry or has_memory or has_evtx else "Internal System")
     adversary_node = clean_domains[0] if clean_domains else (external_ips[0] if external_ips else "No External C2 Detected")
 
-    if primary_category == "REGISTRY":
+    if primary_category == "SEARCH_INDEX":
+        summary_title = "Host Endpoint & Windows Search Index Forensics"
+    elif primary_category == "REGISTRY":
         summary_title = "Host Endpoint & Windows Registry Forensics"
     elif primary_category == "NETWORK":
-        summary_title = "Network Traffic & Command-and-Control (C2) Analysis" if clean_domains or external_ips else "Network Packet Capture Forensics"
+        if any("firewall" in fn.lower() for fn in ev_files):
+            summary_title = "Perimeter Firewall & Network Connection Telemetry Analysis"
+        else:
+            summary_title = "Network Traffic & Command-and-Control (C2) Analysis" if clean_domains or external_ips else "Network Packet Capture Forensics"
     elif primary_category == "MEMORY":
         summary_title = "Volatile Host Memory & Process Injection Analysis"
     elif primary_category == "LOGS":
@@ -160,6 +170,7 @@ def profile_case_evidence(raw_evidence: Optional[List[Any]] = None, raw_findings
     return {
         "category": primary_category,
         "modalities": active_modalities,
+        "is_search": has_search,
         "is_registry": has_registry,
         "is_pcap": has_pcap,
         "is_memory": has_memory,

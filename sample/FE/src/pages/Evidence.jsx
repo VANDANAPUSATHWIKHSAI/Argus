@@ -247,17 +247,15 @@ const Evidence = () => {
 
         const openCases = list.filter(c => c.status === 'open' || c.status === 'in_progress');
         const currentSavedId = getActiveCaseId();
-        const matched = currentSavedId ? openCases.find(c => c.case_id === currentSavedId) : null;
-        const foundSaved = matched || openCases[0] || null;
+        const matched = currentSavedId ? list.find(c => c.case_id === currentSavedId) : null;
+        const foundSaved = matched || (!currentSavedId ? openCases[0] : null);
 
         if (foundSaved) {
-          setActiveCase(foundSaved.case_id, foundSaved.name || foundSaved.case_id);
+          if (foundSaved.case_id !== currentSavedId) {
+            setActiveCase(foundSaved.case_id, foundSaved.name || foundSaved.case_id);
+          }
           setActiveCaseId(foundSaved.case_id);
           setActiveCaseName(foundSaved.name || foundSaved.case_id);
-        } else {
-          setActiveCase('', '');
-          setActiveCaseId('');
-          setActiveCaseName('');
         }
 
       } catch (err) {

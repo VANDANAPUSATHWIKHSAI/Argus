@@ -636,7 +636,78 @@ async def get_recent_activity(
                     logger.warning(f"Audit log fetch note: {al_err}")
     except Exception as e:
         print(f"[DB WARNING] Could not fetch comprehensive activity: {e}")
-        
+
+    # 6. Read cryptographically chained local audit logs from logs/audit/{tenant}.jsonl as fallback/augmentation
+    try:
+        base_logs_dir = os.getenv("ARGUS_LOGS_DIR", "logs")
+        audit_file = Path(base_logs_dir) / "audit" / f"{x_tenant_id}.jsonl"
+        audit_files = [audit_file]
+        if x_tenant_id in ("default", "dev-team"):
+            alt_file = Path(base_logs_dir) / "audit" / "default.jsonl"
+            if alt_file not in audit_files:
+                audit_files.append(alt_file)
+
+        existing_entries = {
+            (str(a.get("case_id") or "").strip().lower(), str(a.get("created_at") or "")[:19].strip(), str(a.get("action") or "").strip())
+            for a in activity
+        }
+
+        for af in audit_files:
+            if not af.exists():
+                continue
+            with af.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    line_str = line.strip()
+                    if not line_str:
+                        continue
+                    try:
+                        record = json.loads(line_str)
+                    except Exception:
+                        continue
+
+                    rec_cid = str(record.get("case_id") or "")
+                    rec_event = record.get("event") or "audit_event"
+                    rec_ts = record.get("timestamp") or ""
+                    rec_actor = record.get("created_by") or record.get("actor") or "System"
+                    rec_detail = record.get("detail") or {}
+
+                    action_name = rec_event
+                    details_str = rec_cid
+                    if rec_event == "case_created":
+                        action_name = "Created Case"
+                        details_str = rec_cid
+                    elif rec_event in ("evidence_stored", "evidence_uploaded"):
+                        action_name = "Uploaded Evidence"
+                        if isinstance(rec_detail, dict):
+                            details_str = (
+                                rec_detail.get("filename")
+                                or (os.path.basename(rec_detail.get("repository_path", "")) if rec_detail.get("repository_path") else "")
+                                or (os.path.basename(rec_detail.get("original_repository_path", "")) if rec_detail.get("original_repository_path") else "")
+                                or rec_cid
+                            )
+                    elif rec_event in ("evidence_deleted",):
+                        action_name = "Deleted Evidence"
+                    elif rec_event in ("finding_reviewed",):
+                        action_name = "Reviewed Finding"
+                    elif rec_event in ("case_closed",):
+                        action_name = "Closed Case"
+
+                    key = (rec_cid.strip().lower(), str(rec_ts)[:19].strip(), action_name.strip())
+                    if key in existing_entries:
+                        continue
+                    existing_entries.add(key)
+
+                    activity.append({
+                        "action": action_name,
+                        "case_id": rec_cid,
+                        "created_by": user_map.get(str(rec_actor), str(rec_actor)),
+                        "created_by_id": str(rec_actor),
+                        "created_at": rec_ts,
+                        "details": details_str
+                    })
+    except Exception as local_al_err:
+        logger.warning(f"Could not read local audit jsonl files: {local_al_err}")
+
     activity.sort(key=lambda x: str(x.get("created_at") or ""), reverse=True)
 
     if target_case_id:

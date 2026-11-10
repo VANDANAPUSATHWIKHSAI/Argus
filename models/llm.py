@@ -762,7 +762,7 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
 
     is_ioc = any(k in uq_lower for k in ("ioc", "indicator", "c2 address", "c2 domain", "indicators of compromise")) and not is_summary
 
-    is_timeline = any(k in uq_lower for k in ("timeline", "chronological", "sequence of events", "reconstruct", "attack timeline")) and not is_summary
+    is_timeline = any(k in uq_lower for k in ("timeline", "chronological", "sequence of events", "reconstruct", "attack timeline", "attack time", "incident time", "when did the attack", "time of the attack", "time of incident", "when did it happen", "event time", "timestamp")) and not is_summary
 
     is_process = any(k in uq_lower for k in ("process", "execution tree", "parent-child", "spawning", "cmd.exe", "powershell")) and not is_summary
 

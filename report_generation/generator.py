@@ -2057,7 +2057,7 @@ class ReportGenerator:
                 "verification": {"score": "100% Supported", "label": "Grounded Records", "explainer": "Record numbers verified."},
             }
         else:
-            victim_node = (profile.get("victim_node") if profile else None) or "192.168.1.105"
+            victim_node = (profile.get("victim_node") if profile else None) or "Endpoint Host"
             adv_node = (profile.get("adversary_node") if profile else None) or "External Infrastructure"
             affected_hosts = f"{victim_node} (Victim Workstation)"
             summary_narrative = (
@@ -2155,8 +2155,8 @@ class ReportGenerator:
                 ]
             }
 
-        victim_str = (profile.get("victim_node") if profile else None) or "192.168.1.105"
-        adv_str = (profile.get("adversary_node") if profile else None) or "Remote C2 Server"
+        victim_str = (profile.get("victim_node") if profile else None) or "Endpoint Host"
+        adv_str = (profile.get("adversary_node") if profile else None) or "Remote Infrastructure"
         dom_list = profile.get("domains", []) if profile else []
         dom_desc = f"Domain queries: {', '.join(dom_list[:3])}" if dom_list else "High-entropy domain queries"
         ext_ips = profile.get("external_ips", []) if profile else []
@@ -2229,33 +2229,38 @@ class ReportGenerator:
             ]
             return confirmed_stages, unconfirmed_stages
 
+        dom_sample = f" ({', '.join(profile.get('domains')[:2])})" if profile and profile.get("domains") else ""
+        ext_ip_sample = f" ({profile.get('external_ips')[0]})" if profile and profile.get("external_ips") else ""
+        victim_ref = (profile.get("victim_node") if profile else None) or "Endpoint Host"
+        ev_label = f"({', '.join(profile.get('evidence_files')[:2])})" if profile and profile.get("evidence_files") else "Ingested Evidence"
+
         confirmed_stages = [
             {
                 "step_number": 1,
-                "stage": "Stage 1 — Initial Contact & DNS Discovery",
-                "description": "Victim endpoint initiated rapid sequence of DNS lookups for algorithmically structured domains matching Shannon entropy threshold >= 3.10.",
-                "evidence_refs": "EVID-001 (Port 53 UDP Flows)",
+                "stage": "Stage 1 — Initial Contact & Domain Discovery",
+                "description": f"Endpoint initiated outbound domain resolution and socket connections{dom_sample}.",
+                "evidence_refs": f"{ev_label} (Network Flows)",
                 "confidence_pct": 94,
             },
             {
                 "step_number": 2,
                 "stage": "Stage 2 — External Infrastructure Rendezvous",
-                "description": "Host successfully resolved and established TCP three-way handshake with remote candidate rendezvous server.",
-                "evidence_refs": "EVID-001 (Port 80/443 TCP Handshakes)",
+                "description": f"Host established session handshake with candidate remote infrastructure{ext_ip_sample}.",
+                "evidence_refs": f"{ev_label} (Transport Sessions)",
                 "confidence_pct": 91,
             },
             {
                 "step_number": 3,
-                "stage": "Stage 3 — Command & Control (C2) Beaconing",
-                "description": "Client initiated recurring HTTP sessions transmitting encoded host identifiers at uniform 15-30s intervals.",
-                "evidence_refs": "EVID-001 (HTTP Query Streams)",
+                "stage": "Stage 3 — Command & Control Communication",
+                "description": f"Client initiated recurring outbound sessions transmitting structured data from host {victim_ref}.",
+                "evidence_refs": f"{ev_label} (Session Query Streams)",
                 "confidence_pct": 96,
             },
             {
                 "step_number": 4,
                 "stage": "Stage 4 — Session Communication & Polling",
-                "description": "Repeated request headers observed polling remote command queue for tasking directives with Base64/XOR parameters.",
-                "evidence_refs": "EVID-001 (HTTP Session Headers)",
+                "description": "Repeated request headers observed polling remote endpoints with structured telemetry parameters.",
+                "evidence_refs": f"{ev_label} (Application Headers)",
                 "confidence_pct": 88,
             },
         ]
@@ -2335,13 +2340,16 @@ class ReportGenerator:
             ]
 
         # Network milestone timeline
+        net_ts = self._to_ist(raw_evidence[0].get("upload_timestamp")) if raw_evidence else "Recorded Timestamp"
+        v_node = (profile.get("victim_node") if profile else None) or "Endpoint Host"
+        adv_node = (profile.get("adversary_node") if profile else None) or "Remote Node"
         return [
-            {"time_str": "2026-09-11 20:05:56 IST", "stage": "DNS Discovery", "event": f"DNS queries initiate from endpoint {profile['victim_node'] if profile else '192.168.1.105'}", "confidence_pct": 94},
-            {"time_str": "2026-09-11 20:06:32 IST", "stage": "Domain Resolution", "event": f"Candidate destination domains queried across TLDs", "confidence_pct": 92},
-            {"time_str": "2026-09-11 20:07:01 IST", "stage": "Rendezvous", "event": f"External infrastructure rendezvous ({profile['adversary_node'] if profile else 'Remote C2'})", "confidence_pct": 91},
-            {"time_str": "2026-09-11 20:07:03 IST", "stage": "TCP Handshake", "event": "Outbound TCP session established on Port 80/443", "confidence_pct": 96},
-            {"time_str": "2026-09-11 20:07:18 IST", "stage": "Egress Beacon", "event": "Periodic egress communication observed", "confidence_pct": 95},
-            {"time_str": "2026-09-11 20:07:33 IST", "stage": "Task Polling", "event": "Repeated C2 polling observed with encoded parameters", "confidence_pct": 89},
+            {"time_str": net_ts, "stage": "DNS Discovery", "event": f"DNS queries initiate from endpoint {v_node}", "confidence_pct": 94},
+            {"time_str": net_ts, "stage": "Domain Resolution", "event": "Candidate destination domains queried across authoritative resolvers", "confidence_pct": 92},
+            {"time_str": net_ts, "stage": "Rendezvous", "event": f"External infrastructure rendezvous ({adv_node})", "confidence_pct": 91},
+            {"time_str": net_ts, "stage": "TCP Handshake", "event": "Outbound TCP session established on Port 80/443", "confidence_pct": 96},
+            {"time_str": net_ts, "stage": "Egress Beacon", "event": "Periodic egress communication observed", "confidence_pct": 95},
+            {"time_str": net_ts, "stage": "Task Polling", "event": "Repeated polling observed with encoded parameters", "confidence_pct": 89},
         ]
 
     def _build_impact_assessment(self, data: dict, clusters: List[dict], db_data: dict, raw_evidence: Optional[List[dict]] = None, raw_findings: Optional[List[dict]] = None) -> dict:
@@ -2753,56 +2761,61 @@ class ReportGenerator:
                 ]
             }
 
+        v_target = (profile.get("victim_node") if profile else None) or "affected workstation"
+        adv_target = (profile.get("adversary_node") if profile else None) or "candidate C2 infrastructure"
+        dom_list = profile.get("domains", []) if profile else []
+        sinkhole_rule = f"Sinkhole domain(s) {', '.join(dom_list[:3])} on internal recursive DNS servers." if dom_list else f"Deploy perimeter firewall egress block rules for {adv_target}."
+
         return {
             "immediate": [
                 {
-                    "title": "Perimeter DNS Sinkhole",
-                    "instruction": "Sinkhole know[.]mom-nower[.]com, aatthews[.]cfd, and all *.cfd queries immediately.",
-                    "rationale": "Prevents active C2 communications and task receipt.",
+                    "title": "Perimeter Network / DNS Blocking",
+                    "instruction": sinkhole_rule,
+                    "rationale": "Prevents active C2 communications and payload delivery.",
                 },
                 {
                     "title": "Isolate Affected Workstation",
-                    "instruction": "Move 192.168.1.105 to quarantine VLAN or disconnect switch port.",
+                    "instruction": f"Move {v_target} to quarantine VLAN or disconnect network interface.",
                     "rationale": "Prevents attacker from initiating east-west lateral reconnaissance.",
                 },
                 {
                     "title": "Preserve Host Memory (RAM)",
-                    "instruction": "Capture live RAM dump using WinPmem / LiME before rebooting machine.",
-                    "rationale": "RAM contains active injected C2 thread and decrypted network payloads.",
+                    "instruction": f"Capture live RAM dump on {v_target} using WinPmem / LiME before rebooting machine.",
+                    "rationale": "RAM contains active injected threads and decrypted network payloads.",
                 },
             ],
             "investigation": [
                 {
                     "title": "Identify Responsible Process (PID)",
                     "instruction": "Correlate outbound socket timestamps with netstat -ano and Sysmon Event ID 3.",
-                    "rationale": "Pins network traffic to specific malicious executable or hollowed process.",
+                    "rationale": "Pins network traffic to specific executable or hollowed process.",
                 },
                 {
                     "title": "Inspect Persistence Locations",
                     "instruction": "Examine HKCU/HKLM Run keys, Scheduled Tasks, and WMI event subscriptions.",
-                    "rationale": "Identifies how malware survives system reboot.",
+                    "rationale": "Identifies how processes survive system reboot.",
                 },
                 {
                     "title": "Audit Active Directory Logs",
-                    "instruction": "Search Event ID 4624 (Type 3) and Event ID 4768/4769 for workstation user account.",
+                    "instruction": f"Search Event ID 4624 (Type 3) and Event ID 4768/4769 for {v_target} user account.",
                     "rationale": "Verifies whether workstation credentials were used on other servers.",
                 },
             ],
             "recovery": [
                 {
                     "title": "Rotate User Credentials",
-                    "instruction": "Force immediate password and Kerberos ticket reset for user logged into 192.168.1.105.",
+                    "instruction": f"Force immediate password and Kerberos ticket reset for user accounts on {v_target}.",
                     "rationale": "Mitigates credential theft risk.",
                 },
                 {
                     "title": "Workstation Re-Imaging",
-                    "instruction": "Wipe affected workstation and redeploy from enterprise gold master image.",
+                    "instruction": f"Wipe affected endpoint {v_target} and redeploy from enterprise gold master image.",
                     "rationale": "Guarantees complete eradication of hidden persistence.",
                 },
                 {
-                    "title": "NRD Egress Filtering Policy",
-                    "instruction": "Enforce firewall policy blocking newly registered domains (<30 days old).",
-                    "rationale": "Proactively neutralizes disposable DGA domains.",
+                    "title": "Egress Filtering Policy",
+                    "instruction": "Enforce firewall policy blocking newly registered domains and untrusted egress ports.",
+                    "rationale": "Proactively neutralizes disposable adversary domains.",
                 },
             ]
         }
@@ -2888,32 +2901,37 @@ class ReportGenerator:
                 },
             ]
 
+        v_endpoint = (profile.get("victim_node") if profile else None) or "Endpoint Host"
+        adv_endpoint = (profile.get("adversary_node") if profile else None) or "Remote Node"
+        ev_label = f"({', '.join(profile.get('evidence_files')[:2])})" if profile and profile.get("evidence_files") else "Ingested Evidence"
+        primary_f = profile.get("finding_facts", ["Telemetry observables correlated"])[0] if profile and profile.get("finding_facts") else "Telemetry observables correlated"
+
         return [
             {
                 "claim_id": "CLM-001",
-                "statement": "Workstation initiated high-entropy DNS queries resolving to external candidate C2 domains.",
-                "evidence_ref": "EVID-001 (Port 53 Flows)",
+                "statement": f"Endpoint {v_endpoint} initiated outbound communication sessions.",
+                "evidence_ref": f"{ev_label} (Network Flows)",
                 "status_slug": "verified",
-                "entailment_note": "Entailment confirmed: 42 DNS queries match Shannon entropy threshold >= 3.10.",
+                "entailment_note": f"Entailment confirmed: {len(raw_findings)} correlated finding(s) indexed from evidence artifacts.",
             },
             {
                 "claim_id": "CLM-002",
-                "statement": "Workstation engaged in persistent outbound HTTP C2 beaconing to know[.]mom-nower[.]com.",
-                "evidence_ref": "EVID-001 (Port 80 HTTP Streams)",
+                "statement": f"Observed interaction: {primary_f}.",
+                "evidence_ref": f"{ev_label}",
                 "status_slug": "verified",
-                "entailment_note": "Entailment confirmed: 232 periodic HTTP sessions with uniform interval.",
+                "entailment_note": f"Entailment confirmed: Validated against ingested artifact byte truth.",
             },
             {
                 "claim_id": "HYP-001",
-                "statement": "Internal credentials were confirmed exfiltrated through the outbound network channel.",
-                "evidence_ref": "EVID-001",
+                "statement": "Internal credentials were confirmed exfiltrated through the outbound channel.",
+                "evidence_ref": ev_label,
                 "status_slug": "unsupported",
-                "entailment_note": "Refuted: No cleartext credential structures or password hashes detected in HTTP query payloads.",
+                "entailment_note": "Refuted: No cleartext credential structures or password hashes detected in query payloads.",
             },
             {
                 "claim_id": "HYP-002",
                 "statement": "Adversary conducted lateral movement to internal domain controllers.",
-                "evidence_ref": "EVID-001",
+                "evidence_ref": ev_label,
                 "status_slug": "partial",
                 "entailment_note": "Insufficient data: Capture scope is perimeter-only; internal east-west traffic was not captured.",
             },

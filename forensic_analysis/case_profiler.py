@@ -182,3 +182,4 @@ def profile_case_evidence(raw_evidence: Optional[List[Any]] = None, raw_findings
         "finding_count": len(finding_records),
         "evidence_count": len(ev_files),
     }
+

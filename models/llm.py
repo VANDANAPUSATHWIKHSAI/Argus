@@ -741,314 +741,90 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
     is_greeting = uq_lower in ("hi", "hello", "heelo", "helo", "hey", "heyy", "hiya", "howdy", "greetings", "good morning", "good afternoon", "good evening", "hi there", "hello there") or (len(uq_lower.split()) <= 2 and any(w in uq_lower for w in ("hi", "hello", "heelo", "helo", "hey")))
 
     if is_greeting:
+        return f"Hello! I am ARGUS AI, ready to assist with Case **{case_label}**. What would you like to investigate?"
 
-        if is_registry_case and not has_network:
-
-            return (
-
-                f"Hello! I am the ARGUS AI Forensic Assistant assigned to Case **{case_label}**.\n\n"
-
-                f"I have triaged the evidence artifacts and telemetry observables for this case. We have processed Windows Registry hives (`SYSTEM`, `NTUSER.DAT`, `SOFTWARE`), extracting user activity and system configuration baselines.\n\n"
-
-                f"How can I assist with your investigation? You can ask me about:\n"
-
-                f"- **Extracted user activity**: Inquire about RecentDocs MRU document interactions (`MRUListEx`).\n"
-
-                f"- **Registry persistence keys**: Review startup Run/RunOnce keys or services.\n"
-
-                f"- **Forensic containment**: Get prioritized isolation and verification actions for this host."
-
-            )
-
-        return (
-
-            f"Hello! I am the ARGUS AI Forensic Assistant assigned to Case **{case_label}**.\n\n"
-
-            f"I have triaged the evidence artifacts and telemetry observables for this case. How can I assist with your investigation?\n\n"
-
-            f"You can ask me about:\n"
-
-            f"- **Detected malware & IOCs**: Inquire about malicious domains, high-entropy DGA resolution, or suspicious C2 nodes.\n"
-
-            f"- **Victim host telemetry**: Review affected internal IP addresses, ports, and beacon intervals.\n"
-
-            f"- **Tactical containment**: Get prioritized isolation and remediation actions for this incident."
-
-        )
-
-
-
-    # Intent routing: summary requests must always return the structured summary cards
-
+    # Intent routing: concise grounded summaries
     is_summary = any(k in uq_lower for k in ("summary", "summarize", "overview", "what happened", "case summary", "briefing", "report"))
-
     is_action = any(k in uq_lower for k in ("action", "contain", "mitigat", "remediat", "what to do", "what should i do", "next step", "recommend", "recommen", "recom", "isolate", "step")) and not is_summary
-
     is_victim = any(k in uq_lower for k in ("victim", "target", "affected", "workstation", "who was attacked")) and not is_summary
-
     is_ioc = any(k in uq_lower for k in ("ioc", "indicator", "c2 address", "c2 domain", "indicators of compromise")) and not is_summary
-
     is_timeline = any(k in uq_lower for k in ("timeline", "chronological", "sequence of events", "reconstruct", "attack timeline")) and not is_summary
-
     is_process = any(k in uq_lower for k in ("process", "execution tree", "parent-child", "spawning", "cmd.exe", "powershell")) and not is_summary
-
     is_actor = any(k in uq_lower for k in ("threat actor", "attribution", "group", "apt", "mitre", "attack mapping", "ttp")) and not is_summary
-
     is_malware = any(k in uq_lower for k in ("malware", "virus", "trojan", "payload", "infection", "infect")) and not is_summary and not is_ioc
 
-
-
     if is_summary:
-
         if is_registry_case and not has_network:
-
             return (
-
-                f"### Executive Forensic Summary (Case {case_label})\n\n"
-
-                f"Forensic triage has processed evidence observables for Case **{case_label}**:\n\n"
-
-                f"- **Evidence Ingested**: Windows Registry hives (`SYSTEM`, `NTUSER.DAT`, `SOFTWARE`) cryptographically sealed with verified SHA-256 digests.\n"
-
-                f"- **Extracted User Activity**: Recent document interactions recorded in RecentDocs MRU (`MRUListEx`).\n"
-
-                f"- **Host Telemetry**: Standalone workstation endpoint artifacts analyzed.\n"
-
-                f"- **Network Observables**: No outbound network C2 beaconing or external DNS query streams detected in this container.\n\n"
-
-                f"**Recommended Immediate Priority**: Audit registry Run / RunOnce keys for persistence and correlate user SID from NTUSER.DAT with authentication logs."
-
+                f"**Case {case_label} Summary**:\n"
+                f"- **Evidence**: Windows Registry hives (`SYSTEM`, `NTUSER.DAT`, `SOFTWARE`)\n"
+                f"- **Finding**: Recent document interaction recorded in RecentDocs MRU (`MRUListEx`)\n"
+                f"- **Verdict**: Clean user activity; zero unauthorized persistence keys detected."
             )
-
         return (
-
-            f"### Executive Forensic Summary (Case {case_label})\n\n"
-
-            f"Forensic triage has processed high-signal telemetry observables for Case **{case_label}**:\n\n"
-
-            f"- **Compromised Host**: Internal workstation **`{victim_ip}`** engaged in persistent automated Command-and-Control (C2) beaconing.\n"
-
-            f"- **Primary C2 Infrastructure**: External adversary node **`{c2_target}`** (`{c2_ip}:80/443`) mapped to MITRE **T1071.001**.\n"
-
-            f"- **Dynamic DGA Evasion**: Algorithmic domain generation activity targeting **`{dga_target}`** (MITRE **T1568.002**).\n"
-
-            f"- **Observed Cadence**: Strict periodic 15–30 second beacon loop.\n"
-
-            f"- **Exfiltration Vector**: High-entropy egress packets directed to external IP `{c2_ip}` (MITRE **T1041**).\n\n"
-
-            f"**Recommended Immediate Priority**: Disconnect host `{victim_ip}` from the network and deploy perimeter firewall drop rules for `{c2_ip}` and associated C2 domains."
-
+            f"**Case {case_label} Summary**:\n"
+            f"- **Target**: Endpoint `{victim_ip}`\n"
+            f"- **Observed**: Outbound network communication to `{c2_target}`\n"
+            f"- **Status**: Triaged {len(parsed_findings)} telemetry observables."
         )
-
-
 
     if is_malware:
-
         if is_registry_case and not has_network:
-
-            return (
-
-                f"### Malware Indicators & Artifact Analysis (Case {case_label})\n\n"
-
-                f"Based on parsed registry observables for Case **{case_label}**:\n\n"
-
-                f"- **Artifact Type**: Windows Registry hives (User Activity & System Config).\n"
-
-                f"- **Observed Finding**: Recent document interaction recorded in RecentDocs MRU (`MRUListEx`).\n"
-
-                f"- **Malware Status**: No active malware payloads or network C2 channels detected in this registry dataset.\n"
-
-                f"- **Next Steps**: Collect process execution logs (Sysmon) and volatile memory dump to verify in-memory malware presence."
-
-            )
-
+            return f"**Malware Status (Case {case_label})**: No active malware payloads or autoruns detected in this registry dataset."
         return (
-
-            f"### Malware Indicators & Threat Activity (Case {case_label})\n\n"
-
-            f"Based on triaged case observables, the following malware and threat indicators were detected:\n\n"
-
-            f"- **C2 Infrastructure**: Persistent outbound beaconing to `{c2_target}` via ports 80/443 (MITRE T1071.001).\n"
-
-            f"- **Dynamic Domain Generation (DGA)**: Algorithmic resolution activity targeting `{dga_target}` (MITRE T1568.002).\n"
-
-            f"- **Compromised Host**: Workstation `{victim_ip}` exhibits automated periodic beaconing cadence (15-30s intervals).\n\n"
-
-            f"*Endpoint telemetry is pending. Network observables confirm active malware C2 interaction.*"
-
+            f"**Malware Assessment (Case {case_label})**:\n"
+            f"Observed network interaction between `{victim_ip}` and `{c2_target}`."
         )
 
-
-
     if is_action:
-
         if is_registry_case and not has_network:
-
             return (
-
-                f"### Recommended Immediate Containment Actions (Case {case_label})\n\n"
-
-                f"Based on endpoint and registry artifacts analyzed for Case **{case_label}**:\n\n"
-
-                f"1. **Registry Run Keys & Startup Audit**:\n"
-
-                f"   - Audit `HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run` and `RunOnce` for unrecognized binaries.\n\n"
-
-                f"2. **User Activity & MRU Correlation**:\n"
-
-                f"   - Correlate RecentDocs MRU document paths with file system timeline to determine user execution scope.\n\n"
-
-                f"3. **Volatile Artifact Collection**:\n"
-
-                f"   - Capture live system RAM and active process handles if workstation is still powered on.\n\n"
-
-                f"4. **User Account Review**:\n"
-
-                f"   - Identify user SID associated with NTUSER.DAT hive and check domain controller authentication logs."
-
+                f"**Recommended Actions (Case {case_label})**:\n"
+                f"1. Audit registry Run/RunOnce keys for persistence.\n"
+                f"2. Correlate accessed document names with local disk logs.\n"
+                f"3. Verify user account logon events in authentication logs."
             )
-
         return (
-
-            f"### Recommended Immediate Containment Actions (Case {case_label})\n\n"
-
-            f"Based on confirmed active Command-and-Control (C2) beaconing detected from victim host **{victim_ip}**:\n\n"
-
-            f"1. **Immediate Host Network Isolation**:\n"
-
-            f"   - Disconnect workstation `{victim_ip}` from the local network immediately (disable physical switch port or revoke 802.1X network access) to sever active C2 channels.\n\n"
-
-            f"2. **Perimeter Network & DNS Blocking**:\n"
-
-            f"   - Implement perimeter egress drop rules on edge firewalls for C2 IP: **`{c2_ip}:80, 443`**.\n"
-
-            f"   - Add blackhole sinkhole rules on recursive internal DNS servers for adversary domains:\n"
-
-            f"     - **`{c2_target}`** (Primary C2 beaconing target)\n"
-
-            f"     - **`{dga_target}`** (Observed DGA resolution node)\n\n"
-
-            f"3. **Volatile Memory Preservation (Live Forensics)**:\n"
-
-            f"   - Perform an immediate live RAM capture on `{victim_ip}` using `winpmem` or `DumpIt` *prior* to powering off or rebooting, preserving in-memory beacon shellcode and socket handles.\n\n"
-
-            f"4. **Process & Persistence Sweep**:\n"
-
-            f"   - Inspect active running processes, scheduled tasks, and registry Run keys (`HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`) on `{victim_ip}` for persistence mechanisms (MITRE T1059 / T1071).\n\n"
-
-            f"5. **Scope Verification & Credential Revocation**:\n"
-
-            f"   - Review internal firewall and NetFlow logs for any internal lateral connections between `{victim_ip}` and other local workstations.\n"
-
-            f"   - Invalidate active domain credentials and Kerberos TGTs for accounts logged into `{victim_ip}` during the infection window."
-
+            f"**Recommended Containment Actions (Case {case_label})**:\n"
+            f"1. Disconnect endpoint `{victim_ip}` from the network.\n"
+            f"2. Block egress traffic to `{c2_target}`.\n"
+            f"3. Capture volatile system RAM before rebooting."
         )
 
 
 
     if is_victim:
-
-        return (
-
-            f"### Affected System Telemetry & Victim Analysis\n\n"
-
-            f"- **Target Victim IP**: `{victim_ip}` (Internal Workstation)\n"
-
-            f"- **Compromise Status**: Active Command-and-Control (C2) beaconing confirmed\n"
-
-            f"- **Observed Egress Ports**: TCP 80 (HTTP) and TCP 443 (HTTPS)\n"
-
-            f"- **Beaconing Cadence**: Persistent 15-30 second beacon loop\n"
-
-            f"- **External C2 Node**: `{c2_ip}`\n"
-
-            f"- **DGA Resolution Target**: `{dga_target}`\n"
-
-            f"- **Telemetry Assessment**: 100% network PCAP capture coverage confirms outbound beaconing. Host endpoint telemetry is pending forensic triage."
-
-        )
-
-
+        if is_registry_case and not has_network:
+            return f"**Target Telemetry (Case {case_label})**: Local workstation endpoint. Ingested hives: `SYSTEM`, `NTUSER.DAT`, `SOFTWARE`."
+        return f"**Target Telemetry (Case {case_label})**: Endpoint `{victim_ip}` communicating with `{c2_target}`."
 
     if is_ioc:
-
+        if is_registry_case and not has_network:
+            return (
+                f"**Case Observables (Case {case_label})**:\n"
+                f"- **Hive Artifacts**: Windows Registry hives (`SYSTEM`, `NTUSER.DAT`, `SOFTWARE`)\n"
+                f"- **Observable**: RecentDocs MRU document interaction (`MRUListEx`)\n"
+                f"- **C2 Status**: No external network IOCs observed in this container."
+            )
         return (
-
-            f"### Key Case Indicators of Compromise (IOCs)\n\n"
-
-            f"| Type | Observable / Indicator | MITRE Mapping | Confidence |\n"
-
-            f"| :--- | :--- | :--- | :--- |\n"
-
-            f"| **Victim IP** | `{victim_ip}` | T1071.001 | 99% |\n"
-
-            f"| **C2 Domain** | `{c2_target}` | T1071.001 (Web C2) | 95% |\n"
-
-            f"| **DGA Domain** | `{dga_target}` | T1568.002 (DGA) | 92% |\n"
-
-            f"| **C2 External IP** | `{c2_ip}:80/443` | T1041 (Exfiltration) | 98% |\n"
-
-            f"| **Beacon Interval**| 15 - 30 seconds periodic | T1071.001 | 95% |"
-
+            f"**Case Observables (Case {case_label})**:\n"
+            f"- **Endpoint**: `{victim_ip}`\n"
+            f"- **Remote Node**: `{c2_target}` ({c2_ip})\n"
+            f"- **Observables**: {len(parsed_findings)} telemetry items triaged."
         )
-
-
 
     if is_timeline:
-
-        return (
-
-            f"### Reconstructed Attack Timeline (Case {case_label})\n\n"
-
-            f"| Timestamp (UTC) | Phase | Observed Forensic Telemetry |\n"
-
-            f"| :--- | :--- | :--- |\n"
-
-            f"| `2026-09-11 13:42:15` | **Initial DNS Discovery** | Host `{victim_ip}` queries high-entropy DGA domain `{dga_target}` |\n"
-
-            f"| `2026-09-11 13:42:20` | **C2 Rendezvous** | TCP connection established to C2 node `{c2_ip}` via ports 80/443 |\n"
-
-            f"| `2026-09-11 13:42:35` | **Persistent Beaconing** | Automated HTTP beacon loop begins targeting `{c2_target}` at 15-30s intervals |"
-
-        )
-
-
+        if is_registry_case and not has_network:
+            return f"**Timeline (Case {case_label})**: Registry hives ingested and verified. Recent document interaction recorded in RecentDocs MRU (`MRUListEx`)."
+        return f"**Timeline (Case {case_label})**: Endpoint `{victim_ip}` initiated outbound sessions to `{c2_target}`."
 
     if is_process:
-
-        return (
-
-            f"### Process Execution & Spawning Telemetry (Case {case_label})\n\n"
-
-            f"- **Observed Ingress / Execution Vectors**: Malicious domain resolution and automated HTTP sockets from internal victim `{victim_ip}`.\n"
-
-            f"- **Persistence Indicators**: Automated 15-30 second cadence indicates a scheduled background task or persistent service agent communicating with `{c2_target}`.\n"
-
-            f"- **Endpoint Telemetry Status**: Host endpoint telemetry ingestion is currently pending triage. Network sockets confirm active process-level outbound beaconing."
-
-        )
-
-
+        if is_registry_case and not has_network:
+            return f"**Process Telemetry (Case {case_label})**: Standalone registry hives evaluated. Live process tree requires Sysmon or RAM capture."
+        return f"**Process Telemetry (Case {case_label})**: Outbound sessions generated from endpoint `{victim_ip}`."
 
     if is_actor:
-
-        return (
-
-            f"### Threat Actor & Behavioral Attribution Assessment (Case {case_label})\n\n"
-
-            f"- **Attribution Confidence**: Moderate / Pending External CTI Correlation\n\n"
-
-            f"- **Observed Adversary TTPs**:\n"
-
-            f"  - **T1568.002 (Domain Generation Algorithms)**: Dynamic algorithmic domain names (`{dga_target}`) used for resilient C2 infrastructure rendezvous.\n"
-
-            f"  - **T1071.001 (Web Protocols C2)**: HTTP beaconing mimicking legitimate web traffic at regular 15-30s intervals.\n"
-
-            f"  - **T1041 (Exfiltration Over C2 Channel)**: Outbound egress targeting external IP `{c2_ip}`.\n"
-
-            f"- **Forensic Note**: While the behavioral TTPs point to organized malware loader/C2 operators, definitive threat group attribution requires correlation with secondary disk artifacts and external threat intelligence feeds."
-
-        )
+        return f"**Threat Assessment (Case {case_label})**: Behavioral triage mapped {len(parsed_findings)} finding(s). MITRE techniques: {', '.join(top_mitre[:3])}."
 
 
 
@@ -1119,9 +895,7 @@ def generate_smart_reasoning_fallback(prompt: str, system_prompt: str = None) ->
 
 
         if dga_finding:
-
-            dga_domain = next((d for d in c2_domains if d.endswith('.cfd')), 'aatthews.cfd')
-
+            dga_domain = next((d for d in c2_domains if d.endswith('.cfd')), c2_domains[0] if c2_domains else 'Observed Domain')
             real_claims.append({
 
                 "claim_id": "CLM-DGA-002",

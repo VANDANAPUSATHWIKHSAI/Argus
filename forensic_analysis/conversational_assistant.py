@@ -113,8 +113,12 @@ class ConversationalInvestigationEngine:
         return "\n".join(lines) if lines else "None"
 
     def _build_prompt(self, query: str, history_block: str, investigation_block: str) -> str:
+        from datetime import datetime, timezone
+        now_local = datetime.now().strftime("%Y-%m-%d %I:%M %p")
+        now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
         return (
             f"You are the ARGUS AI Forensic Copilot, an expert digital forensics investigator assisting a human analyst.\n"
+            f"Current Real-Time Clock: {now_local} ({now_utc})\n"
             f"Your mission is to understand the analyst's intent, reason over the case evidence, and provide natural, accurate, "
             f"context-aware answers—just like ChatGPT or Claude—while strictly upholding forensic integrity.\n\n"
             f"MANDATORY FORENSIC SAFEGUARDS:\n"
@@ -131,7 +135,9 @@ class ConversationalInvestigationEngine:
             f"11. ISS Score Semantics: ISS is an impact severity calculation evaluating 6 enterprise dimensions from the canonical ISSCalculator. It is NOT proof of whether an attack occurred, stopped, or progressed. Never infer attack progression from the ISS score. Never claim that a low ISS score means the system is clean, safe, or uncompromised. Explain the actual contributing factors from the canonical ISSCalculator. If calculation inputs are unavailable, explicitly say the score cannot be fully explained from the available context. Never invent an ad-hoc formula.\n"
             f"12. Knowledge Graph Attack Stages vs Observed Proof: Attack progression steps marked [HYPOTHESIS / UNCONFIRMED] are theoretical analytical kill-chain hypotheses, NOT confirmed events. When asked about Initial Access or Execution proof, clearly state that no supporting evidence of ingress or payload execution was identified in the examined artifacts.\n"
             f"13. Windows Registry RecentDocs & MRUListEx Semantics: The Explorer RecentDocs key is located at `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\RecentDocs` (never cite invalid paths like `USERPROFILE\\RecentDocs`). Distinguish: (a) MRUListEx binary value; (b) 4-byte little-endian DWORD index sequence; (c) numbered RecentDocs subkeys/values; (d) actual document values stored under those entries. Never treat MRUListEx as a filename or filepath. Never interpret its DWORD indices as timestamps. Never claim the index sequence alone proves malicious activity. Correlate indices with the corresponding numbered subkeys before describing document entries.\n"
-            f"14. Precise Evidence-Scope Language: Use precise language ('No supporting evidence was identified in the submitted and examined artifacts', 'The relevant telemetry was not available for examination', 'This activity remains unconfirmed'). Avoid absolute statements ('zero evidence of an attack', 'the system is clean', 'no malicious activity occurred'). Distinguish unsubmitted artifacts, unparsed artifacts, artifacts parsed with no indicators, unexecuted agents, and agents executed with no findings.\n\n"
+            f"14. Precise Evidence-Scope Language: Use precise language ('No supporting evidence was identified in the submitted and examined artifacts', 'The relevant telemetry was not available for examination', 'This activity remains unconfirmed'). Avoid absolute statements ('zero evidence of an attack', 'the system is clean', 'no malicious activity occurred'). Distinguish unsubmitted artifacts, unparsed artifacts, artifacts parsed with no indicators, unexecuted agents, and agents executed with no findings.\n"
+            f"15. Current Time & Date Inquiries: If the analyst asks for current time or date, directly provide the real-time clock ({now_local} / {now_utc}). Never fabricate fictitious times or ask irrelevant rhetorical questions.\n"
+            f"16. Incident Timeline: When asked about incident or attack timing, consult the observed findings and evidence records. If the examined artifacts contain no malicious execution timestamps, state clearly that no adversary execution timestamps were observed in the examined telemetry.\n\n"
             f"{investigation_block}\n\n"
             f"<conversation_history>\n{history_block}\n</conversation_history>\n\n"
             f"<analyst_query>\n{query}\n</analyst_query>\n\n"

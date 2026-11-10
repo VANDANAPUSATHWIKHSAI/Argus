@@ -28,8 +28,10 @@ export default function ForensicGraph({ caseId }) {
   } catch (e) {}
   const isAnalyst = currentUser?.role === 'analyst';
 
+  const targetCaseId = caseId || localStorage.getItem('active_case_id');
+
   useEffect(() => {
-    if (!caseId) {
+    if (!targetCaseId) {
       setNodes([]);
       setEdges([]);
       setSelectedNodeId(null);
@@ -50,8 +52,8 @@ export default function ForensicGraph({ caseId }) {
 
         // Fetch evidence and agents first to quickly verify if correlation is available
         const [evidenceRes, agentsRes] = await Promise.all([
-          fetch(`${baseUrl}/evidence/case/${caseId}`, { headers }).catch(() => null),
-          fetch(`${baseUrl}/cases/${caseId}/agents`, { headers }).catch(() => null)
+          fetch(`${baseUrl}/evidence/case/${targetCaseId}`, { headers }).catch(() => null),
+          fetch(`${baseUrl}/cases/${targetCaseId}/agents`, { headers }).catch(() => null)
         ]);
 
         let rawEvidence = [];
@@ -94,22 +96,20 @@ export default function ForensicGraph({ caseId }) {
         let rawFindings = [];
         let partialFlag = false;
 
-        // If agents have not correlated findings, skip finding query to prevent lag but keep evidence nodes
-        if (!isAgentCorrelated) {
-          rawFindings = [];
-        } else if (relevantFindingIds.size > 0) {
+        // Fetch findings: prioritize agent-correlated findings if available; otherwise fetch case findings
+        if (relevantFindingIds.size > 0) {
           // Explicit graph query targeting the exact findings correlated by the agents (bounded to 50)
           const targetIds = Array.from(relevantFindingIds).slice(0, 50);
           if (relevantFindingIds.size > 50) partialFlag = true;
           const idsQuery = encodeURIComponent(targetIds.join(','));
-          const findingsRes = await fetch(`${baseUrl}/cases/${caseId}/findings?ids=${idsQuery}`, { headers }).catch(() => null);
+          const findingsRes = await fetch(`${baseUrl}/cases/${targetCaseId}/findings?ids=${idsQuery}`, { headers }).catch(() => null);
           if (findingsRes && findingsRes.ok) {
             const data = await findingsRes.json();
             rawFindings = Array.isArray(data) ? data : (data.data || []);
           }
         } else {
-          // Correlated swarm completed with no specific cross-finding claims: fetch initial bounded findings
-          const findingsRes = await fetch(`${baseUrl}/cases/${caseId}/findings?limit=15`, { headers }).catch(() => null);
+          // Always query initial bounded case findings so the investigation map visualizes extracted forensic evidence
+          const findingsRes = await fetch(`${baseUrl}/cases/${targetCaseId}/findings?limit=25`, { headers }).catch(() => null);
           if (findingsRes && findingsRes.ok) {
             const data = await findingsRes.json();
             rawFindings = Array.isArray(data) ? data : (data.data || []);
@@ -156,7 +156,7 @@ export default function ForensicGraph({ caseId }) {
 
     loadGraphData();
     return () => { isMounted = false; };
-  }, [caseId]);
+  }, [targetCaseId]);
 
   const nodeMap = useMemo(() => {
     const map = new Map();

@@ -281,7 +281,7 @@ const Dashboard = () => {
 
 
 
-  const activeCaseId = localStorage.getItem('active_case_id');
+  const activeCaseId = localStorage.getItem('active_case_id') || activeSummary?.case_id || (cases && (cases[0]?.id || cases[0]?.case_id));
 
 
 

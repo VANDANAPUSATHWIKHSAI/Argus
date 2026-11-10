@@ -180,7 +180,53 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
                 latency_ms=round((time.perf_counter() - t_start) * 1000, 2),
             )
 
-    # 1.2 Injection check on analyst query
+    # 1.2 Fast deterministic real-time clock & date handler (< 0.1ms)
+    time_triggers = (
+        "what is the time", "what time is it", "current time", "what's the time",
+        "tell me the time", "time now", "what time is it now", "whats the time"
+    )
+    date_triggers = (
+        "what is today's date", "what's the date", "what is the date", "today's date",
+        "current date", "what day is it", "whats the date", "today date"
+    )
+    is_time_query = (
+        clean_q in time_triggers or
+        clean_q == "time" or
+        (any(clean_q.startswith(t) for t in ("what time", "what is the time", "tell me the time", "current time")) and not any(k in clean_q for k in ("attack", "incident", "breach", "c2", "beacon", "malware", "event", "case")))
+    )
+    is_date_query = (
+        clean_q in date_triggers or
+        clean_q == "date" or
+        clean_q == "today" or
+        (any(clean_q.startswith(d) for d in ("what is the date", "what's the date", "today's date", "what day")) and not any(k in clean_q for k in ("attack", "incident", "breach", "event", "case")))
+    )
+
+    if is_time_query or is_date_query:
+        from datetime import datetime, timezone
+        now_local = datetime.now()
+        now_utc = datetime.now(timezone.utc)
+        local_str = now_local.strftime("%I:%M %p").lstrip("0")
+        utc_str = now_utc.strftime("%H:%M UTC")
+        date_str = now_local.strftime("%A, %B %d, %Y")
+
+        if is_time_query and not is_date_query:
+            resp_str = f"The current system time is **{local_str}** ({utc_str})."
+        elif is_date_query and not is_time_query:
+            resp_str = f"Today's date is **{date_str}**."
+        else:
+            resp_str = f"The current system time is **{local_str}** ({utc_str}) on **{date_str}**."
+
+        return QueryResponse(
+            response=resp_str,
+            injection_flagged=False,
+            injection_score=0.0,
+            model_tag=None,
+            execution_mode="RETRIEVAL_ONLY",
+            retrieval_only=True,
+            latency_ms=round((time.perf_counter() - t_start) * 1000, 2),
+        )
+
+    # 1.3 Injection check on analyst query
     gate_res = _injection_gate.check(req.query, field_name="unstructured")
 
     # 2. Load Unified Case Investigation Context (reusing FIR, DB, Neo4j, Qdrant)

@@ -622,3 +622,4 @@ class EvidenceReferenceValidator:
                             valid_evidence.add(clean_ev)
 
         return valid_findings, valid_evidence, cache
+

@@ -195,19 +195,13 @@ const Dashboard = () => {
 
 
 
-  async function loadDashboard() {
-
-    setLoading(true);
+  async function loadDashboard(silent = false) {
+    if (!silent) setLoading(true);
 
     try {
-
       const res = await fetchCases();
-
       const caseList = res.data || [];
-
       setCases(caseList);
-
-
 
       // Single assigned case enforcement: only OPEN or IN_PROGRESS cases can be active
       let currentActiveId = null;
@@ -229,65 +223,46 @@ const Dashboard = () => {
         currentActiveId = null;
       }
 
-
-
       const activeCaseId = localStorage.getItem('active_case_id');
-
       if (activeCaseId) {
-
         const [summaryData, agentData] = await Promise.all([
-
           fetchCaseSummary(activeCaseId).catch(() => null),
-
           fetchAgentResults(activeCaseId).catch(() => null)
-
         ]);
 
         if (summaryData) {
-
           setActiveSummary(summaryData);
-
           if (summaryData.name) localStorage.setItem('active_case_name', summaryData.name);
-
           if (summaryData.description) localStorage.setItem('active_case_desc', summaryData.description);
-
         } else {
-
           setActiveSummary(null);
-
         }
-
         setAgentSummary(agentData);
-
       } else {
-
         setActiveSummary(null);
-
         setAgentSummary(null);
-
       }
-
     } catch (e) {
-
       console.error(e);
-
     } finally {
-
-      setLoading(false);
-
+      if (!silent) setLoading(false);
     }
-
   }
-
-
 
   const activeCaseId = localStorage.getItem('active_case_id') || activeSummary?.case_id || (cases && (cases[0]?.id || cases[0]?.case_id));
 
-
-
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadDashboard();
 
-  useEffect(() => { loadDashboard(); }, []);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadDashboard(true);
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
 
 
 

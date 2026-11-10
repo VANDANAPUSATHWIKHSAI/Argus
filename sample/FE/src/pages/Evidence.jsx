@@ -155,9 +155,9 @@ const Evidence = () => {
         lastPolledCaseRef.current = activeCaseId;
         loadWorkload(activeCaseId);
       }
-      // Adaptive polling: 4s while running, 30s when idle to eliminate constant re-renders
+      // Adaptive polling: 3s while running, 5s when idle to ensure numbers update smoothly in real time
       const isRunning = workloadStatus === 'RUNNING' || workloadStatus === 'PROCESSING';
-      const pollInterval = isRunning ? 4000 : 30000;
+      const pollInterval = isRunning ? 3000 : 5000;
       const interval = setInterval(() => {
         if (!isCancelled && document.visibilityState === 'visible') {
           loadWorkload(activeCaseId);

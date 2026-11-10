@@ -700,126 +700,91 @@ const Agents = () => {
 
 
 
-    if (runningAgents && activeCaseId) {
+    if (activeCaseId) {
+      // 1. Fast polling when analysis actively running (2.5s); 2. Background heartbeat polling when idle/ready (3.5s)
+      const pollDelay = runningAgents ? 2500 : 3500;
 
       interval = setInterval(async () => {
-
         if (isPolling) return; // Skip cycle if previous request is still in-flight
-
+        if (document.visibilityState !== 'visible') return; // Pause when tab is minimized/hidden
         isPolling = true;
 
         try {
-
           const data = await fetchAgentResults(activeCaseId);
 
           // Discard if case changed or unmounted while in flight
-
           if (getActiveCaseId() !== activeCaseId) return;
-
-
 
           consecutiveErrors = 0;
 
-          setAgentData(data);
+          // Seamless state merge: update if findings_count, progress, claims, or status changed
+          setAgentData(prev => {
+            if (!prev) return data;
+            const findingsChanged = data.findings_count !== prev.findings_count;
+            const statusChanged = data.status !== prev.status;
+            const progressChanged = data.progress !== prev.progress;
+            const claimsChanged = (data.claims?.length || 0) !== (prev.claims?.length || 0);
+            const reviewLevelChanged = data.review_level !== prev.review_level;
+            if (findingsChanged || statusChanged || progressChanged || claimsChanged || reviewLevelChanged) {
+              return { ...prev, ...data };
+            }
+            return prev;
+          });
 
-          if (data.status !== 'RUNNING') {
-
+          if (runningAgents && data.status !== 'RUNNING') {
             setRunningAgents(false);
 
             if (data.status === 'FAILED' || data.status === 'ERROR') {
-
               setCustomAlert({
-
                 isOpen: true,
-
                 title: '❌ Multi-Agent Analysis Failed',
-
                 message: (typeof data.agent_errors === 'string' ? data.agent_errors : data.error_message) || `Multi-agent reasoning execution failed for Case ${activeCaseId}. Inspect error telemetry for details.`,
-
                 type: 'error'
-
               });
-
             } else if (data.status === 'STOPPED') {
-
               setCustomAlert({
-
                 isOpen: true,
-
                 title: '⏹ Multi-Agent Workload Stopped',
-
                 message: data.message || `Workload for Case ${activeCaseId} stopped. All evidence collected so far has been safely retained. You can upload missing evidence and restart anytime.`,
-
                 type: 'info'
-
               });
-
             } else if (data.status === 'PARTIAL_SUCCESS') {
-
               setCustomAlert({
-
                 isOpen: true,
-
                 title: '⚠️ Multi-Agent Analysis Partial Success',
-
                 message: `Analysis completed with warnings or degraded stages for Case ${activeCaseId}. Some agent outputs may be partial or require review.`,
-
                 type: 'warning'
-
               });
-
             } else if (data.status === 'COMPLETED' || data.status === 'SUCCESS') {
-
               setCustomAlert({
-
                 isOpen: true,
-
                 title: '✅ Multi-Agent Analysis Complete',
-
                 message: `Agents 1 through 7 finished processing Case ${activeCaseId}. Full findings, attack paths, and supervisor synthesis are now ready.`,
-
                 type: 'success'
-
               });
-
             }
-
+          } else if (!runningAgents && data.status === 'RUNNING') {
+            setRunningAgents(true);
           }
-
         } catch (e) {
-
           if (getActiveCaseId() !== activeCaseId) return;
-
           consecutiveErrors += 1;
-
-          console.error(`Polling error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, e);
-
-          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-
-            setRunningAgents(false);
-
-            setCustomAlert({
-
-              isOpen: true,
-
-              title: '📡 Backend Polling Paused',
-
-              message: `Lost connection to agent service after multiple attempts for Case ${activeCaseId}. Polling stopped to avoid unconstrained retries.`,
-
-              type: 'error'
-
-            });
-
+          if (runningAgents) {
+            console.error(`Polling error (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, e);
+            if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+              setRunningAgents(false);
+              setCustomAlert({
+                isOpen: true,
+                title: '📡 Backend Polling Paused',
+                message: `Lost connection to agent service after multiple attempts for Case ${activeCaseId}. Polling stopped to avoid unconstrained retries.`,
+                type: 'error'
+              });
+            }
           }
-
         } finally {
-
           isPolling = false;
-
         }
-
-      }, 3000);
-
+      }, pollDelay);
     }
 
     return () => {

@@ -7,7 +7,7 @@ import AlertModal from '../components/AlertModal';
 import CloseCaseReasonModal from '../components/CloseCaseReasonModal';
 import { safeFormatDateOnly, safeFormatDateTime, safeFormatTime } from '../js/dateUtils';
 import { setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
-import { isCaseReportGenerated } from '../js/caseUtils';
+import { isCaseReportGenerated, getCaseSubmissionState, isAgentSwarmComplete } from '../js/caseUtils';
 
 
 const AdminDashboard = () => {
@@ -77,22 +77,10 @@ const AdminDashboard = () => {
     }
     const isClosed = caseObj.status === 'closed' || caseObj.status === 'completed' || caseObj.status === 'archived';
     const cId = caseObj.case_id;
-    const isAuditCertified = Boolean(
-      (typeof localStorage !== 'undefined' && cId && localStorage.getItem(`argus_audit_certified_${cId}`)) ||
-      caseObj.audit_certified ||
-      caseObj.is_certified
-    );
-    const isSubmittedToAuditor = Boolean(
-      (typeof localStorage !== 'undefined' && cId && localStorage.getItem(`argus_case_${cId}_submitted_to_auditor`)) ||
-      caseObj.submitted_to_auditor ||
-      isAuditCertified
-    );
-    const isSubmittedToSenior = Boolean(
-      (typeof localStorage !== 'undefined' && cId && localStorage.getItem(`argus_case_${cId}_submitted_to_senior`)) ||
-      caseObj.submitted_to_senior ||
-      caseObj.has_report ||
-      isSubmittedToAuditor
-    );
+    const subState = getCaseSubmissionState(caseObj, cId);
+    const isAuditCertified = subState.auditCertified;
+    const isSubmittedToAuditor = subState.submittedToAuditor;
+    const isSubmittedToSenior = subState.submittedToSenior;
 
     if (isClosed) {
       return {
@@ -184,26 +172,22 @@ const AdminDashboard = () => {
 
   const currentCaseId = currentCase?.case_id;
 
-  const isAuditCertified = Boolean(
-    (typeof localStorage !== 'undefined' && currentCaseId && localStorage.getItem(`argus_audit_certified_${currentCaseId}`)) ||
-    currentCase?.audit_certified ||
-    currentCase?.is_certified
-  );
+  const submissionState = getCaseSubmissionState({
+    ...(currentCase || {}),
+    ...(activeSummary || {}),
+    status: currentCase?.status || activeSummary?.status,
+    has_report: Boolean(currentCase?.has_report || activeSummary?.has_report),
+    submitted_to_senior: Boolean(currentCase?.submitted_to_senior || activeSummary?.submitted_to_senior),
+    submitted_to_auditor: Boolean(currentCase?.submitted_to_auditor || activeSummary?.submitted_to_auditor),
+  }, currentCaseId);
 
-  const isSubmittedToAuditor = Boolean(
-    (typeof localStorage !== 'undefined' && currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_auditor`)) ||
-    currentCase?.submitted_to_auditor ||
-    isAuditCertified
-  );
+  const isAuditCertified = submissionState.auditCertified;
 
-  const isSubmittedToSenior = Boolean(
-    (typeof localStorage !== 'undefined' && currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_senior`)) ||
-    currentCase?.submitted_to_senior ||
-    currentCase?.has_report ||
-    isSubmittedToAuditor
-  );
+  const isSubmittedToAuditor = submissionState.submittedToAuditor;
 
-  const isReportCompleted = isSubmittedToAuditor || isSubmittedToSenior || isCaseClosed || activeSummary?.investigation_progress?.report === 'completed';
+  const isSubmittedToSenior = submissionState.submittedToSenior;
+
+  const isReportCompleted = submissionState.isReportReady || (isCaseClosed && Boolean(currentCase?.has_report || activeSummary?.has_report)) || activeSummary?.investigation_progress?.report === 'completed';
 
   const agentStatusUpper = (
     agentSummary?.status ||
@@ -213,18 +197,8 @@ const AdminDashboard = () => {
     ''
   ).toUpperCase();
 
-  const allDashboardAgentsDone = Boolean(
-    agentSummary?.stage_statuses &&
-    ['agent1', 'agent2', 'agent3', 'agent4', 'agent5a', 'agent5b', 'agent6', 'agent7'].every(k => {
-      const st = (agentSummary?.stage_statuses?.[k] || '').toUpperCase();
-      return st === 'COMPLETED' || st === 'SUCCESS' || st === 'NEEDS_REVIEW';
-    })
-  );
-
   const isAgentComplete = Boolean(
-    (allDashboardAgentsDone &&
-      (agentSummary?.stage_statuses?.agent7 === 'COMPLETED' || agentSummary?.stage_statuses?.agent7 === 'NEEDS_REVIEW' || agentSummary?.stage_statuses?.agent7 === 'SUCCESS') &&
-      (findingsCount > 0 || (agentSummary?.findings_count || 0) > 0 || (agentSummary?.claims?.length || 0) > 0)) ||
+    isAgentSwarmComplete(agentSummary, findingsCount) ||
     agentStatusUpper === 'COMPLETED' ||
     agentStatusUpper === 'SUCCESS' ||
     activeSummary?.investigation_progress?.agent_analysis === 'completed'
@@ -261,13 +235,18 @@ const AdminDashboard = () => {
     }
 
     if (isCaseClosed) {
+      const evDone = isReportCompleted || evidenceCount > 0 || activeSummary?.investigation_progress?.evidence_collection === 'completed';
+      const anDone = isReportCompleted || artifactsCount > 0 || findingsCount > 0 || activeSummary?.investigation_progress?.analysis === 'completed';
+      const agDone = isReportCompleted || isAgentComplete;
+      const revDone = isSubmittedToAuditor || isAuditCertified || isSubmittedToSenior || Boolean(currentCase?.has_report);
+      const audDone = isAuditCertified || isSubmittedToAuditor;
       return [
-        { key: 'evidence_collection', label: 'Evidence Collection', role: analystRole, metric: `${evidenceCount} file${evidenceCount === 1 ? '' : 's'}`, status: 'completed' },
-        { key: 'analysis', label: 'File Analysis', role: analystRole, metric: `${artifactsCount || findingsCount} processed`, status: 'completed' },
-        { key: 'agent_analysis', label: 'Agent Analysis', role: analystRole, metric: `${agentSummary?.claims?.length || findingsCount || 0} claims verified`, status: 'completed' },
-        { key: 'report', label: 'Case Report', role: analystRole, metric: 'Case Closed', status: 'completed' },
-        { key: 'review', label: 'Review', role: seniorRole, metric: 'Reviewed', status: 'completed' },
-        { key: 'audit', label: 'Audit', role: auditRole, metric: 'Audited', status: 'completed' },
+        { key: 'evidence_collection', label: 'Evidence Collection', role: analystRole, metric: evidenceCount > 0 ? `${evidenceCount} file${evidenceCount === 1 ? '' : 's'}` : 'No files', status: evDone ? 'completed' : 'pending' },
+        { key: 'analysis', label: 'File Analysis', role: analystRole, metric: (artifactsCount || findingsCount) > 0 ? `${artifactsCount || findingsCount} processed` : 'None', status: anDone ? 'completed' : 'pending' },
+        { key: 'agent_analysis', label: 'Agent Analysis', role: analystRole, metric: agDone ? `${agentSummary?.claims?.length || findingsCount || 0} claims verified` : 'Not Run', status: agDone ? 'completed' : 'pending' },
+        { key: 'report', label: 'Case Report', role: analystRole, metric: isReportCompleted ? 'Report Generated' : 'Closed Early', status: isReportCompleted ? 'completed' : 'pending' },
+        { key: 'review', label: 'Review', role: seniorRole, metric: revDone ? 'Reviewed' : 'Skipped', status: revDone ? 'completed' : 'pending' },
+        { key: 'audit', label: 'Audit', role: auditRole, metric: audDone ? 'Audited' : 'Skipped', status: audDone ? 'completed' : 'pending' },
         { key: 'closed', label: 'Closed', role: '(Resolved)', metric: 'Resolved', status: 'completed' },
       ];
     }
@@ -585,32 +564,36 @@ const AdminDashboard = () => {
           'X-Tenant-ID': DEFAULT_TENANT_ID
         };
 
-        // Fetch Employees first, build a lookup map by id
+        // Fetch Employees and Cases in parallel
         let employeeMap = {};
+        const [empOutcome, caseOutcome] = await Promise.allSettled([
+          fetch(`${API_BASE_URL}/auth/employees`, { headers }),
+          fetch(`${API_BASE_URL}/cases/`, { headers })
+        ]);
+
         try {
-          const empRes = await fetch(`${API_BASE_URL}/auth/employees`, { headers });
-          if (empRes.ok) {
+          const empRes = empOutcome.status === 'fulfilled' ? empOutcome.value : null;
+          if (empRes && empRes.ok) {
             const empData = await empRes.json();
             const count = Array.isArray(empData) ? empData.length : 0;
-            setTotalEmployees(count > 0 ? count : 11);
+            setTotalEmployees(count);
             setEmployees(empData || []);
             (empData || []).forEach(emp => {
               employeeMap[String(emp.id)] = emp;
             });
           } else {
-            setTotalEmployees(11);
+            setTotalEmployees(0);
           }
         } catch (_) {
-          setTotalEmployees(11);
+          setTotalEmployees(0);
         }
 
-        // Fetch Cases
-        const caseRes = await fetch(`${API_BASE_URL}/cases/`, { headers });
-        if (caseRes.ok) {
+        const caseRes = caseOutcome.status === 'fulfilled' ? caseOutcome.value : null;
+        if (caseRes && caseRes.ok) {
           const caseData = await caseRes.json();
           const cases = caseData.data || [];
           const closedCount = cases.filter(c => c.status === 'closed' || c.status === 'completed' || c.status === 'archived').length;
-          setCasesSolved(closedCount > 0 ? closedCount : (cases.length || 12));
+          setCasesSolved(closedCount);
           
           if (cases.length > 0) {
             // Enrich each case with resolved analyst and senior analyst names
@@ -866,6 +849,34 @@ const AdminDashboard = () => {
                   }} />
                   &bull; {agentSummary?.status || 'READY'}
                 </span>
+              )}
+
+              {currentCase && (isSubmittedToSenior || isSubmittedToAuditor) && (
+                <button
+                  onClick={() => {
+                    setActiveCase(currentCase.case_id, currentCase.name || currentCase.case_id);
+                    navigate('/report');
+                  }}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 14px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    borderRadius: '8px',
+                    background: 'rgba(37, 99, 235, 0.14)',
+                    border: '1px solid rgba(37, 99, 235, 0.45)',
+                    color: '#60a5fa',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    whiteSpace: 'nowrap'
+                  }}
+                  title="Inspect submitted forensic case report"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                  View Case Report
+                </button>
               )}
 
               {currentCase && (currentCase.status === 'open' || currentCase.status === 'in_progress') && (

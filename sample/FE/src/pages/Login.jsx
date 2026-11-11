@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { login as apiLogin } from '../js/api';
+import { login as apiLogin, API_BASE_URL } from '../js/api';
 import { setAuthSession } from '../js/authSession';
 import ArgusLogo from '../components/ArgusLogo';
 import '../css/style.css';
@@ -438,7 +438,7 @@ const Login = () => {
       }
       setIsSendingReset(true);
       try {
-        const response = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/auth/forgot-password', {
+        const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userid: userid.trim() })
@@ -471,7 +471,7 @@ const Login = () => {
       }
       setIsSendingReset(true);
       try {
-        const response = await fetch((import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000') + '/auth/verify-otp', {
+        const response = await fetch(`${API_BASE_URL}/auth/verify-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userid: userid.trim(), otp: otp.trim(), new_password: newPassword })

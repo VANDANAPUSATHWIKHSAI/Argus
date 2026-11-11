@@ -74,6 +74,17 @@ class CaseSummaryResponse(BaseModel):
     latest_timestamp: Optional[str] = None
     evidence_files: list[Dict[str, Any]] = Field(default_factory=list)
     lock: Optional[Dict[str, Any]] = None
+    has_report: bool = False
+    submitted_to_senior: bool = False
+    submitted_to_auditor: bool = False
+    submitted_to_senior_data: Optional[Dict[str, Any]] = None
+    submitted_to_auditor_data: Optional[Dict[str, Any]] = None
+
+class ReportSubmissionRequest(BaseModel):
+    stage: str = "submitted_to_senior"
+    note: Optional[str] = None
+    findings_count: Optional[int] = None
+    evidence_count: Optional[int] = None
 
 class CreateCaseRequest(BaseModel):
     name: str
@@ -328,6 +339,400 @@ async def create_case(
         "description": req.description
     }
 
+def _read_case_submission_meta(case_id: str, session: Optional[Any] = None) -> Dict[str, Any]:
+    """Read authoritative report submission state from local case_session.json and CaseSession."""
+    meta: Dict[str, Any] = {
+        "submitted_to_senior": bool(getattr(session, "submitted_to_senior", False)) if session else False,
+        "submitted_to_auditor": bool(getattr(session, "submitted_to_auditor", False)) if session else False,
+        "has_report": bool(getattr(session, "has_report", False)) if session else False,
+        "submitted_to_senior_data": None,
+        "submitted_to_auditor_data": None,
+    }
+    try:
+        from infrastructure.repository.evidence_store import REPOSITORY_DIR
+        s_file = Path(REPOSITORY_DIR) / case_id / "case_session.json"
+        if s_file.is_file():
+            with open(s_file, "r", encoding="utf-8") as f:
+                s_data = json.load(f)
+            if s_data.get("submitted_to_senior"):
+                meta["submitted_to_senior"] = True
+            if s_data.get("submitted_to_auditor"):
+                meta["submitted_to_auditor"] = True
+                meta["submitted_to_senior"] = True
+            if s_data.get("has_report") or meta["submitted_to_senior"] or meta["submitted_to_auditor"]:
+                meta["has_report"] = True
+            if isinstance(s_data.get("submitted_to_senior_data"), dict):
+                meta["submitted_to_senior_data"] = s_data.get("submitted_to_senior_data")
+            if isinstance(s_data.get("submitted_to_auditor_data"), dict):
+                meta["submitted_to_auditor_data"] = s_data.get("submitted_to_auditor_data")
+    except Exception:
+        pass
+    return meta
+
+
+def _persist_case_report_stage(
+    case_id: str,
+    x_tenant_id: str,
+    stage: str,
+    meta: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Persist report submission/escalation stage to case_session.json and PostgreSQL cases table."""
+    from datetime import datetime, timezone
+    from infrastructure.repository.evidence_store import REPOSITORY_DIR
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    record = {"case_id": case_id, "submitted": True, "submitted_at": now_iso, **(meta or {})}
+    is_auditor_stage = stage == "submitted_to_auditor"
+
+    try:
+        case_dir = Path(REPOSITORY_DIR) / case_id
+        if case_dir.exists() and case_dir.is_dir():
+            s_file = case_dir / "case_session.json"
+            s_data: Dict[str, Any] = {}
+            if s_file.exists():
+                try:
+                    with open(s_file, "r", encoding="utf-8") as f:
+                        s_data = json.load(f)
+                except Exception:
+                    s_data = {}
+            s_data["has_report"] = True
+            s_data["submitted_to_senior"] = True
+            if is_auditor_stage:
+                s_data["submitted_to_auditor"] = True
+                s_data["submitted_to_auditor_data"] = record
+            else:
+                s_data["submitted_to_senior_data"] = record
+            with open(s_file, "w", encoding="utf-8") as f:
+                json.dump(s_data, f, indent=2)
+    except Exception as f_err:
+        logger.warning(f"Could not persist local report submission stage for {case_id}: {f_err}")
+
+    try:
+        from infrastructure.repository.evidence_store import _should_attempt_postgres
+        if _should_attempt_postgres():
+            from api.routes.auth import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
+                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_senior BOOLEAN DEFAULT FALSE;")
+                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_auditor BOOLEAN DEFAULT FALSE;")
+                    if is_auditor_stage:
+                        cur.execute(
+                            "UPDATE cases SET has_report = TRUE, submitted_to_senior = TRUE, submitted_to_auditor = TRUE WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'));",
+                            (case_id, x_tenant_id),
+                        )
+                    else:
+                        cur.execute(
+                            "UPDATE cases SET has_report = TRUE, submitted_to_senior = TRUE WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'));",
+                            (case_id, x_tenant_id),
+                        )
+                conn.commit()
+    except Exception as db_err:
+        logger.warning(f"Could not persist DB report submission stage for {case_id}: {db_err}")
+
+    return record
+
+
+_REQUIRED_SWARM_STAGES = ("agent1", "agent2", "agent3", "agent4", "agent5a", "agent5b", "agent6", "agent7")
+_FINISHED_STAGE_STATUSES = {
+    "COMPLETED",
+    "SUCCESS",
+    "NEEDS_REVIEW",
+    "PARTIAL_SUCCESS",
+    "COMPLETED_WITH_FINDINGS",
+    "COMPLETED_WITH_NO_FINDINGS",
+    "NO_CLAIMS",
+}
+_FINISHED_AGENT7_STATUSES = {"COMPLETED", "SUCCESS", "NEEDS_REVIEW", "NO_CLAIMS", "PARTIAL_SUCCESS"}
+
+
+def _extract_stage_statuses(
+    job_source: Optional[Dict[str, Any]] = None,
+    stored_pipeline_results: Optional[Dict[str, Any]] = None,
+    results_data: Optional[Dict[str, Any]] = None,
+) -> Dict[str, str]:
+    """Collect non-empty stage status entries across pipeline job and stored result structures."""
+    merged: Dict[str, str] = {}
+    for src in (
+        (stored_pipeline_results or {}).get("stage_statuses"),
+        ((job_source or {}).get("results") or {}).get("stage_statuses"),
+        (job_source or {}).get("stage_statuses"),
+        (results_data or {}).get("stage_statuses"),
+    ):
+        if isinstance(src, dict):
+            for k, v in src.items():
+                if v:
+                    merged[k] = str(v)
+
+    for container in (results_data, stored_pipeline_results, (job_source or {}).get("results")):
+        if not isinstance(container, dict):
+            continue
+        for key in _REQUIRED_SWARM_STAGES:
+            if not merged.get(key) and isinstance(container.get(key), dict):
+                st = container[key].get("execution_status") or container[key].get("status")
+                if st:
+                    merged[key] = str(st)
+    return merged
+
+
+def _has_completed_agent_stages(stage_statuses: Optional[Dict[str, Any]]) -> bool:
+    """Return True only when every stage in the 8-agent swarm reached a finished terminal state."""
+    if not isinstance(stage_statuses, dict) or not stage_statuses:
+        return False
+    for key in _REQUIRED_SWARM_STAGES:
+        if str(stage_statuses.get(key) or "").strip().upper() not in _FINISHED_STAGE_STATUSES:
+            return False
+    ag7_status = str(stage_statuses.get("agent7") or "").strip().upper()
+    return ag7_status in _FINISHED_AGENT7_STATUSES
+
+
+def _count_agent_claims_in_dict(source: Optional[Dict[str, Any]]) -> int:
+    """Count verified claims/synthesis items present inside an in-memory or persisted agent payload."""
+    if not isinstance(source, dict):
+        return 0
+    if isinstance(source.get("claims"), list) and source["claims"]:
+        return len(source["claims"])
+    total = 0
+    for key in _REQUIRED_SWARM_STAGES:
+        ag_obj = source.get(key)
+        if not isinstance(ag_obj, dict):
+            continue
+        if isinstance(ag_obj.get("claims"), list):
+            total += len(ag_obj["claims"])
+        if key == "agent7":
+            if isinstance(ag_obj.get("verification"), list):
+                total += len(ag_obj["verification"])
+            if isinstance(ag_obj.get("synthesis"), dict) and ag_obj["synthesis"]:
+                total += 1
+    return total
+
+
+def _resolve_pipeline_sources(
+    case_id: str,
+    x_tenant_id: str,
+    evidence_list: Optional[list] = None,
+) -> tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]], Dict[str, str]]:
+    """Gather live job, durable ISM checkpoints, and evidence-stored pipeline results for a case."""
+    from api.routes.evidence import sanitize_uuid
+    from ism.checkpointer import Checkpointer
+
+    clean_case_id = sanitize_uuid(case_id)
+    with _agent_jobs_lock:
+        mem_job = _agent_jobs.get(clean_case_id) or _agent_jobs.get(case_id)
+        live_job = mem_job if (mem_job and mem_job.get("tenant_id") == x_tenant_id) else None
+
+    checkpointer = Checkpointer()
+    persisted_job = None
+    if not live_job:
+        cp = checkpointer.get_stage_checkpoint(case_id=clean_case_id, stage="pipeline_job", tenant_id=x_tenant_id)
+        if not cp and case_id != clean_case_id:
+            cp = checkpointer.get_stage_checkpoint(case_id=case_id, stage="pipeline_job", tenant_id=x_tenant_id)
+        if cp:
+            persisted_job = cp.get("checkpoint") if isinstance(cp.get("checkpoint"), dict) else cp
+
+    stored_pipeline_results = None
+    for ev in (evidence_list or []):
+        meta = ev.metadata or {}
+        if meta.get("agent_results"):
+            stored_pipeline_results = meta.get("agent_results")
+            break
+
+    job_source = live_job or persisted_job
+    stage_statuses = _extract_stage_statuses(job_source, stored_pipeline_results)
+
+    # Fallback: reconstruct stage statuses from individual ISM stage checkpoints if pipeline_job wasn't captured
+    if not _has_completed_agent_stages(stage_statuses):
+        for key in _REQUIRED_SWARM_STAGES:
+            if stage_statuses.get(key):
+                continue
+            stg_cp = checkpointer.get_stage_checkpoint(case_id=clean_case_id, stage=key, tenant_id=x_tenant_id)
+            if not stg_cp and case_id != clean_case_id:
+                stg_cp = checkpointer.get_stage_checkpoint(case_id=case_id, stage=key, tenant_id=x_tenant_id)
+            if isinstance(stg_cp, dict):
+                st = stg_cp.get("status")
+                if not st and isinstance(stg_cp.get("checkpoint"), dict):
+                    st = stg_cp["checkpoint"].get("execution_status") or stg_cp["checkpoint"].get("status")
+                if st:
+                    stage_statuses[key] = str(st)
+
+    return job_source, stored_pipeline_results, stage_statuses
+
+
+def _has_verified_swarm_outputs(
+    case_id: str,
+    x_tenant_id: str,
+    evidence_list: list,
+    findings: list,
+    job_source: Optional[Dict[str, Any]],
+    stored_pipeline_results: Optional[Dict[str, Any]],
+    stage_statuses: Dict[str, str],
+) -> bool:
+    """Return True if completed swarm produced FIR findings, agent claims/synthesis, or clean no-findings completion."""
+    if findings:
+        return True
+
+    if _count_agent_claims_in_dict(job_source) > 0:
+        return True
+    if _count_agent_claims_in_dict((job_source or {}).get("results")) > 0:
+        return True
+    if _count_agent_claims_in_dict(stored_pipeline_results) > 0:
+        return True
+
+    # Clean benign evidence run: all 8 agents finished and reported no IOCs/claims
+    if evidence_list and _has_completed_agent_stages(stage_statuses):
+        ag7_st = str(stage_statuses.get("agent7") or "").upper()
+        ag3_st = str(stage_statuses.get("agent3") or "").upper()
+        if ag7_st == "NO_CLAIMS" or ag3_st == "COMPLETED_WITH_NO_FINDINGS":
+            return True
+
+    try:
+        from infrastructure.repository.evidence_store import _should_attempt_postgres
+        if _should_attempt_postgres():
+            from api.routes.evidence import sanitize_uuid
+            from api.routes.auth import get_db_connection
+            clean_case_id = sanitize_uuid(case_id)
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT 1 FROM agent_outputs WHERE case_id IN (%s, %s) AND tenant_id = %s LIMIT 1;",
+                        (clean_case_id, case_id, x_tenant_id),
+                    )
+                    if cur.fetchone():
+                        return True
+    except Exception:
+        pass
+
+    return False
+
+
+def _get_agent_pipeline_status(
+    case_id: str,
+    x_tenant_id: str,
+    evidence_list: Optional[list] = None,
+) -> InvestigationStageStatus:
+    """Resolve authoritative multi-agent swarm completion status for a case."""
+    job_source, stored_pipeline_results, stage_statuses = _resolve_pipeline_sources(
+        case_id, x_tenant_id, evidence_list
+    )
+
+    job_status = str((job_source.get("status") if job_source else "") or "").upper()
+    stored_status = str((stored_pipeline_results.get("execution_status") if stored_pipeline_results else "") or "").upper()
+
+    if job_status in ("RUNNING", "PROCESSING") or stored_status in ("RUNNING", "PROCESSING"):
+        return InvestigationStageStatus.IN_PROGRESS
+
+    terminal_blocked = {"FAILED", "ERROR", "STOPPED", "CANCELLED", "MODEL_UNAVAILABLE"}
+    if job_status in ("COMPLETED", "SUCCESS") or stored_status in ("COMPLETED", "SUCCESS"):
+        return InvestigationStageStatus.COMPLETED
+
+    if (
+        _has_completed_agent_stages(stage_statuses)
+        and job_status not in terminal_blocked
+        and stored_status not in terminal_blocked
+    ):
+        return InvestigationStageStatus.COMPLETED
+
+    return InvestigationStageStatus.NOT_STARTED
+
+
+@router.post("/{case_id}/report-submission", response_model=Dict[str, Any])
+async def submit_case_report_stage(
+    case_id: str,
+    req: ReportSubmissionRequest,
+    x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Persist explicit case report submission ('submitted_to_senior' or 'submitted_to_auditor').
+    Enforces that investigation and multi-agent analysis have completed before a report can be submitted.
+    """
+    verify_case_access(case_id, current_user, x_tenant_id)
+    from api.routes.evidence import sanitize_uuid
+    from infrastructure.repository.evidence_store import get_case_session, list_evidence_by_case
+
+    clean_case_id = sanitize_uuid(case_id)
+    stage = (req.stage or "submitted_to_senior").strip().lower()
+    if stage not in ("submitted_to_senior", "submitted_to_auditor"):
+        raise HTTPException(status_code=400, detail="Unsupported report submission stage.")
+
+    user_role = (current_user.get("role") or "").lower()
+    session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+    target_case_id = session.case_id if session else clean_case_id
+    evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=target_case_id)
+    findings = _analyst_service.list_findings(case_id=target_case_id, tenant_id=x_tenant_id)
+
+    if stage == "submitted_to_senior":
+        user_id = str(current_user.get("id", ""))
+        is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+            case_id=target_case_id,
+            user_id=user_id,
+            is_admin=user_role == "admin",
+        )
+        if not is_allowed and lock:
+            raise HTTPException(
+                status_code=423,
+                detail=f"Cannot submit report: Case is locked by analyst '{lock.locked_by_user_name}'.",
+            )
+
+        job_source, stored_pipeline_results, stage_statuses = _resolve_pipeline_sources(
+            target_case_id, x_tenant_id, evidence_list
+        )
+        agent_status = _get_agent_pipeline_status(target_case_id, x_tenant_id, evidence_list)
+        has_outputs = _has_verified_swarm_outputs(
+            target_case_id,
+            x_tenant_id,
+            evidence_list,
+            findings,
+            job_source,
+            stored_pipeline_results,
+            stage_statuses,
+        )
+        if not evidence_list or agent_status != InvestigationStageStatus.COMPLETED or not has_outputs:
+            raise HTTPException(
+                status_code=400,
+                detail="Investigation, evidence processing, and Multi-Agent Swarm analysis must complete with verified findings before submitting the case report.",
+            )
+
+        record = _persist_case_report_stage(
+            target_case_id,
+            x_tenant_id,
+            "submitted_to_senior",
+            {
+                "analyst_id": current_user.get("id") or "analyst",
+                "analyst_name": current_user.get("name") or "Analyst",
+                "note": req.note or "",
+                "findings_count": req.findings_count if req.findings_count is not None else len(findings),
+                "evidence_count": req.evidence_count if req.evidence_count is not None else len(evidence_list),
+            },
+        )
+        return {"status": "SUCCESS", "stage": "submitted_to_senior", "record": record}
+
+    # Senior escalation to Auditor
+    if user_role not in ("senior_analyst", "senior", "admin"):
+        raise HTTPException(status_code=403, detail="Only Senior Analysts or Admins can escalate reports to the Auditor.")
+
+    sub_meta = _read_case_submission_meta(target_case_id, session)
+    if not (sub_meta["submitted_to_senior"] or sub_meta["has_report"] or (session and getattr(session, "status", "") == "closed")):
+        raise HTTPException(
+            status_code=400,
+            detail="The assigned Analyst must complete investigation and submit the report to Senior Analyst before escalating to Auditor.",
+        )
+
+    record = _persist_case_report_stage(
+        target_case_id,
+        x_tenant_id,
+        "submitted_to_auditor",
+        {
+            "senior_analyst_id": current_user.get("id") or "senior_analyst",
+            "senior_analyst_name": current_user.get("name") or "Senior Analyst",
+            "memo": req.note or "",
+            "findings_count": req.findings_count if req.findings_count is not None else len(findings),
+            "evidence_count": req.evidence_count if req.evidence_count is not None else len(evidence_list),
+        },
+    )
+    return {"status": "SUCCESS", "stage": "submitted_to_auditor", "record": record}
+
+
 @router.get("/", response_model=Dict[str, Any])
 async def get_all_cases(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
@@ -336,6 +741,8 @@ async def get_all_cases(
     cases = list_cases(tenant_id=x_tenant_id)
     
     user_map = {}
+    senior_note_cases = set()
+    auditor_note_cases = set()
     try:
         from api.routes.auth import get_db_connection
         with get_db_connection() as conn:
@@ -343,6 +750,18 @@ async def get_all_cases(
                 cur.execute("SELECT id, name FROM users")
                 for row in cur.fetchall():
                     user_map[str(row[0])] = row[1]
+                cur.execute(
+                    "SELECT case_id, title FROM case_notes WHERE title ILIKE %s OR title ILIKE %s",
+                    ("%Report Submitted%", "%Escalation to Auditor%")
+                )
+                for n_row in cur.fetchall():
+                    n_cid = str(n_row[0] or "")
+                    n_title = str(n_row[1] or "").lower()
+                    if "escalation to auditor" in n_title:
+                        auditor_note_cases.add(n_cid)
+                        senior_note_cases.add(n_cid)
+                    elif "report submitted" in n_title:
+                        senior_note_cases.add(n_cid)
     except Exception as e:
         print(f"[DB WARNING] Could not fetch user names: {e}")
 
@@ -383,12 +802,35 @@ async def get_all_cases(
         analyst_name = user_map.get(analyst_id_str, analyst_id_str)
         senior_name = user_map.get(senior_id_str, senior_id_str)
         
-        lock = case_lock_manager.get_lock(c.case_id)
-        lock_info = lock.to_dict(user_id) if lock else None
+        is_open_case = str(getattr(c, "status", "open") or "open").lower() in ("open", "in_progress")
+        lock = case_lock_manager.get_lock(c.case_id) if is_open_case else None
+        if not is_open_case and case_lock_manager.get_lock(c.case_id):
+            case_lock_manager.release(c.case_id, user_id, is_admin=True)
+        is_team_member = (
+            is_admin or
+            analyst_id_str in (user_id, user_email) or
+            senior_id_str in (user_id, user_email)
+        )
+        lock_info = lock.to_dict(user_id, is_assigned=is_team_member) if lock else None
+
+        sub_meta = _read_case_submission_meta(c.case_id, c)
+        submitted_to_senior = bool(
+            sub_meta["submitted_to_senior"] or
+            c.case_id in senior_note_cases or
+            getattr(c, "submitted_to_senior", False)
+        )
+        submitted_to_auditor = bool(
+            sub_meta["submitted_to_auditor"] or
+            c.case_id in auditor_note_cases or
+            getattr(c, "submitted_to_auditor", False)
+        )
+        if submitted_to_auditor:
+            submitted_to_senior = True
 
         has_report = bool(
-            getattr(c, "submitted_to_senior", False) or
-            getattr(c, "submitted_to_auditor", False) or
+            submitted_to_senior or
+            submitted_to_auditor or
+            sub_meta["has_report"] or
             getattr(c, "has_report", False)
         )
         if not has_report:
@@ -417,6 +859,10 @@ async def get_all_cases(
             "assigned_to_you": assigned,
             "lock": lock_info,
             "has_report": has_report,
+            "submitted_to_senior": submitted_to_senior,
+            "submitted_to_auditor": submitted_to_auditor,
+            "submitted_to_senior_data": sub_meta["submitted_to_senior_data"],
+            "submitted_to_auditor_data": sub_meta["submitted_to_auditor_data"],
             "closed_reason": closed_reason,
         })
 
@@ -778,11 +1224,16 @@ async def get_auditor_stats(
                        ELSE 0 END) as max_sev_rank
             FROM cases c
             LEFT JOIN fir_findings f ON c.case_id = f.case_id
-            GROUP BY c.case_id, c.name, c.closed_at, c.created_at
+            WHERE (c.tenant_id = %s OR (%s IN ('default', 'dev-team') AND c.tenant_id IN ('default', 'dev-team')))
+            GROUP BY c.case_id, c.name, c.closed_at, c.created_at, c.has_report, c.submitted_to_senior, c.submitted_to_auditor
+            HAVING COUNT(f.finding_id) > 0
+                OR COALESCE(c.has_report, FALSE) = TRUE
+                OR COALESCE(c.submitted_to_senior, FALSE) = TRUE
+                OR COALESCE(c.submitted_to_auditor, FALSE) = TRUE
             ORDER BY COALESCE(c.closed_at, c.created_at) DESC
             LIMIT %s
             """,
-            (limit,)
+            (x_tenant_id, x_tenant_id, limit)
         )
         case_rows = list(reversed(cur.fetchall()))
 
@@ -791,7 +1242,7 @@ async def get_auditor_stats(
         for r in case_rows:
             cid, name, closed_at, created_at, f_count, avg_conf, max_sev_rank = r
             dt = closed_at or created_at
-            conf_pct = round(float(avg_conf) * 100, 1) if avg_conf is not None else 90.0
+            conf_pct = round(float(avg_conf) * 100, 1) if avg_conf is not None else 0.0
             sev_label = sev_rank_map.get(max_sev_rank or 0, "Low")
             
             previous_cases.append({
@@ -810,32 +1261,12 @@ async def get_auditor_stats(
     except Exception as e:
         logger.warning(f"Could not fetch auditor stats from DB: {e}")
 
-    # Ensure rich historical dataset with balanced severities if DB has fewer cases
-    if len(previous_cases) < 25:
-        severities = ["Low", "Low", "Medium", "High", "Critical", "Low", "Medium", "Low", "High", "Low", "Medium", "Low", "Critical", "Low", "Low"]
-        base_id = 100
-        for i, sev in enumerate(severities):
-            if len(previous_cases) >= 25:
-                break
-            case_num = base_id + i
-            previous_cases.append({
-                "case_id": f"CASE-2025-{case_num}",
-                "name": f"HISTORICAL-AUDIT-{case_num}: Routine System Inspection",
-                "closed_at": f"2025-11-{(i%28)+1:02d}T10:00:00",
-                "month": "Nov",
-                "date_formatted": f"Nov {(i%28)+1:02d}",
-                "full_date_formatted": f"Nov {(i%28)+1:02d}, 2025",
-                "severity": sev,
-                "confidence": 90.0 + (i % 8),
-                "total_findings": (i % 5) + 1
-            })
-
     return {
         "status": "SUCCESS",
-        "total_findings": max(total_findings, 42),
-        "high_severity": max(high_severity, 12),
-        "medium_severity": max(medium_severity, 18),
-        "low_severity": max(low_severity, 12),
+        "total_findings": total_findings,
+        "high_severity": high_severity,
+        "medium_severity": medium_severity,
+        "low_severity": low_severity,
         "previous_cases": previous_cases[:limit]
     }
 
@@ -988,7 +1419,11 @@ async def close_case_endpoint(
     
     if not success and not db_updated:
         raise HTTPException(status_code=404, detail="Case not found or could not be closed.")
-        
+
+    case_lock_manager.release(clean_case_id, user_id, is_admin=True)
+    if case_id != clean_case_id:
+        case_lock_manager.release(case_id, user_id, is_admin=True)
+
     return {"status": "SUCCESS", "message": f"Case {case_id} closed."}
 
 
@@ -1167,6 +1602,20 @@ async def get_all_active_case_locks(
     }
 
 
+def _is_case_closed(case_id: str, x_tenant_id: str) -> bool:
+    """Return True if the case session has been closed/completed/archived."""
+    try:
+        from api.routes.evidence import sanitize_uuid
+        from infrastructure.repository.evidence_store import get_case_session
+        clean_cid = sanitize_uuid(case_id)
+        session = get_case_session(tenant_id=x_tenant_id, case_id=clean_cid) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+        if session and str(getattr(session, "status", "open") or "").lower() in ("closed", "completed", "archived"):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 @router.post("/{case_id}/lock", response_model=Dict[str, Any])
 async def acquire_or_refresh_case_lock(
     case_id: str,
@@ -1177,6 +1626,18 @@ async def acquire_or_refresh_case_lock(
     user_id = str(current_user.get("id", ""))
     user_name = current_user.get("name") or current_user.get("userid") or "Analyst"
     user_email = current_user.get("email")
+
+    if _is_case_closed(case_id, x_tenant_id):
+        case_lock_manager.release(case_id, user_id, is_admin=True)
+        return {
+            "status": "CASE_CLOSED",
+            "lock_status": "CASE_CLOSED",
+            "is_locked": False,
+            "is_owner": False,
+            "read_only": True,
+            "message": f"Case '{case_id}' is closed.",
+            "lock": None,
+        }
 
     is_authorized = is_user_authorized_for_case_modification(case_id, current_user, x_tenant_id)
 
@@ -1221,6 +1682,16 @@ async def get_case_lock_status(
     Check current lock status for a specific case.
     """
     user_id = str(current_user.get("id", ""))
+    if _is_case_closed(case_id, x_tenant_id):
+        case_lock_manager.release(case_id, user_id, is_admin=True)
+        return {
+            "status": "UNLOCKED",
+            "is_locked": False,
+            "is_owner": False,
+            "read_only": True,
+            "message": "Case is closed and unlocked.",
+            "lock": None
+        }
     is_authorized = is_user_authorized_for_case_modification(case_id, current_user, x_tenant_id)
     lock = case_lock_manager.get_lock(case_id)
     if not lock:
@@ -1259,6 +1730,16 @@ async def case_lock_heartbeat(
     Heartbeat to extend TTL of an active case lock.
     """
     user_id = str(current_user.get("id", ""))
+    if _is_case_closed(case_id, x_tenant_id):
+        case_lock_manager.release(case_id, user_id, is_admin=True)
+        return {
+            "status": "CASE_CLOSED",
+            "lock_status": "CASE_CLOSED",
+            "is_locked": False,
+            "is_owner": False,
+            "read_only": True,
+            "lock": None,
+        }
     is_authorized = is_user_authorized_for_case_modification(case_id, current_user, x_tenant_id)
     success, lock, code = case_lock_manager.heartbeat(case_id=case_id, user_id=user_id, is_assigned=is_authorized)
     if not success:
@@ -1415,45 +1896,14 @@ async def get_case(
         agent_status = InvestigationStageStatus.NOT_STARTED
     else:
         find_status = InvestigationStageStatus.COMPLETED
-        
-        # Verify whether the multi-agent swarm actually executed and succeeded for this case
-        with _agent_jobs_lock:
-            mem_job = _agent_jobs.get(case_id)
-            live_job = mem_job if (mem_job and mem_job.get("tenant_id") == x_tenant_id) else None
+        agent_status = _get_agent_pipeline_status(case_id, x_tenant_id, evidence_list)
 
-        from ism.checkpointer import Checkpointer
-        checkpointer = Checkpointer()
-        cp = checkpointer.get_stage_checkpoint(case_id=case_id, stage="pipeline_job", tenant_id=x_tenant_id)
-        persisted_job = None
-        if cp:
-            persisted_job = cp.get("checkpoint") if isinstance(cp.get("checkpoint"), dict) else cp
-        
-        job_source = live_job or persisted_job
-        job_status = (job_source.get("status") if job_source else "").upper()
+    sub_meta = _read_case_submission_meta(case_id, session)
+    is_closed = getattr(session, "status", "") == "closed"
+    submitted_to_senior = sub_meta["submitted_to_senior"]
+    submitted_to_auditor = sub_meta["submitted_to_auditor"]
 
-        stored_pipeline_results = None
-        for ev in (evidence_list or []):
-            meta = ev.metadata or {}
-            if meta.get("agent_results"):
-                stored_pipeline_results = meta.get("agent_results")
-                break
-        stored_status = (stored_pipeline_results.get("execution_status") if stored_pipeline_results else "").upper()
-
-        if job_status in ("COMPLETED", "SUCCESS") or stored_status in ("COMPLETED", "SUCCESS"):
-            agent_status = InvestigationStageStatus.COMPLETED
-        elif job_status in ("RUNNING", "PROCESSING") or stored_status in ("RUNNING", "PROCESSING"):
-            agent_status = InvestigationStageStatus.IN_PROGRESS
-        else:
-            agent_status = InvestigationStageStatus.NOT_STARTED
-        
-    # 5. Report (Must NOT be ready or in-progress if Agent Analysis has not completed!)
-    if agent_status != InvestigationStageStatus.COMPLETED:
-        rep_status = InvestigationStageStatus.NOT_STARTED
-    else:
-        # Check case status for closure or report submission
-        is_closed = getattr(session, "status", "") == "closed"
-        
-        has_report_note = False
+    if not (submitted_to_senior and submitted_to_auditor):
         try:
             from infrastructure.repository.evidence_store import _should_attempt_postgres
             if _should_attempt_postgres():
@@ -1461,18 +1911,31 @@ async def get_case(
                 with get_db_connection() as conn:
                     with conn.cursor() as cur:
                         cur.execute(
-                            "SELECT 1 FROM case_notes WHERE case_id = %s AND (title ILIKE %s OR title ILIKE %s) LIMIT 1",
+                            "SELECT title FROM case_notes WHERE case_id = %s AND (title ILIKE %s OR title ILIKE %s)",
                             (case_id, "%Report Submitted%", "%Escalation to Auditor%")
                         )
-                        if cur.fetchone():
-                            has_report_note = True
+                        for n_row in cur.fetchall():
+                            n_title = str(n_row[0] or "").lower()
+                            if "escalation to auditor" in n_title:
+                                submitted_to_auditor = True
+                                submitted_to_senior = True
+                            elif "report submitted" in n_title:
+                                submitted_to_senior = True
         except Exception:
             pass
 
-        if is_closed or has_report_note:
-            rep_status = InvestigationStageStatus.COMPLETED
-        else:
-            rep_status = InvestigationStageStatus.IN_PROGRESS
+    if submitted_to_auditor:
+        submitted_to_senior = True
+
+    has_report_flag = bool(submitted_to_senior or submitted_to_auditor or sub_meta["has_report"])
+
+    # 5. Report (Must NOT be ready or in-progress if Agent Analysis has not completed!)
+    if agent_status != InvestigationStageStatus.COMPLETED:
+        rep_status = InvestigationStageStatus.NOT_STARTED
+    elif is_closed or submitted_to_senior or submitted_to_auditor:
+        rep_status = InvestigationStageStatus.COMPLETED
+    else:
+        rep_status = InvestigationStageStatus.IN_PROGRESS
 
     progress = InvestigationProgress(
         evidence_collection=ev_status,
@@ -1532,7 +1995,12 @@ async def get_case(
         investigation_progress=progress,
         latest_timestamp=latest_ts,
         evidence_files=formatted_evidence,
-        lock=lock_dict
+        lock=lock_dict,
+        has_report=has_report_flag,
+        submitted_to_senior=submitted_to_senior,
+        submitted_to_auditor=submitted_to_auditor,
+        submitted_to_senior_data=sub_meta["submitted_to_senior_data"],
+        submitted_to_auditor_data=sub_meta["submitted_to_auditor_data"],
     )
 
 from collections import OrderedDict
@@ -1743,16 +2211,21 @@ async def create_case_note(
     current_user: Dict = Depends(get_current_user)
 ):
     user_id = str(current_user.get("id", ""))
-    is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
-        case_id=case_id,
-        user_id=user_id,
-        is_admin=current_user.get("role") == "admin"
-    )
-    if not is_allowed and lock:
-        raise HTTPException(
-            status_code=423,
-            detail=f"Cannot add case note: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+    user_role = (current_user.get("role") or "").lower()
+    note_title_lower = (note.title or "").lower()
+    is_senior_escalation_note = user_role in ("senior_analyst", "senior") and "escalation to auditor" in note_title_lower
+
+    if not is_senior_escalation_note:
+        is_allowed, lock, _msg = case_lock_manager.check_modification_allowed(
+            case_id=case_id,
+            user_id=user_id,
+            is_admin=user_role == "admin"
         )
+        if not is_allowed and lock:
+            raise HTTPException(
+                status_code=423,
+                detail=f"Cannot add case note: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
+            )
 
     from config.settings import settings
     import psycopg2
@@ -1774,6 +2247,22 @@ async def create_case_note(
         )
         conn.commit()
         conn.close()
+
+        if "escalation to auditor" in note_title_lower:
+            _persist_case_report_stage(
+                case_id,
+                x_tenant_id,
+                "submitted_to_auditor",
+                {"senior_analyst_name": current_user.get("name") or "Senior Analyst", "memo": note.content},
+            )
+        elif "report submitted" in note_title_lower:
+            _persist_case_report_stage(
+                case_id,
+                x_tenant_id,
+                "submitted_to_senior",
+                {"analyst_name": current_user.get("name") or "Analyst", "note": note.content},
+            )
+
         return {"status": "SUCCESS", "noteId": note_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2146,20 +2635,24 @@ async def get_case_agent_results(
     job_source = live_job or persisted_job
     if job_source and job_source.get("status") == "RUNNING":
         status_val = "RUNNING"
-        stage_statuses = job_source.get("stage_statuses", {})
+        stage_statuses = _extract_stage_statuses(job_source, stored_pipeline_results)
         results_data = job_source.get("results") or stored_pipeline_results or {}
-    elif job_source and job_source.get("status") in ("COMPLETED", "SUCCESS", "PARTIAL_SUCCESS", "FAILED", "ERROR"):
+    elif job_source and str(job_source.get("status") or "").upper() in ("COMPLETED", "SUCCESS", "PARTIAL_SUCCESS", "NEEDS_REVIEW", "FAILED", "ERROR"):
         status_val = job_source["status"]
         results_data = job_source.get("results") or stored_pipeline_results or {}
-        stage_statuses = results_data.get("stage_statuses", job_source.get("stage_statuses", {}))
-    elif job_source and job_source.get("status") in ("STOPPED", "CANCELLED"):
+        stage_statuses = _extract_stage_statuses(job_source, stored_pipeline_results, results_data)
+        if not stage_statuses and str(status_val or "").upper() in ("COMPLETED", "SUCCESS"):
+            stage_statuses = {k: str(status_val).upper() for k in _REQUIRED_SWARM_STAGES}
+    elif job_source and str(job_source.get("status") or "").upper() in ("STOPPED", "CANCELLED"):
         status_val = "STOPPED"
         results_data = job_source.get("results") or stored_pipeline_results or {}
-        stage_statuses = results_data.get("stage_statuses", job_source.get("stage_statuses", {}))
+        stage_statuses = _extract_stage_statuses(job_source, stored_pipeline_results, results_data)
     elif stored_pipeline_results:
         status_val = stored_pipeline_results.get("execution_status", "COMPLETED")
         results_data = stored_pipeline_results
-        stage_statuses = results_data.get("stage_statuses", {})
+        stage_statuses = _extract_stage_statuses(None, stored_pipeline_results, results_data)
+        if not stage_statuses and str(status_val or "").upper() in ("COMPLETED", "SUCCESS"):
+            stage_statuses = {k: str(status_val).upper() for k in _REQUIRED_SWARM_STAGES}
     elif db_claims:
         claim_agents = {c.get("agent_id") for c in db_claims}
         stage_statuses = {
@@ -2178,16 +2671,26 @@ async def get_case_agent_results(
     else:
         status_val = "READY"
         results_data = {}
-        stage_statuses = {
-            "agent1": "PENDING",
-            "agent2": "PENDING",
-            "agent3": "PENDING",
-            "agent4": "PENDING",
-            "agent5a": "PENDING",
-            "agent5b": "PENDING",
-            "agent6": "PENDING",
-            "agent7": "PENDING"
-        }
+        stage_statuses = {k: "PENDING" for k in _REQUIRED_SWARM_STAGES}
+        # Fallback: recover stage statuses from per-agent ISM checkpoints if pipeline_job wasn't written
+        recovered_any = False
+        for key in _REQUIRED_SWARM_STAGES:
+            stg_cp = checkpointer.get_stage_checkpoint(case_id=clean_case_id, stage=key, tenant_id=x_tenant_id)
+            if not stg_cp and case_id != clean_case_id:
+                stg_cp = checkpointer.get_stage_checkpoint(case_id=case_id, stage=key, tenant_id=x_tenant_id)
+            if isinstance(stg_cp, dict):
+                cp_body = stg_cp.get("checkpoint") if isinstance(stg_cp.get("checkpoint"), dict) else {}
+                st = stg_cp.get("status") or cp_body.get("execution_status") or cp_body.get("status")
+                if st:
+                    stage_statuses[key] = str(st)
+                    recovered_any = True
+                if cp_body:
+                    results_data[key] = cp_body
+        if recovered_any:
+            if _has_completed_agent_stages(stage_statuses):
+                status_val = "COMPLETED"
+            else:
+                status_val = "PARTIAL"
 
     # Extract per-agent intelligence from real results (never fabricated)
     a1_data = results_data.get("agent1") or {}

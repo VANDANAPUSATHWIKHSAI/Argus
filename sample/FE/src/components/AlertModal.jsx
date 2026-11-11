@@ -93,6 +93,7 @@ const AlertModal = ({
 
   return (
     <div 
+      className="alert-overlay"
       onClick={(e) => {
         if (e.target === e.currentTarget && onClose) onClose();
       }}
@@ -102,9 +103,9 @@ const AlertModal = ({
         left: 0,
         right: 0,
         bottom: 0,
-        backgroundColor: isDark ? 'rgba(0, 0, 0, 0.65)' : 'rgba(15, 23, 42, 0.45)',
-        backdropFilter: 'blur(5px)',
-        WebkitBackdropFilter: 'blur(5px)',
+        backgroundColor: 'transparent',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
         zIndex: 99999,
         display: 'flex',
         alignItems: 'center',

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 
-import { fetchReport, createCaseNote } from '../js/api';
+import { fetchReport, createCaseNote, submitCaseReportStage } from '../js/api';
 
 import { generateHtmlFromReportData, handleDownloadHtml, handleDownloadJson } from '../js/reportUtils';
 
@@ -20,9 +20,13 @@ export default function AnalystSubmitReportModal({
 
   activeSummary,
 
+  isAgentComplete = true,
+
   onSuccess
 
 }) {
+
+  const isSwarmWorkComplete = Boolean(isAgentComplete);
 
   const [loading, setLoading] = useState(true);
 
@@ -38,6 +42,8 @@ export default function AnalystSubmitReportModal({
 
   const [submittedSuccess, setSubmittedSuccess] = useState(false);
 
+  const [submitError, setSubmitError] = useState('');
+
 
 
   const currentUser = JSON.parse(localStorage.getItem('argus_user') || '{}');
@@ -51,6 +57,16 @@ export default function AnalystSubmitReportModal({
   useEffect(() => {
 
     if (!isOpen || !caseId) return;
+
+    setSubmitError('');
+
+    if (!isSwarmWorkComplete) {
+      setReportData(null);
+      setReportHtml('');
+      setLoading(false);
+      setSubmittedSuccess(false);
+      return;
+    }
 
 
 
@@ -140,7 +156,7 @@ export default function AnalystSubmitReportModal({
 
     return () => { isMounted = false; };
 
-  }, [isOpen, caseId]);
+  }, [isOpen, caseId, isSwarmWorkComplete]);
 
 
 
@@ -164,7 +180,13 @@ export default function AnalystSubmitReportModal({
 
   const handleSubmitToSenior = async () => {
 
+    if (!isSwarmWorkComplete) {
+      setSubmitError('Complete all 8 Multi-Agent Swarm stages with verified findings before generating or submitting the report.');
+      return;
+    }
+
     setSubmitting(true);
+    setSubmitError('');
 
     const analystName = currentUser.name || 'Analyst';
 
@@ -173,6 +195,13 @@ export default function AnalystSubmitReportModal({
 
 
     try {
+
+      // 0. Enforce and persist backend report submission stage
+      await submitCaseReportStage(caseId, 'submitted_to_senior', {
+        note: noteText,
+        findings_count: findings.length,
+        evidence_count: evidence.length
+      });
 
       // 1. Create durable Case Note for Senior Analyst review trail
 
@@ -223,6 +252,7 @@ export default function AnalystSubmitReportModal({
 
 
       localStorage.setItem(`argus_case_${caseId}_submitted_to_senior`, JSON.stringify(submissionRecord));
+      localStorage.setItem(`argus_case_${caseId}_report_completed`, 'true');
 
       window.dispatchEvent(new Event('storage'));
 
@@ -243,6 +273,7 @@ export default function AnalystSubmitReportModal({
     } catch (err) {
 
       console.error('Failed to submit report to senior analyst:', err);
+      setSubmitError(err?.message || 'Failed to submit report. Please ensure all investigation stages are completed.');
 
     } finally {
 
@@ -319,7 +350,7 @@ export default function AnalystSubmitReportModal({
         >
 
           {/* Incomplete warning when swarm has not executed */}
-          {!isSwarmWorkComplete && (
+          {(!isSwarmWorkComplete || submitError) && (
             <div style={{
               padding: '12px 20px',
               background: 'rgba(239, 68, 68, 0.12)',
@@ -332,7 +363,7 @@ export default function AnalystSubmitReportModal({
             }}>
               <span style={{ fontSize: '18px' }}>⚠️</span>
               <div>
-                <strong>Multi-Agent Swarm Incomplete:</strong> The report cannot be generated or submitted for Senior Analyst review until all 8 AI reasoning agents finish execution and verified findings are generated.
+                <strong>Multi-Agent Swarm Incomplete:</strong> {submitError || 'The report cannot be generated or submitted for Senior Analyst review until all 8 AI reasoning agents finish execution and verified findings are generated.'}
               </div>
             </div>
           )}
@@ -815,11 +846,11 @@ export default function AnalystSubmitReportModal({
 
                   onClick={() => setShowFullPreview(true)}
 
-                  disabled={loading || submitting}
+                  disabled={loading || submitting || !isSwarmWorkComplete}
 
                   className="btn btn-outline"
 
-                  style={{ fontSize: '12.5px', padding: '7px 14px' }}
+                  style={{ fontSize: '12.5px', padding: '7px 14px', opacity: (!isSwarmWorkComplete || loading || submitting) ? 0.5 : 1 }}
 
                 >
 
@@ -833,11 +864,11 @@ export default function AnalystSubmitReportModal({
 
                   onClick={() => handleDownloadHtml(reportData, reportHtml, caseId)}
 
-                  disabled={loading || submitting}
+                  disabled={loading || submitting || !isSwarmWorkComplete}
 
                   className="btn btn-outline"
 
-                  style={{ fontSize: '12.5px', padding: '7px 14px' }}
+                  style={{ fontSize: '12.5px', padding: '7px 14px', opacity: (!isSwarmWorkComplete || loading || submitting) ? 0.5 : 1 }}
 
                 >
 
@@ -851,11 +882,11 @@ export default function AnalystSubmitReportModal({
 
                   onClick={() => handleDownloadJson(reportData, caseId)}
 
-                  disabled={loading || submitting}
+                  disabled={loading || submitting || !isSwarmWorkComplete}
 
                   className="btn btn-outline"
 
-                  style={{ fontSize: '12.5px', padding: '7px 14px' }}
+                  style={{ fontSize: '12.5px', padding: '7px 14px', opacity: (!isSwarmWorkComplete || loading || submitting) ? 0.5 : 1 }}
 
                 >
 
@@ -893,7 +924,7 @@ export default function AnalystSubmitReportModal({
 
                   onClick={handleSubmitToSenior}
 
-                  disabled={loading || submitting}
+                  disabled={loading || submitting || !isSwarmWorkComplete}
 
                   className="btn btn-primary"
 
@@ -905,11 +936,15 @@ export default function AnalystSubmitReportModal({
 
                     fontWeight: 700,
 
-                    background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                    background: !isSwarmWorkComplete ? '#475569' : 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
 
                     border: 'none',
 
-                    boxShadow: '0 4px 14px rgba(37, 99, 235, 0.4)'
+                    opacity: !isSwarmWorkComplete ? 0.55 : 1,
+
+                    cursor: (loading || submitting || !isSwarmWorkComplete) ? 'not-allowed' : 'pointer',
+
+                    boxShadow: !isSwarmWorkComplete ? 'none' : '0 4px 14px rgba(37, 99, 235, 0.4)'
 
                   }}
 

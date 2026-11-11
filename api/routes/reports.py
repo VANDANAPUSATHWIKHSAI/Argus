@@ -60,10 +60,19 @@ async def get_report(
     if not case_id or not case_id.strip():
         raise HTTPException(status_code=400, detail="case_id path parameter cannot be empty.")
 
-    from api.routes.evidence import sanitize_uuid
-    clean_case_id = sanitize_uuid(case_id)
+    fmt_check = (format or "html").lower().strip()
+    if fmt_check not in ("html", "json", "pdf"):
+        raise HTTPException(status_code=400, detail=f"Unsupported report format '{format}'. Expected 'html', 'json', or 'pdf'.")
 
-    from infrastructure.repository.evidence_store import list_evidence_by_case
+    from api.routes.evidence import sanitize_uuid
+    from infrastructure.repository.evidence_store import get_case_session, list_evidence_by_case
+    from api.routes.cases import (
+        InvestigationStageStatus,
+        _get_agent_pipeline_status,
+        _read_case_submission_meta,
+    )
+
+    clean_case_id = sanitize_uuid(case_id)
 
     # 1. Fetch case evidence and findings with tenant isolation
     evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
@@ -77,35 +86,51 @@ async def get_report(
         if findings:
             target_case_id = case_id
 
-    case_exists = bool(evidence_list or findings)
-    if not case_exists:
+    session = None
+    try:
+        session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
+    except Exception:
+        session = None
+
+    db_case_exists = False
+    if not session:
         try:
-            from infrastructure.repository.evidence_store import get_case_session
-            session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
-            if session:
-                case_exists = True
+            from infrastructure.repository.evidence_store import _should_attempt_postgres
+            if _should_attempt_postgres():
+                from api.routes.auth import get_db_connection
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT case_id FROM cases WHERE (case_id = %s OR case_id = %s) AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')));",
+                            (clean_case_id, case_id, x_tenant_id, x_tenant_id)
+                        )
+                        if cur.fetchone():
+                            db_case_exists = True
         except Exception:
             pass
 
-    if not case_exists:
-        try:
-            from api.routes.auth import get_db_connection
-            with get_db_connection() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT case_id FROM cases WHERE (case_id = %s OR case_id = %s) AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'));",
-                        (clean_case_id, case_id, x_tenant_id)
-                    )
-                    if cur.fetchone():
-                        case_exists = True
-        except Exception:
-            pass
-
+    case_exists = bool(evidence_list or findings or session or db_case_exists)
     if not case_exists:
         raise HTTPException(
             status_code=404,
             detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
         )
+
+    # Gate managed investigation cases so reports cannot be generated before multi-agent swarm completes
+    is_managed_case = bool(session or (db_case_exists and not findings))
+    if is_managed_case:
+        agent_status = _get_agent_pipeline_status(target_case_id, x_tenant_id, evidence_list)
+        sub_meta = _read_case_submission_meta(target_case_id, session)
+        has_submitted_report = bool(
+            sub_meta.get("has_report")
+            or sub_meta.get("submitted_to_senior")
+            or sub_meta.get("submitted_to_auditor")
+        )
+        if agent_status != InvestigationStageStatus.COMPLETED and not has_submitted_report:
+            raise HTTPException(
+                status_code=400,
+                detail="Case report is locked until Evidence Ingestion and Multi-Agent Swarm analysis complete.",
+            )
 
     # 2. Export sanitized findings payload subject to review gate
     exported_findings = []
@@ -152,35 +177,37 @@ async def get_report(
         logger.error(f"Report generation error for case {case_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Report generation failed: {e}")
 
-    # Mark case as having report generated in repository and database
-    try:
-        from pathlib import Path
-        import json
-        from infrastructure.repository.evidence_store import REPOSITORY_DIR
-        for cid in (clean_case_id, case_id):
-            case_dir = Path(REPOSITORY_DIR) / cid
-            if case_dir.exists() and case_dir.is_dir():
-                s_file = case_dir / "case_session.json"
-                if s_file.exists():
-                    try:
-                        with open(s_file, "r", encoding="utf-8") as f:
-                            s_data = json.load(f)
-                        s_data["has_report"] = True
-                        with open(s_file, "w", encoding="utf-8") as f:
-                            json.dump(s_data, f, indent=2)
-                    except Exception:
-                        pass
-    except Exception as rep_err:
-        logger.warning(f"Could not update local session has_report: {rep_err}")
+    # Mark case as having report only when an official reviewed report with findings is exported
+    if not allow_unreviewed and exported_findings:
+        try:
+            from pathlib import Path
+            import json
+            from infrastructure.repository.evidence_store import REPOSITORY_DIR
+            for cid in (clean_case_id, case_id):
+                case_dir = Path(REPOSITORY_DIR) / cid
+                if case_dir.exists() and case_dir.is_dir():
+                    s_file = case_dir / "case_session.json"
+                    if s_file.exists():
+                        try:
+                            with open(s_file, "r", encoding="utf-8") as f:
+                                s_data = json.load(f)
+                            s_data["has_report"] = True
+                            with open(s_file, "w", encoding="utf-8") as f:
+                                json.dump(s_data, f, indent=2)
+                        except Exception:
+                            pass
+        except Exception as rep_err:
+            logger.warning(f"Could not update local session has_report: {rep_err}")
 
-    try:
-        from api.routes.auth import get_db_connection
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
-                cur.execute("UPDATE cases SET has_report = TRUE WHERE case_id = %s OR case_id = %s;", (clean_case_id, case_id))
-    except Exception:
-        pass
+        try:
+            from api.routes.auth import get_db_connection
+            with get_db_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
+                    cur.execute("UPDATE cases SET has_report = TRUE WHERE case_id = %s OR case_id = %s;", (clean_case_id, case_id))
+                conn.commit()
+        except Exception:
+            pass
 
     # 4. Return HTTP Response with appropriate media type and Content-Disposition header
     fmt = (format or "html").lower().strip()

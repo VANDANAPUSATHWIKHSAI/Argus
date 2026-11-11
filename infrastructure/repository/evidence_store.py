@@ -524,6 +524,8 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                         pass
                 if not created_at or not isinstance(created_at, datetime):
                     created_at = datetime.fromtimestamp(session_file.stat().st_mtime, tz=timezone.utc)
+                submitted_to_senior = bool(data.get("submitted_to_senior") or False)
+                submitted_to_auditor = bool(data.get("submitted_to_auditor") or False)
                 return CaseSession(
                     case_id=str(data.get("case_id", case_id)),
                     tenant_id=stored_tenant or tenant_id,
@@ -534,7 +536,9 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                     senior_analyst_id=data.get("senior_analyst_id"),
                     name=data.get("name"),
                     description=data.get("description"),
-                    has_report=bool(data.get("has_report") or data.get("submitted_to_senior") or data.get("submitted_to_auditor") or (case_dir / "report.json").exists() or (case_dir / "report.html").exists()),
+                    has_report=bool(data.get("has_report") or submitted_to_senior or submitted_to_auditor or (case_dir / "report.json").exists() or (case_dir / "report.html").exists()),
+                    submitted_to_senior=submitted_to_senior,
+                    submitted_to_auditor=submitted_to_auditor,
                     closed_reason=data.get("closed_reason")
                 )
             except Exception as e:
@@ -604,10 +608,13 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
                         try:
                             cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
                             cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
+                            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_senior BOOLEAN DEFAULT FALSE;")
+                            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_auditor BOOLEAN DEFAULT FALSE;")
+                            conn.commit()
                         except Exception:
                             pass
                         cur.execute(
-                            "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description, has_report, closed_reason FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
+                            "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description, has_report, closed_reason, submitted_to_senior, submitted_to_auditor FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
                             (tenant_id, tenant_id)
                         )
                         rows = cur.fetchall()
@@ -626,10 +633,13 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
                 try:
                     cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
                     cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
+                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_senior BOOLEAN DEFAULT FALSE;")
+                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_auditor BOOLEAN DEFAULT FALSE;")
+                    conn.commit()
                 except Exception:
                     pass
                 cur.execute(
-                    "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description, has_report, closed_reason FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
+                    "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description, has_report, closed_reason, submitted_to_senior, submitted_to_auditor FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
                     (tenant_id, tenant_id)
                 )
                 rows = cur.fetchall()
@@ -638,6 +648,9 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
             for row in rows:
                 c_id = str(row[0])
                 seen_ids.add(c_id)
+                sub_senior = bool(row[11]) if len(row) > 11 and row[11] is not None else False
+                sub_auditor = bool(row[12]) if len(row) > 12 and row[12] is not None else False
+                has_rep = bool(row[9] if len(row) > 9 and row[9] is not None else False) or sub_senior or sub_auditor
                 cases.append(CaseSession(
                     case_id=c_id,
                     tenant_id=row[1],
@@ -648,7 +661,9 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
                     senior_analyst_id=row[6] if len(row) > 6 else None,
                     name=row[7] if len(row) > 7 else None,
                     description=row[8] if len(row) > 8 else None,
-                    has_report=row[9] if len(row) > 9 and row[9] is not None else False,
+                    has_report=has_rep,
+                    submitted_to_senior=sub_senior,
+                    submitted_to_auditor=sub_auditor,
                     closed_reason=row[10] if len(row) > 10 else None
                 ))
             pg_success = True

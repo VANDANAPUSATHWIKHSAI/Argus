@@ -103,3 +103,14 @@ test('Upload.jsx: blocks drag-and-drop, browsing, and evidence upload in read-on
   assert.ok(source.includes('Evidence Upload Disabled'), 'Must display evidence upload disabled UI');
   assert.ok(source.includes('handleCloseCase'), 'Must guard closing case in read-only mode');
 });
+
+test('Cases.jsx: only renders row lock pill for open cases', () => {
+  const casesPath = path.join(feSrcDir, 'pages', 'Cases.jsx');
+  const source = fs.readFileSync(casesPath, 'utf8');
+
+  assert.ok(
+    source.includes('isOpen && c.lock && c.lock.is_locked'),
+    'Must gate row lock pill behind isOpen so closed cases never show In Use badges'
+  );
+});
+

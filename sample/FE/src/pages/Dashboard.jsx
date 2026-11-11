@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 
 import { useNavigate, Link, Navigate } from 'react-router-dom';
 
@@ -11,22 +11,22 @@ import AlertModal from '../components/AlertModal';
 
 import NotificationMenu from '../components/NotificationMenu';
 
-import AdminDashboard from './AdminDashboard';
+const AdminDashboard = lazy(() => import('./AdminDashboard'));
 
-import SeniorDashboard from './SeniorDashboard';
+const SeniorDashboard = lazy(() => import('./SeniorDashboard'));
 
-import AuditorDashboard from './AuditorDashboard';
+const AuditorDashboard = lazy(() => import('./AuditorDashboard'));
 
-import ForensicGraph from '../components/ForensicGraph';
+const ForensicGraph = lazy(() => import('../components/ForensicGraph'));
 
-import AnalystSubmitReportModal from '../components/AnalystSubmitReportModal';
+const AnalystSubmitReportModal = lazy(() => import('../components/AnalystSubmitReportModal'));
 
 import CaseNotAssigned from '../components/CaseNotAssigned';
 
 import { fetchCases, fetchCaseSummary, fetchAgentResults, stopWorkload, restartWorkload, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
 import { safeFormatDateTime } from '../js/dateUtils';
-import { isCaseReportGenerated } from '../js/caseUtils';
+import { isCaseReportGenerated, isAgentSwarmComplete } from '../js/caseUtils';
 import { setActiveCase } from '../js/caseEvents';
 
 
@@ -163,7 +163,7 @@ const Dashboard = () => {
 
         const subRecord = localStorage.getItem(`argus_case_${cId}_submitted_to_senior`);
 
-        setIsReportSubmitted(Boolean(subRecord));
+        setIsReportSubmitted(Boolean(subRecord || activeSummary?.submitted_to_senior || activeSummary?.submitted_to_auditor || activeSummary?.investigation_progress?.report === 'completed'));
 
       } else {
 
@@ -253,16 +253,22 @@ const Dashboard = () => {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
+    // Admin, Senior Analyst, and Auditor views manage their own data/polling inside their dedicated dashboard components.
+    if (isAdmin || isSeniorAnalyst || isAuditor) {
+      setLoading(false);
+      return undefined;
+    }
+
     loadDashboard();
 
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         loadDashboard(true);
       }
-    }, 4000);
+    }, 12000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [isAdmin, isSeniorAnalyst, isAuditor]);
 
 
 
@@ -524,11 +530,11 @@ const Dashboard = () => {
 
   const currentCaseId = activeSummary?.case_id || localStorage.getItem('active_case_id');
 
-  const isSubmittedToSenior = isReportSubmitted || Boolean(currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_senior`));
+  const isSubmittedToSenior = isReportSubmitted || Boolean(currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_senior`)) || Boolean(activeSummary?.submitted_to_senior) || activeSummary?.investigation_progress?.report === 'completed';
 
-  const isSubmittedToAuditor = Boolean(currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_auditor`));
+  const isSubmittedToAuditor = Boolean(currentCaseId && localStorage.getItem(`argus_case_${currentCaseId}_submitted_to_auditor`)) || Boolean(activeSummary?.submitted_to_auditor);
 
-  const isReportCompleted = isSubmittedToAuditor || isSubmittedToSenior || isCaseClosed;
+  const isReportCompleted = isSubmittedToAuditor || isSubmittedToSenior || (isCaseClosed && Boolean(activeSummary?.has_report));
 
 
 
@@ -568,18 +574,9 @@ const Dashboard = () => {
 
   // Real Agent Swarm Execution & Workload Status Verification
   const agentStatusUpper = (agentSummary?.status || (typeof activeSummary?.investigation_progress?.agent_analysis === 'object' ? activeSummary?.investigation_progress?.agent_analysis?.status : activeSummary?.investigation_progress?.agent_analysis) || '').toUpperCase();
-  const allDashboardAgentsDone = Boolean(
-    agentSummary?.stage_statuses &&
-    ['agent1', 'agent2', 'agent3', 'agent4', 'agent5a', 'agent5b', 'agent6', 'agent7'].every(k => {
-      const st = (agentSummary?.stage_statuses?.[k] || '').toUpperCase();
-      return st === 'COMPLETED' || st === 'SUCCESS' || st === 'NEEDS_REVIEW';
-    })
-  );
-
   const isAgentComplete = Boolean(
-    allDashboardAgentsDone &&
-    (agentSummary?.stage_statuses?.agent7 === 'COMPLETED' || agentSummary?.stage_statuses?.agent7 === 'NEEDS_REVIEW' || agentSummary?.stage_statuses?.agent7 === 'SUCCESS') &&
-    (findingsCount > 0 || (agentSummary?.findings_count || 0) > 0 || (agentSummary?.claims?.length || 0) > 0)
+    isAgentSwarmComplete(agentSummary, findingsCount) ||
+    activeSummary?.investigation_progress?.agent_analysis === 'completed'
   );
   const isAgentRunning = Boolean(
     agentStatusUpper === 'RUNNING' || agentStatusUpper === 'PROCESSING'
@@ -604,10 +601,10 @@ const Dashboard = () => {
     ? 'completed'
     : (isAgentRunning ? 'in_progress' : 'not_started');
 
-  // Stage 4: Case Report (requires completed agents before it is ready for senior!)
+  // Stage 4: Case Report (requires completed agents before analyst can generate/submit to senior!)
   rawStageStatuses[3] = isReportCompleted
     ? 'completed'
-    : ((isAgentComplete && (isSubmittedToSenior || isSubmittedToAuditor)) ? 'in_progress' : 'not_started');
+    : (isAgentComplete ? 'in_progress' : 'not_started');
 
   // Contextual telemetry metrics under each stage
   const stageTelemetry = [
@@ -714,6 +711,8 @@ const Dashboard = () => {
         {/* ── MAIN CONTENT ── */}
 
         <main className="main-content">
+
+          <Suspense fallback={<div style={{ padding: '48px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading dashboard...</div>}>
 
           {isAuditor ? (
 
@@ -1530,6 +1529,8 @@ const Dashboard = () => {
 
           )}
 
+          </Suspense>
+
         </main>
 
       </div>
@@ -1629,6 +1630,10 @@ const Dashboard = () => {
 
       {/* Analyst Report Generation and Senior Submission Modal */}
 
+      {submitModalOpen && (
+
+      <Suspense fallback={null}>
+
       <AnalystSubmitReportModal
 
         isOpen={submitModalOpen}
@@ -1664,6 +1669,10 @@ const Dashboard = () => {
         }}
 
       />
+
+      </Suspense>
+
+      )}
 
     </>
 

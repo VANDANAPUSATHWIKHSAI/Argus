@@ -1,9 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 /**
  * SearchableSelect
  * Premium glassmorphic dropdown with optional search filter,
- * smooth chevron rotation, text truncation, and responsive menu width.
+ * viewport-aware flip/portal positioning, smooth chevron rotation,
+ * and responsive menu width.
  */
 const SearchableSelect = ({
   options = [],
@@ -17,30 +19,51 @@ const SearchableSelect = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
-  const [effectiveAlign, setEffectiveAlign] = useState(align);
+  const [menuPosition, setMenuPosition] = useState(null);
   const wrapperRef = useRef(null);
+  const menuRef = useRef(null);
   const searchInputRef = useRef(null);
 
   const currentTheme = (typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme')) || (typeof localStorage !== 'undefined' && localStorage.getItem('argus_theme')) || 'dark';
   const isDark = currentTheme === 'dark';
 
-  useEffect(() => {
-    if (isOpen && wrapperRef.current && typeof window !== 'undefined') {
-      const rect = wrapperRef.current.getBoundingClientRect();
-      if (align === 'right' || (window.innerWidth - rect.right < 120)) {
-        setEffectiveAlign('right');
-      } else {
-        setEffectiveAlign('left');
-      }
-    } else {
-      setEffectiveAlign(align);
-    }
-  }, [isOpen, align]);
+  const updateMenuPosition = useCallback(() => {
+    if (!wrapperRef.current || typeof window === 'undefined') return;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom - 12;
+    const spaceAbove = rect.top - 12;
+    const openUpward = spaceBelow < 200 && spaceAbove > spaceBelow;
+    const availableSpace = Math.max(120, openUpward ? spaceAbove : spaceBelow);
+    const useRight = align === 'right' || (window.innerWidth - rect.right < 120);
 
-  // Close when clicking outside
+    setMenuPosition({
+      openUpward,
+      top: openUpward ? 'auto' : rect.bottom + 6,
+      bottom: openUpward ? window.innerHeight - rect.top + 6 : 'auto',
+      left: useRight ? 'auto' : Math.max(8, rect.left),
+      right: useRight ? Math.max(8, window.innerWidth - rect.right) : 'auto',
+      width: rect.width,
+      maxListHeight: Math.min(220, Math.max(96, availableSpace - (noSearch ? 18 : 64))),
+    });
+  }, [align, noSearch]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+    };
+  }, [isOpen, updateMenuPosition]);
+
+  // Close when clicking outside both trigger and portaled menu
   useEffect(() => {
     function handleClickOutside(event) {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+      const insideTrigger = wrapperRef.current && wrapperRef.current.contains(event.target);
+      const insideMenu = menuRef.current && menuRef.current.contains(event.target);
+      if (!insideTrigger && !insideMenu) {
         setIsOpen(false);
       }
     }
@@ -165,27 +188,28 @@ const SearchableSelect = ({
         </svg>
       </div>
 
-      {/* Solid Opaque Dropdown Menu with Shadow and Sharp Contrast */}
-      {isOpen && (() => {
-        const isRight = align === 'right' || effectiveAlign === 'right';
-        return (
+      {/* Solid Opaque Dropdown Menu (portaled + auto-flipped so never clipped by containers or screen bottom) */}
+      {isOpen && menuPosition && (() => {
+        const menuElement = (
         <div
+          ref={menuRef}
           role="listbox"
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 6px)',
-            right: isRight ? 0 : 'auto',
-            left: isRight ? 'auto' : 0,
-            minWidth: '100%',
+            position: 'fixed',
+            top: menuPosition.top,
+            bottom: menuPosition.bottom,
+            left: menuPosition.left,
+            right: menuPosition.right,
+            minWidth: menuPosition.width,
             width: 'max-content',
-            maxWidth: '260px',
+            maxWidth: 'min(280px, calc(100vw - 16px))',
             background: isDark ? '#181a20' : '#ffffff',
             border: `1px solid ${isDark ? 'rgba(255, 255, 255, 0.15)' : '#cbd5e1'}`,
             borderRadius: '12px',
             boxShadow: isDark
               ? '0 16px 40px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08)'
               : '0 16px 36px rgba(0, 0, 0, 0.16), 0 2px 6px rgba(0, 0, 0, 0.06)',
-            zIndex: 9999,
+            zIndex: 100000,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
@@ -242,7 +266,7 @@ const SearchableSelect = ({
           <div
             style={{
               overflowY: 'auto',
-              maxHeight: '220px',
+              maxHeight: `${menuPosition.maxListHeight}px`,
               display: 'flex',
               flexDirection: 'column',
               gap: '2px',
@@ -332,6 +356,9 @@ const SearchableSelect = ({
           </div>
         </div>
         );
+        return typeof document !== 'undefined' && document.body
+          ? createPortal(menuElement, document.body)
+          : menuElement;
       })()}
     </div>
   );

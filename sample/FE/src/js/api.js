@@ -10,6 +10,9 @@ export function getActiveTenantId() {
   return getAuthTenantId() || DEFAULT_TENANT_ID;
 }
 
+// Coalesce simultaneous identical in-flight GET requests (e.g., StrictMode double-mounts & sibling widgets)
+const _inflightGets = new Map();
+
 // Helper for authenticated requests
 export async function fetchWithAuth(url, options = {}) {
   const token = getAuthToken();
@@ -21,6 +24,14 @@ export async function fetchWithAuth(url, options = {}) {
   }
 
   const tenantId = getActiveTenantId();
+  const method = (options.method || 'GET').toUpperCase();
+  const canDedupGet = method === 'GET' && !options.noDedup && !options.signal;
+  const dedupKey = canDedupGet ? `${API_BASE_URL}${url}|${tenantId}|${token.slice(-16)}` : null;
+
+  if (dedupKey && _inflightGets.has(dedupKey)) {
+    return _inflightGets.get(dedupKey);
+  }
+
   const headers = {
     'Accept': 'application/json',
     'X-Tenant-ID': tenantId,
@@ -33,44 +44,56 @@ export async function fetchWithAuth(url, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
-  let response;
-  try {
-    response = await fetch(`${API_BASE_URL}${url}`, {
-      ...options,
-      headers,
-    });
-  } catch (netErr) {
-    throw new Error(`Network failure connecting to ARGUS backend: ${netErr.message || netErr}`);
-  }
-
-  if (!response.ok) {
-    let errorMsg = `HTTP Error ${response.status}`;
+  const execRequest = async () => {
+    let response;
     try {
-      const errData = await response.json();
-      errorMsg = errData.detail || errorMsg;
-    } catch(e) {
+      response = await fetch(`${API_BASE_URL}${url}`, {
+        ...options,
+        headers,
+      });
+    } catch (netErr) {
+      throw new Error(`Network failure connecting to ARGUS backend: ${netErr.message || netErr}`);
+    }
+
+    if (!response.ok) {
+      let errorMsg = `HTTP Error ${response.status}`;
       try {
-        const text = await response.text();
-        if (text) errorMsg = text.slice(0, 200);
-      } catch(_) {}
+        const errData = await response.json();
+        errorMsg = errData.detail || errorMsg;
+      } catch(e) {
+        try {
+          const text = await response.text();
+          if (text) errorMsg = text.slice(0, 200);
+        } catch(_) {}
+      }
+
+      // Global 401 Unauthorized interceptor: automatically wipe session and redirect to login
+      if (response.status === 401) {
+        logout('session_expired');
+      }
+
+      const err = new Error(errorMsg);
+      err.status = response.status;
+      throw err;
     }
 
-    // Global 401 Unauthorized interceptor: automatically wipe session and redirect to login
-    if (response.status === 401) {
-      logout('session_expired');
+    // Handle empty responses (e.g. 204 No Content)
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return response.json();
     }
+    return response.text();
+  };
 
-    const err = new Error(errorMsg);
-    err.status = response.status;
-    throw err;
+  if (!dedupKey) {
+    return execRequest();
   }
 
-  // Handle empty responses (e.g. 204 No Content)
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) {
-    return response.json();
-  }
-  return response.text();
+  const promise = execRequest().finally(() => {
+    _inflightGets.delete(dedupKey);
+  });
+  _inflightGets.set(dedupKey, promise);
+  return promise;
 }
 
 export async function login(userid, password) {
@@ -95,7 +118,17 @@ export async function login(userid, password) {
 }
 
 export async function fetchCases() {
-  return fetchWithAuth('/cases/');
+  const res = await fetchWithAuth('/cases/');
+  if (res && Array.isArray(res.data) && typeof localStorage !== 'undefined') {
+    try {
+      res.data.forEach((c) => {
+        if (c?.case_id && !c.has_report && !c.submitted_to_senior && !c.submitted_to_auditor && c.status !== 'closed') {
+          localStorage.removeItem(`argus_case_${c.case_id}_report_completed`);
+        }
+      });
+    } catch (_) {}
+  }
+  return res;
 }
 
 export async function fetchCaseSummary(caseId) {
@@ -114,6 +147,15 @@ export async function uploadEvidenceFile(file, caseId, options = {}) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('case_id', caseId);
+  if (options.hostId) {
+    formData.append('host_id', options.hostId);
+  }
+  if (options.uploadedBy) {
+    formData.append('uploaded_by', options.uploadedBy);
+  }
+  if (options.relativePath) {
+    formData.append('relative_path', options.relativePath);
+  }
 
   const asyncQuery = options.asyncMode !== false ? '&async_mode=true' : '';
   return fetchWithAuth(`/evidence/upload?case_id=${encodeURIComponent(caseId)}${asyncQuery}`, {
@@ -231,13 +273,14 @@ export async function queryCase(caseId, queryText, history = []) {
 export async function fetchReport(caseId, format = 'html', allowUnreviewed = false) {
   const cleanFormat = encodeURIComponent(format || 'html');
   const allowFlag = Boolean(allowUnreviewed);
-  const data = await fetchWithAuth(`/reports/${encodeURIComponent(caseId)}/report?format=${cleanFormat}&allow_unreviewed=${allowFlag}`);
-  if (data && typeof localStorage !== 'undefined' && caseId) {
-    try {
-      localStorage.setItem(`argus_case_${caseId}_report_completed`, 'true');
-    } catch (_) {}
-  }
-  return data;
+  return fetchWithAuth(`/reports/${encodeURIComponent(caseId)}/report?format=${cleanFormat}&allow_unreviewed=${allowFlag}`);
+}
+
+export async function submitCaseReportStage(caseId, stage = 'submitted_to_senior', payload = {}) {
+  return fetchWithAuth(`/cases/${encodeURIComponent(caseId)}/report-submission`, {
+    method: 'POST',
+    body: JSON.stringify({ stage, ...payload }),
+  });
 }
 
 

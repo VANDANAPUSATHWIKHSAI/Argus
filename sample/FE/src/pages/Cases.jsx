@@ -408,7 +408,7 @@ const Cases = () => {
                                   ACTIVE
                                 </span>
                               )}
-                              {c.lock && c.lock.is_locked && (
+                              {isOpen && c.lock && c.lock.is_locked && (
                                 <span
                                   style={{
                                     background: c.lock.read_only ? 'rgba(245, 158, 11, 0.15)' : 'rgba(59, 130, 246, 0.15)',

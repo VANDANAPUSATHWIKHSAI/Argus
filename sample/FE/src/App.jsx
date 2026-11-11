@@ -1,37 +1,39 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from './pages/Dashboard';
 import Login from './pages/Login';
-import Evidence from './pages/Evidence';
-import Settings from './pages/Settings';
-import Upload from './pages/Upload';
-import Sanitized from './pages/Sanitized';
-import SanitizedDetail from './pages/SanitizedDetail';
-import Employees from './pages/Employees';
-import AuditLogs from './pages/AuditLogs';
-import CaseNotes from './pages/CaseNotes';
-import Chatbot from './pages/Chatbot';
-import Findings from './pages/Findings';
-import TimelineDetail from './pages/TimelineDetail';
-import Notifications from './pages/Notifications';
-import Cases from './pages/Cases';
-import Agents from './pages/Agents';
-import Report from './pages/Report';
-import Profile from './pages/Profile';
 import ProtectedRoute from './components/ProtectedRoute';
 import './App.css';
 
 import SessionManager from './components/SessionManager';
 import DevTools from './components/DevTools';
-import TemplateHub from './templates/TemplateHub';
-import TechnicalMinimalTemplate from './templates/TechnicalMinimalTemplate';
-import ModernWorkspaceTemplate from './templates/ModernWorkspaceTemplate';
-import TechnicalMinimalCompactTemplate from './templates/TechnicalMinimalCompactTemplate';
-import TechnicalMinimalAdvancedTemplate from './templates/TechnicalMinimalAdvancedTemplate';
-import ModernWorkspaceDetailedTemplate from './templates/ModernWorkspaceDetailedTemplate';
-import ModernWorkspaceSplitTemplate from './templates/ModernWorkspaceSplitTemplate';
-import TechnicalWorkstationV2 from './templates_v2/TechnicalWorkstationV2';
-import GlassDashboardTemplate from './templates/GlassDashboardTemplate';
+
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Evidence = lazy(() => import('./pages/Evidence'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Upload = lazy(() => import('./pages/Upload'));
+const Sanitized = lazy(() => import('./pages/Sanitized'));
+const SanitizedDetail = lazy(() => import('./pages/SanitizedDetail'));
+const Employees = lazy(() => import('./pages/Employees'));
+const AuditLogs = lazy(() => import('./pages/AuditLogs'));
+const CaseNotes = lazy(() => import('./pages/CaseNotes'));
+const Chatbot = lazy(() => import('./pages/Chatbot'));
+const Findings = lazy(() => import('./pages/Findings'));
+const TimelineDetail = lazy(() => import('./pages/TimelineDetail'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Cases = lazy(() => import('./pages/Cases'));
+const Agents = lazy(() => import('./pages/Agents'));
+const Report = lazy(() => import('./pages/Report'));
+const Profile = lazy(() => import('./pages/Profile'));
+
+const TemplateHub = lazy(() => import('./templates/TemplateHub'));
+const TechnicalMinimalTemplate = lazy(() => import('./templates/TechnicalMinimalTemplate'));
+const ModernWorkspaceTemplate = lazy(() => import('./templates/ModernWorkspaceTemplate'));
+const TechnicalMinimalCompactTemplate = lazy(() => import('./templates/TechnicalMinimalCompactTemplate'));
+const TechnicalMinimalAdvancedTemplate = lazy(() => import('./templates/TechnicalMinimalAdvancedTemplate'));
+const ModernWorkspaceDetailedTemplate = lazy(() => import('./templates/ModernWorkspaceDetailedTemplate'));
+const ModernWorkspaceSplitTemplate = lazy(() => import('./templates/ModernWorkspaceSplitTemplate'));
+const TechnicalWorkstationV2 = lazy(() => import('./templates_v2/TechnicalWorkstationV2'));
+const GlassDashboardTemplate = lazy(() => import('./templates/GlassDashboardTemplate'));
 
 function App() {
   React.useEffect(() => {
@@ -63,6 +65,7 @@ function App() {
       <div className="glass-dash-neutral-glow-2" aria-hidden="true" />
       <SessionManager />
       <DevTools />
+      <Suspense fallback={<div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted, #94a3b8)', fontSize: '14px' }}>Loading workspace...</div>}>
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
@@ -107,6 +110,7 @@ function App() {
         <Route path="/templates/modern-workspace-split" element={<ModernWorkspaceSplitTemplate />} />
         <Route path="/templates/v2-technical" element={<TechnicalWorkstationV2 />} />
       </Routes>
+      </Suspense>
     </Router>
   );
 }

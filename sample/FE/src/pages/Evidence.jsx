@@ -155,9 +155,9 @@ const Evidence = () => {
         lastPolledCaseRef.current = activeCaseId;
         loadWorkload(activeCaseId);
       }
-      // Adaptive polling: 3s while running, 5s when idle to ensure numbers update smoothly in real time
+      // Adaptive polling: 3s while running, 15s when idle to avoid saturating multi-tab requests
       const isRunning = workloadStatus === 'RUNNING' || workloadStatus === 'PROCESSING';
-      const pollInterval = isRunning ? 3000 : 5000;
+      const pollInterval = isRunning ? 3000 : 15000;
       const interval = setInterval(() => {
         if (!isCancelled && document.visibilityState === 'visible') {
           loadWorkload(activeCaseId);
@@ -1322,9 +1322,7 @@ const Evidence = () => {
 
           <div className="evidence-tabs" style={{display: 'flex', borderBottom: '1px solid var(--border-strong)', padding: '0 24px', background: 'var(--bg-app)'}}>
 
-            <div className="evidence-tab active" style={{padding: '16px 20px', fontWeight: '600', fontSize: '14px', color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'pointer'}}>Evidence Items</div>
-
-            <div id="tab-upload-evidence" className="evidence-tab" onClick={() => navigate('/upload')} style={{padding: '16px 20px', fontWeight: '500', fontSize: '14px', color: 'var(--text-muted)', cursor: 'pointer'}}>Upload Evidence</div>
+            <div className="evidence-tab active" style={{padding: '16px 20px', fontWeight: '600', fontSize: '14px', color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'default'}}>Evidence Items</div>
 
           </div>
 

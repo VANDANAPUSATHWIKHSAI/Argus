@@ -7,8 +7,10 @@ import '../css/style.css';
 import NotificationMenu from '../components/NotificationMenu';
 
 import { fetchCases, fetchCaseSummary, fetchEvidenceForCase, fetchFindings, fetchReport } from '../js/api';
+import { getCaseSubmissionState } from '../js/caseUtils';
 
 import SeniorSubmitToAuditorModal from '../components/SeniorSubmitToAuditorModal';
+import AlertModal from '../components/AlertModal';
 
 import CaseNotAssigned from '../components/CaseNotAssigned';
 
@@ -45,6 +47,8 @@ const SeniorDashboard = () => {
   const [isSubmittedToAuditor, setIsSubmittedToAuditor] = useState(false);
 
   const [auditorSubmissionDetails, setAuditorSubmissionDetails] = useState(null);
+
+  const [customAlert, setCustomAlert] = useState({ isOpen: false, title: '', message: '', type: 'warning' });
 
   
 
@@ -99,37 +103,7 @@ const SeniorDashboard = () => {
 
       if (targetCaseId) {
 
-        const sub = localStorage.getItem(`argus_case_${targetCaseId}_submitted_to_senior`);
-
-        setIsSubmittedByAnalyst(Boolean(sub));
-
-        const subAud = localStorage.getItem(`argus_case_${targetCaseId}_submitted_to_auditor`);
-
-        if (subAud) {
-
-          try {
-
-            const parsedAud = JSON.parse(subAud);
-
-            setIsSubmittedToAuditor(Boolean(parsedAud?.submitted));
-
-            setAuditorSubmissionDetails(parsedAud);
-
-          } catch (_e) {
-
-            setIsSubmittedToAuditor(false);
-
-          }
-
-        } else {
-
-          setIsSubmittedToAuditor(false);
-
-          setAuditorSubmissionDetails(null);
-
-        }
-
-        const currentCase = caseList.find(c => c.case_id === targetCaseId);
+        const currentCase = caseList.find(c => c.case_id === targetCaseId) || targetCase;
 
         if (currentCase) {
 
@@ -144,6 +118,22 @@ const SeniorDashboard = () => {
           setActiveSummary(summaryData);
 
         }
+
+        const localSubSenior = localStorage.getItem(`argus_case_${targetCaseId}_submitted_to_senior`);
+        const localSubAud = localStorage.getItem(`argus_case_${targetCaseId}_submitted_to_auditor`);
+        const mergedCaseObj = {
+          ...(currentCase || {}),
+          ...(summaryData || {}),
+          status: currentCase?.status || summaryData?.status,
+          has_report: Boolean(currentCase?.has_report || summaryData?.has_report),
+          submitted_to_senior: Boolean(currentCase?.submitted_to_senior || summaryData?.submitted_to_senior || localSubSenior),
+          submitted_to_auditor: Boolean(currentCase?.submitted_to_auditor || summaryData?.submitted_to_auditor || localSubAud),
+        };
+        const subState = getCaseSubmissionState(mergedCaseObj, targetCaseId);
+
+        setIsSubmittedByAnalyst(subState.submittedToSenior);
+        setIsSubmittedToAuditor(subState.submittedToAuditor);
+        setAuditorSubmissionDetails(subState.auditorData);
 
 
 
@@ -177,58 +167,63 @@ const SeniorDashboard = () => {
 
 
 
-        // Fetch authoritative generated report package
+        // Only fetch official report package after Analyst completes investigation & submits report
 
-        try {
+        if (subState.isReportReady) {
+          try {
 
-          const [repJsonRes, repHtmlRes] = await Promise.allSettled([
+            const [repJsonRes, repHtmlRes] = await Promise.allSettled([
 
-            fetchReport(targetCaseId, 'json', true),
+              fetchReport(targetCaseId, 'json', true),
 
-            fetchReport(targetCaseId, 'html', true)
+              fetchReport(targetCaseId, 'html', true)
 
-          ]);
+            ]);
 
-          let rData = null;
+            let rData = null;
 
-          if (repJsonRes.status === 'fulfilled' && repJsonRes.value) {
+            if (repJsonRes.status === 'fulfilled' && repJsonRes.value) {
 
-            rData = typeof repJsonRes.value === 'string' ? JSON.parse(repJsonRes.value) : repJsonRes.value;
+              rData = typeof repJsonRes.value === 'string' ? JSON.parse(repJsonRes.value) : repJsonRes.value;
 
-            setReportData(rData);
+              setReportData(rData);
+
+            }
+
+            if (repHtmlRes.status === 'fulfilled' && repHtmlRes.value) {
+
+              const hVal = typeof repHtmlRes.value === 'string' ? repHtmlRes.value : JSON.stringify(repHtmlRes.value);
+
+              setReportHtml(hVal);
+
+            }
+
+            if (!rData) {
+
+              setReportData({
+
+                case_id: targetCaseId,
+
+                findings: findingsList,
+
+                evidence_files: evList,
+
+                timeline: [],
+
+                executive_summary: summaryData?.description || `Forensic case dossier compiled for Case ${targetCaseId}. Contains ${evList.length} evidence artifact(s) and ${findingsList.length} triaged finding(s).`
+
+              });
+
+            }
+
+          } catch (repErr) {
+
+            console.warn('Authoritative report fetch non-fatal error:', repErr);
 
           }
-
-          if (repHtmlRes.status === 'fulfilled' && repHtmlRes.value) {
-
-            const hVal = typeof repHtmlRes.value === 'string' ? repHtmlRes.value : JSON.stringify(repHtmlRes.value);
-
-            setReportHtml(hVal);
-
-          }
-
-          if (!rData) {
-
-            setReportData({
-
-              case_id: targetCaseId,
-
-              findings: findingsList,
-
-              evidence_files: evList,
-
-              timeline: [],
-
-              executive_summary: summaryData?.description || `Forensic case baseline compiled for Case ${targetCaseId}. Contains ${evList.length} evidence artifact(s) and ${findingsList.length} triaged finding(s).`
-
-            });
-
-          }
-
-        } catch (repErr) {
-
-          console.warn('Authoritative report fetch non-fatal error:', repErr);
-
+        } else {
+          setReportData(null);
+          setReportHtml('');
         }
 
       }
@@ -847,6 +842,11 @@ const SeniorDashboard = () => {
 
 
       {/* Senior Analyst -> Auditor Escalation Modal */}
+
+      <AlertModal
+        {...customAlert}
+        onClose={() => setCustomAlert(prev => ({ ...prev, isOpen: false }))}
+      />
 
       <SeniorSubmitToAuditorModal
 

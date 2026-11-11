@@ -22,6 +22,8 @@ import { getActiveCaseId, getActiveCaseName, subscribeToActiveCase, setActiveCas
 
 import { syncCaseLock, subscribeToCaseLock } from '../js/caseLockService';
 
+import { isAgentSwarmComplete, isAgentStageFinished } from '../js/caseUtils';
+
 import '../css/style.css';
 
 
@@ -701,8 +703,8 @@ const Agents = () => {
 
 
     if (activeCaseId) {
-      // 1. Fast polling when analysis actively running (2.5s); 2. Background heartbeat polling when idle/ready (3.5s)
-      const pollDelay = runningAgents ? 2500 : 3500;
+      // 1. Fast polling when analysis actively running (2.5s); 2. Low-overhead heartbeat when idle (15s)
+      const pollDelay = runningAgents ? 2500 : 15000;
 
       interval = setInterval(async () => {
         if (isPolling) return; // Skip cycle if previous request is still in-flight
@@ -717,7 +719,7 @@ const Agents = () => {
 
           consecutiveErrors = 0;
 
-          // Seamless state merge: update if findings_count, progress, claims, or status changed
+          // Seamless state merge: update if findings_count, progress, claims, stage_statuses, or status changed
           setAgentData(prev => {
             if (!prev) return data;
             const findingsChanged = data.findings_count !== prev.findings_count;
@@ -725,7 +727,8 @@ const Agents = () => {
             const progressChanged = data.progress !== prev.progress;
             const claimsChanged = (data.claims?.length || 0) !== (prev.claims?.length || 0);
             const reviewLevelChanged = data.review_level !== prev.review_level;
-            if (findingsChanged || statusChanged || progressChanged || claimsChanged || reviewLevelChanged) {
+            const stageStatusesChanged = JSON.stringify(data.stage_statuses || {}) !== JSON.stringify(prev.stage_statuses || {});
+            if (findingsChanged || statusChanged || progressChanged || claimsChanged || reviewLevelChanged || stageStatusesChanged) {
               return { ...prev, ...data };
             }
             return prev;
@@ -752,10 +755,10 @@ const Agents = () => {
               setCustomAlert({
                 isOpen: true,
                 title: '⚠️ Multi-Agent Analysis Partial Success',
-                message: `Analysis completed with warnings or degraded stages for Case ${activeCaseId}. Some agent outputs may be partial or require review.`,
+                message: `Analysis completed with warnings or review flags for Case ${activeCaseId}. Review outputs and compile the case report when ready.`,
                 type: 'warning'
               });
-            } else if (data.status === 'COMPLETED' || data.status === 'SUCCESS') {
+            } else if (data.status === 'COMPLETED' || data.status === 'SUCCESS' || data.status === 'NEEDS_REVIEW') {
               setCustomAlert({
                 isOpen: true,
                 title: '✅ Multi-Agent Analysis Complete',
@@ -1077,7 +1080,7 @@ const Agents = () => {
 
     const st = (stageStatuses[key] || '').toUpperCase();
 
-    if (st === 'COMPLETED' || st === 'SUCCESS') {
+    if (isAgentStageFinished(st)) {
 
       completedCount += 1;
 
@@ -1097,9 +1100,15 @@ const Agents = () => {
 
 
 
+  const topStatusUpper = (agentData?.status || '').toUpperCase();
   let progressPercentage = 0;
 
-  if (agentData?.status === 'COMPLETED' || agentData?.status === 'SUCCESS' || completedCount === totalAgents) {
+  if (
+    topStatusUpper === 'COMPLETED' ||
+    topStatusUpper === 'SUCCESS' ||
+    ((topStatusUpper === 'PARTIAL_SUCCESS' || topStatusUpper === 'NEEDS_REVIEW') && completedCount === totalAgents) ||
+    completedCount === totalAgents
+  ) {
 
     progressPercentage = 100;
 
@@ -1116,20 +1125,21 @@ const Agents = () => {
 
 
   
+  const ag7Upper = (stageStatuses.agent7 || '').toUpperCase();
   const allAgentsCompleted = Boolean(
     completedCount === totalAgents &&
     runningCount === 0 &&
     !runningAgents &&
-    (stageStatuses.agent7 === 'COMPLETED' || stageStatuses.agent7 === 'SUCCESS' || stageStatuses.agent7 === 'NEEDS_REVIEW')
+    (stageStatuses.agent7 === 'COMPLETED' || ag7Upper === 'COMPLETED' || ag7Upper === 'SUCCESS' || ag7Upper === 'NEEDS_REVIEW' || ag7Upper === 'NO_CLAIMS' || ag7Upper === 'PARTIAL_SUCCESS')
   );
 
-  const hasFindings = Boolean(
-    (agentData?.findings_count || 0) > 0 ||
-    (agentData?.claims?.length || 0) > 0 ||
-    (caseDetails?.findings?.length || 0) > 0
-  );
+  const effectiveAgentSummary = agentData ? { ...agentData, stage_statuses: stageStatuses } : null;
+  const fallbackCaseFindings = caseDetails?.total_findings ?? caseDetails?.findings?.length ?? 0;
 
-  const isAgentWorkComplete = Boolean(allAgentsCompleted && hasFindings);
+  const isAgentWorkComplete = Boolean(
+    allAgentsCompleted &&
+    isAgentSwarmComplete(effectiveAgentSummary, fallbackCaseFindings)
+  );
 
   const canSubmitReport = Boolean(isAgentWorkComplete);
 
@@ -1143,7 +1153,31 @@ const Agents = () => {
 
     const st = (stageStatuses[agentId] || 'PENDING').toUpperCase();
 
-    if (st === 'COMPLETED' || st === 'SUCCESS') {
+    if (st === 'NEEDS_REVIEW' || st === 'PARTIAL_SUCCESS') {
+
+      return (
+
+        <span
+          className="swarm-badge-pill"
+          style={{
+            background: 'rgba(245, 158, 11, 0.16)',
+            color: '#f59e0b',
+            border: '1px solid rgba(245, 158, 11, 0.35)'
+          }}
+          title={st === 'NEEDS_REVIEW' ? 'Completed — Flagged for Analyst/Senior Review' : 'Completed with partial telemetry warnings'}
+        >
+
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="20 6 9 17 4 12"/></svg>
+
+          <span>{st === 'NEEDS_REVIEW' ? 'REVIEW' : 'PARTIAL'}</span>
+
+        </span>
+
+      );
+
+    }
+
+    if (isAgentStageFinished(st)) {
 
       return (
 
@@ -1229,7 +1263,7 @@ const Agents = () => {
 
     const st = (stageStatuses[agentId] || 'PENDING').toUpperCase();
 
-    const isCompleted = st === 'COMPLETED' || st === 'SUCCESS';
+    const isCompleted = isAgentStageFinished(st);
 
     const isRunning = st === 'RUNNING' || st === 'PROCESSING';
 
@@ -1353,7 +1387,7 @@ const Agents = () => {
 
     const st = (stageStatuses[agentId] || 'PENDING').toUpperCase();
 
-    const isCompleted = st === 'COMPLETED' || st === 'SUCCESS';
+    const isCompleted = isAgentStageFinished(st);
 
     const isRunning = st === 'RUNNING' || st === 'PROCESSING';
 
@@ -1431,7 +1465,7 @@ const Agents = () => {
 
     const toStatus = (stageStatuses[toAgentId] || 'PENDING').toUpperCase();
 
-    const isPassed = fromStatus === 'COMPLETED' || fromStatus === 'SUCCESS';
+    const isPassed = isAgentStageFinished(fromStatus);
 
     const isActive = toStatus === 'RUNNING' || toStatus === 'PROCESSING';
 

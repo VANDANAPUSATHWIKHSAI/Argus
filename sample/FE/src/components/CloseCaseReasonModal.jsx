@@ -89,9 +89,9 @@ const CloseCaseReasonModal = ({
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: isDark ? 'rgba(0, 0, 0, 0.72)' : 'rgba(15, 23, 42, 0.55)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
+        backgroundColor: 'transparent',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
         zIndex: 99999,
         display: 'flex',
         alignItems: 'center',

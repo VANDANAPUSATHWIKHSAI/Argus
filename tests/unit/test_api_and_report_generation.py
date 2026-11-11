@@ -529,3 +529,259 @@ class TestApiAndReportGeneration:
             dup_data = dup_res.json()
             assert dup_data["evidence_id"] == ev_id
             assert dup_data["status"] == "SUCCESS"
+
+    def test_report_preview_does_not_mark_case_complete_and_submission_requires_completed_agents(self, tmp_path, monkeypatch):
+        """
+        Verify GET /reports/{case_id}/report?allow_unreviewed=true does not mark
+        case_session.json as has_report=True, and POST /cases/{case_id}/report-submission
+        rejects premature submission before agent swarm completes.
+        """
+        from infrastructure.repository import evidence_store
+
+        monkeypatch.setattr(evidence_store, "REPOSITORY_DIR", str(tmp_path))
+        monkeypatch.setattr(evidence_store, "_should_attempt_postgres", lambda: False)
+
+        case_id = "CASE-REPORT-GATE-901"
+        tenant_id = "tenant-report-gate"
+        evidence_store.create_case_session(
+            tenant_id=tenant_id,
+            created_by="admin",
+            case_id=case_id,
+            name="Premature Report Guard",
+        )
+
+        # Before agents complete, GET /reports/{case_id}/report must be blocked (HTTP 400)
+        premature_preview = client.get(
+            f"/reports/{case_id}/report?format=json&allow_unreviewed=true",
+            headers={"X-Tenant-ID": tenant_id},
+        )
+        assert premature_preview.status_code == 400
+        assert "complete" in premature_preview.json()["detail"].lower()
+        sess_file = tmp_path / case_id / "case_session.json"
+        sess_data = json.loads(sess_file.read_text(encoding="utf-8"))
+        assert not sess_data.get("has_report"), "Premature report check must not set has_report=True"
+
+        # Submitting before evidence/swarm completion must fail with HTTP 400
+        premature_res = client.post(
+            f"/cases/{case_id}/report-submission",
+            json={"stage": "submitted_to_senior"},
+            headers={"X-Tenant-ID": tenant_id},
+        )
+        assert premature_res.status_code == 400
+        assert "complete" in premature_res.json()["detail"].lower()
+
+        # Once evidence, completed swarm results, and findings exist:
+        # 1. Draft preview (allow_unreviewed=true) returns 200 without marking has_report=True
+        # 2. Explicit report-submission persists submitted_to_senior=True and has_report=True
+        finding = FIRFinding(
+            finding_id="fnd-gate-1",
+            case_id=case_id,
+            tenant_id=tenant_id,
+            fact="Verified lateral movement event",
+            confidence=0.92,
+            severity="high",
+            layer="network",
+            timestamp=datetime.now(timezone.utc),
+            evidence_reference=["EV-GATE-1"],
+        )
+        self.fir_repo.insert(finding)
+        mock_ev = MagicMock()
+        mock_ev.evidence_id = "EV-GATE-1"
+        mock_ev.filename = "gate_evidence.evtx"
+        mock_ev.status = "stored"
+        mock_ev.sha256_hash = "deadbeef1234"
+        mock_ev.metadata = {"agent_results": {"execution_status": "COMPLETED"}}
+        with patch("infrastructure.repository.evidence_store.list_evidence_by_case", return_value=[mock_ev]):
+            preview_res = client.get(
+                f"/reports/{case_id}/report?format=json&allow_unreviewed=true",
+                headers={"X-Tenant-ID": tenant_id},
+            )
+            assert preview_res.status_code == 200
+            sess_data = json.loads(sess_file.read_text(encoding="utf-8"))
+            assert not sess_data.get("has_report"), "Draft preview GET must not set has_report=True"
+
+            ok_res = client.post(
+                f"/cases/{case_id}/report-submission",
+                json={"stage": "submitted_to_senior", "note": "All 8 agents finished cleanly."},
+                headers={"X-Tenant-ID": tenant_id},
+            )
+            assert ok_res.status_code == 200
+            assert ok_res.json()["stage"] == "submitted_to_senior"
+            sess_data = json.loads(sess_file.read_text(encoding="utf-8"))
+            assert sess_data.get("submitted_to_senior") is True
+            assert sess_data.get("has_report") is True
+
+    def test_closing_case_releases_lock_and_blocks_relock(self, tmp_path, monkeypatch):
+        """
+        Verify closing an active case releases any active analyst lock immediately,
+        omits lock metadata from GET /cases/, and blocks re-locking or heartbeat
+        extension on closed cases.
+        """
+        from infrastructure.repository import evidence_store
+
+        monkeypatch.setattr(evidence_store, "REPOSITORY_DIR", str(tmp_path))
+        monkeypatch.setattr(evidence_store, "_should_attempt_postgres", lambda: False)
+
+        case_id = "CASE-LOCK-CLOSE-902"
+        tenant_id = "tenant-lock-close"
+        evidence_store.create_case_session(
+            tenant_id=tenant_id,
+            created_by="admin",
+            case_id=case_id,
+            name="Closed Lock Release Guard",
+        )
+
+        # Acquire active lock while case is open
+        lock_res = client.post(
+            f"/cases/{case_id}/lock",
+            headers={"X-Tenant-ID": tenant_id},
+        )
+        assert lock_res.status_code == 200
+        assert lock_res.json()["is_locked"] is True
+
+        # Close case with an explicit reason
+        close_res = client.put(
+            f"/cases/{case_id}/close",
+            json={"reason": "Investigation concluded"},
+            headers={"X-Tenant-ID": tenant_id},
+        )
+        assert close_res.status_code == 200
+
+        # GET /cases/ must return closed status with lock=None
+        list_res = client.get("/cases/", headers={"X-Tenant-ID": tenant_id})
+        assert list_res.status_code == 200
+        matching = [c for c in list_res.json()["data"] if c["case_id"] == case_id]
+        assert len(matching) == 1
+        assert matching[0]["status"] == "closed"
+        assert matching[0]["lock"] is None
+
+        # Re-locking, querying lock status, and heartbeating a closed case must remain unlocked
+        relock_res = client.post(
+            f"/cases/{case_id}/lock",
+            headers={"X-Tenant-ID": tenant_id},
+        )
+        assert relock_res.status_code == 200
+        relock_body = relock_res.json()
+        assert relock_body["status"] == "CASE_CLOSED"
+        assert relock_body["is_locked"] is False
+        assert relock_body["lock"] is None
+
+        status_res = client.get(
+            f"/cases/{case_id}/lock",
+            headers={"X-Tenant-ID": tenant_id},
+        )
+        assert status_res.status_code == 200
+        assert status_res.json()["is_locked"] is False
+        assert status_res.json()["lock"] is None
+
+        hb_res = client.post(
+            f"/cases/{case_id}/heartbeat",
+            headers={"X-Tenant-ID": tenant_id},
+        )
+        assert hb_res.status_code == 200
+        hb_body = hb_res.json()
+        assert hb_body["status"] == "CASE_CLOSED"
+        assert hb_body["is_locked"] is False
+        assert hb_body["lock"] is None
+
+    def test_completed_swarm_with_review_partial_and_claims_only_unlocks_report_submission(self, tmp_path, monkeypatch):
+        """
+        Verify report generation/submission unlocks once all 8 agents finish — including
+        PARTIAL_SUCCESS / NEEDS_REVIEW stage statuses and claims-only runs without FIR rows —
+        while failed/incomplete swarms remain strictly blocked.
+        """
+        from infrastructure.repository import evidence_store
+
+        monkeypatch.setattr(evidence_store, "REPOSITORY_DIR", str(tmp_path))
+        monkeypatch.setattr(evidence_store, "_should_attempt_postgres", lambda: False)
+
+        # Case A: All 8 stages finished (agent5a=PARTIAL_SUCCESS, agent7=NEEDS_REVIEW), claims-only (0 FIR rows)
+        case_done = "CASE-SWARM-REVIEW-903"
+        tenant_id = "tenant-swarm-review"
+        evidence_store.create_case_session(
+            tenant_id=tenant_id,
+            created_by="admin",
+            case_id=case_done,
+            name="Review Status Swarm Guard",
+        )
+
+        finished_ev = MagicMock()
+        finished_ev.evidence_id = "EV-REV-1"
+        finished_ev.filename = "artifact.exe"
+        finished_ev.status = "stored"
+        finished_ev.sha256_hash = "abc123"
+        finished_ev.metadata = {
+            "agent_results": {
+                "execution_status": "PARTIAL_SUCCESS",
+                "stage_statuses": {
+                    "agent1": "SUCCESS",
+                    "agent2": "SUCCESS",
+                    "agent3": "COMPLETED_WITH_FINDINGS",
+                    "agent4": "COMPLETED",
+                    "agent5a": "PARTIAL_SUCCESS",
+                    "agent5b": "SUCCESS",
+                    "agent6": "COMPLETED",
+                    "agent7": "NEEDS_REVIEW",
+                },
+                "agent1": {"claims": [{"claim": "Signed executable metadata correlated"}]},
+            }
+        }
+
+        with patch("infrastructure.repository.evidence_store.list_evidence_by_case", return_value=[finished_ev]):
+            summary_res = client.get(f"/cases/{case_done}", headers={"X-Tenant-ID": tenant_id})
+            assert summary_res.status_code == 200
+            prog = summary_res.json()["investigation_progress"]
+            assert prog["agent_analysis"] == "completed"
+            assert prog["report"] == "in_progress"
+
+            sub_res = client.post(
+                f"/cases/{case_done}/report-submission",
+                json={"stage": "submitted_to_senior", "note": "Completed all 8 stages with review flag."},
+                headers={"X-Tenant-ID": tenant_id},
+            )
+            assert sub_res.status_code == 200
+            assert sub_res.json()["stage"] == "submitted_to_senior"
+
+        # Case B: Agent 7 failed -> must remain blocked even if other agents completed
+        case_failed = "CASE-SWARM-FAILED-904"
+        evidence_store.create_case_session(
+            tenant_id=tenant_id,
+            created_by="admin",
+            case_id=case_failed,
+            name="Failed Swarm Block",
+        )
+        failed_ev = MagicMock()
+        failed_ev.evidence_id = "EV-FAIL-1"
+        failed_ev.filename = "artifact.exe"
+        failed_ev.status = "stored"
+        failed_ev.sha256_hash = "def456"
+        failed_ev.metadata = {
+            "agent_results": {
+                "execution_status": "PARTIAL_SUCCESS",
+                "stage_statuses": {
+                    "agent1": "SUCCESS",
+                    "agent2": "SUCCESS",
+                    "agent3": "COMPLETED",
+                    "agent4": "COMPLETED",
+                    "agent5a": "SUCCESS",
+                    "agent5b": "SUCCESS",
+                    "agent6": "COMPLETED",
+                    "agent7": "FAILED",
+                },
+                "agent1": {"claims": [{"claim": "Partial claim"}]},
+            }
+        }
+
+        with patch("infrastructure.repository.evidence_store.list_evidence_by_case", return_value=[failed_ev]):
+            fail_summary = client.get(f"/cases/{case_failed}", headers={"X-Tenant-ID": tenant_id})
+            assert fail_summary.status_code == 200
+            assert fail_summary.json()["investigation_progress"]["agent_analysis"] == "not_started"
+
+            blocked_res = client.post(
+                f"/cases/{case_failed}/report-submission",
+                json={"stage": "submitted_to_senior"},
+                headers={"X-Tenant-ID": tenant_id},
+            )
+            assert blocked_res.status_code == 400
+
+

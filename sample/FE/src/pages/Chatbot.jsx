@@ -52,7 +52,11 @@ import {
 
   fetchReport,
 
+  fetchAgentResults,
 
+  fetchCaseSummary,
+
+  submitCaseReportStage,
 
   API_BASE_URL, 
 
@@ -63,6 +67,8 @@ import {
 
 
 } from '../js/api';
+
+import { isAgentSwarmComplete, getCaseSubmissionState } from '../js/caseUtils';
 
 
 
@@ -3242,7 +3248,7 @@ function CaseReportCard({
 
 
 
-            onClick={() => {
+            onClick={async () => {
 
 
 
@@ -3282,7 +3288,27 @@ function CaseReportCard({
 
 
 
+              try {
+                await submitCaseReportStage(caseId, 'submitted_to_senior', {
+                  note: 'Report submitted via AI Assistant to Senior Analyst.',
+                  findings_count: findings.length,
+                  evidence_count: evidence.length
+                });
+                await createCaseNote(caseId, {
+                  title: '📑 Case Report Submitted for Senior Review',
+                  content: `Submitted By: ${u?.name || 'Analyst'}\nCase ID: ${caseId}\nTriaged Findings: ${findings.length}\nEvidence Artifacts: ${evidence.length}`,
+                  type: 'finding',
+                  priority: 'HIGH'
+                }).catch(() => {});
+              } catch (err) {
+                showToast(err?.message || 'Complete investigation and Multi-Agent Swarm before submitting report.');
+                return;
+              }
+
+
+
               localStorage.setItem(`argus_case_${caseId}_submitted_to_senior`, JSON.stringify(record));
+              localStorage.setItem(`argus_case_${caseId}_report_completed`, 'true');
 
 
 
@@ -3728,9 +3754,15 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
   const [generatingReport, setGeneratingReport] = useState(false);
 
+  const [swarmComplete, setSwarmComplete] = useState(false);
 
+  const [caseSummaryState, setCaseSummaryState] = useState(null);
 
   const [reportModalOpen, setReportModalOpen] = useState(false);
+
+  const isChatbotReportUnlocked = Boolean(
+    swarmComplete || getCaseSubmissionState(caseSummaryState, activeCaseId).isReportReady
+  );
 
 
 
@@ -3914,7 +3946,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
 
 
-        const [findingsRes, evidenceRes] = await Promise.allSettled([
+        const [findingsRes, evidenceRes, summaryRes, agentRes] = await Promise.allSettled([
 
 
 
@@ -3922,7 +3954,15 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
 
 
-          fetchEvidenceForCase(activeCaseId)
+          fetchEvidenceForCase(activeCaseId),
+
+
+
+          fetchCaseSummary(activeCaseId),
+
+
+
+          fetchAgentResults(activeCaseId)
 
 
 
@@ -3934,6 +3974,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
 
 
+        let loadedFindings = [];
         if (findingsRes.status === 'fulfilled' && findingsRes.value) {
 
 
@@ -3950,6 +3991,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
 
 
+          loadedFindings = fList;
           setCaseFindings(fList);
 
 
@@ -3963,6 +4005,14 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
 
         }
+
+        const sumObj = summaryRes?.status === 'fulfilled' ? summaryRes.value : null;
+        const agObj = agentRes?.status === 'fulfilled' ? agentRes.value : null;
+        setCaseSummaryState(sumObj);
+        setSwarmComplete(
+          isAgentSwarmComplete(agObj, sumObj?.total_findings ?? loadedFindings.length) ||
+          sumObj?.investigation_progress?.agent_analysis === 'completed'
+        );
 
 
 
@@ -4624,7 +4674,27 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
     try {
 
+      // Enforce prerequisite: case report is only available once Evidence + Multi-Agent Swarm complete
+      const [sumRes, agRes] = await Promise.allSettled([
+        fetchCaseSummary(activeCaseId),
+        fetchAgentResults(activeCaseId)
+      ]);
+      const sumObj = sumRes.status === 'fulfilled' ? sumRes.value : null;
+      const agObj = agRes.status === 'fulfilled' ? agRes.value : null;
+      const swarmDone = isAgentSwarmComplete(agObj, sumObj?.total_findings || caseFindings.length);
+      const subState = getCaseSubmissionState(sumObj, activeCaseId);
 
+      if (!swarmDone && !subState.isReportReady) {
+        clearInterval(stepInterval);
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          sender: 'assistant',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          text: `### 🔒 Case Report Locked — Investigation Not Completed\n\nCase **${activeCaseId}** must complete Evidence Ingestion, File Analysis, and all 8 Multi-Agent Swarm reasoning stages before a Forensic Report can be generated.\n\n- **Current Swarm Status:** \`${sumObj?.investigation_progress?.agent_analysis || agObj?.status || 'NOT_STARTED'}\`\n- **Verified Findings:** \`${sumObj?.total_findings ?? caseFindings.length}\`\n\nPlease complete the Multi-Agent Swarm on the **Agents Swarm** page first, then generate and submit the report.`
+        }]);
+        showToast('Complete Multi-Agent Swarm investigation before generating report.');
+        return;
+      }
 
       // Fetch both JSON structured report data and HTML package
 
@@ -9061,7 +9131,7 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
 
 
-            {SUGGESTED_PROMPTS.map((p, idx) => (
+            {SUGGESTED_PROMPTS.filter((p) => isChatbotReportUnlocked || p.query !== 'generate report').map((p, idx) => (
 
 
 
@@ -9859,167 +9929,95 @@ Select a quick prompt below or type your forensic query to begin querying Case *
 
                 <span style={{
 
-
-
                   fontSize: '10px',
 
+                  color: isChatbotReportUnlocked ? '#10b981' : '#f59e0b',
 
+                  background: isChatbotReportUnlocked ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.14)',
 
-                  color: '#10b981',
-
-
-
-                  background: 'rgba(16, 185, 129, 0.12)',
-
-
+                  border: isChatbotReportUnlocked ? 'none' : '1px solid rgba(245, 158, 11, 0.3)',
 
                   padding: '2px 8px',
 
-
-
                   borderRadius: '8px',
-
-
 
                   fontWeight: 700
 
-
-
                 }}>
 
-
-
-                  READY
-
-
+                  {isChatbotReportUnlocked ? 'READY' : 'LOCKED'}
 
                 </span>
 
-
-
               </div>
-
-
 
               <p style={{ margin: 0, fontSize: '11px', color: themeStyles.textMuted, lineHeight: '1.4' }}>
 
-
-
-                Generate legal-grade case forensic report package directly in this assistant.
-
-
+                {isChatbotReportUnlocked
+                  ? 'Generate legal-grade case forensic report package directly in this assistant.'
+                  : 'Complete Evidence Ingestion and all 8 Multi-Agent Swarm stages before generating a forensic report.'}
 
               </p>
 
-
-
               <button
-
-
 
                 type="button"
 
-
-
                 onClick={() => handleGenerateReport()}
 
-
-
-                disabled={generatingReport}
-
-
+                disabled={generatingReport || !isChatbotReportUnlocked}
 
                 className="btn-primary"
 
-
-
                 style={{
-
-
 
                   padding: '8px 12px',
 
-
-
                   fontSize: '11.5px',
-
-
 
                   fontWeight: 600,
 
-
-
                   gap: '6px',
-
-
 
                   justifyContent: 'center',
 
+                  borderRadius: '12px',
 
+                  opacity: isChatbotReportUnlocked ? 1 : 0.72,
 
-                  borderRadius: '12px'
-
-
+                  background: isChatbotReportUnlocked ? undefined : 'rgba(100, 116, 139, 0.25)'
 
                 }}
 
-
+                title={isChatbotReportUnlocked ? 'Compile legal-grade case forensic report' : 'Locked until Multi-Agent Swarm completes'}
 
               >
 
-
-
                 {generatingReport ? (
 
-
-
                   <>
-
-
 
                     <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '2px', borderColor: '#ffffff', borderTopColor: 'transparent' }} />
 
-
-
                     <span>Compiling Report...</span>
 
-
-
                   </>
-
-
 
                 ) : (
 
-
-
                   <>
-
-
 
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
 
-
-
                       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
-
-
 
                     </svg>
 
-
-
-                    <span>Generate Case Report</span>
-
-
+                    <span>{isChatbotReportUnlocked ? 'Generate Case Report' : '🔒 Report Locked (Run Agents)'}</span>
 
                   </>
 
-
-
                 )}
-
-
 
               </button>
 

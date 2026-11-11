@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../js/api';
 
 const DEFAULT_TENANT_ID = import.meta.env.VITE_TENANT_ID || 'default';
 
@@ -43,7 +44,7 @@ export default function ForensicGraph({ caseId }) {
     async function loadGraphData() {
       setLoading(true);
       try {
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+        const baseUrl = API_BASE_URL;
         const token = localStorage.getItem('argus_token');
         const headers = {
           'X-Tenant-ID': DEFAULT_TENANT_ID,

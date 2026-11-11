@@ -37,8 +37,9 @@ const CaseDescriptionModal = ({ isOpen, onClose, caseData }) => {
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0, 0, 0, 0.65)',
-        backdropFilter: 'blur(8px)',
+        backgroundColor: 'transparent',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
         zIndex: 9999,
         display: 'flex',
         alignItems: 'center',

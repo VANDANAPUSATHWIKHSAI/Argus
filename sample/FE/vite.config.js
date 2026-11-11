@@ -5,7 +5,18 @@ import { defineConfig } from 'vite'
 export default defineConfig({
   plugins: [react()],
   server: {
-    host: '0.0.0.0',
-    port: 5173
+    host: '::',
+    port: 5173,
+    warmup: {
+      clientFiles: [
+        './src/pages/Login.jsx',
+        './src/pages/Dashboard.jsx',
+        './src/pages/AdminDashboard.jsx',
+        './src/pages/Cases.jsx',
+        './src/pages/Evidence.jsx',
+        './src/pages/Upload.jsx',
+        './src/pages/Agents.jsx'
+      ]
+    }
   }
 })

@@ -1,5 +1,4 @@
 /* ── ARGUS ENTERPRISE DESIGN SYSTEM: GLASS DASHBOARD TEMPLATE ── */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Poppins:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root,
 [data-theme="light"] {
@@ -720,8 +719,8 @@
 .glass-stat-card {
   position: relative;
   background: var(--glass-dash-surface-gradient);
-  backdrop-filter: blur(28px) saturate(190%);
-  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  backdrop-filter: blur(10px) saturate(135%);
+  -webkit-backdrop-filter: blur(10px) saturate(135%);
   border: 1px solid var(--glass-dash-border);
   border-radius: 20px;
   padding: 24px 26px;

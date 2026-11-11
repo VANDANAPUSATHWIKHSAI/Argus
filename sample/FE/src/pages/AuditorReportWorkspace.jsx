@@ -11,6 +11,7 @@ import {
   fetchReport
 } from '../js/api';
 import { generateHtmlFromReportData, handleDownloadHtml, handleDownloadJson } from '../js/reportUtils';
+import { getCaseSubmissionState } from '../js/caseUtils';
 import GeneratedReportModal from '../components/GeneratedReportModal';
 import SeniorSubmitToAuditorModal from '../components/SeniorSubmitToAuditorModal';
 import CaseNotAssigned from '../components/CaseNotAssigned';
@@ -234,66 +235,55 @@ You can click any **"Verify with AI"** or **"Audit Artifact"** button in the rep
           setCaseSummary(sumRes.value);
         }
 
-        // Fetch authoritative generated report package
-        try {
-          const [repJsonRes, repHtmlRes] = await Promise.allSettled([
-            fetchReport(activeCaseId, 'json', true),
-            fetchReport(activeCaseId, 'html', true)
-          ]);
-          let rData = null;
-          if (repJsonRes.status === 'fulfilled' && repJsonRes.value) {
-            rData = typeof repJsonRes.value === 'string' ? JSON.parse(repJsonRes.value) : repJsonRes.value;
-            if (isMounted) setReportData(rData);
-          }
-          if (repHtmlRes.status === 'fulfilled' && repHtmlRes.value) {
-            const hVal = typeof repHtmlRes.value === 'string' ? repHtmlRes.value : JSON.stringify(repHtmlRes.value);
-            if (isMounted) setReportHtml(hVal);
-          }
-          if (!rData && isMounted) {
-            setReportData({
-              case_id: activeCaseId,
-              findings: fRes.status === 'fulfilled' && fRes.value ? (Array.isArray(fRes.value) ? fRes.value : fRes.value.data || []) : [],
-              evidence_files: evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [],
-              timeline: [],
-              executive_summary: sumRes.status === 'fulfilled' && sumRes.value ? sumRes.value.description : `Forensic case baseline compiled for Case ${activeCaseId}.`
-            });
-          }
-        } catch (repErr) {
-          console.warn('Report fetch in workspace error:', repErr);
-        }
+        const matchedCaseObj = casesList.find(c => c.case_id === activeCaseId) || null;
+        const sumObj = sumRes.status === 'fulfilled' ? sumRes.value : null;
+        const localSubSenior = localStorage.getItem(`argus_case_${activeCaseId}_submitted_to_senior`);
+        const localSubAud = localStorage.getItem(`argus_case_${activeCaseId}_submitted_to_auditor`);
+        const subState = getCaseSubmissionState({
+          ...(matchedCaseObj || {}),
+          ...(sumObj || {}),
+          status: matchedCaseObj?.status || sumObj?.status,
+          has_report: Boolean(matchedCaseObj?.has_report || sumObj?.has_report),
+          submitted_to_senior: Boolean(matchedCaseObj?.submitted_to_senior || sumObj?.submitted_to_senior || localSubSenior),
+          submitted_to_auditor: Boolean(matchedCaseObj?.submitted_to_auditor || sumObj?.submitted_to_auditor || localSubAud),
+        }, activeCaseId);
 
-        // Check if report was submitted by junior analyst to senior analyst
-        let subSeniorFlag = false;
-        const subSenior = localStorage.getItem(`argus_case_${activeCaseId}_submitted_to_senior`);
-        if (subSenior) {
-          try {
-            const parsedSenior = JSON.parse(subSenior);
-            subSeniorFlag = Boolean(parsedSenior?.submitted);
-            setIsSubmittedByAnalyst(subSeniorFlag);
-            setAnalystSubmissionData(parsedSenior);
-          } catch (_e) {
-            setIsSubmittedByAnalyst(false);
-            setAnalystSubmissionData(null);
-          }
-        } else {
-          setIsSubmittedByAnalyst(false);
-          setAnalystSubmissionData(null);
-        }
+        setIsSubmittedByAnalyst(subState.submittedToSenior);
+        setAnalystSubmissionData(subState.seniorData);
+        setIsSubmittedToAuditor(subState.submittedToAuditor);
+        setSubmittedToAuditorData(subState.auditorData);
 
-        // Check if report was escalated to auditor
-        const subAud = localStorage.getItem(`argus_case_${activeCaseId}_submitted_to_auditor`);
-        if (subAud) {
+        // Fetch authoritative generated report package ONLY once investigation & Analyst submission complete
+        if (subState.isReportReady) {
           try {
-            const parsedAud = JSON.parse(subAud);
-            setIsSubmittedToAuditor(Boolean(parsedAud?.submitted));
-            setSubmittedToAuditorData(parsedAud);
-          } catch (_e) {
-            setIsSubmittedToAuditor(false);
-            setSubmittedToAuditorData(null);
+            const [repJsonRes, repHtmlRes] = await Promise.allSettled([
+              fetchReport(activeCaseId, 'json', true),
+              fetchReport(activeCaseId, 'html', true)
+            ]);
+            let rData = null;
+            if (repJsonRes.status === 'fulfilled' && repJsonRes.value) {
+              rData = typeof repJsonRes.value === 'string' ? JSON.parse(repJsonRes.value) : repJsonRes.value;
+              if (isMounted) setReportData(rData);
+            }
+            if (repHtmlRes.status === 'fulfilled' && repHtmlRes.value) {
+              const hVal = typeof repHtmlRes.value === 'string' ? repHtmlRes.value : JSON.stringify(repHtmlRes.value);
+              if (isMounted) setReportHtml(hVal);
+            }
+            if (!rData && isMounted) {
+              setReportData({
+                case_id: activeCaseId,
+                findings: fRes.status === 'fulfilled' && fRes.value ? (Array.isArray(fRes.value) ? fRes.value : fRes.value.data || []) : [],
+                evidence_files: evRes.status === 'fulfilled' && evRes.value ? (Array.isArray(evRes.value) ? evRes.value : evRes.value.data || []) : [],
+                timeline: [],
+                executive_summary: sumObj ? sumObj.description : `Forensic case baseline compiled for Case ${activeCaseId}.`
+              });
+            }
+          } catch (repErr) {
+            console.warn('Report fetch in workspace error:', repErr);
           }
-        } else {
-          setIsSubmittedToAuditor(false);
-          setSubmittedToAuditorData(null);
+        } else if (isMounted) {
+          setReportData(null);
+          setReportHtml('');
         }
 
         // Check if previously certified
@@ -312,7 +302,7 @@ You can click any **"Verify with AI"** or **"Audit Artifact"** button in the rep
         }
 
         // Initialize audit chat welcome message for this case
-        initAuditChatWelcome(activeCaseId, activeCaseName, subSeniorFlag);
+        initAuditChatWelcome(activeCaseId, activeCaseName, subState.isReportReady);
 
       } catch (err) {
         console.error('Failed to load case data for audit:', err);
@@ -324,7 +314,7 @@ You can click any **"Verify with AI"** or **"Audit Artifact"** button in the rep
     loadData();
 
     return () => { isMounted = false; };
-  }, [activeCaseId, activeCaseName]);
+  }, [activeCaseId, activeCaseName, casesList]);
 
   // Scroll chat to bottom on new messages
   useEffect(() => {
@@ -448,8 +438,19 @@ No hash match, custody event, signature, MITRE mapping, compliance verdict, or f
     }
   };
 
+  const isReportReady = Boolean(isSubmittedByAnalyst || isSubmittedToAuditor);
+
   // Print / Export PDF
   const handlePrintReport = () => {
+    if (!isReportReady) {
+      setCustomAlert({
+        isOpen: true,
+        title: 'Report Not Ready',
+        message: 'Case report cannot be exported until the investigation and Multi-Agent Swarm complete and the assigned Analyst submits the report.',
+        type: 'warning'
+      });
+      return;
+    }
     if (reportViewMode === 'dossier') {
       const frame = document.getElementById('argus-dossier-iframe');
       if (frame && frame.contentWindow) {
@@ -880,6 +881,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
             <button
               type="button"
               onClick={handlePrintReport}
+              disabled={!isReportReady}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -891,10 +893,11 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                 borderRadius: '9999px',
                 fontSize: '12px',
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: !isReportReady ? 'not-allowed' : 'pointer',
+                opacity: !isReportReady ? 0.5 : 1,
                 transition: 'all 0.2s'
               }}
-              title="Print or Save as PDF"
+              title={!isReportReady ? 'Report will unlock after investigation completes and Analyst submits' : 'Print or Save as PDF'}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
               <span>Export PDF</span>
@@ -1057,7 +1060,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                 flexShrink: 0
               }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-                <span>Notice: Pre-attestation review. Case report is pending formal escalation memo from Senior Analyst.</span>
+                <span>{isReportReady ? 'Notice: Pre-attestation review. Case report is pending formal escalation memo from Senior Analyst.' : 'Notice: Investigation in progress. Official case report will appear only after investigation and Analyst submission complete.'}</span>
               </div>
             ) : null}
 
@@ -1104,20 +1107,21 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                 <button
                   type="button"
                   onClick={() => {
-                    if (user?.role === 'senior_analyst' && !isSubmittedByAnalyst) {
+                    if (!isReportReady) {
                       setCustomAlert({
                         isOpen: true,
                         title: 'Report Not Received',
-                        message: 'Cannot download report: The assigned Analyst has not submitted the case report yet.',
+                        message: 'Cannot download report: Investigation and Analyst report submission have not completed yet.',
                         type: 'warning'
                       });
                       return;
                     }
                     handleDownloadHtml(reportData, reportHtml, activeCaseId);
                   }}
+                  disabled={!isReportReady}
                   className="btn-outline"
-                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 'not-allowed' : 'pointer', opacity: user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 0.5 : 1 }}
-                  title={user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 'Report not received yet' : 'Download legal-grade HTML dossier'}
+                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: !isReportReady ? 'not-allowed' : 'pointer', opacity: !isReportReady ? 0.5 : 1 }}
+                  title={!isReportReady ? 'Report not completed yet' : 'Download legal-grade HTML dossier'}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                   HTML
@@ -1125,36 +1129,49 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                 <button
                   type="button"
                   onClick={() => {
-                    if (user?.role === 'senior_analyst' && !isSubmittedByAnalyst) {
+                    if (!isReportReady) {
                       setCustomAlert({
                         isOpen: true,
                         title: 'Report Not Received',
-                        message: 'Cannot download report: The assigned Analyst has not submitted the case report yet.',
+                        message: 'Cannot download report: Investigation and Analyst report submission have not completed yet.',
                         type: 'warning'
                       });
                       return;
                     }
                     handleDownloadJson(reportData, activeCaseId);
                   }}
+                  disabled={!isReportReady}
                   className="btn-outline"
-                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 'not-allowed' : 'pointer', opacity: user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 0.5 : 1 }}
-                  title={user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? 'Report not received yet' : 'Download structured JSON report'}
+                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: !isReportReady ? 'not-allowed' : 'pointer', opacity: !isReportReady ? 0.5 : 1 }}
+                  title={!isReportReady ? 'Report not completed yet' : 'Download structured JSON report'}
                 >
                   JSON
                 </button>
                 <button
                   type="button"
-                  onClick={() => setDossierModalOpen(true)}
+                  onClick={() => {
+                    if (!isReportReady) {
+                      setCustomAlert({
+                        isOpen: true,
+                        title: 'Report Not Ready',
+                        message: 'Full-screen report preview is locked until the Analyst finishes investigation and submits the case report.',
+                        type: 'warning'
+                      });
+                      return;
+                    }
+                    setDossierModalOpen(true);
+                  }}
+                  disabled={!isReportReady}
                   className="btn-primary"
-                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}
-                  title="Expand report to full screen view"
+                  style={{ padding: '5px 12px', fontSize: '11.5px', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '4px', cursor: !isReportReady ? 'not-allowed' : 'pointer', opacity: !isReportReady ? 0.5 : 1 }}
+                  title={!isReportReady ? 'Report not completed yet' : 'Expand report to full screen view'}
                 >
                   Full Screen
                 </button>
               </div>
             </div>
 
-            {user?.role === 'senior_analyst' && !isSubmittedByAnalyst ? (
+            {!isReportReady ? (
               <div style={{
                 flex: 1,
                 minHeight: 0,
@@ -1190,7 +1207,7 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                   Report Not Received
                 </h3>
                 <p style={{ margin: '0 0 16px 0', maxWidth: '480px', fontSize: '14px', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-                  The assigned Analyst has not submitted the case report for <strong>{activeCaseId}</strong> ({activeCaseName || 'Active Case'}) yet.
+                  The assigned Analyst has not completed investigation and submitted the case report for <strong>{activeCaseId}</strong> ({activeCaseName || 'Active Case'}) yet.
                 </p>
                 <div style={{
                   padding: '9px 18px',
@@ -1205,10 +1222,10 @@ Hash Ledger: CHECK SERVER-SIDE VERIFICATION STATUS
                   gap: '6px'
                 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                  <span>Awaiting Analyst Hand-off &middot; Case is in Investigation Stage</span>
+                  <span>Awaiting Investigation &amp; Analyst Hand-off &middot; Agent Swarm: {caseSummary?.investigation_progress?.agent_analysis || 'not_started'}</span>
                 </div>
                 <p style={{ marginTop: '18px', fontSize: '12.5px', color: 'var(--text-dim)', maxWidth: '440px', lineHeight: '1.5' }}>
-                  Once the assigned Analyst completes the investigation and clicks <strong>Submit Report to Senior Analyst</strong> from their dashboard, the finalized report package will automatically appear here for your review and auditor escalation.
+                  Once the assigned Analyst finishes evidence ingestion and Multi-Agent Swarm analysis and clicks <strong>Submit Report to Senior Analyst</strong>, the finalized report package will automatically appear here for review and audit.
                 </p>
               </div>
             ) : reportViewMode === 'dossier' ? (

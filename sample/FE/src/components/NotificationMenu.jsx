@@ -3,6 +3,32 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 import { setActiveCase } from '../js/caseEvents';
 
+let _activityCache = { token: '', ts: 0, items: null };
+let _activityInflight = null;
+const ACTIVITY_CACHE_TTL_MS = 10000;
+
+async function fetchActivityCached(token) {
+  const now = Date.now();
+  if (_activityCache.items && _activityCache.token === token && now - _activityCache.ts < ACTIVITY_CACHE_TTL_MS) {
+    return _activityCache.items;
+  }
+  if (_activityInflight) return _activityInflight;
+  _activityInflight = fetch(`${API_BASE_URL}/cases/activity`, {
+    headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': DEFAULT_TENANT_ID }
+  })
+    .then(async (res) => {
+      if (!res.ok) return null;
+      const data = await res.json();
+      const items = data.data || [];
+      _activityCache = { token, ts: Date.now(), items };
+      return items;
+    })
+    .finally(() => {
+      _activityInflight = null;
+    });
+  return _activityInflight;
+}
+
 const NotificationMenu = () => {
   const [isOpen, setIsOpen] = useState(false);
   const navigate = useNavigate();
@@ -19,15 +45,13 @@ const NotificationMenu = () => {
   const isAdmin = currentUser?.role === 'admin';
 
   useEffect(() => {
-    const load = async () => {
+    const load = async (force = false) => {
       try {
         const token = localStorage.getItem('argus_token');
-        const res = await fetch(`${API_BASE_URL}/cases/activity`, {
-          headers: { 'Authorization': `Bearer ${token}`, 'X-Tenant-ID': DEFAULT_TENANT_ID }
-        });
-        if (!res.ok) return;
-        const data = await res.json();
-        const items = data.data || [];
+        if (!token) return;
+        if (force) _activityCache.ts = 0;
+        const items = await fetchActivityCached(token);
+        if (!items) return;
 
         const mapped = items.map((a, i) => {
           const rawTs = a.created_at ? String(a.created_at).replace(/\s+/, 'T') : null;
@@ -57,13 +81,13 @@ const NotificationMenu = () => {
 
     const handleInterval = () => {
       if (document.visibilityState === 'visible') {
-        load();
+        load(true);
       }
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        load();
+        load(false);
       }
     };
 

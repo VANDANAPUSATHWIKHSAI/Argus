@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createCaseNote } from '../js/api';
+import { createCaseNote, submitCaseReportStage } from '../js/api';
 import GeneratedReportModal from './GeneratedReportModal';
 
 export default function SeniorSubmitToAuditorModal({
@@ -37,6 +37,13 @@ export default function SeniorSubmitToAuditorModal({
     const memoText = seniorMemo.trim() || 'Validated by Senior Analyst. Ready for independent compliance audit.';
 
     try {
+      // 0. Persist escalation state on backend case metadata
+      await submitCaseReportStage(caseId, 'submitted_to_auditor', {
+        note: memoText,
+        findings_count: findings.length,
+        evidence_count: evidence.length
+      }).catch(e => console.warn('Report escalation stage save warning:', e));
+
       // 1. Create durable Case Note for complete audit trail
       const notePayload = {
         title: `🛡️ Senior Analyst Approval & Escalation to Auditor`,

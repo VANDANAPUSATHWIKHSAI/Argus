@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import '../css/style.css';
 
-import { uploadEvidenceFile, closeCase, fetchAgentResults, stopWorkload, restartWorkload, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
+import { fetchCases as fetchCasesApi, uploadEvidenceFile, closeCase, fetchAgentResults, stopWorkload, restartWorkload, API_BASE_URL, DEFAULT_TENANT_ID } from '../js/api';
 
 import { getActiveCaseId, getActiveCaseName, setActiveCase, subscribeToActiveCase } from '../js/caseEvents';
 
@@ -25,7 +25,36 @@ import CaseLockBanner from '../components/CaseLockBanner';
 
 import CaseSwitcher from '../components/CaseSwitcher';
 
+import SearchableSelect from '../components/SearchableSelect';
+
 import CaseNotAssigned from '../components/CaseNotAssigned';
+
+const EVIDENCE_TYPE_OPTIONS = [
+  { value: 'Auto Detect', label: 'Auto Detect' },
+  { value: 'Disk Image', label: 'Disk Image' },
+  { value: 'Memory Dump', label: 'Memory Dump' },
+  { value: 'Network Capture', label: 'Network Capture' },
+  { value: 'Windows Event Log', label: 'Windows Event Log' },
+  { value: 'Linux Log', label: 'Linux Log' },
+  { value: 'Registry Hive', label: 'Registry Hive' },
+  { value: 'File / Document', label: 'File / Document' },
+  { value: 'Archive', label: 'Archive' },
+  { value: 'Other', label: 'Other' }
+];
+
+function inferEvidenceTypeLabel(filename, selectedType) {
+  if (selectedType && selectedType !== 'Auto Detect') return selectedType;
+  const lower = (filename || '').toLowerCase();
+  if (/\.(e01|ex01|raw|dd|img|iso|vmdk|vhd|vhdx)$/.test(lower)) return 'Disk Image';
+  if (/\.(mem|dmp|vmem|lime)$/.test(lower)) return 'Memory Dump';
+  if (/\.(pcap|pcapng|cap)$/.test(lower)) return 'Network Capture';
+  if (/\.evtx?$/.test(lower)) return 'Windows Event Log';
+  if (/^(ntuser\.dat|sam|system|software|security|usrclass\.dat)$/.test(lower) || /\.reg$/.test(lower)) return 'Registry Hive';
+  if (/\.(log|syslog|auth|audit|jsonl?)$/.test(lower)) return 'Log Artifact';
+  if (/\.(zip|tar|gz|tgz|7z|rar)$/.test(lower)) return 'Archive';
+  if (/\.(txt|csv|pdf|doc|docx|xls|xlsx|edb|xml)$/.test(lower)) return 'File / Document';
+  return 'Auto Detect';
+}
 
 
 
@@ -52,7 +81,9 @@ const Upload = () => {
 
   const [dragOver, setDragOver] = useState(false);
 
-  const [argusEnabled, setArgusEnabled] = useState(true);
+  const [evidenceType, setEvidenceType] = useState('Auto Detect');
+
+  const [sourceDevice, setSourceDevice] = useState('NTFS1-HOST');
 
   const [showModal, setShowModal] = useState(false);
 
@@ -267,27 +298,13 @@ const Upload = () => {
 
   useEffect(() => {
 
-    const fetchCases = async () => {
+    const loadCasesList = async () => {
 
       try {
 
-        const token = localStorage.getItem('argus_token');
+        const data = await fetchCasesApi();
 
-        const res = await fetch(`${API_BASE_URL}/cases/`, {
-
-          headers: {
-
-            'Authorization': `Bearer ${token}`,
-
-            'X-Tenant-ID': DEFAULT_TENANT_ID
-
-          }
-
-        });
-
-        if (res.ok) {
-
-          const data = await res.json();
+        if (data) {
 
           const list = data.data || [];
 
@@ -318,7 +335,7 @@ const Upload = () => {
 
     };
 
-    fetchCases();
+    loadCasesList();
 
     const unsubscribe = subscribeToActiveCase(({ caseId, caseName }) => {
 
@@ -518,19 +535,14 @@ const Upload = () => {
     }
 
     const newItems = files.map((f, i) => ({
-
-      id: Date.now() + i,
-
+      id: `${Date.now()}-${i}-${f.name}`,
       name: f.name,
-
-      size: formatSize(f.size),
-
-      type: 'Auto Detect',
-
+      rawSize: f.size || 0,
+      size: formatSize(f.size || 0),
+      relativePath: f.webkitRelativePath || '',
+      type: inferEvidenceTypeLabel(f.name, evidenceType),
       status: 'ready',
-
       file: f
-
     }));
 
     setQueue(prev => [...prev, ...newItems]);
@@ -601,34 +613,30 @@ const Upload = () => {
 
 
 
-    setUploading(true);
-
-    setQueue(prev => prev.map(i => (i.status === 'ready' || i.status === 'error') ? { ...i, status: 'uploading' } : i));
-
-
-
-    let successCount = 0;
-
-    let failedCount = 0;
-
-    let lastErrorMsg = '';
-
-
-
     const itemsToUpload = queue.filter(item => item.status === 'ready' || item.status === 'uploading' || item.status === 'error');
 
     if (itemsToUpload.length === 0) {
-      setUploading(false);
       return;
     }
 
-    // Set all queued items to uploading status immediately
-    setQueue(prev => prev.map(i => (i.status === 'ready' || i.status === 'error') ? { ...i, status: 'uploading' } : i));
+    setUploading(true);
+    setQueue(prev => prev.map(i => (i.status === 'ready' || i.status === 'error') ? { ...i, status: 'uploading', error: null } : i));
+
+    let successCount = 0;
+    let failedCount = 0;
+    let lastErrorMsg = '';
+    const collectorName = currentUser?.name || currentUser?.email || 'Analyst';
+    const hostIdVal = sourceDevice.trim() || undefined;
 
     // Parallel asynchronous upload for all selected evidence files
     const uploadTasks = itemsToUpload.map(async (item) => {
       try {
-        const res = await uploadEvidenceFile(item.file, caseId, { asyncMode: true });
+        const res = await uploadEvidenceFile(item.file, caseId, {
+          asyncMode: true,
+          hostId: hostIdVal,
+          uploadedBy: collectorName,
+          relativePath: item.relativePath || undefined
+        });
         if (res && (res.status === 'FAILED' || res.status === 'ERROR' || res.status === 'validation_failed' || res.error)) {
           const errDetail = res.message || res.detail || res.error || 'Upload validation failed';
           throw new Error(errDetail);
@@ -785,17 +793,61 @@ const Upload = () => {
 
           <header className="glass-topbar-capsule topbar">
 
-            <div className="search-container">
+            <div className="glass-topbar-left">
 
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: 'var(--glass-dash-text-muted)', marginRight: 8 }}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <h2 className="glass-welcome-title">Evidence Ingestion</h2>
 
-              <input type="text" placeholder="Search cases, evidence, or findings..." />
+              <p className="glass-welcome-sub">
 
-              <span className="search-shortcut">⌘ K</span>
+                {activeCaseId
+                  ? `Target Case: ${activeCaseId}${activeCaseName ? ` — ${activeCaseName}` : ''}`
+                  : 'Select an active investigation case to ingest artifacts'}
+
+              </p>
 
             </div>
 
-            <div className="glass-topbar-right topbar-actions" style={{ flex: 1, justifyContent: 'flex-end', display: 'flex' }}>
+            <div className="glass-topbar-right topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+
+              {casesList.length > 0 && (
+
+                <CaseSwitcher
+
+                  id="upload-case-select"
+
+                  cases={casesList.filter(c => c.status === 'open' || c.status === 'in_progress')}
+
+                  activeCaseId={activeCaseId}
+
+                  onSelectCase={handleSelectCase}
+
+                  placeholder="-- Select Case --"
+
+                  align="left"
+
+                />
+
+              )}
+
+              <button
+
+                type="button"
+
+                onClick={() => navigate('/evidence')}
+
+                className="btn-outline"
+
+                style={{ padding: '8px 14px', borderRadius: 'var(--radius-full)', fontSize: '12.5px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+
+                title="Return to Evidence Items workspace"
+
+              >
+
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="15 18 9 12 15 6" /></svg>
+
+                Evidence Items
+
+              </button>
 
               {isAdmin && activeCaseId && (
 
@@ -807,11 +859,11 @@ const Upload = () => {
 
                   className="btn btn-outline"
 
-                  style={{ border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444', background: 'rgba(239, 68, 68, 0.08)', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+                  style={{ border: '1px solid rgba(239, 68, 68, 0.4)', color: '#ef4444', background: 'rgba(239, 68, 68, 0.08)', padding: '8px 14px', borderRadius: 'var(--radius-full)', fontSize: '12.5px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
 
                 >
 
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
 
                   Close Case
 
@@ -829,11 +881,11 @@ const Upload = () => {
 
                   className="btn btn-primary"
 
-                  style={{ background: 'var(--blue)', border: 'none', padding: '8px 16px', borderRadius: 'var(--radius-full)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, color: '#fff', cursor: 'pointer' }}
+                  style={{ background: 'var(--blue)', border: 'none', padding: '8px 14px', borderRadius: 'var(--radius-full)', fontSize: '12.5px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6, color: '#fff', cursor: 'pointer' }}
 
                 >
 
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
 
                   Create Case
 
@@ -849,7 +901,7 @@ const Upload = () => {
 
                 <div className="glass-profile-avatar-dark avatar">{currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'S'}</div>
 
-                <span className="glass-profile-name" style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</span>
+                <span className="glass-profile-name" style={{ fontWeight: 500, textTransform: 'capitalize' }}>{currentUser?.name || 'Analyst'}</span>
 
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9"/></svg>
 
@@ -859,7 +911,7 @@ const Upload = () => {
 
                     <div className="user-dropdown-header">
 
-                      <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'sathwik'}</div>
+                      <div className="ud-name" style={{ textTransform: 'capitalize' }}>{currentUser?.name || 'Analyst'}</div>
 
                       <div className="ud-role">{currentUser?.role?.replace('_', ' ') || 'Digital Forensics Investigator'}</div>
 
@@ -883,8 +935,6 @@ const Upload = () => {
 
           </header>
 
-
-
           <div className="dashboard-scroll">
 
             {!activeCaseId ? (
@@ -893,519 +943,679 @@ const Upload = () => {
 
             ) : (
 
-              <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', paddingBottom: '28px' }}>
 
-            {/* Case Header */}
+                {/* Case Lock Banner */}
 
-            <div className="header-card" style={{ flexShrink: 0 }}>
+                <CaseLockBanner lockState={caseLock} caseId={activeCaseId} onLockRefreshed={setCaseLock} />
 
-              <div className="header-info-wrap">
+                {/* Active Workload Warning Banner */}
 
-                <div className="header-id"><h1>UPLOAD EVIDENCE</h1></div>
+                {workloadStatus === 'RUNNING' && (
 
-                <div className="header-details">
+                  <div style={{
 
-                  <h2 style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-muted)' }}>Add digital artifacts to the active investigation for ARGUS analysis.</h2>
+                    padding: '14px 18px',
 
-                  <div className="header-meta" style={{ marginTop: 12, gap: 12 }}>
+                    background: 'rgba(239, 68, 68, 0.12)',
 
-                    <div className="meta-item" style={{ color: 'var(--text-main)', background: 'var(--bg-card)', padding: '4px 12px', borderRadius: 20, border: '1px solid var(--border-subtle)', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    border: '1px solid rgba(239, 68, 68, 0.4)',
 
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    borderRadius: '14px',
+
+                    display: 'flex',
+
+                    alignItems: 'center',
+
+                    justifyContent: 'space-between',
+
+                    gap: '14px',
+
+                    flexWrap: 'wrap'
+
+                  }}>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+
+                      <span className="live-dot" style={{ background: '#ef4444' }}></span>
 
                       <div>
 
-                        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>{activeCaseId || 'No Active Case'}</span>
+                        <div style={{ fontSize: '13px', color: '#f87171', fontWeight: 600 }}>
 
-                        {activeCaseName && <span style={{ fontSize: 13, color: 'var(--text-main)' }}> — {activeCaseName}</span>}
+                          Investigation Workload Currently Running
+
+                        </div>
+
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+
+                          Stop the workload before adding files if you want all existing and new evidence processed together cleanly.
+
+                        </div>
 
                       </div>
 
                     </div>
 
-                    {casesList.length > 0 && (
+                    <button
 
-                      <CaseSwitcher
+                      onClick={handleStopWorkloadInUpload}
 
-                        id="upload-case-select"
+                      disabled={stoppingWorkload}
 
-                        cases={casesList.filter(c => c.status === 'open' || c.status === 'in_progress')}
+                      style={{
 
-                        activeCaseId={activeCaseId}
+                        background: '#ef4444',
 
-                        onSelectCase={handleSelectCase}
+                        border: 'none',
 
-                        placeholder="-- Switch / Select Target Case --"
+                        color: '#fff',
 
-                        align="left"
+                        padding: '8px 16px',
 
-                      />
+                        borderRadius: '8px',
 
-                    )}
+                        fontSize: '12px',
 
-                    {isCaseReadOnly && <CaseLockBanner compact lockState={caseLock} />}
+                        fontWeight: 700,
+
+                        cursor: 'pointer'
+
+                      }}
+
+                    >
+
+                      {stoppingWorkload ? 'Stopping...' : 'Stop Running Workload'}
+
+                    </button>
 
                   </div>
 
-                </div>
+                )}
 
-              </div>
+                {/* Post-Upload Restart Banner */}
 
-            </div>
+                {showRestartBanner && (
 
+                  <div style={{
 
+                    padding: '14px 18px',
 
-            {/* Evidence Tabs */}
+                    background: 'rgba(16, 185, 129, 0.12)',
 
-            <div className="panel-card" style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', overflow: 'hidden', flexShrink: 0 }}>
+                    border: '1px solid rgba(16, 185, 129, 0.4)',
 
-              <div style={{ display: 'flex', borderBottom: '1px solid var(--border-strong)', padding: '0 24px', background: 'var(--bg-app)' }}>
+                    borderRadius: '14px',
 
-                <a href="/evidence" style={{ padding: '16px 20px', fontWeight: 500, fontSize: 14, color: 'var(--text-muted)', textDecoration: 'none' }}>Evidence Items</a>
+                    display: 'flex',
 
-                <div style={{ padding: '16px 20px', fontWeight: 600, fontSize: 14, color: 'var(--blue)', borderBottom: '2px solid var(--blue)', cursor: 'pointer' }}>Upload Evidence</div>
+                    alignItems: 'center',
 
+                    justifyContent: 'space-between',
 
-              </div>
+                    gap: '14px',
 
+                    flexWrap: 'wrap'
 
+                  }}>
 
-              {/* Main Upload Workspace */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 24, padding: 24 }}>
+                      <span style={{ color: '#10b981', fontSize: '16px', fontWeight: 800 }}>✓</span>
 
+                      <div>
 
+                        <div style={{ fontSize: '13px', color: '#10b981', fontWeight: 600 }}>
 
-                {/* Left Column */}
+                          New Evidence Uploaded Successfully
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-
-
-                  {/* Case Lock Banner for Active Case */}
-
-                  <CaseLockBanner lockState={caseLock} caseId={activeCaseId} onLockRefreshed={setCaseLock} />
-
-                  {/* Active Workload Warning Banner */}
-                  {workloadStatus === 'RUNNING' && (
-                    <div style={{
-                      padding: '14px 18px',
-                      background: 'rgba(239, 68, 68, 0.12)',
-                      border: '1px solid rgba(239, 68, 68, 0.4)',
-                      borderRadius: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '14px',
-                      flexWrap: 'wrap'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span className="live-dot" style={{ background: '#ef4444' }}></span>
-                        <div>
-                          <div style={{ fontSize: '13px', color: '#f87171', fontWeight: 600 }}>
-                            Investigation Workload Currently Running
-                          </div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                            If you realized you missed uploading some evidence, click &quot;Stop Workload&quot; so it halts cleanly and all files can be included when restarted.
-                          </div>
                         </div>
+
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+
+                          Restart the multi-agent workload to correlate new artifacts with existing findings, or inspect them in Evidence Items.
+
+                        </div>
+
                       </div>
+
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+
                       <button
-                        onClick={handleStopWorkloadInUpload}
-                        disabled={stoppingWorkload}
+
+                        onClick={() => setShowRestartBanner(false)}
+
+                        className="btn-outline"
+
+                        style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer' }}
+
+                      >
+
+                        Dismiss
+
+                      </button>
+
+                      <button
+
+                        onClick={() => navigate('/evidence')}
+
+                        className="btn-outline"
+
+                        style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer' }}
+
+                      >
+
+                        View Evidence Items →
+
+                      </button>
+
+                      <button
+
+                        onClick={handleRestartWorkloadInUpload}
+
+                        disabled={restartingWorkload}
+
                         style={{
-                          background: '#ef4444',
+
+                          background: '#10b981',
+
                           border: 'none',
+
                           color: '#fff',
+
                           padding: '7px 16px',
+
                           borderRadius: '8px',
+
                           fontSize: '12px',
+
                           fontWeight: 700,
+
                           cursor: 'pointer'
-                        }}
-                      >
-                        {stoppingWorkload ? 'Stopping...' : 'Stop Running Workload'}
-                      </button>
-                    </div>
-                  )}
 
-                  {/* Post-Upload Restart Suggestion Banner */}
-                  {showRestartBanner && (
-                    <div style={{
-                      padding: '14px 18px',
-                      background: 'rgba(16, 185, 129, 0.12)',
-                      border: '1px solid rgba(16, 185, 129, 0.4)',
-                      borderRadius: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '14px',
-                      flexWrap: 'wrap'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                        <span style={{ color: '#10b981', fontSize: '16px', fontWeight: 800 }}>✓</span>
-                        <div>
-                          <div style={{ fontSize: '13px', color: '#10b981', fontWeight: 600 }}>
-                            New Evidence Uploaded Successfully
+                        }}
+
+                      >
+
+                        {restartingWorkload ? 'Restarting...' : 'Restart Workload Now →'}
+
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                )}
+
+                {/* 2-Column Glass Ingestion Workspace */}
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '22px', alignItems: 'start' }}>
+
+                  {/* Left Column: Dropzone + Ingestion Context */}
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+
+                    {/* Dropzone Card */}
+
+                    <div
+
+                      onDragOver={e => { e.preventDefault(); if (!isCaseReadOnly) setDragOver(true); }}
+
+                      onDragLeave={() => setDragOver(false)}
+
+                      onDrop={handleDrop}
+
+                      onClick={() => {
+
+                        if (caseLock?.readOnly) {
+
+                          setCustomAlert({
+
+                            isOpen: true,
+
+                            title: '🔒 Case Locked — Read-Only Mode',
+
+                            message: `Cannot upload evidence to Case ${activeCaseId}. It is currently locked by analyst ${caseLock.lockedBy?.name || 'another analyst'}. Modifications are restricted.`,
+
+                            type: 'warning'
+
+                          });
+
+                          return;
+
+                        }
+
+                        fileInputRef.current?.click();
+
+                      }}
+
+                      style={{
+
+                        borderRadius: '20px',
+
+                        border: `2px dashed ${isCaseReadOnly ? 'rgba(245, 158, 11, 0.55)' : dragOver ? 'var(--purple, #8b5cf6)' : 'rgba(59, 130, 246, 0.5)'}`,
+
+                        background: isCaseReadOnly
+
+                          ? 'rgba(245, 158, 11, 0.06)'
+
+                          : dragOver
+
+                            ? 'rgba(139, 92, 246, 0.08)'
+
+                            : 'var(--glass-dash-surface-gradient, var(--bg-card))',
+
+                        backdropFilter: 'blur(24px) saturate(180%)',
+
+                        WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+
+                        boxShadow: 'var(--glass-dash-shadow-card, var(--shadow-card))',
+
+                        textAlign: 'center',
+
+                        padding: '32px 26px',
+
+                        position: 'relative',
+
+                        overflow: 'hidden',
+
+                        display: 'flex',
+
+                        flexDirection: 'column',
+
+                        alignItems: 'center',
+
+                        justifyContent: 'center',
+
+                        cursor: isCaseReadOnly ? 'not-allowed' : 'pointer',
+
+                        transition: 'border-color 0.2s ease, background 0.2s ease, transform 0.2s ease'
+
+                      }}
+
+                    >
+
+                      {isCaseReadOnly ? (
+
+                        <>
+
+                          <div style={{ background: 'rgba(245, 158, 11, 0.16)', color: '#f59e0b', width: 58, height: 58, borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+
                           </div>
-                          <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                            Restart the multi-agent workload to ensure this new evidence is analyzed together with all existing findings.
+
+                          <h3 style={{ fontSize: 19, fontWeight: 700, color: 'var(--text-main)', margin: '0 0 8px' }}>Evidence Upload Disabled</h3>
+
+                          <p style={{ fontSize: 13.5, color: '#f59e0b', margin: '0 0 18px', maxWidth: 440, lineHeight: 1.5 }}>
+
+                            Case is under active investigation by Analyst <strong>{caseLock.lockedBy?.name || 'another analyst'}</strong>. File ingestion is restricted to preserve forensic chain-of-custody.
+
+                          </p>
+
+                        </>
+
+                      ) : (
+
+                        <>
+
+                          <div style={{ background: 'rgba(59, 130, 246, 0.14)', color: 'var(--blue, #3b82f6)', width: 60, height: 60, borderRadius: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18, border: '1px solid rgba(59, 130, 246, 0.25)' }}>
+
+                            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+
                           </div>
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+
+                          <h3 style={{ fontSize: 19, fontWeight: 700, color: 'var(--text-main)', margin: '0 0 6px' }}>Drop Digital Artifacts Here</h3>
+
+                          <p style={{ fontSize: 13.5, color: 'var(--text-muted)', margin: '0 0 20px' }}>
+
+                            Drag files or evidence directories, or browse from disk
+
+                          </p>
+
+                        </>
+
+                      )}
+
+                      <div style={{ display: 'flex', gap: 12, marginBottom: 20, position: 'relative', zIndex: 2, flexWrap: 'wrap', justifyContent: 'center' }}>
+
                         <button
-                          onClick={() => setShowRestartBanner(false)}
-                          className="btn-outline"
-                          style={{ fontSize: '12px', padding: '6px 12px', borderRadius: '8px', cursor: 'pointer' }}
-                        >
-                          Dismiss
-                        </button>
-                        <button
-                          onClick={handleRestartWorkloadInUpload}
-                          disabled={restartingWorkload}
-                          style={{
-                            background: '#10b981',
-                            border: 'none',
-                            color: '#fff',
-                            padding: '7px 16px',
-                            borderRadius: '8px',
-                            fontSize: '12px',
-                            fontWeight: 700,
-                            cursor: 'pointer'
+
+                          type="button"
+
+                          className="btn btn-primary"
+
+                          id="btn-browse-files"
+
+                          onClick={e => {
+
+                            e.stopPropagation();
+
+                            if (caseLock?.readOnly) {
+
+                              setCustomAlert({
+
+                                isOpen: true,
+
+                                title: '🔒 Case Locked — Read-Only Mode',
+
+                                message: `Cannot upload evidence to Case ${activeCaseId}. It is currently locked by analyst ${caseLock.lockedBy?.name || 'another analyst'}. Modifications are restricted.`,
+
+                                type: 'warning'
+
+                              });
+
+                              return;
+
+                            }
+
+                            fileInputRef.current?.click();
+
                           }}
+
+                          style={{
+
+                            padding: '10px 18px',
+
+                            fontSize: 13.5,
+
+                            fontWeight: 600,
+
+                            borderRadius: '12px',
+
+                            display: 'inline-flex',
+
+                            alignItems: 'center',
+
+                            gap: 8,
+
+                            opacity: isCaseReadOnly ? 0.55 : 1,
+
+                            cursor: isCaseReadOnly ? 'not-allowed' : 'pointer'
+
+                          }}
+
                         >
-                          {restartingWorkload ? 'Restarting...' : 'Restart Workload Now →'}
+
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+
+                          Browse Files
+
                         </button>
+
+                        <button
+
+                          type="button"
+
+                          className="btn btn-outline"
+
+                          id="btn-browse-folders"
+
+                          onClick={e => {
+
+                            e.stopPropagation();
+
+                            if (caseLock?.readOnly) {
+
+                              setCustomAlert({
+
+                                isOpen: true,
+
+                                title: '🔒 Case Locked — Read-Only Mode',
+
+                                message: `Cannot upload evidence to Case ${activeCaseId}. It is currently locked by analyst ${caseLock.lockedBy?.name || 'another analyst'}. Modifications are restricted.`,
+
+                                type: 'warning'
+
+                              });
+
+                              return;
+
+                            }
+
+                            folderInputRef.current?.click();
+
+                          }}
+
+                          style={{
+
+                            padding: '10px 18px',
+
+                            fontSize: 13.5,
+
+                            fontWeight: 600,
+
+                            borderRadius: '12px',
+
+                            display: 'inline-flex',
+
+                            alignItems: 'center',
+
+                            gap: 8,
+
+                            opacity: isCaseReadOnly ? 0.55 : 1,
+
+                            cursor: isCaseReadOnly ? 'not-allowed' : 'pointer'
+
+                          }}
+
+                        >
+
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+
+                          Browse Folder
+
+                        </button>
+
                       </div>
-                    </div>
-                  )}
 
+                      <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={e => addFiles(Array.from(e.target.files))} />
 
+                      <input ref={folderInputRef} type="file" multiple webkitdirectory="true" style={{ display: 'none' }} onChange={e => addFiles(Array.from(e.target.files))} />
 
-                  {/* Dropzone */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
 
-                  <div
+                        {['E01 / RAW', 'MEM / DMP', 'EVTX / LOG', 'PCAP', 'Registry Hives', 'Archives / Docs'].map(tag => (
 
-                    onDragOver={e => { e.preventDefault(); if (!isCaseReadOnly) setDragOver(true); }}
+                          <span
 
-                    onDragLeave={() => setDragOver(false)}
+                            key={tag}
 
-                    onDrop={handleDrop}
+                            style={{
 
-                    onClick={() => {
+                              fontSize: '11px',
 
-                      if (caseLock?.readOnly) {
+                              fontWeight: 600,
 
-                        setCustomAlert({
+                              color: 'var(--text-muted)',
 
-                          isOpen: true,
+                              padding: '4px 10px',
 
-                          title: '🔒 Case Locked — Read-Only Mode',
+                              borderRadius: '999px',
 
-                          message: `Cannot upload evidence to Case ${activeCaseId}. It is currently locked by analyst ${caseLock.lockedBy?.name || 'another analyst'}. Modifications are restricted.`,
+                              background: 'var(--glass-dash-surface-nested, rgba(148, 163, 184, 0.1))',
 
-                          type: 'warning'
+                              border: '1px solid var(--glass-dash-border-subtle, var(--border-subtle))'
 
-                        });
+                            }}
 
-                        return;
+                          >
 
-                      }
+                            {tag}
 
-                      fileInputRef.current?.click();
+                          </span>
 
-                    }}
+                        ))}
 
-                    style={{
-
-                      borderRadius: 'var(--radius-lg)',
-
-                      border: `2px dashed ${isCaseReadOnly ? 'rgba(245, 158, 11, 0.6)' : dragOver ? 'var(--purple)' : 'var(--blue)'}`,
-
-                      background: isCaseReadOnly ? 'rgba(245, 158, 11, 0.05)' : dragOver ? 'var(--purple-light, #f3e8ff)' : 'var(--bg-card)',
-
-                      textAlign: 'center',
-
-                      padding: '60px 40px',
-
-                      position: 'relative',
-
-                      overflow: 'hidden',
-
-                      display: 'flex',
-
-                      flexDirection: 'column',
-
-                      alignItems: 'center',
-
-                      justifyContent: 'center',
-
-                      cursor: isCaseReadOnly ? 'not-allowed' : 'pointer',
-
-                      transition: 'all 0.3s ease',
-
-                    }}
-
-                  >
-
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, background: 'radial-gradient(circle at center, rgba(37,99,235,0.04) 0%, transparent 70%)', pointerEvents: 'none' }} />
-
-                    {isCaseReadOnly ? (
-
-                      <>
-
-                        <div style={{ background: 'rgba(245, 158, 11, 0.18)', color: '#f59e0b', width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24, boxShadow: '0 4px 12px rgba(245, 158, 11, 0.2)' }}>
-
-                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-
-                        </div>
-
-                        <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-main)', marginBottom: 8 }}>Evidence Upload Disabled</h2>
-
-                        <p style={{ fontSize: 14, color: '#f59e0b', marginBottom: 16, maxWidth: 520, lineHeight: 1.5 }}>
-
-                          Case is under active investigation by Analyst <strong>{caseLock.lockedBy?.name || 'another analyst'}</strong>. File ingestion is restricted to preserve forensic chain-of-custody.
-
-                        </p>
-
-                      </>
-
-                    ) : (
-
-                      <>
-
-                        <div style={{ background: 'var(--blue-light)', color: 'var(--blue)', width: 64, height: 64, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 24, boxShadow: '0 4px 12px rgba(37,99,235,0.1)' }}>
-
-                          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-
-                        </div>
-
-                        <h2 style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-main)', marginBottom: 8 }}>Upload Evidence</h2>
-
-                        <p style={{ fontSize: 15, color: 'var(--text-muted)', marginBottom: 16 }}>Drag and drop files here<br />or</p>
-
-                      </>
-
-                    )}
-
-                    <div style={{ display: 'flex', gap: 12, marginBottom: 24, position: 'relative', zIndex: 2 }}>
-
-                      <button
-
-                        className="btn btn-primary"
-
-                        id="btn-browse-files"
-
-                        onClick={e => {
-
-                          e.stopPropagation();
-
-                          if (caseLock?.readOnly) {
-
-                            setCustomAlert({
-
-                              isOpen: true,
-
-                              title: '🔒 Case Locked — Read-Only Mode',
-
-                              message: `Cannot upload evidence to Case ${activeCaseId}. It is currently locked by analyst ${caseLock.lockedBy?.name || 'another analyst'}. Modifications are restricted.`,
-
-                              type: 'warning'
-
-                            });
-
-                            return;
-
-                          }
-
-                          fileInputRef.current?.click();
-
-                        }}
-
-                        style={{
-
-                          padding: '10px 20px',
-
-                          fontSize: 14,
-
-                          borderRadius: 'var(--radius-md)',
-
-                          display: 'flex',
-
-                          alignItems: 'center',
-
-                          gap: 8,
-
-                          opacity: isCaseReadOnly ? 0.6 : 1,
-
-                          cursor: isCaseReadOnly ? 'not-allowed' : 'pointer'
-
-                        }}
-
-                      >
-
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-
-                        Browse Files
-
-                      </button>
-
-                      <button
-
-                        className="btn btn-outline"
-
-                        id="btn-browse-folders"
-
-                        onClick={e => {
-
-                          e.stopPropagation();
-
-                          if (caseLock?.readOnly) {
-
-                            setCustomAlert({
-
-                              isOpen: true,
-
-                              title: '🔒 Case Locked — Read-Only Mode',
-
-                              message: `Cannot upload evidence to Case ${activeCaseId}. It is currently locked by analyst ${caseLock.lockedBy?.name || 'another analyst'}. Modifications are restricted.`,
-
-                              type: 'warning'
-
-                            });
-
-                            return;
-
-                          }
-
-                          folderInputRef.current?.click();
-
-                        }}
-
-                        style={{
-
-                          padding: '10px 20px',
-
-                          fontSize: 14,
-
-                          borderRadius: 'var(--radius-md)',
-
-                          display: 'flex',
-
-                          alignItems: 'center',
-
-                          gap: 8,
-
-                          background: 'var(--bg-card)',
-
-                          opacity: isCaseReadOnly ? 0.6 : 1,
-
-                          cursor: isCaseReadOnly ? 'not-allowed' : 'pointer'
-
-                        }}
-
-                      >
-
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-
-                        Browse Folder
-
-                      </button>
+                      </div>
 
                     </div>
 
-                    <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={e => addFiles(Array.from(e.target.files))} />
+                    {/* Ingestion Context Card (overflow visible so glass dropdown is never clipped) */}
 
-                    <input ref={folderInputRef} type="file" multiple webkitdirectory="true" style={{ display: 'none' }} onChange={e => addFiles(Array.from(e.target.files))} />
+                    <div
 
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                      className="panel-card"
 
-                      Supported evidence: Disk Images · Memory Dumps · Logs · PCAP · Documents · Archives
+                      style={{
 
-                    </div>
+                        padding: '20px 22px',
 
-                  </div>
+                        overflow: 'visible',
 
+                        position: 'relative',
 
+                        zIndex: 20
 
-                  {/* Metadata Fields */}
+                      }}
 
-                  <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', padding: 24, display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 32 }}>
+                    >
 
-                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
 
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-main)', marginBottom: 12 }}>
+                        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: 'var(--text-main)' }}>
 
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                          Ingestion Context
 
-                        Evidence Type
+                        </h4>
 
-                      </label>
+                        <span style={{ fontSize: '11.5px', color: 'var(--text-muted)' }}>
 
-                      <select style={{ width: '100%', padding: '12px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 14, color: 'var(--text-main)', background: 'var(--bg-app)', outline: 'none' }}>
+                          Applied on upload
 
-                        <option>Auto Detect</option>
+                        </span>
 
-                        <option>Disk Image</option>
+                      </div>
 
-                        <option>Memory Dump</option>
-
-                        <option>Network Capture</option>
-
-                        <option>Windows Event Log</option>
-
-                        <option>Linux Log</option>
-
-                        <option>Registry Hive</option>
-
-                        <option>File / Document</option>
-
-                        <option>Archive</option>
-
-                        <option>Other</option>
-
-                      </select>
-
-                    </div>
-
-                    <div>
-
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: 'var(--text-main)', marginBottom: 12 }}>
-
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" strokeWidth="2"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"/><path d="M10 4v4"/><path d="M14 4v4"/><path d="M2 8h20"/></svg>
-
-                        Evidence Source
-
-                      </label>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '14px' }}>
 
                         <div>
 
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Source Device</div>
+                          <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
 
-                          <input type="text" id="source-device-input" defaultValue="DESKTOP-7G2K" style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 13, color: 'var(--text-main)', background: 'var(--bg-app)', outline: 'none', boxSizing: 'border-box' }} />
+                            Evidence Type
+
+                          </label>
+
+                          <SearchableSelect
+
+                            options={EVIDENCE_TYPE_OPTIONS}
+
+                            value={evidenceType}
+
+                            onChange={(val) => {
+
+                              setEvidenceType(val);
+
+                              setQueue(prev => prev.map(item =>
+
+                                item.status === 'ready'
+
+                                  ? { ...item, type: inferEvidenceTypeLabel(item.name, val) }
+
+                                  : item
+
+                              ));
+
+                            }}
+
+                            noSearch
+
+                            size="medium"
+
+                          />
 
                         </div>
 
                         <div>
 
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Collection Date</div>
+                          <label htmlFor="source-device-input" style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
 
-                          <input type="text" defaultValue="Nov 14, 2024 09:41 AM" style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 13, color: 'var(--text-main)', background: 'var(--bg-app)', outline: 'none', boxSizing: 'border-box' }} />
+                            Source Host / Device
+
+                          </label>
+
+                          <input
+
+                            type="text"
+
+                            id="source-device-input"
+
+                            value={sourceDevice}
+
+                            onChange={e => setSourceDevice(e.target.value)}
+
+                            placeholder="e.g., NTFS1-HOST"
+
+                            style={{
+
+                              width: '100%',
+
+                              padding: '9px 12px',
+
+                              borderRadius: '10px',
+
+                              border: '1px solid var(--border-strong)',
+
+                              fontSize: '13px',
+
+                              color: 'var(--text-main)',
+
+                              background: 'var(--glass-dash-surface-nested, var(--bg-app))',
+
+                              outline: 'none',
+
+                              boxSizing: 'border-box'
+
+                            }}
+
+                          />
 
                         </div>
 
                         <div>
 
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Collected By</div>
+                          <label style={{ display: 'block', fontSize: '11.5px', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '6px' }}>
 
-                          <select style={{ width: '100%', padding: '10px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-strong)', fontSize: 13, color: 'var(--text-main)', background: 'var(--bg-app)', outline: 'none' }}>
+                            Collected By
 
-                            <option>Analyst</option>
+                          </label>
 
-                          </select>
+                          <div
+
+                            style={{
+
+                              padding: '9px 12px',
+
+                              borderRadius: '10px',
+
+                              border: '1px solid var(--glass-dash-border-subtle, var(--border-subtle))',
+
+                              background: 'var(--glass-dash-surface-nested, rgba(148, 163, 184, 0.08))',
+
+                              fontSize: '13px',
+
+                              fontWeight: 600,
+
+                              color: 'var(--text-main)',
+
+                              whiteSpace: 'nowrap',
+
+                              overflow: 'hidden',
+
+                              textOverflow: 'ellipsis'
+
+                            }}
+
+                            title={currentUser?.email || currentUser?.name || 'Analyst'}
+
+                          >
+
+                            {currentUser?.name || currentUser?.email || 'Analyst'}
+
+                          </div>
 
                         </div>
 
@@ -1415,29 +1625,51 @@ const Upload = () => {
 
                   </div>
 
-
-
-                  {/* Upload Queue */}
+                  {/* Right Column: Live Upload Queue & Actions */}
 
                   {(() => {
 
                     const failedQueueCount = queue.filter(item => item.status === 'error').length;
 
+                    const doneQueueCount = queue.filter(item => item.status === 'done').length;
+
                     const hasPendingItems = queue.some(item => item.status === 'ready' || item.status === 'error');
+
+                    const totalBytes = queue.reduce((acc, item) => acc + (item.rawSize || item.file?.size || 0), 0);
 
                     return (
 
-                      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', display: 'flex', flexDirection: 'column' }}>
+                      <div className="panel-card" style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', minHeight: '340px' }}>
 
-                        <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-strong)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
 
-                          <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-main)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
 
-                            Upload Queue <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 14 }}>({queue.length} files)</span>
+                            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-main)' }}>
+
+                              Upload Queue
+
+                            </h3>
+
+                            <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 500 }}>
+
+                              ({queue.length} {queue.length === 1 ? 'file' : 'files'}{queue.length > 0 ? ` · ${formatSize(totalBytes)}` : ''})
+
+                            </span>
+
+                            {doneQueueCount > 0 && (
+
+                              <span style={{ fontSize: 11.5, color: '#10b981', background: 'rgba(16, 185, 129, 0.14)', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+
+                                ✓ {doneQueueCount} queued
+
+                              </span>
+
+                            )}
 
                             {failedQueueCount > 0 && (
 
-                              <span style={{ fontSize: 12, color: 'var(--red, #ef4444)', background: 'var(--red-light, #fee2e2)', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
+                              <span style={{ fontSize: 11.5, color: 'var(--red, #ef4444)', background: 'rgba(239, 68, 68, 0.14)', padding: '2px 8px', borderRadius: 12, fontWeight: 600 }}>
 
                                 • {failedQueueCount} failed
 
@@ -1445,45 +1677,87 @@ const Upload = () => {
 
                             )}
 
-                          </h3>
+                          </div>
 
-                          <button onClick={clearAll} style={{ fontSize: 12, color: 'var(--blue)', padding: '4px 8px', border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          {queue.length > 0 && (
 
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            <button
 
-                            Clear All
+                              type="button"
 
-                          </button>
+                              onClick={clearAll}
+
+                              disabled={uploading}
+
+                              style={{ fontSize: 12, color: 'var(--blue)', padding: '4px 8px', border: 'none', background: 'transparent', cursor: uploading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
+
+                            >
+
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+
+                              Clear All
+
+                            </button>
+
+                          )}
 
                         </div>
 
-
-
                         {queue.length === 0 ? (
 
-                          <div style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '52px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
 
-                            No files in queue. Drop files or click Browse.
+                            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" style={{ opacity: 0.45, marginBottom: 10 }}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+
+                            <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-main)', marginBottom: 4 }}>No files staged yet</div>
+
+                            <div style={{ fontSize: 12.5, maxWidth: 260 }}>Drop artifacts on the left or click Browse to stage files for forensic parsing.</div>
 
                           </div>
 
                         ) : (
 
-                          <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                          <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '360px', overflowY: 'auto' }}>
 
                             {queue.map(item => (
 
-                              <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'var(--bg-app)', borderRadius: 'var(--radius-md)', border: item.status === 'error' ? '1px solid var(--red, #ef4444)' : '1px solid var(--border-subtle)' }}>
+                              <div
 
-                                <div style={{ width: 36, height: 36, borderRadius: 8, background: item.status === 'error' ? 'var(--red-light, #fee2e2)' : 'var(--blue-light)', color: item.status === 'error' ? 'var(--red, #ef4444)' : 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                key={item.id}
+
+                                style={{
+
+                                  display: 'flex',
+
+                                  alignItems: 'center',
+
+                                  gap: 12,
+
+                                  padding: '10px 14px',
+
+                                  background: 'var(--glass-dash-surface-nested, var(--bg-app))',
+
+                                  borderRadius: '12px',
+
+                                  border: item.status === 'error'
+
+                                    ? '1px solid var(--red, #ef4444)'
+
+                                    : '1px solid var(--glass-dash-border-subtle, var(--border-subtle))'
+
+                                }}
+
+                              >
+
+                                <div style={{ width: 34, height: 34, borderRadius: 9, background: item.status === 'error' ? 'rgba(239, 68, 68, 0.14)' : 'rgba(59, 130, 246, 0.14)', color: item.status === 'error' ? 'var(--red, #ef4444)' : 'var(--blue, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
 
                                   {item.status === 'error' ? (
 
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
 
                                   ) : (
 
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
 
                                   )}
 
@@ -1491,13 +1765,23 @@ const Upload = () => {
 
                                 <div style={{ flex: 1, minWidth: 0 }}>
 
-                                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</div>
+                                  <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-main)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.relativePath || item.name}>
 
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                    {item.name}
+
+                                  </div>
+
+                                  <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
 
                                     {item.type} · {item.size}
 
-                                    {item.error && <span style={{ color: 'var(--red, #ef4444)', marginLeft: 8, fontWeight: 500 }}>— {item.error}</span>}
+                                    {item.relativePath && item.relativePath !== item.name && (
+
+                                      <span style={{ marginLeft: 6, opacity: 0.75 }}>({item.relativePath})</span>
+
+                                    )}
+
+                                    {item.error && <span style={{ color: 'var(--red, #ef4444)', marginLeft: 6, fontWeight: 500 }}>— {item.error}</span>}
 
                                   </div>
 
@@ -1505,7 +1789,19 @@ const Upload = () => {
 
                                 {statusBadge(item.status)}
 
-                                <button onClick={() => removeItem(item.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 4, flexShrink: 0 }}>
+                                <button
+
+                                  type="button"
+
+                                  onClick={() => removeItem(item.id)}
+
+                                  disabled={uploading && item.status === 'uploading'}
+
+                                  title="Remove from queue"
+
+                                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: (uploading && item.status === 'uploading') ? 'not-allowed' : 'pointer', padding: 4, flexShrink: 0 }}
+
+                                >
 
                                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
 
@@ -1519,27 +1815,41 @@ const Upload = () => {
 
                         )}
 
-
-
-                        {/* Status bar */}
-
                         {queue.length > 0 && !activeCaseId && (
 
-                          <div style={{ margin: '0 24px 0 24px', padding: '10px 14px', background: 'rgba(234,88,12,0.1)', border: '1px solid var(--orange, #ea580c)', borderRadius: 8, fontSize: 13, color: 'var(--orange, #ea580c)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ margin: '0 18px 12px', padding: '10px 14px', background: 'rgba(234,88,12,0.1)', border: '1px solid var(--orange, #ea580c)', borderRadius: 10, fontSize: 12.5, color: 'var(--orange, #ea580c)', display: 'flex', alignItems: 'center', gap: 8 }}>
 
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
 
-                            No case selected. Select a case from the dropdown above before uploading.
+                            Select an active case from the topbar before uploading.
 
                           </div>
 
                         )}
 
-                        <div style={{ padding: '16px 24px 20px', borderTop: '1px solid var(--border-strong)', display: 'flex', justifyContent: 'flex-end', gap: 16, marginTop: 'auto', background: 'var(--bg-app)', borderBottomLeftRadius: 'var(--radius-lg)', borderBottomRightRadius: 'var(--radius-lg)' }}>
-
-                          <button className="btn btn-outline" onClick={clearAll} style={{ padding: '12px 24px', fontWeight: 600 }}>Clear Queue</button>
+                        <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 'auto', background: 'var(--glass-dash-surface-nested, rgba(15, 23, 42, 0.04))' }}>
 
                           <button
+
+                            type="button"
+
+                            className="btn btn-outline"
+
+                            onClick={clearAll}
+
+                            disabled={uploading || queue.length === 0}
+
+                            style={{ padding: '10px 18px', fontWeight: 600, fontSize: 13, borderRadius: '12px', opacity: (uploading || queue.length === 0) ? 0.5 : 1 }}
+
+                          >
+
+                            Clear Queue
+
+                          </button>
+
+                          <button
+
+                            type="button"
 
                             id="btn-upload"
 
@@ -1553,9 +1863,13 @@ const Upload = () => {
 
                             style={{
 
-                              padding: '12px 24px',
+                              padding: '10px 22px',
 
                               fontWeight: 600,
+
+                              fontSize: 13,
+
+                              borderRadius: '12px',
 
                               background: (failedQueueCount > 0 && !queue.some(i => i.status === 'ready')) ? 'var(--red, #ef4444)' : undefined,
 
@@ -1597,13 +1911,7 @@ const Upload = () => {
 
                 </div>
 
-
-
               </div>
-
-            </div>
-
-              </>
 
             )}
 

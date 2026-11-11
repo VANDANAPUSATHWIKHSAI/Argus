@@ -90,10 +90,12 @@ class CaseSession(BaseModel):
     status:            str           = "open"         # open / closed / archived
     analyst_id:        Optional[str] = None
     senior_analyst_id: Optional[str] = None
-    name:              Optional[str] = None
-    description:       Optional[str] = None
-    has_report:        bool          = False
-    closed_reason:     Optional[str] = None
+    name:                 Optional[str] = None
+    description:          Optional[str] = None
+    has_report:           bool          = False
+    submitted_to_senior:  bool          = False
+    submitted_to_auditor: bool          = False
+    closed_reason:        Optional[str] = None
 
 
 class Evidence(BaseModel):

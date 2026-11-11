@@ -12,6 +12,7 @@ export const ARGUS_CASE_LOCK_CHANGED_EVENT = 'argus:caseLockChanged';
 let _activeHeartbeatTimer = null;
 let _activeLockedCaseId = null;
 let _currentLockState = null;
+const _inflightSyncLocks = new Map();
 
 export function getCachedLockState() {
   return _currentLockState;
@@ -51,60 +52,71 @@ export async function syncCaseLock(caseId) {
     releaseActiveCaseLock(prevId).catch(() => {});
   }
 
-  try {
-    const res = await acquireCaseLock(caseId);
-    const lockData = {
-      caseId,
-      isLocked: Boolean(res.is_locked),
-      isOwner: Boolean(res.is_owner),
-      readOnly: Boolean(res.read_only),
-      lockStatus: res.lock_status,
-      lockedBy: res.lock?.locked_by || { name: 'Another Analyst' },
-      lockedAt: res.lock?.locked_at,
-      expiresAt: res.lock?.expires_at,
-      message: res.message || ''
-    };
-
-    // If we acquired/own the lock, maintain heartbeat
-    if (lockData.isOwner) {
-      startCaseLockHeartbeat(caseId);
-    } else {
-      stopCaseLockHeartbeat();
-    }
-
-    dispatchCaseLockEvent(lockData);
-    return lockData;
-  } catch (err) {
-    // If backend reports 423 Locked or fails, attempt read-only fetch
-    console.warn(`[CASE LOCK] Could not acquire lock for ${caseId}:`, err.message);
-    try {
-      const statusRes = await fetchCaseLock(caseId);
-      const fallbackData = {
-        caseId,
-        isLocked: Boolean(statusRes.is_locked),
-        isOwner: Boolean(statusRes.is_owner),
-        readOnly: Boolean(statusRes.read_only ?? true),
-        lockStatus: statusRes.status,
-        lockedBy: statusRes.lock?.locked_by || { name: 'Another Analyst' },
-        lockedAt: statusRes.lock?.locked_at,
-        expiresAt: statusRes.lock?.expires_at,
-        message: statusRes.message || 'Case is locked in read-only mode.'
-      };
-      stopCaseLockHeartbeat();
-      dispatchCaseLockEvent(fallbackData);
-      return fallbackData;
-    } catch (_fallbackErr) {
-      const errLock = {
-        caseId,
-        isLocked: false,
-        isOwner: true,
-        readOnly: false,
-        message: 'Could not connect to lock manager.'
-      };
-      dispatchCaseLockEvent(errLock);
-      return errLock;
-    }
+  if (_inflightSyncLocks.has(caseId)) {
+    return _inflightSyncLocks.get(caseId);
   }
+
+  const syncPromise = (async () => {
+    try {
+      const res = await acquireCaseLock(caseId);
+      const lockData = {
+        caseId,
+        isLocked: Boolean(res.is_locked),
+        isOwner: Boolean(res.is_owner),
+        readOnly: Boolean(res.read_only),
+        lockStatus: res.lock_status,
+        lockedBy: res.lock?.locked_by || { name: 'Another Analyst' },
+        lockedAt: res.lock?.locked_at,
+        expiresAt: res.lock?.expires_at,
+        message: res.message || ''
+      };
+
+      // If we acquired/own the lock, maintain heartbeat
+      if (lockData.isOwner) {
+        startCaseLockHeartbeat(caseId);
+      } else {
+        stopCaseLockHeartbeat();
+      }
+
+      dispatchCaseLockEvent(lockData);
+      return lockData;
+    } catch (err) {
+      // If backend reports 423 Locked or fails, attempt read-only fetch
+      console.warn(`[CASE LOCK] Could not acquire lock for ${caseId}:`, err.message);
+      try {
+        const statusRes = await fetchCaseLock(caseId);
+        const fallbackData = {
+          caseId,
+          isLocked: Boolean(statusRes.is_locked),
+          isOwner: Boolean(statusRes.is_owner),
+          readOnly: Boolean(statusRes.read_only ?? true),
+          lockStatus: statusRes.status,
+          lockedBy: statusRes.lock?.locked_by || { name: 'Another Analyst' },
+          lockedAt: statusRes.lock?.locked_at,
+          expiresAt: statusRes.lock?.expires_at,
+          message: statusRes.message || 'Case is locked in read-only mode.'
+        };
+        stopCaseLockHeartbeat();
+        dispatchCaseLockEvent(fallbackData);
+        return fallbackData;
+      } catch (_fallbackErr) {
+        const errLock = {
+          caseId,
+          isLocked: false,
+          isOwner: true,
+          readOnly: false,
+          message: 'Could not connect to lock manager.'
+        };
+        dispatchCaseLockEvent(errLock);
+        return errLock;
+      }
+    }
+  })().finally(() => {
+    _inflightSyncLocks.delete(caseId);
+  });
+
+  _inflightSyncLocks.set(caseId, syncPromise);
+  return syncPromise;
 }
 
 /**

@@ -95,10 +95,21 @@ class PostgresConnectionPool:
 
             yield conn
 
+        except Exception:
+            if conn is not None and not conn.closed:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+            raise
         finally:
             if conn is not None:
                 if from_pool and cls._pool is not None:
                     try:
+                        if not conn.closed:
+                            status = conn.get_transaction_status()
+                            if status != psycopg2.extensions.TRANSACTION_STATUS_IDLE:
+                                conn.rollback()
                         cls._pool.putconn(conn)
                     except Exception as e:
                         logger.error("Error returning connection to pool: %s", e)

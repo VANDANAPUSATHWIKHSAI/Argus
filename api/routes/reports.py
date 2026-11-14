@@ -70,8 +70,10 @@ async def get_report(
         InvestigationStageStatus,
         _get_agent_pipeline_status,
         _read_case_submission_meta,
+        verify_case_access,
     )
 
+    verify_case_access(case_id, current_user, x_tenant_id)
     clean_case_id = sanitize_uuid(case_id)
 
     # 1. Fetch case evidence and findings with tenant isolation

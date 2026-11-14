@@ -102,45 +102,31 @@ def create_case_session(
     from config.settings import settings
     if _should_attempt_postgres():
         try:
-            import psycopg2
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS cases (
-                    case_id VARCHAR(255) PRIMARY KEY,
-                    tenant_id TEXT NOT NULL,
-                    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                    created_by TEXT NOT NULL,
-                    status TEXT NOT NULL DEFAULT 'open'
-                );
-            """)
-            cur.execute("ALTER TABLE cases ALTER COLUMN case_id TYPE VARCHAR(255) USING case_id::text;")
-            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS analyst_id VARCHAR(255)")
-            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS senior_analyst_id VARCHAR(255)")
-            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS name VARCHAR(255)")
-            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS description TEXT")
-            
-            cur.execute("""
-                INSERT INTO cases (case_id, tenant_id, created_by, status, analyst_id, senior_analyst_id, name, description)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (case_id) DO UPDATE SET
-                    name = COALESCE(EXCLUDED.name, cases.name),
-                    description = COALESCE(EXCLUDED.description, cases.description),
-                    analyst_id = COALESCE(EXCLUDED.analyst_id, cases.analyst_id),
-                    senior_analyst_id = COALESCE(EXCLUDED.senior_analyst_id, cases.senior_analyst_id),
-                    status = COALESCE(EXCLUDED.status, cases.status);
-            """,
-                (session.case_id, session.tenant_id, session.created_by, session.status, session.analyst_id, session.senior_analyst_id, session.name, session.description)
-            )
-            conn.commit()
-            conn.close()
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS cases (
+                            case_id VARCHAR(255) PRIMARY KEY,
+                            tenant_id TEXT NOT NULL,
+                            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                            created_by TEXT NOT NULL,
+                            status TEXT NOT NULL DEFAULT 'open'
+                        );
+                    """)
+                    cur.execute("""
+                        INSERT INTO cases (case_id, tenant_id, created_by, status, analyst_id, senior_analyst_id, name, description)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (case_id) DO UPDATE SET
+                            name = COALESCE(EXCLUDED.name, cases.name),
+                            description = COALESCE(EXCLUDED.description, cases.description),
+                            analyst_id = COALESCE(EXCLUDED.analyst_id, cases.analyst_id),
+                            senior_analyst_id = COALESCE(EXCLUDED.senior_analyst_id, cases.senior_analyst_id),
+                            status = COALESCE(EXCLUDED.status, cases.status);
+                    """,
+                        (session.case_id, session.tenant_id, session.created_by, session.status, session.analyst_id, session.senior_analyst_id, session.name, session.description)
+                    )
+                    conn.commit()
         except Exception as e:
             raise RuntimeError(f"Database persistence failed: {str(e)}")
     else:
@@ -372,59 +358,89 @@ def store_evidence(evidence: Evidence, case: CaseSession) -> Evidence:
     # ── 6. Write metadata and logs to Postgres ────────────────────
     if _should_attempt_postgres():
         try:
-            import psycopg2
-            from config.settings import settings
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=2
-            )
-            cur = conn.cursor()
-            
-            cur.execute(
-                """
-                INSERT INTO evidence 
-                  (evidence_id, case_id, filename, uploaded_by, status, sha256_hash, encrypted, rfc3161_timestamp, metadata, repository_path)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (evidence_id) DO NOTHING;
-                """,
-                (
-                    evidence.evidence_id,
-                    evidence.case_id,
-                    evidence.filename,
-                    evidence.uploaded_by,
-                    "stored",
-                    evidence.sha256_hash,
-                    evidence.encrypted,
-                    evidence.rfc3161_timestamp,
-                    json.dumps(evidence.metadata),
-                    evidence.repository_path
-                )
-            )
-            
-            for entry in evidence.custody_log:
-                cur.execute(
-                    """
-                    INSERT INTO custody_log (evidence_id, actor, action, timestamp, notes)
-                    VALUES (%s, %s, %s, %s, %s);
-                    """,
-                    (evidence.evidence_id, entry.actor, entry.action, entry.timestamp, entry.notes)
-                )
-                
-            for entry in evidence.audit_log:
-                cur.execute(
-                    """
-                    INSERT INTO audit_log (case_id, evidence_id, tenant_id, event, timestamp, detail)
-                    VALUES (%s, %s, %s, %s, %s, %s);
-                    """,
-                    (case.case_id, evidence.evidence_id, case.tenant_id, entry.event, entry.timestamp, json.dumps(entry.detail or {}))
-                )
-                
-            conn.commit()
-            conn.close()
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Check if evidence table contains tenant_id column
+                    cur.execute("""
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'evidence' AND column_name = 'tenant_id';
+                    """)
+                    has_ev_tenant = cur.fetchone() is not None
+
+                    if has_ev_tenant:
+                        cur.execute(
+                            """
+                            INSERT INTO evidence 
+                              (evidence_id, tenant_id, case_id, filename, uploaded_by, status, sha256_hash, encrypted, rfc3161_timestamp, metadata, repository_path)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (evidence_id) DO UPDATE SET
+                                tenant_id = EXCLUDED.tenant_id,
+                                status = EXCLUDED.status,
+                                repository_path = EXCLUDED.repository_path,
+                                encrypted = EXCLUDED.encrypted,
+                                rfc3161_timestamp = EXCLUDED.rfc3161_timestamp,
+                                metadata = EXCLUDED.metadata;
+                            """,
+                            (
+                                evidence.evidence_id,
+                                case.tenant_id,
+                                evidence.case_id,
+                                evidence.filename,
+                                evidence.uploaded_by,
+                                "stored",
+                                evidence.sha256_hash,
+                                evidence.encrypted,
+                                evidence.rfc3161_timestamp,
+                                json.dumps(evidence.metadata),
+                                evidence.repository_path
+                            )
+                        )
+                    else:
+                        cur.execute(
+                            """
+                            INSERT INTO evidence 
+                              (evidence_id, case_id, filename, uploaded_by, status, sha256_hash, encrypted, rfc3161_timestamp, metadata, repository_path)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            ON CONFLICT (evidence_id) DO UPDATE SET
+                                status = EXCLUDED.status,
+                                repository_path = EXCLUDED.repository_path,
+                                encrypted = EXCLUDED.encrypted,
+                                rfc3161_timestamp = EXCLUDED.rfc3161_timestamp,
+                                metadata = EXCLUDED.metadata;
+                            """,
+                            (
+                                evidence.evidence_id,
+                                evidence.case_id,
+                                evidence.filename,
+                                evidence.uploaded_by,
+                                "stored",
+                                evidence.sha256_hash,
+                                evidence.encrypted,
+                                evidence.rfc3161_timestamp,
+                                json.dumps(evidence.metadata),
+                                evidence.repository_path
+                            )
+                        )
+                    
+                    for entry in evidence.custody_log:
+                        cur.execute(
+                            """
+                            INSERT INTO custody_log (evidence_id, actor, action, timestamp, notes)
+                            VALUES (%s, %s, %s, %s, %s);
+                            """,
+                            (evidence.evidence_id, entry.actor, entry.action, entry.timestamp, entry.notes)
+                        )
+                        
+                    for entry in evidence.audit_log:
+                        cur.execute(
+                            """
+                            INSERT INTO audit_log (case_id, evidence_id, tenant_id, event, timestamp, detail)
+                            VALUES (%s, %s, %s, %s, %s, %s);
+                            """,
+                            (case.case_id, evidence.evidence_id, case.tenant_id, entry.event, entry.timestamp, json.dumps(entry.detail or {}))
+                        )
+                    conn.commit()
         except Exception as e:
             print(f"  [DB WARNING] Failed to persist evidence records: {e}")
     # Local fallback persistence of metadata.json
@@ -457,6 +473,15 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
         try:
             row = None
             try:
+                from databases.postgres_pool import PostgresConnectionPool
+                with PostgresConnectionPool.get_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE case_id = %s AND tenant_id = %s;",
+                            (case_id, tenant_id)
+                        )
+                        row = cur.fetchone()
+            except Exception:
                 from api.routes.auth import get_db_connection
                 with get_db_connection() as conn:
                     with conn.cursor() as cur:
@@ -465,24 +490,6 @@ def get_case_session(tenant_id: str, case_id: str, check_db: bool = True) -> Opt
                             (case_id, tenant_id)
                         )
                         row = cur.fetchone()
-            except Exception:
-                import psycopg2
-                from config.settings import settings
-                conn = psycopg2.connect(
-                    host=settings.postgres_host,
-                    port=settings.postgres_port,
-                    database=settings.postgres_db,
-                    user=settings.postgres_user,
-                    password=settings.postgres_password,
-                    connect_timeout=2
-                )
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description FROM cases WHERE case_id = %s AND tenant_id = %s;",
-                    (case_id, tenant_id)
-                )
-                row = cur.fetchone()
-                conn.close()
 
             if row:
                 # Strictly enforce that row tenant_id matches requested tenant_id
@@ -602,48 +609,23 @@ def list_cases(tenant_id: str) -> list[CaseSession]:
         try:
             rows = []
             try:
-                from api.routes.auth import get_db_connection
-                with get_db_connection() as conn:
+                from databases.postgres_pool import PostgresConnectionPool
+                with PostgresConnectionPool.get_connection() as conn:
                     with conn.cursor() as cur:
-                        try:
-                            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
-                            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
-                            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_senior BOOLEAN DEFAULT FALSE;")
-                            cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_auditor BOOLEAN DEFAULT FALSE;")
-                            conn.commit()
-                        except Exception:
-                            pass
                         cur.execute(
                             "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description, has_report, closed_reason, submitted_to_senior, submitted_to_auditor FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
                             (tenant_id, tenant_id)
                         )
                         rows = cur.fetchall()
             except Exception:
-                import psycopg2
-                from config.settings import settings
-                conn = psycopg2.connect(
-                    host=settings.postgres_host,
-                    port=settings.postgres_port,
-                    database=settings.postgres_db,
-                    user=settings.postgres_user,
-                    password=settings.postgres_password,
-                    connect_timeout=2
-                )
-                cur = conn.cursor()
-                try:
-                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
-                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
-                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_senior BOOLEAN DEFAULT FALSE;")
-                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS submitted_to_auditor BOOLEAN DEFAULT FALSE;")
-                    conn.commit()
-                except Exception:
-                    pass
-                cur.execute(
-                    "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description, has_report, closed_reason, submitted_to_senior, submitted_to_auditor FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
-                    (tenant_id, tenant_id)
-                )
-                rows = cur.fetchall()
-                conn.close()
+                from api.routes.auth import get_db_connection
+                with get_db_connection() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT case_id, tenant_id, created_at, created_by, status, analyst_id, senior_analyst_id, name, description, has_report, closed_reason, submitted_to_senior, submitted_to_auditor FROM cases WHERE tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')) ORDER BY created_at DESC;",
+                            (tenant_id, tenant_id)
+                        )
+                        rows = cur.fetchall()
 
             for row in rows:
                 c_id = str(row[0])
@@ -772,34 +754,23 @@ def close_case(tenant_id: str, case_id: str, reason: Optional[str] = None) -> bo
 
     if _should_attempt_postgres():
         try:
-            import psycopg2
-            from config.settings import settings
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=2
-            )
-            cur = conn.cursor()
-            if tenant_id:
-                if reason:
-                    cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
-                    cur.execute(
-                        "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_reason = %s, description = COALESCE(%s, description) WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')));",
-                        (reason, reason, case_id, tenant_id, tenant_id)
-                    )
-                else:
-                    cur.execute(
-                        "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')));",
-                        (case_id, tenant_id, tenant_id)
-                    )
-                if cur.rowcount > 0:
-                    closed_any = True
-
-            conn.commit()
-            conn.close()
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
+                with conn.cursor() as cur:
+                    if tenant_id:
+                        if reason:
+                            cur.execute(
+                                "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_reason = %s, description = COALESCE(%s, description) WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')));",
+                                (reason, reason, case_id, tenant_id, tenant_id)
+                            )
+                        else:
+                            cur.execute(
+                                "UPDATE cases SET status = 'closed', closed_at = NOW() WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')));",
+                                (case_id, tenant_id, tenant_id)
+                            )
+                        if cur.rowcount > 0:
+                            closed_any = True
+                    conn.commit()
         except Exception as e:
             logger.error("Failed to close case in Postgres: %s", e)
 
@@ -850,32 +821,21 @@ def get_evidence(tenant_id: str, evidence_id: str) -> Optional[Evidence]:
 
     if _should_attempt_postgres():
         try:
-            import psycopg2
-            from config.settings import settings
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT e.evidence_id, e.case_id, e.filename, e.repository_path, e.uploaded_by, e.upload_timestamp, e.status, e.sha256_hash, e.encrypted, e.rfc3161_timestamp, e.metadata
-                FROM evidence e
-                INNER JOIN cases c ON e.case_id = c.case_id
-                WHERE e.evidence_id = %s AND c.tenant_id = %s;
-                """,
-                (evidence_id, tenant_id)
-            )
-            row = cur.fetchone()
-            conn.close()
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT e.evidence_id, e.case_id, e.filename, e.repository_path, e.uploaded_by, e.upload_timestamp, e.status, e.sha256_hash, e.encrypted, e.rfc3161_timestamp, e.metadata
+                        FROM evidence e
+                        INNER JOIN cases c ON e.case_id = c.case_id
+                        WHERE e.evidence_id = %s AND c.tenant_id = %s;
+                        """,
+                        (evidence_id, tenant_id)
+                    )
+                    row = cur.fetchone()
             if row:
                 return reconstruct_evidence_from_row(row)
-            # Authoritative DB query returned 0 rows: evidence record does not exist.
-            # Security Rule: A database lookup returning zero rows is never treated as permission to select a local artifact.
             return None
         except Exception as e:
             # PostgreSQL failure and ID-format mismatch fail closed; cannot silently switch to unrelated sources
@@ -944,28 +904,19 @@ def list_evidence_by_case(tenant_id: str, case_id: str) -> list[Evidence]:
     if _should_attempt_postgres():
         evidence_list = []
         try:
-            import psycopg2
-            from config.settings import settings
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute(
-                """
-                SELECT e.evidence_id, e.case_id, e.filename, e.repository_path, e.uploaded_by, e.upload_timestamp, e.status, e.sha256_hash, e.encrypted, e.rfc3161_timestamp, e.metadata
-                FROM evidence e
-                INNER JOIN cases c ON e.case_id = c.case_id
-                WHERE e.case_id = %s AND c.tenant_id = %s;
-                """,
-                (case_id, tenant_id)
-            )
-            rows = cur.fetchall()
-            conn.close()
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT e.evidence_id, e.case_id, e.filename, e.repository_path, e.uploaded_by, e.upload_timestamp, e.status, e.sha256_hash, e.encrypted, e.rfc3161_timestamp, e.metadata
+                        FROM evidence e
+                        INNER JOIN cases c ON e.case_id = c.case_id
+                        WHERE e.case_id = %s AND c.tenant_id = %s;
+                        """,
+                        (case_id, tenant_id)
+                    )
+                    rows = cur.fetchall()
             for row in rows:
                 ev = reconstruct_evidence_from_row(row)
                 if ev:
@@ -1097,106 +1048,95 @@ def delete_evidence(
     # 1. Authoritative check and deletion in PostgreSQL if available
     if _should_attempt_postgres():
         try:
-            import psycopg2
-            from config.settings import settings
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=2
-            )
-            cur = conn.cursor()
-
-            # Locate the evidence and verify tenant isolation
-            cur.execute(
-                """
-                SELECT e.evidence_id, e.case_id, e.filename, c.tenant_id
-                FROM evidence e
-                LEFT JOIN cases c ON e.case_id = c.case_id
-                WHERE e.evidence_id = %s;
-                """,
-                (evidence_id,)
-            )
-            row = cur.fetchone()
-            if not row and case_id:
-                cur.execute(
-                    """
-                    SELECT e.evidence_id, e.case_id, e.filename, c.tenant_id
-                    FROM evidence e
-                    LEFT JOIN cases c ON e.case_id = c.case_id
-                    WHERE (e.case_id = %s OR e.case_id = %s) AND (e.evidence_id = %s OR e.filename = %s);
-                    """,
-                    (case_id, case_id.replace('-', '_'), evidence_id, evidence_id)
-                )
-                row = cur.fetchone()
-            if row:
-                ev_id, ev_case_id, ev_filename, ev_tenant_id = row
-                evidence_id = ev_id
-                # Enforce tenant isolation if tenant is specified and not admin wildcard
-                if ev_tenant_id and tenant_id not in ("default", "dev-team") and ev_tenant_id != tenant_id:
-                    conn.close()
-                    logger.warning(f"Tenant isolation mismatch for evidence {evidence_id}: {ev_tenant_id} != {tenant_id}")
-                    return False
-
-                resolved_case_id = ev_case_id or resolved_case_id
-                filename = ev_filename or filename
-
-                # 1. Unlink any case notes referencing this evidence
-                try:
-                    cur.execute(
-                        "UPDATE case_notes SET related_evidence_id = NULL WHERE related_evidence_id = %s;",
-                        (evidence_id,)
-                    )
-                except Exception as cn_err:
-                    logger.debug(f"case_notes unlink skipped or table absent: {cn_err}")
-
-                # 2. Delete custody log entries for this evidence
-                try:
-                    cur.execute(
-                        "DELETE FROM custody_log WHERE evidence_id = %s;",
-                        (evidence_id,)
-                    )
-                except Exception as cl_err:
-                    logger.debug(f"custody_log delete skipped: {cl_err}")
-
-                # 3. Delete fir_findings referencing this evidence
-                try:
-                    cur.execute(
-                        "DELETE FROM fir_findings WHERE evidence_id = %s;",
-                        (evidence_id,)
-                    )
-                except Exception as ff_err:
-                    logger.debug(f"fir_findings delete skipped: {ff_err}")
-
-                # 4. Record audit log entry before deleting evidence
-                try:
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
+                with conn.cursor() as cur:
+                    # Locate the evidence and verify tenant isolation
                     cur.execute(
                         """
-                        INSERT INTO audit_log (case_id, evidence_id, tenant_id, event, actor, timestamp, detail)
-                        VALUES (%s, %s, %s, %s, %s, NOW(), %s);
+                        SELECT e.evidence_id, e.case_id, e.filename, c.tenant_id
+                        FROM evidence e
+                        LEFT JOIN cases c ON e.case_id = c.case_id
+                        WHERE e.evidence_id = %s;
                         """,
-                        (
-                            resolved_case_id,
-                            evidence_id,
-                            tenant_id,
-                            "evidence_deleted",
-                            actor,
-                            json.dumps({"filename": filename, "deleted_by": actor, "evidence_id": evidence_id})
-                        )
+                        (evidence_id,)
                     )
-                except Exception as log_err:
-                    logger.warning(f"Failed to record deletion audit log in postgres: {log_err}")
+                    row = cur.fetchone()
+                    if not row and case_id:
+                        cur.execute(
+                            """
+                            SELECT e.evidence_id, e.case_id, e.filename, c.tenant_id
+                            FROM evidence e
+                            LEFT JOIN cases c ON e.case_id = c.case_id
+                            WHERE (e.case_id = %s OR e.case_id = %s) AND (e.evidence_id = %s OR e.filename = %s);
+                            """,
+                            (case_id, case_id.replace('-', '_'), evidence_id, evidence_id)
+                        )
+                        row = cur.fetchone()
+                    if row:
+                        ev_id, ev_case_id, ev_filename, ev_tenant_id = row
+                        evidence_id = ev_id
+                        # Enforce tenant isolation if tenant is specified and not admin wildcard
+                        if ev_tenant_id and tenant_id not in ("default", "dev-team") and ev_tenant_id != tenant_id:
+                            logger.warning(f"Tenant isolation mismatch for evidence {evidence_id}: {ev_tenant_id} != {tenant_id}")
+                            return False
 
-                # 5. Delete from evidence table
-                cur.execute(
-                    "DELETE FROM evidence WHERE evidence_id = %s;",
-                    (evidence_id,)
-                )
-                conn.commit()
-                deleted = True
-            conn.close()
+                        resolved_case_id = ev_case_id or resolved_case_id
+                        filename = ev_filename or filename
+
+                        # 1. Unlink any case notes referencing this evidence
+                        try:
+                            cur.execute(
+                                "UPDATE case_notes SET related_evidence_id = NULL WHERE related_evidence_id = %s;",
+                                (evidence_id,)
+                            )
+                        except Exception as cn_err:
+                            logger.debug(f"case_notes unlink skipped or table absent: {cn_err}")
+
+                        # 2. Delete custody log entries for this evidence
+                        try:
+                            cur.execute(
+                                "DELETE FROM custody_log WHERE evidence_id = %s;",
+                                (evidence_id,)
+                            )
+                        except Exception as cl_err:
+                            logger.debug(f"custody_log delete skipped: {cl_err}")
+
+                        # 3. Delete fir_findings referencing this evidence
+                        try:
+                            cur.execute(
+                                "DELETE FROM fir_findings WHERE evidence_id = %s;",
+                                (evidence_id,)
+                            )
+                        except Exception as ff_err:
+                            logger.debug(f"fir_findings delete skipped: {ff_err}")
+
+                        # 4. Record audit log entry before deleting evidence
+                        try:
+                            cur.execute(
+                                """
+                                INSERT INTO audit_log (case_id, evidence_id, tenant_id, event, actor, timestamp, detail)
+                                VALUES (%s, %s, %s, %s, %s, NOW(), %s);
+                                """,
+                                (
+                                    resolved_case_id,
+                                    evidence_id,
+                                    tenant_id,
+                                    "evidence_deleted",
+                                    actor,
+                                    json.dumps({"filename": filename, "deleted_by": actor, "evidence_id": evidence_id})
+                                )
+                            )
+                        except Exception as log_err:
+                            logger.warning(f"Failed to record deletion audit log in postgres: {log_err}")
+
+                        # 5. Delete from evidence table
+                        cur.execute(
+                            "DELETE FROM evidence WHERE evidence_id = %s;",
+                            (evidence_id,)
+                        )
+                        conn.commit()
+                        deleted = True
         except Exception as e:
             logger.error(f"Postgres delete_evidence failed: {e}")
 

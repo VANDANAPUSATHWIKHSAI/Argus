@@ -6,7 +6,32 @@ Includes automatic availability detection and fallback helpers.
 """
 
 import logging
-from celery import Celery
+try:
+    from celery import Celery
+except ImportError:
+    import sys
+    from unittest.mock import MagicMock
+    celery_mock = MagicMock()
+    class Celery:
+        def __init__(self, *args, **kwargs):
+            class _Conf:
+                def __init__(self):
+                    self.task_serializer = "json"
+                    self.result_serializer = "json"
+                    self.timezone = "UTC"
+                    self.task_acks_late = True
+                def update(self, **kw):
+                    pass
+            self.conf = _Conf()
+            class _Control:
+                def ping(self, timeout=None):
+                    return []
+            self.control = _Control()
+            self.task = lambda *a, **k: (lambda f: f)
+    celery_mock.Celery = Celery
+    sys.modules["celery"] = celery_mock
+    sys.modules["celery.result"] = celery_mock.result
+
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -37,7 +62,7 @@ celery_app.conf.update(
 _celery_available_cache = None
 _celery_available_cache_time = 0.0
 
-def is_celery_broker_available(timeout_sec: float = 0.5) -> bool:
+def is_celery_broker_available(timeout_sec: float = 0.2) -> bool:
     """
     Check if the Redis broker is reachable AND at least one Celery worker is actively running.
     Used by FastAPI to choose between Celery async dispatch and thread pool fallback.
@@ -45,27 +70,23 @@ def is_celery_broker_available(timeout_sec: float = 0.5) -> bool:
     import time
     global _celery_available_cache, _celery_available_cache_time
     now = time.time()
-    if _celery_available_cache is not None and (now - _celery_available_cache_time < 5.0):
+    if _celery_available_cache is not None and (now - _celery_available_cache_time < 30.0):
         return _celery_available_cache
 
     try:
-        import redis
-        host = getattr(settings, "redis_host", "127.0.0.1")
-        port = int(getattr(settings, "redis_port", 6379))
-        password = getattr(settings, "redis_password", None)
-        r = redis.Redis(
-            host=host,
-            port=port,
-            password=password,
-            socket_timeout=timeout_sec,
-            socket_connect_timeout=timeout_sec
-        )
-        if not r.ping():
+        from databases.redis_client import redis_client
+        if not redis_client.is_available():
             _celery_available_cache = False
             _celery_available_cache_time = now
             return False
 
-        # Verify active Celery worker is responding
+        r = redis_client.get_client()
+        if not r or not r.ping():
+            _celery_available_cache = False
+            _celery_available_cache_time = now
+            return False
+
+        # Verify active Celery worker is responding with bounded tight timeout
         workers = celery_app.control.ping(timeout=timeout_sec)
         is_ready = bool(workers and len(workers) > 0)
         _celery_available_cache = is_ready

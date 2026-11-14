@@ -2,6 +2,7 @@
 # Redis Client — Workflow State, Queues, Checkpoints
 # ──────────────────────────────────────────────────────────────
 import logging
+import time
 from typing import Optional, Any
 from config.settings import settings
 
@@ -12,26 +13,36 @@ class RedisClient:
     """
     Redis client interface for workflow state management, task queuing,
     and execution checkpoints.
-    Does not interfere with forensic reasoning logic.
+    Features fast failover and circuit breaker to prevent blocking when Redis is offline.
     """
 
     def __init__(self):
         self._client: Optional[Any] = None
+        self._circuit_broken_until: float = 0.0
 
     def connect(self):
-        """Lazy initialization of redis client connection."""
+        """Lazy initialization of redis client connection with short connect timeout."""
+        if time.monotonic() < self._circuit_broken_until:
+            return
         if self._client is None:
             try:
                 import redis
                 self._client = redis.Redis.from_url(
                     settings.redis_url,
                     decode_responses=True,
-                    socket_timeout=5
+                    socket_connect_timeout=0.2,
+                    socket_timeout=0.5
                 )
+                # Quick healthcheck ping
+                self._client.ping()
             except Exception as e:
-                logger.warning(f"Redis client initialization deferred/failed: {e}")
+                logger.debug(f"Redis unavailable; activating circuit breaker for 30s: {e}")
+                self._client = None
+                self._circuit_broken_until = time.monotonic() + 30.0
 
     def get_client(self) -> Optional[Any]:
+        if time.monotonic() < self._circuit_broken_until:
+            return None
         if self._client is None:
             self.connect()
         return self._client
@@ -53,7 +64,9 @@ class RedisClient:
                     return bool(client.set(key, data))
                 return bool(client.set(key, data, ex=ttl))
         except Exception as exc:
-            logger.warning(f"Redis set_checkpoint failed: {exc}")
+            self._client = None
+            self._circuit_broken_until = time.monotonic() + 30.0
+            logger.debug(f"Redis set_checkpoint failed: {exc}")
         return False
 
     def persist_checkpoint(self, case_id: str, stage: str) -> bool:
@@ -64,7 +77,9 @@ class RedisClient:
                 key = f"checkpoint:{case_id}:{stage}"
                 return bool(client.persist(key))
         except Exception as exc:
-            logger.warning(f"Redis persist_checkpoint failed: {exc}")
+            self._client = None
+            self._circuit_broken_until = time.monotonic() + 30.0
+            logger.debug(f"Redis persist_checkpoint failed: {exc}")
         return False
 
     def get_eviction_policy(self) -> dict[str, str]:
@@ -78,7 +93,9 @@ class RedisClient:
                 save_cfg = client.config_get("save")
                 info["rdb_save"] = save_cfg.get("save", "unknown")
         except Exception as exc:
-            logger.warning(f"Failed to query Redis eviction policy: {exc}")
+            self._client = None
+            self._circuit_broken_until = time.monotonic() + 30.0
+            logger.debug(f"Failed to query Redis eviction policy: {exc}")
             info["error"] = str(exc)
         return info
 
@@ -90,7 +107,9 @@ class RedisClient:
                 key = f"checkpoint:{case_id}:{stage}"
                 return client.get(key)
         except Exception as exc:
-            logger.warning(f"Redis get_checkpoint failed: {exc}")
+            self._client = None
+            self._circuit_broken_until = time.monotonic() + 30.0
+            logger.debug(f"Redis get_checkpoint failed: {exc}")
         return None
 
 

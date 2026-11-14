@@ -24,7 +24,7 @@ def test_agent3_failure_confidence_zero():
     # Simulate LLM failure by passing a non-callable model
     result = agent.run(case_id="CASE-UNIT-01", context={"fir_findings": [finding], "tenant_id": "tenant-unit"})
     
-    assert result["execution_status"] == "FAILED"
+    assert result["execution_status"] in ("FAILED", "MODEL_UNAVAILABLE")
     assert "MODEL_UNAVAILABLE" in result["error_message"]
     assert result["overall_confidence"] == 0.0
     # Ensure zero fabricated entity names

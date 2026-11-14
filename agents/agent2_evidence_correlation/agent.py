@@ -23,6 +23,7 @@ from typing import Dict, Any, List, Optional, Set, Tuple
 from agents.base_agent import BaseAgent
 from fir.repository import FIRRepository
 from sanitization.gateway import SanitizationGateway, SanitizedAgentContext
+from sanitization.json_sanitizer import robust_json_loads
 from models.llm import LLMLoader
 from config.settings import settings
 
@@ -212,8 +213,32 @@ class EvidenceCorrelationAgent(BaseAgent):
             )
             return output.model_dump()
 
-        # ── 5. Parse Structured JSON Response ──────────────────────────────
+        # ── 5. Parse Structured JSON Response (with Bounded Retry) ─────────
         raw_claims, qwen_interp, parse_err = self._parse_json_claims_with_error(llm_response)
+        if parse_err and not raw_claims:
+            logger.warning("Agent 2: Initial LLM output was malformed (%s). Performing bounded retry...", parse_err)
+            try:
+                retry_user_prompt = (
+                    f"{user_prompt}\n\n"
+                    f"CRITICAL FORMATTING INSTRUCTION: Your previous response produced invalid JSON ({parse_err}). "
+                    f"Return ONLY a single strictly valid JSON object matching the schema. "
+                    f"Do NOT include markdown backticks (```), commentary, trailing commas, or unterminated strings."
+                )
+                if hasattr(self.model, "generate"):
+                    retry_response = self.model.generate(retry_user_prompt, system_prompt=AGENT2_SYSTEM_PROMPT)
+                elif callable(self.model):
+                    retry_response = self.model(retry_user_prompt)
+                else:
+                    retry_response = None
+                
+                if retry_response:
+                    retry_claims, retry_interp, retry_err = self._parse_json_claims_with_error(retry_response)
+                    if not retry_err and retry_claims:
+                        raw_claims, qwen_interp, parse_err = retry_claims, retry_interp, None
+                        llm_response = retry_response
+            except Exception as retry_exc:
+                logger.warning("Agent 2: Bounded retry failed: %s", retry_exc)
+
         if parse_err and not raw_claims:
             logger.error("Agent 2: Fail-closed due to malformed JSON response: %s", parse_err)
             output = Agent2Output(
@@ -226,7 +251,7 @@ class EvidenceCorrelationAgent(BaseAgent):
                 sanitization_summary={"findings_sanitized": len(sanitized_contexts)},
                 execution_status="FAILED",
                 failure_type="MALFORMED_OUTPUT",
-                error_message=f"Malformed LLM JSON output: {parse_err}"
+                error_message=f"Malformed LLM JSON output: {parse_err} (raw snippet: {str(llm_response)[:300]})"
             )
             self._persist_agent_output(output)
             return output.model_dump()
@@ -305,26 +330,26 @@ class EvidenceCorrelationAgent(BaseAgent):
         valid_universe: Set[str]
     ) -> List[Agent2Claim]:
         fallback_claims = []
-        valid_list = list(valid_universe)[:10] if valid_universe else []
 
         for idx, comm in enumerate(signals.graph_communities[:5], 1):
-            fids = [fid for fid in comm.community_id.split(",") if not valid_universe or fid in valid_universe] or valid_list[:2]
-            fallback_claims.append(
-                Agent2Claim(
-                    claim_id=f"CLM-AG2-COMM-{idx:03d}",
-                    summary=f"Correlated entity cluster in graph community {comm.community_id}",
-                    correlation_type="entity",
-                    findings_summary=f"Evidence findings {fids} share forensic entities.",
-                    cited_evidence_ids=fids,
-                    community_id=comm.community_id,
-                    assessed_importance="high" if len(fids) > 1 else "medium",
-                    confidence_score=0.90,
-                    reasoning_notes="Deterministic Graph Builder Weakly Connected Component (WCC) entity correlation."
+            fids = [fid.strip() for fid in comm.community_id.split(",") if fid.strip() in valid_universe]
+            if fids:
+                fallback_claims.append(
+                    Agent2Claim(
+                        claim_id=f"CLM-AG2-COMM-{idx:03d}",
+                        summary=f"Correlated entity cluster in graph community {comm.community_id}",
+                        correlation_type="entity",
+                        findings_summary=f"Evidence findings {fids} share forensic entities.",
+                        cited_evidence_ids=fids,
+                        community_id=comm.community_id,
+                        assessed_importance="high" if len(fids) > 1 else "medium",
+                        confidence_score=0.90,
+                        reasoning_notes="Deterministic Graph Builder Weakly Connected Component (WCC) entity correlation."
+                    )
                 )
-            )
 
         for idx, tc in enumerate(signals.temporal_clusters[:3], 1):
-            fids = [fid for fid in tc.cluster_id.split(",") if not valid_universe or fid in valid_universe] or valid_list[:2]
+            fids = [fid.strip() for fid in tc.cluster_id.split(",") if fid.strip() in valid_universe]
             if len(fids) > 1:
                 t_span = getattr(tc, "time_span_seconds", 3600.0)
                 fallback_claims.append(
@@ -340,41 +365,20 @@ class EvidenceCorrelationAgent(BaseAgent):
                     )
                 )
 
-        if not fallback_claims and valid_list:
-            fallback_claims.append(
-                Agent2Claim(
-                    claim_id="CLM-AG2-001",
-                    summary="Synthesized forensic evidence correlation claim",
-                    correlation_type="multi_signal",
-                    findings_summary="Evidence findings grouped based on common case context.",
-                    cited_evidence_ids=valid_list[:3],
-                    assessed_importance="medium",
-                    confidence_score=0.85,
-                    reasoning_notes="Synthesized from processed FIR findings."
-                )
-            )
-
         return fallback_claims
 
     def _parse_json_claims_with_error(self, raw_text: str) -> Tuple[List[Agent2Claim], QwenInterpretation, Optional[str]]:
         """
-        Extracts JSON from LLM output string and constructs Agent2Claim and QwenInterpretation objects, returning error message if parse fails.
+        Extracts JSON from LLM output string using robust parser and constructs Agent2Claim and QwenInterpretation objects, returning error message if parse fails.
         """
         empty_interp = QwenInterpretation()
         if not raw_text:
             return [], empty_interp, "Empty LLM output"
 
-        cleaned = raw_text.strip()
-        if "```json" in cleaned:
-            cleaned = cleaned.split("```json")[1].split("```")[0].strip()
-        elif "```" in cleaned:
-            cleaned = cleaned.split("```")[1].split("```")[0].strip()
-
-        try:
-            data = json.loads(cleaned)
-        except Exception as err:
-            logger.warning("Failed to parse LLM response as JSON: %s. Raw text: %s", err, raw_text[:200])
-            return [], empty_interp, f"JSON parse error: {str(err)}"
+        data, parse_err = robust_json_loads(raw_text)
+        if parse_err or not isinstance(data, (dict, list)):
+            logger.warning("Failed to parse LLM response as JSON: %s. Raw text snippet: %s", parse_err, str(raw_text)[:200])
+            return [], empty_interp, f"JSON parse error: {parse_err or 'Parsed JSON is not a valid structure'}"
 
         claims_list = data.get("claims", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         parsed_claims: List[Agent2Claim] = []

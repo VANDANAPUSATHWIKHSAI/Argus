@@ -484,11 +484,30 @@ class TestDynamicReportGeneration:
         import uuid
         from fir.revision_schemas import FindingCorrectionRecord, CorrectionStatus
         from fir.finding_revision_repository import FindingRevisionRepository
+        from fir.repository import FIRRepository
+
+        unique_fid = f"f-test-{uuid.uuid4().hex[:8]}"
+        # Ensure the original finding exists for the case and tenant
+        fir_repo = FIRRepository()
+        try:
+            from fir.schemas import FIRFinding
+            fir_repo.insert(FIRFinding(
+                finding_id=unique_fid,
+                case_id="CASE_TEST",
+                tenant_id="tenant_alpha",
+                layer="registry",
+                fact="Raw index array 0, 1, 2",
+                confidence=0.9,
+                severity="low",
+                evidence_reference=["ev-test-1"]
+            ))
+        except Exception:
+            pass
 
         repo = FindingRevisionRepository()
         rec = FindingCorrectionRecord(
             revision_id=str(uuid.uuid4()),
-            original_finding_id="f-test-001",
+            original_finding_id=unique_fid,
             case_id="CASE_TEST",
             tenant_id="tenant_alpha",
             original_wording="Raw index array 0, 1, 2",
@@ -509,13 +528,13 @@ class TestDynamicReportGeneration:
         assert r2.revision_id == r1.revision_id
 
         # Read isolation
-        found = repo.get_corrections_by_finding("f-test-001", "CASE_TEST", "tenant_alpha")
+        found = repo.get_corrections_by_finding(unique_fid, "CASE_TEST", "tenant_alpha")
         assert len(found) >= 1
 
-        isolated_tenant = repo.get_corrections_by_finding("f-test-001", "CASE_TEST", "tenant_beta")
+        isolated_tenant = repo.get_corrections_by_finding(unique_fid, "CASE_TEST", "tenant_beta")
         assert len(isolated_tenant) == 0
 
-        isolated_case = repo.get_corrections_by_finding("f-test-001", "CASE_OTHER", "tenant_alpha")
+        isolated_case = repo.get_corrections_by_finding(unique_fid, "CASE_OTHER", "tenant_alpha")
         assert len(isolated_case) == 0
 
     def test_unexecuted_agents_marked_pending_pipeline_run(self):

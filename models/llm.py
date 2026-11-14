@@ -1309,8 +1309,8 @@ class OllamaWrapper:
             "stream": False,
             "keep_alive": "24h",
             "options": {
-                "num_ctx": 4096,
-                "num_predict": 1024,
+                "num_ctx": int(os.getenv("OLLAMA_NUM_CTX", "8192")),
+                "num_predict": int(os.getenv("OLLAMA_NUM_PREDICT", "4096")),
                 "temperature": 0.2
             }
         }

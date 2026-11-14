@@ -46,13 +46,24 @@ export async function fetchWithAuth(url, options = {}) {
 
   const execRequest = async () => {
     let response;
+    const timeoutMs = options.body instanceof FormData ? 60000 : 15000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(new Error(`Request timed out after ${timeoutMs}ms`)), timeoutMs);
+    const combinedSignal = options.signal || controller.signal;
+
     try {
       response = await fetch(`${API_BASE_URL}${url}`, {
         ...options,
+        signal: combinedSignal,
         headers,
       });
     } catch (netErr) {
+      if (controller.signal.aborted) {
+        throw new Error(`Request to ${url} timed out after ${timeoutMs}ms`);
+      }
       throw new Error(`Network failure connecting to ARGUS backend: ${netErr.message || netErr}`);
+    } finally {
+      clearTimeout(timeoutId);
     }
 
     if (!response.ok) {
@@ -147,6 +158,8 @@ export async function uploadEvidenceFile(file, caseId, options = {}) {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('case_id', caseId);
+  const isAsync = options.asyncMode !== false;
+  formData.append('async_mode', isAsync ? 'true' : 'false');
   if (options.hostId) {
     formData.append('host_id', options.hostId);
   }
@@ -157,7 +170,7 @@ export async function uploadEvidenceFile(file, caseId, options = {}) {
     formData.append('relative_path', options.relativePath);
   }
 
-  const asyncQuery = options.asyncMode !== false ? '&async_mode=true' : '';
+  const asyncQuery = isAsync ? '&async_mode=true' : '';
   return fetchWithAuth(`/evidence/upload?case_id=${encodeURIComponent(caseId)}${asyncQuery}`, {
     method: 'POST',
     body: formData,

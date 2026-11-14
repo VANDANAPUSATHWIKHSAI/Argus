@@ -16,16 +16,120 @@ Design Principles:
      retrieval-only response grounded in actual case findings, never generating hallucinated conclusions.
 """
 
-from __future__ import annotations
-
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from forensic_analysis.investigation_context import CaseInvestigationContext
 from models.llm import OllamaWrapper
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
+
+
+class IntentCategory:
+    CASUAL = "CASUAL"                     # Category A: Greetings, meta identity, capabilities, gratitude
+    GENERAL_KNOWLEDGE = "GENERAL_KNOWLEDGE" # Category B: Cybersecurity, MITRE, forensics concepts
+    CASE_SPECIFIC = "CASE_SPECIFIC"       # Category C: Findings, evidence, timeline, ISS for case
+    FOLLOW_UP = "FOLLOW_UP"               # Category D: Pronouns, "second one", "is it serious", "explain this"
+    COMPLEX_REASONING = "COMPLEX_REASONING" # Category E: Hypothetical / counterfactual forensic reasoning
+
+
+TYPO_CORRECTIONS = {
+    "heelo": "hello", "helllo": "hello", "helo": "hello", "hlo": "hello", "hiii": "hi", "heyya": "hey",
+    "wat": "what", "wats": "what is", "whats": "what is", "wht": "what", "wot": "what",
+    "happend": "happened", "hpened": "happened", "happnd": "happened", "occurd": "occurred",
+    "recomen": "recommend", "recommen": "recommend", "precautin": "precaution",
+    "evidense": "evidence", "evidenc": "evidence", "evdence": "evidence", "evidences": "evidence",
+    "malwre": "malware", "regsitry": "registry", "registri": "registry",
+    "serios": "serious", "atack": "attack", "attck": "attack",
+    "conclusin": "conclusion", "discrepency": "discrepancy",
+    "frm": "from", "pls": "please", "plz": "please",
+    "thx": "thanks", "thnk": "thanks", "thnks": "thanks", "ty": "thanks",
+    "bcoz": "because", "cuz": "because", "bcuz": "because",
+    "tel": "tell", "tl": "tell",
+    "sec": "second", "2nd": "second", "1st": "first", "3rd": "third",
+    "diff": "difference", "infomation": "information", "info": "information",
+    "suspicius": "suspicious", "sus": "suspicious",
+    "analys": "analysis", "analisis": "analysis",
+}
+
+
+def normalize_query(text: str) -> str:
+    """Lightweight normalization for typos and informal language without altering IDs, hashes, paths, or code."""
+    if not text or not isinstance(text, str):
+        return ""
+    words = text.strip().split()
+    normalized = []
+    for w in words:
+        clean_w = w.lower().strip(".,;:?!'\"")
+        # Do not alter technical tokens (Case IDs, finding IDs, evidence IDs, CVEs, hashes, paths)
+        if (
+            re.match(r"^(?:fir|evid|clm|step|cve|t\d{4}|argus)[-_]", clean_w)
+            or (len(clean_w) in (32, 40, 64) and re.match(r"^[0-9a-f]+$", clean_w))
+            or "\\" in w or "/" in w or ("." in w and not clean_w.endswith("."))
+        ):
+            normalized.append(w)
+            continue
+        if clean_w in TYPO_CORRECTIONS:
+            replacement = TYPO_CORRECTIONS[clean_w]
+            normalized.append(replacement)
+        else:
+            normalized.append(w)
+    return " ".join(normalized)
+
+
+GENERAL_KNOWLEDGE_BASE: Dict[str, str] = {
+    "mimikatz": (
+        "Mimikatz is an open-source post-exploitation credential harvesting tool created by Benjamin Delpy. "
+        "It extracts plaintext passwords, NTLM hashes, Kerberos tickets, and PINs directly from the memory of the "
+        "Local Security Authority Subsystem Service (LSASS.exe) process (MITRE ATT&CK T1003.001)."
+    ),
+    "pass-the-hash": (
+        "Pass-the-Hash (PtH) is an exploitation technique where an adversary uses an acquired NTLM password hash "
+        "instead of the plaintext password to authenticate over SMB, RPC, or WMI protocols (MITRE ATT&CK T1550.002). "
+        "This bypasses the need to crack the password hash and allows lateral movement across the enterprise."
+    ),
+    "pth": (
+        "Pass-the-Hash (PtH) is an exploitation technique where an adversary uses an acquired NTLM password hash "
+        "instead of the plaintext password to authenticate over SMB, RPC, or WMI protocols (MITRE ATT&CK T1550.002). "
+        "This bypasses the need to crack the password hash and allows lateral movement across the enterprise."
+    ),
+    "t1059": (
+        "MITRE ATT&CK Technique T1059 (Command and Scripting Interpreter) covers adversary abuse of local command-line "
+        "and scripting environments to execute arbitrary payloads. Sub-techniques include PowerShell (T1059.001), "
+        "Windows Command Shell / cmd (T1059.003), Unix Shells (T1059.004), Visual Basic (T1059.005), and Python (T1059.006)."
+    ),
+    "kerberoasting": (
+        "Kerberoasting (MITRE ATT&CK T1558.003) is a post-exploitation technique targeting Active Directory domain user "
+        "accounts with configured Service Principal Names (SPNs). Any valid domain user requests Kerberos Ticket Granting "
+        "Service (TGS) tickets encrypted with the service account's password hash and cracks them offline using dictionary attacks."
+    ),
+    "lsass": (
+        "LSASS (Local Security Authority Subsystem Service) is a critical Windows OS process (`lsass.exe`) that enforces "
+        "domain security policies, verifies user authentications, handles password changes, and caches active credentials, "
+        "Kerberos tickets, and NTLM hashes in process memory."
+    ),
+    "prefetch": (
+        "Windows Prefetch files (`.pf` located in `C:\\Windows\\Prefetch`) are forensic artifacts created by the OS to optimize "
+        "application launch times. They record the executable name, total execution count, first execution timestamp, and the "
+        "last 8 execution timestamps (on Windows 8+), providing conclusive evidence of binary execution on the endpoint."
+    ),
+    "shimcache": (
+        "The Application Compatibility Cache (Shimcache or AppCompatCache) is stored in the `SYSTEM` registry hive "
+        "(`CurrentControlSet\\Control\\Session Manager\\AppCompatCache`). It tracks executables that existed on the system, "
+        "recording the full file path, file size, and last modified timestamp, proving binary presence on disk."
+    ),
+    "amcache": (
+        "Amcache (`C:\\Windows\\AppCompat\\Programs\\Amcache.hve`) is a Windows registry hive tracking application executions, "
+        "installations, and device drivers. It stores SHA-1 file hashes, PE headers, and compilation timestamps even if the binary "
+        "has been deleted from disk."
+    ),
+    "timestomp": (
+        "Timestomping (MITRE ATT&CK T1070.006) is an anti-forensics technique where an adversary modifies file metadata timestamps "
+        "($STANDARD_INFORMATION attribute in NTFS) to blend in with legitimate system files. Forensic investigators detect it by "
+        "comparing $STANDARD_INFORMATION with $FILE_NAME timestamps in the NTFS $MFT, which standard Win32 APIs cannot alter."
+    ),
+}
 
 
 class ConversationalInvestigationEngine:
@@ -37,6 +141,85 @@ class ConversationalInvestigationEngine:
         self.context = context or CaseInvestigationContext("UNKNOWN", "default")
         self.case_id = self.context.case_id
         self.tenant_id = self.context.tenant_id
+
+    @classmethod
+    def is_fast_path(cls, query: str) -> bool:
+        """Determines if query can be answered on fast-path (< 5ms) without heavy DB/graph loads."""
+        if not query or not isinstance(query, str):
+            return False
+        clean = normalize_query(query).strip().lower()
+        # Never fast-path case-specific forensic identifiers or evidence queries
+        if any(w in clean for w in ("finding", "evidence", "case", "iss", "score", "provenance", "audit", "f-", "argus_")):
+            return False
+        # Category A triggers
+        casual_greetings = ("hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening", "whats up", "sup")
+        if clean in casual_greetings or any(clean.startswith(f"{g} ") for g in casual_greetings):
+            return True
+        casual_meta = ("who are you", "what is your name", "what can you do", "help", "what are your capabilities", "thanks", "thank you", "thx", "bye")
+        if any(m in clean for m in casual_meta):
+            return True
+        # Category B triggers (general concepts without case binding)
+        for concept in GENERAL_KNOWLEDGE_BASE:
+            if re.search(rf"\b{re.escape(concept)}\b", clean):
+                return True
+        return False
+
+    def answer_fast_path(self, query: str, history: Optional[List[Dict[str, Any]]] = None) -> Tuple[Optional[str], Dict[str, Any]]:
+        """Handles Category A (Casual) and Category B (General Knowledge) with zero DB/LLM overhead (< 2ms)."""
+        import time
+        t_start = time.perf_counter()
+        clean = normalize_query(query).strip().lower()
+
+        # Category A: Greetings
+        casual_greetings = ("hi", "hello", "hey", "greetings", "good morning", "good afternoon", "good evening", "whats up", "sup")
+        if clean in casual_greetings or any(clean.startswith(f"{g} ") for g in casual_greetings):
+            resp = f"Hello! I am ARGUS AI, your digital forensics copilot for Case **{self.case_id}**. How can I assist with your investigation today?"
+            return resp, {"model_tag": None, "execution_mode": "RETRIEVAL_ONLY", "retrieval_only": True, "latency_ms": round((time.perf_counter() - t_start) * 1000, 2)}
+
+        # Category A: Meta / Capabilities / Gratitude
+        if any(clean.startswith(w) or clean == w for w in ("who are you", "what is your name")):
+            resp = f"I am ARGUS AI, an expert digital forensics assistant designed to evaluate multi-modal evidence, correlate attack progressions, verify forensic integrity, and assist your investigation in Case **{self.case_id}**."
+            return resp, {"model_tag": None, "execution_mode": "RETRIEVAL_ONLY", "retrieval_only": True, "latency_ms": round((time.perf_counter() - t_start) * 1000, 2)}
+
+        if any(w in clean for w in ("what can you do", "help", "what are your capabilities")):
+            resp = f"I can analyze forensic artifacts, correlate attack timelines, evaluate MITRE ATT&CK techniques, calculate canonical ISS impact severity, inspect evidence hashes, and answer technical case inquiries for Case **{self.case_id}**."
+            return resp, {"model_tag": None, "execution_mode": "RETRIEVAL_ONLY", "retrieval_only": True, "latency_ms": round((time.perf_counter() - t_start) * 1000, 2)}
+
+        if any(w in clean for w in ("thank you", "thanks", "thx", "great job")):
+            resp = "You're welcome! Let me know if you need any additional forensic analysis or verification on the case."
+            return resp, {"model_tag": None, "execution_mode": "RETRIEVAL_ONLY", "retrieval_only": True, "latency_ms": round((time.perf_counter() - t_start) * 1000, 2)}
+
+        # Category B: General Cybersecurity & Forensics Concepts
+        for concept, answer in GENERAL_KNOWLEDGE_BASE.items():
+            if re.search(rf"\b{re.escape(concept)}\b", clean):
+                return answer, {"model_tag": None, "execution_mode": "RETRIEVAL_ONLY", "retrieval_only": True, "latency_ms": round((time.perf_counter() - t_start) * 1000, 2)}
+
+        return None, {}
+
+    def classify_intent(self, query: str, history: Optional[List[Dict[str, Any]]] = None) -> str:
+        """Classifies the analyst query into one of 5 distinct Intent Categories."""
+        clean = normalize_query(query).strip().lower()
+
+        # Category A: Casual / Meta
+        if self.is_fast_path(query):
+            for concept in GENERAL_KNOWLEDGE_BASE:
+                if re.search(rf"\b{re.escape(concept)}\b", clean):
+                    return IntentCategory.GENERAL_KNOWLEDGE
+            return IntentCategory.CASUAL
+
+        # Category D: Contextual Follow-up (pronouns, ordinal references, "explain this", "is it serious")
+        follow_up_triggers = ("explain this", "what about the second", "the second one", "the 2nd one", "the first one", "the 1st one", "the third", "is it serious", "tell me more", "how did they do that", "which one", "why did that happen")
+        has_pronoun = any(re.search(rf"\b{p}\b", clean) for p in ("it", "that", "this", "they", "them", "which one", "the file", "the artifact"))
+        if any(t in clean for t in follow_up_triggers) or (has_pronoun and history and len(history) > 0):
+            return IntentCategory.FOLLOW_UP
+
+        # Category E: Complex Forensic Reasoning / Hypotheses
+        hypothesis_triggers = ("could this be", "could an attacker", "what if", "is it possible that", "could the timestamp", "hypothetically", "spoofed", "insider")
+        if any(t in clean for t in hypothesis_triggers):
+            return IntentCategory.COMPLEX_REASONING
+
+        # Category C: Case-Specific Forensic Query (default)
+        return IntentCategory.CASE_SPECIFIC
 
     def answer_query(self, query: str, history: Optional[List[Dict[str, Any]]] = None) -> str:
         """Processes analyst query and returns response text."""
@@ -53,7 +236,7 @@ class ConversationalInvestigationEngine:
         """
         import time
         t_start = time.perf_counter()
-        clean_q = query.strip()
+        clean_q = normalize_query(query.strip())
         if not clean_q:
             return "Please enter a question regarding the case investigation.", {
                 "model_tag": None,
@@ -62,23 +245,36 @@ class ConversationalInvestigationEngine:
                 "latency_ms": 0.0,
             }
 
+        # 0. Check Fast Path (< 2ms) for Category A (Casual) and Category B (General Knowledge)
+        fast_resp, fast_meta = self.answer_fast_path(clean_q, history)
+        if fast_resp is not None:
+            return fast_resp, fast_meta
+
         # 1. Format multi-turn conversation history (last 6 turns)
         history_block = self._format_conversation_history(history)
 
-        # 2. Extract case investigation context
+        # 2. Extract case investigation context with measured retrieval latency
+        t_retrieval_0 = time.perf_counter()
         investigation_block = self.context.get_llm_grounding_block()
+        retrieval_latency_ms = round((time.perf_counter() - t_retrieval_0) * 1000, 2)
 
-        # 3. Assemble prompt
+        # 3. Assemble prompt with measured prompt assembly latency
+        t_prompt_0 = time.perf_counter()
         prompt = self._build_prompt(clean_q, history_block, investigation_block)
+        prompt_latency_ms = round((time.perf_counter() - t_prompt_0) * 1000, 2)
 
         # 4. Attempt local Qwen3-8B generation
+        llm_inference_ms = 0.0
         try:
             model_name = getattr(settings, "llm_model_name", "qwen3:8b")
             if model_name in ("Qwen/Qwen3-8B", "Qwen3-8B", "qwen3-8b"):
                 model_name = "qwen3:8b"
             base_url = getattr(settings, "ollama_base_url", "http://127.0.0.1:11434")
-            llm = OllamaWrapper(model_name=model_name, base_url=base_url, allow_mock=False, timeout=60)
+            chat_timeout = int(os.getenv("CHAT_LLM_TIMEOUT", "15"))
+            llm = OllamaWrapper(model_name=model_name, base_url=base_url, allow_mock=False, timeout=chat_timeout)
+            t_llm_0 = time.perf_counter()
             generated = llm.generate(prompt)
+            llm_inference_ms = round((time.perf_counter() - t_llm_0) * 1000, 2)
             if generated and generated.strip() and not generated.startswith("{\"executive_summary\""):
                 elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
                 return generated.strip(), {
@@ -86,12 +282,17 @@ class ConversationalInvestigationEngine:
                     "execution_mode": "LLM_GENERATED",
                     "retrieval_only": False,
                     "latency_ms": elapsed_ms,
+                    "retrieval_latency_ms": retrieval_latency_ms,
+                    "prompt_latency_ms": prompt_latency_ms,
+                    "llm_inference_ms": llm_inference_ms,
                 }
         except Exception as e:
             logger.info(f"Ollama generation failed or timed out ({e}). Activating explicit retrieval mode.")
 
         # 5. Deterministic, strictly grounded retrieval-only response explicitly labelled (NO fabricated conclusions)
+        t_fallback_0 = time.perf_counter()
         retrieval_body = self._generate_retrieval_only_response(clean_q, history)
+        fallback_latency_ms = round((time.perf_counter() - t_fallback_0) * 1000, 2)
         elapsed_ms = round((time.perf_counter() - t_start) * 1000, 2)
         resp_text = f"[ARGUS Grounded Retrieval Mode — Local Qwen3:8B Unavailable]\n\n{retrieval_body}"
         return resp_text, {
@@ -99,6 +300,10 @@ class ConversationalInvestigationEngine:
             "execution_mode": "MODEL_UNAVAILABLE",
             "retrieval_only": True,
             "latency_ms": elapsed_ms,
+            "retrieval_latency_ms": retrieval_latency_ms,
+            "prompt_latency_ms": prompt_latency_ms,
+            "llm_inference_ms": llm_inference_ms,
+            "fallback_latency_ms": fallback_latency_ms,
         }
 
     def _format_conversation_history(self, history: Optional[List[Dict[str, Any]]]) -> str:
@@ -295,6 +500,53 @@ class ConversationalInvestigationEngine:
                         f"Static malware analysis was not applicable, and no malicious persistence was detected in the examined artifacts."
                     )
                 return f"Regarding the submitted binary in Case {self.case_id}: Static analysis completed. Observables have been mapped to MITRE ATT&CK techniques."
+
+        # 1.1 Follow-up: Ordinal finding references ("second one", "first one", "3rd one")
+        if any(k in q_lower for k in ("second one", "second finding", "2nd one", "2nd finding", "the second")):
+            if len(findings) >= 2:
+                f2 = findings[1]
+                return (
+                    f"The second finding is `{f2['fact']}` (Severity: {f2['severity'].upper()}, Confidence: {round(f2['confidence']*100, 1)}%). "
+                    f"It was derived from the {f2.get('layer', 'telemetry')} layer with evidence reference {f2.get('evidence_reference', 'N/A')}."
+                )
+            elif findings:
+                f1 = findings[0]
+                return f"Only 1 finding is recorded for Case {self.case_id}: `{f1['fact']}`. A second finding does not exist in the examined telemetry."
+            return f"No findings have been recorded yet for Case **{self.case_id}**."
+
+        if any(k in q_lower for k in ("first one", "first finding", "1st one", "1st finding", "the first")):
+            if findings:
+                f1 = findings[0]
+                return (
+                    f"The first finding is `{f1['fact']}` (Severity: {f1['severity'].upper()}, Confidence: {round(f1['confidence']*100, 1)}%). "
+                    f"It was derived from the {f1.get('layer', 'telemetry')} layer with evidence reference {f1.get('evidence_reference', 'N/A')}."
+                )
+            return f"No findings have been recorded yet for Case **{self.case_id}**."
+
+        # 1.2 Follow-up: Severity inquiries ("is it serious", "how bad is it")
+        if any(k in q_lower for k in ("is it serious", "is that serious", "is this serious", "how serious", "is it critical")):
+            iss_text = f"The overall case Investigation Impact Severity (ISS) score is **{self.context.iss_score}/10 ({self.context.iss_severity})**."
+            high_sev = [f for f in findings if f["severity"] in ("high", "critical")]
+            if high_sev:
+                return f"Yes, serious security findings were detected in Case **{self.case_id}**. {len(high_sev)} high/critical finding(s) were recorded, including `{high_sev[0]['fact']}`. {iss_text}"
+            return f"No, the observed findings are not categorized as critical or high severity. The findings represent low or informational user activity, though relevant telemetry ({', '.join(prov['missing_domains'])}) was not available for examination. {iss_text}"
+
+        # 1.3 Complex Reasoning: Insider threat hypothesis
+        if "insider" in q_lower:
+            return (
+                f"An insider threat hypothesis cannot be confirmed or ruled out from the current evidence package for Case **{self.case_id}**. "
+                f"The examined telemetry ({ev_str}) reflects user activity and registry artifacts, but host logon telemetry (Event ID 4624/4625), "
+                f"privilege assignment logs (Event ID 4672), and physical access records were not available for examination. "
+                f"Without multi-factor authentication logs and process lineage telemetry, distinguishing between legitimate authorized usage and malicious insider activity remains unconfirmed."
+            )
+
+        # 1.4 Complex Reasoning: Timestamp spoofing / timestomp
+        if "spoofed" in q_lower or "timestomp" in q_lower:
+            return (
+                f"No evidence of timestamp spoofing (timestomping) was observed in the examined telemetry for Case **{self.case_id}**. "
+                f"Timestomping is typically validated by cross-referencing NTFS `$STANDARD_INFORMATION` against `$FILE_NAME` attributes in the Master File Table ($MFT). "
+                f"Because raw filesystem $MFT and $LogFile telemetry were not available for examination, timestamp manipulation cannot be definitively excluded for uncollected artifacts, but no anomalies were detected in the provided containers ({ev_str})."
+            )
 
         # 2. Ambiguous or overly vague queries -> clarify & offer candidates
         is_ambiguous = len(q_raw.split()) <= 2 and any(q_lower.startswith(w) or q_lower == w for w in (

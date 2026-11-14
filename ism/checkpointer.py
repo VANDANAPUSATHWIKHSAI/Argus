@@ -53,6 +53,24 @@ class Checkpointer:
         self._pg_conn = postgres_conn
         self._redis = redis_client
         self._pg_unreachable = False
+        self._has_tenant_column_cached: Optional[bool] = None
+
+    def _check_tenant_column(self, cur) -> bool:
+        """
+        Checks whether ism_state contains the tenant_id column.
+        Caches the result to avoid redundant metadata queries.
+        """
+        if self._has_tenant_column_cached is not None:
+            return self._has_tenant_column_cached
+        try:
+            cur.execute("""
+                SELECT 1 FROM information_schema.columns 
+                WHERE table_name = 'ism_state' AND column_name = 'tenant_id';
+            """)
+            self._has_tenant_column_cached = cur.fetchone() is not None
+        except Exception:
+            self._has_tenant_column_cached = False
+        return self._has_tenant_column_cached
 
     def _get_redis(self):
         if self._redis is not None:
@@ -134,9 +152,9 @@ class Checkpointer:
                 logger.warning("Redis checkpoint write warning: %s", re)
 
         # 3. PostgreSQL durable ism_state
-        conn = self._get_pg_conn()
-        if conn:
-            try:
+        try:
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
                 with conn.cursor() as cur:
                     cur.execute("""
                         CREATE TABLE IF NOT EXISTS ism_state (
@@ -149,27 +167,36 @@ class Checkpointer:
                             PRIMARY KEY (case_id, stage)
                         );
                     """)
+                    t_id = tenant_id or "default"
                     cur.execute("""
                         INSERT INTO cases (case_id, tenant_id, created_by)
                         VALUES (%s, %s, %s)
                         ON CONFLICT (case_id) DO NOTHING;
-                    """, (case_id, tenant_id or "default", "argus_system"))
-                    cur.execute("""
-                        INSERT INTO ism_state (case_id, stage, status, retry_count, last_updated, checkpoint)
-                        VALUES (%s, %s, %s, %s, NOW(), %s)
-                        ON CONFLICT (case_id, stage) DO UPDATE SET
-                            status = EXCLUDED.status,
-                            retry_count = ism_state.retry_count + EXCLUDED.retry_count,
-                            last_updated = NOW(),
-                            checkpoint = EXCLUDED.checkpoint;
-                    """, (case_id, stage, status, retry_count, json_str))
+                    """, (case_id, t_id, "argus_system"))
+                    
+                    if self._check_tenant_column(cur):
+                        cur.execute("""
+                            INSERT INTO ism_state (tenant_id, case_id, stage, status, retry_count, last_updated, checkpoint)
+                            VALUES (%s, %s, %s, %s, %s, NOW(), %s)
+                            ON CONFLICT (tenant_id, case_id, stage) DO UPDATE SET
+                                status = EXCLUDED.status,
+                                retry_count = ism_state.retry_count + EXCLUDED.retry_count,
+                                last_updated = NOW(),
+                                checkpoint = EXCLUDED.checkpoint;
+                        """, (t_id, case_id, stage, status, retry_count, json_str))
+                    else:
+                        cur.execute("""
+                            INSERT INTO ism_state (case_id, stage, status, retry_count, last_updated, checkpoint)
+                            VALUES (%s, %s, %s, %s, NOW(), %s)
+                            ON CONFLICT (case_id, stage) DO UPDATE SET
+                                status = EXCLUDED.status,
+                                retry_count = ism_state.retry_count + EXCLUDED.retry_count,
+                                last_updated = NOW(),
+                                checkpoint = EXCLUDED.checkpoint;
+                        """, (case_id, stage, status, retry_count, json_str))
                 conn.commit()
-            except Exception as pe:
-                logger.warning("PostgreSQL ism_state write warning: %s", pe)
-                try:
-                    conn.rollback()
-                except Exception:
-                    pass
+        except Exception as pe:
+            logger.warning("PostgreSQL ism_state write warning: %s", pe)
 
         return True
 
@@ -205,32 +232,63 @@ class Checkpointer:
 
         # 2. PostgreSQL
         if not candidate:
-            conn = self._get_pg_conn()
-            if conn:
-                try:
+            try:
+                from databases.postgres_pool import PostgresConnectionPool
+                with PostgresConnectionPool.get_connection() as conn:
                     with conn.cursor() as cur:
-                        cur.execute(
-                            "SELECT status, retry_count, last_updated, checkpoint FROM ism_state WHERE case_id = %s AND stage = %s",
-                            (case_id, stage)
-                        )
-                        row = cur.fetchone()
-                        if row:
-                            status, retries, updated, cp_data = row
-                            if isinstance(cp_data, str):
-                                cp_data = json.loads(cp_data)
-                            if isinstance(cp_data, dict) and "checkpoint" in cp_data:
-                                candidate = cp_data
+                        if self._check_tenant_column(cur):
+                            if tenant_id and tenant_id != "default":
+                                cur.execute(
+                                    "SELECT status, retry_count, last_updated, checkpoint, tenant_id FROM ism_state WHERE tenant_id = %s AND case_id = %s AND stage = %s",
+                                    (tenant_id, case_id, stage)
+                                )
                             else:
-                                candidate = {
-                                    "case_id": case_id,
-                                    "stage": stage,
-                                    "status": status,
-                                    "retry_count": retries,
-                                    "timestamp": str(updated),
-                                    "checkpoint": cp_data
-                                }
-                except Exception as pe:
-                    logger.debug("PostgreSQL ism_state read warning: %s", pe)
+                                cur.execute(
+                                    "SELECT status, retry_count, last_updated, checkpoint, tenant_id FROM ism_state WHERE case_id = %s AND stage = %s ORDER BY (tenant_id = %s) DESC LIMIT 1",
+                                    (case_id, stage, tenant_id or "default")
+                                )
+                            row = cur.fetchone()
+                            if row:
+                                status, retries, updated, cp_data, row_tenant = row
+                                if isinstance(cp_data, str):
+                                    cp_data = json.loads(cp_data)
+                                if isinstance(cp_data, dict) and "checkpoint" in cp_data:
+                                    candidate = cp_data
+                                    if "tenant_id" not in candidate:
+                                        candidate["tenant_id"] = row_tenant
+                                else:
+                                    candidate = {
+                                        "case_id": case_id,
+                                        "tenant_id": row_tenant,
+                                        "stage": stage,
+                                        "status": status,
+                                        "retry_count": retries,
+                                        "timestamp": str(updated),
+                                        "checkpoint": cp_data
+                                    }
+                        else:
+                            cur.execute(
+                                "SELECT status, retry_count, last_updated, checkpoint FROM ism_state WHERE case_id = %s AND stage = %s",
+                                (case_id, stage)
+                            )
+                            row = cur.fetchone()
+                            if row:
+                                status, retries, updated, cp_data = row
+                                if isinstance(cp_data, str):
+                                    cp_data = json.loads(cp_data)
+                                if isinstance(cp_data, dict) and "checkpoint" in cp_data:
+                                    candidate = cp_data
+                                else:
+                                    candidate = {
+                                        "case_id": case_id,
+                                        "stage": stage,
+                                        "status": status,
+                                        "retry_count": retries,
+                                        "timestamp": str(updated),
+                                        "checkpoint": cp_data
+                                    }
+            except Exception as pe:
+                logger.debug("PostgreSQL ism_state read warning: %s", pe)
 
         # 3. In-memory fallback
         if not candidate:
@@ -245,9 +303,12 @@ class Checkpointer:
 
         # --- AUDIT & VALIDATION GATES ---
         # 1. Tenant Isolation
-        if tenant_id and "tenant_id" in candidate:
-            stored_tenant = candidate.get("tenant_id")
-            if stored_tenant and stored_tenant != tenant_id and stored_tenant != "default":
+        stored_tenant = candidate.get("tenant_id")
+        if not stored_tenant and isinstance(candidate.get("checkpoint"), dict):
+            stored_tenant = candidate["checkpoint"].get("tenant_id")
+
+        if tenant_id and stored_tenant:
+            if stored_tenant != tenant_id:
                 logger.warning(
                     "Tenant isolation mismatch for case %s: requested %s but checkpoint belongs to %s",
                     case_id, tenant_id, stored_tenant
@@ -287,20 +348,28 @@ class Checkpointer:
                 stages.update(self._in_memory_state.get(case_id, {}))
 
         # Supplement from PostgreSQL
-        conn = self._get_pg_conn()
-        if conn:
-            try:
+        try:
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(
-                        "SELECT stage, status, retry_count, last_updated, checkpoint FROM ism_state WHERE case_id = %s",
-                        (case_id,)
-                    )
-                    for stage, status, retries, updated, cp_data in cur.fetchall():
+                    if self._check_tenant_column(cur) and tenant_id and tenant_id != "default":
+                        cur.execute(
+                            "SELECT stage, status, retry_count, last_updated, checkpoint, tenant_id FROM ism_state WHERE tenant_id = %s AND case_id = %s",
+                            (tenant_id, case_id)
+                        )
+                    else:
+                        cur.execute(
+                            "SELECT stage, status, retry_count, last_updated, checkpoint FROM ism_state WHERE case_id = %s",
+                            (case_id,)
+                        )
+                    for row in cur.fetchall():
+                        stage, status, retries, updated, cp_data = row[0], row[1], row[2], row[3], row[4]
+                        row_tenant = row[5] if len(row) > 5 else None
                         if isinstance(cp_data, str):
                             cp_data = json.loads(cp_data)
                         if tenant_id and isinstance(cp_data, dict):
-                            stored_tenant = cp_data.get("tenant_id")
-                            if stored_tenant and stored_tenant != tenant_id and stored_tenant != "default":
+                            stored_tenant = row_tenant or cp_data.get("tenant_id")
+                            if stored_tenant and stored_tenant != tenant_id:
                                 continue
                         stages[stage] = {
                             "case_id": case_id,
@@ -310,10 +379,55 @@ class Checkpointer:
                             "timestamp": str(updated),
                             "checkpoint": cp_data
                         }
-            except Exception:
-                pass
+        except Exception as pe:
+            logger.debug("PostgreSQL ism_state get_case_state warning: %s", pe)
 
         return stages
+
+    def delete_stage_checkpoint(self, case_id: str, stage: str, tenant_id: str = "default") -> bool:
+        """
+        Deletes a stage checkpoint durably from in-memory cache, Redis, and PostgreSQL.
+        Enforces tenant isolation by composite identity (tenant_id, case_id, stage).
+        """
+        with self._lock:
+            scoped = f"{tenant_id}:{case_id}"
+            if scoped in self._in_memory_state:
+                self._in_memory_state[scoped].pop(stage, None)
+            if case_id in self._in_memory_state and stage in self._in_memory_state[case_id]:
+                entry = self._in_memory_state[case_id][stage]
+                if isinstance(entry, dict) and entry.get("tenant_id") == tenant_id:
+                    self._in_memory_state[case_id].pop(stage, None)
+
+        rc = self._get_redis()
+        if rc:
+            try:
+                client = rc.get_client()
+                if client:
+                    if tenant_id != "default":
+                        client.delete(f"checkpoint:{tenant_id}:{case_id}:{stage}")
+                    client.delete(f"checkpoint:{case_id}:{stage}")
+            except Exception as re:
+                logger.debug("Redis delete checkpoint warning: %s", re)
+
+        try:
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
+                with conn.cursor() as cur:
+                    if self._check_tenant_column(cur):
+                        cur.execute(
+                            "DELETE FROM ism_state WHERE tenant_id = %s AND case_id = %s AND stage = %s",
+                            (tenant_id, case_id, stage)
+                        )
+                    else:
+                        cur.execute(
+                            "DELETE FROM ism_state WHERE case_id = %s AND stage = %s AND checkpoint->>'tenant_id' = %s",
+                            (case_id, stage, tenant_id)
+                        )
+                conn.commit()
+            return True
+        except Exception as pe:
+            logger.debug("PostgreSQL delete ism_state warning: %s", pe)
+            return False
 
     # Legacy method compatibility
     def save(self, case_id: str, stage: str, state: dict) -> bool:
@@ -321,3 +435,6 @@ class Checkpointer:
 
     def load(self, case_id: str) -> dict:
         return self.get_case_state(case_id=case_id)
+
+
+checkpointer = Checkpointer()

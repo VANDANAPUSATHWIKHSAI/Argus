@@ -311,6 +311,8 @@ class ThreatIntelligenceAgent(BaseAgent):
             return [], FeedStatus(feed=name, state=FeedState.NO_MATCH), [], 0, 0
         if adapter is None:
             return [], FeedStatus(feed=name, state=FeedState.UNAVAILABLE, error="adapter not configured"), [f"{name}: adapter not configured"], 0, 0
+        if name == "stix_taxii" and hasattr(adapter, "server_url") and not adapter.server_url:
+            return [], FeedStatus(feed=name, state=FeedState.UNAVAILABLE, error="TAXII server URL is not configured"), [f"{name}: TAXII server URL is not configured"], 0, 0
         method = getattr(adapter, method_name, None)
         if not callable(method):
             return [], FeedStatus(feed=name, state=FeedState.UNAVAILABLE, error=f"missing {method_name}"), [f"{name}: missing {method_name}"], 0, 0
@@ -630,7 +632,12 @@ class ThreatIntelligenceAgent(BaseAgent):
             return FeedStatus(feed=name, state=FeedState.UNKNOWN, error="invalid freshness metadata")
         age = (datetime.now(timezone.utc) - updated).total_seconds() if updated else None
         if errors:
-            state = FeedState.TIMEOUT if any("timeout" in error for error in errors) else FeedState.ERROR
+            if any("timeout" in error.lower() for error in errors):
+                state = FeedState.TIMEOUT
+            elif any("not configured" in error.lower() or "unavailable" in error.lower() for error in errors):
+                state = FeedState.UNAVAILABLE
+            else:
+                state = FeedState.ERROR
         elif updated and max_age is not None and age is not None and (age < 0 or age > max_age):
             state = FeedState.UNKNOWN if age < 0 else FeedState.STALE
         elif not updated:

@@ -142,6 +142,8 @@ from forensic_analysis.conversational_assistant import ConversationalInvestigati
 
 @router.post("/{case_id}/query", response_model=QueryResponse)
 async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(..., alias="X-Tenant-ID"), current_user: dict = Depends(get_current_user)):
+    from api.routes.cases import verify_case_access
+    verify_case_access(case_id, current_user, x_tenant_id)
     import time
     t_start = time.perf_counter()
     from api.routes.evidence import sanitize_uuid
@@ -228,6 +230,24 @@ async def query_case(case_id: str, req: QueryRequest, x_tenant_id: str = Header(
 
     # 1.3 Injection check on analyst query
     gate_res = _injection_gate.check(req.query, field_name="unstructured")
+
+    # 1.4 Instantaneous Fast-path for Category A (Casual) and Category B (General Cybersecurity Knowledge)
+    # Bypasses heavy database and graph loading for ultra-low latency (< 5ms) responses
+    if ConversationalInvestigationEngine.is_fast_path(req.query):
+        fast_engine = ConversationalInvestigationEngine(
+            context=CaseInvestigationContext(case_id=clean_case_id, tenant_id=x_tenant_id)
+        )
+        fast_resp, fast_meta = fast_engine.answer_fast_path(req.query, req.history)
+        if fast_resp is not None:
+            return QueryResponse(
+                response=fast_resp,
+                injection_flagged=gate_res.injection_flagged,
+                injection_score=gate_res.injection_score,
+                model_tag=fast_meta.get("model_tag"),
+                execution_mode=fast_meta.get("execution_mode", "RETRIEVAL_ONLY"),
+                retrieval_only=fast_meta.get("retrieval_only", True),
+                latency_ms=round((time.perf_counter() - t_start) * 1000, 2),
+            )
 
     # 2. Load Unified Case Investigation Context (reusing FIR, DB, Neo4j, Qdrant)
     context = CaseInvestigationContext(case_id=clean_case_id, tenant_id=x_tenant_id, fir_repo=_fir_repo).load()

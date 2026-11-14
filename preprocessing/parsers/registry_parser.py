@@ -133,8 +133,16 @@ class RegistryParser:
     _RECMD_BINARIES: tuple[str, ...] = ("RECmd.exe", "RECmd", "recmd")
     _BINARIES: tuple[str, ...] = ("rip.pl", "rip.exe", "rip")
 
-    def __init__(self, profiles: Optional[list[str]] = None) -> None:
+    def __init__(
+        self,
+        profiles: Optional[list[str]] = None,
+        max_artifacts: int = 5000,
+        max_depth: int = 12
+    ) -> None:
         self._profiles = profiles or DEFAULT_PROFILES
+        self.max_artifacts = max_artifacts
+        self.max_depth = max_depth
+        self.last_parse_stats: dict[str, Any] = {}
 
     def parse(self, file_path: str, evidence_id: str = "", case_id: str = "") -> list[Artifact]:
         """Parse the registry hive at *file_path* and return Artifact records."""
@@ -195,7 +203,7 @@ class RegistryParser:
         return self._parse_with_python_registry(src, evidence_id, case_id)
 
     def _parse_with_python_registry(self, src: Path, evidence_id: str, case_id: str = "") -> list[Artifact]:
-        """Native pure-Python registry parser fallback using python-registry library."""
+        """Native pure-Python registry parser with targeted forensic prioritization, explicit safeguards, and completeness accounting."""
         try:
             from Registry import Registry
         except ImportError:
@@ -210,21 +218,91 @@ class RegistryParser:
 
         ver = get_tool_version("python_registry") or "1.4.0"
         artifacts: list[Artifact] = []
+        seen_paths: set[str] = set()
+        skipped_subtrees: list[dict] = []
+        discovered_keys = 0
+        traversed_keys = 0
 
-        def walk(key, depth=0):
-            if depth > 12:
-                return
+        # Exact priority target paths across all standard Windows hives (SOFTWARE, SYSTEM, NTUSER)
+        PRIORITY_TARGETS = [
+            # SOFTWARE Persistence & Execution Controls
+            "Microsoft\\Windows\\CurrentVersion\\Run",
+            "Microsoft\\Windows\\CurrentVersion\\RunOnce",
+            "Microsoft\\Windows\\CurrentVersion\\RunOnceEx",
+            "Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run",
+            "Microsoft\\Windows\\CurrentVersion\\Policies\\System",
+            "Microsoft\\Windows NT\\CurrentVersion\\Winlogon",
+            "Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options",
+            "Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit",
+            "Microsoft\\Windows\\CurrentVersion\\App Paths",
+            "Microsoft\\Windows\\CurrentVersion\\Uninstall",
+            "Microsoft\\Windows\\CurrentVersion\\Authentication\\Credential Providers",
+            "Classes\\Folder\\shell\\open\\command",
+            "Classes\\Directory\\shell\\open\\command",
+            "Classes\\ms-settings\\Shell\\Open\\command",
+
+            # SYSTEM Services, Drivers, Network & Execution Artifacts
+            "ControlSet001\\Services",
+            "ControlSet001\\Services\\bam",
+            "ControlSet001\\Services\\dam",
+            "ControlSet001\\Control\\Session Manager\\KnownDLLs",
+            "ControlSet001\\Control\\Session Manager\\AppCertDLLs",
+            "ControlSet001\\Control\\Session Manager\\AppCompatCache",
+            "ControlSet001\\Control\\NetworkList",
+            "ControlSet001\\Services\\Tcpip\\Parameters\\Interfaces",
+            "ControlSet002\\Services",
+            "CurrentControlSet\\Services",
+            "CurrentControlSet\\Services\\bam",
+            "CurrentControlSet\\Services\\dam",
+            "Select",
+
+            # NTUSER.DAT User Activities & History
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+            "Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce",
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\UserAssist",
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\RecentDocs",
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\RunMRU",
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\TypedPaths",
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\ComDlg32",
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\MountPoints2"
+        ]
+
+        # Specific known bloat subtree prefixes (anchored, not broad substrings like "classes")
+        BLOAT_PREFIXES = (
+            "software\\microsoft\\windows\\currentversion\\component based servicing",
+            "software\\microsoft\\windows\\currentversion\\sidebyside",
+            "software\\microsoft\\windows\\currentversion\\appx\\packagerepository",
+            "software\\microsoft\\windows\\currentversion\\installer\\userdata",
+            "software\\microsoft\\.netframework",
+            "software\\schemas",
+            "microsoft\\windows\\currentversion\\component based servicing",
+            "microsoft\\windows\\currentversion\\sidebyside",
+            "microsoft\\windows\\currentversion\\appx\\packagerepository",
+            "microsoft\\windows\\currentversion\\installer\\userdata",
+            "microsoft\\.netframework",
+            "schemas"
+        )
+
+        # Critical forensic terms that MUST NEVER be skipped even if under a bloat tree
+        FORENSIC_EXEMPT_WORDS = (
+            "run", "runonce", "services", "userassist", "recentdocs",
+            "bam", "dam", "muicache", "networklist", "shimcache",
+            "winlogon", "ifeo", "command", "contextmenuhandlers",
+            "silentprocessexit"
+        )
+
+        def extract_key_artifacts(key, is_priority=False, recurse_depth=0, max_recurse=3):
+            nonlocal discovered_keys, traversed_keys
             kp = key.path()
             kp_lower = kp.lower()
-
-            # Skip redundant file-association Classes trees in SOFTWARE hive
-            if key.name().lower() == "classes" and ("software" in kp_lower or depth <= 3):
-                return
+            seen_paths.add(kp_lower)
+            discovered_keys += 1
+            traversed_keys += 1
 
             ts = key.timestamp()
             if ts and ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
-            
+
             values = []
             try:
                 values = key.values()
@@ -235,20 +313,20 @@ class RegistryParser:
                 for val in values:
                     try:
                         v_name = val.name()
-                        v_data_raw = val.value()
-                        if isinstance(v_data_raw, bytes):
-                            v_data = v_data_raw.decode("utf-8", errors="ignore")
-                        elif isinstance(v_data_raw, (list, dict)):
-                            v_data = json.dumps(v_data_raw)
+                        v_raw = val.value()
+                        if isinstance(v_raw, bytes):
+                            v_data = v_raw.decode("utf-8", errors="ignore")
+                        elif isinstance(v_raw, (list, dict)):
+                            v_data = json.dumps(v_raw)
                         else:
-                            v_data = str(v_data_raw) if v_data_raw is not None else None
+                            v_data = str(v_raw) if v_raw is not None else None
                     except Exception:
                         continue
 
                     plugin_cat = "python_registry"
                     if "userassist" in kp_lower:
                         plugin_cat = "userassist"
-                    elif "recentdocs" in kp_lower or "runmru" in kp_lower or "typedpaths" in kp_lower:
+                    elif any(k in kp_lower for k in ("recentdocs", "runmru", "typedpaths")):
                         plugin_cat = "recentdocs"
                     elif "services" in kp_lower:
                         plugin_cat = "services"
@@ -275,7 +353,7 @@ class RegistryParser:
                     )
                     artifacts.append(art)
             else:
-                if depth <= 2 or any(w in kp_lower for w in ["run", "services", "userassist", "recentdocs", "network", "bam", "dam", "muicache"]):
+                if is_priority or any(w in kp_lower for w in ["run", "services", "userassist", "recentdocs", "network", "bam", "dam", "muicache"]):
                     art = _make_artifact(
                         evidence_id=evidence_id,
                         case_id=case_id,
@@ -290,14 +368,148 @@ class RegistryParser:
                     )
                     artifacts.append(art)
 
+            if is_priority and recurse_depth < max_recurse:
+                try:
+                    for sk in key.subkeys():
+                        extract_key_artifacts(sk, is_priority=True, recurse_depth=recurse_depth + 1, max_recurse=max_recurse)
+                except Exception:
+                    pass
+
+        # ── Pass 1: Targeted Priority Extraction (Never capped or bloat-skipped) ──
+        priority_hits = 0
+        for target in PRIORITY_TARGETS:
             try:
-                for subkey in key.subkeys():
-                    walk(subkey, depth + 1)
+                target_key = reg.open(target)
+                extract_key_artifacts(target_key, is_priority=True, recurse_depth=0, max_recurse=2)
+                priority_hits += 1
             except Exception:
                 pass
 
-        walk(reg.root())
-        logger.info("RegistryParser total (python-registry): %d artifacts from %s", len(artifacts), src.name)
+        # ── Pass 2: Generic Hierarchical Traversal (Configurable Cap & Safeguarded Pruning) ──
+        generic_count = [0]
+        max_generic = self.max_artifacts
+        max_depth = self.max_depth
+
+        def walk_generic(key, depth=0):
+            nonlocal discovered_keys, traversed_keys
+            if generic_count[0] >= max_generic:
+                return
+            if depth > max_depth:
+                return
+
+            kp = key.path()
+            kp_lower = kp.lower()
+            discovered_keys += 1
+
+            # Exact prefix bloat filter with forensic keyword exemption
+            is_exempt = any(w in kp_lower for w in FORENSIC_EXEMPT_WORDS)
+            if not is_exempt and any(kp_lower == b or kp_lower.startswith(b + "\\") for b in BLOAT_PREFIXES):
+                try:
+                    sk_count = len(key.subkeys())
+                except Exception:
+                    sk_count = 0
+                skipped_subtrees.append({
+                    "path": kp,
+                    "reason": "non_forensic_bloat_tree",
+                    "subkeys_count": sk_count
+                })
+                return
+
+            traversed_keys += 1
+            if kp_lower not in seen_paths:
+                seen_paths.add(kp_lower)
+                try:
+                    values = key.values()
+                except Exception:
+                    values = []
+                if values:
+                    for val in values:
+                        if generic_count[0] >= max_generic:
+                            break
+                        try:
+                            v_name = val.name()
+                            v_raw = val.value()
+                            if isinstance(v_raw, bytes):
+                                v_data = v_raw.decode("utf-8", errors="ignore")
+                            elif isinstance(v_raw, (list, dict)):
+                                v_data = json.dumps(v_raw)
+                            else:
+                                v_data = str(v_raw) if v_raw is not None else None
+                        except Exception:
+                            continue
+
+                        art = _make_artifact(
+                            evidence_id=evidence_id,
+                            case_id=case_id,
+                            plugin="python_registry",
+                            plugin_text=f"Key: {kp} | Value: {v_name} = {v_data}",
+                            key_path=kp,
+                            value_name=v_name,
+                            value_data=v_data,
+                            timestamp=key.timestamp(),
+                            tool_version=ver,
+                            source_tool="python_registry"
+                        )
+                        artifacts.append(art)
+                        generic_count[0] += 1
+                else:
+                    if depth <= 2:
+                        art = _make_artifact(
+                            evidence_id=evidence_id,
+                            case_id=case_id,
+                            plugin="python_registry",
+                            plugin_text=f"Key: {kp}",
+                            key_path=kp,
+                            value_name=None,
+                            value_data=None,
+                            timestamp=key.timestamp(),
+                            tool_version=ver,
+                            source_tool="python_registry"
+                        )
+                        artifacts.append(art)
+                        generic_count[0] += 1
+
+            try:
+                for subkey in key.subkeys():
+                    if generic_count[0] >= max_generic:
+                        break
+                    walk_generic(subkey, depth + 1)
+            except Exception:
+                pass
+
+        walk_generic(reg.root())
+
+        cap_reached = generic_count[0] >= max_generic
+        is_pruned = len(skipped_subtrees) > 0
+        completeness_status = "FULL"
+        if cap_reached:
+            completeness_status = "PARTIAL_CAPPED"
+        elif is_pruned:
+            completeness_status = "PARTIAL_PRUNED"
+
+        self.last_parse_stats = {
+            "discovered_keys": discovered_keys,
+            "traversed_keys": traversed_keys,
+            "total_artifacts_extracted": len(artifacts),
+            "generic_artifacts_extracted": generic_count[0],
+            "priority_targets_hit": priority_hits,
+            "skipped_subtrees_count": len(skipped_subtrees),
+            "skipped_subtrees": skipped_subtrees[:20],
+            "cap_reached": cap_reached,
+            "completeness_status": completeness_status,
+            "tool_version": ver
+        }
+
+        # Tag completeness metadata on each artifact for forensic defensibility
+        for a in artifacts:
+            if getattr(a, "raw_fields", None) is not None:
+                a.raw_fields["completeness_status"] = completeness_status
+                a.raw_fields["cap_reached"] = cap_reached
+
+        logger.info(
+            "RegistryParser total (python-registry): %d artifacts from %s [Completeness: %s, Cap Reached: %s]",
+            len(artifacts), src.name, completeness_status, cap_reached
+        )
         artifacts.extend(_check_timestomping(artifacts, evidence_id, case_id=case_id, tool_version=ver))
         return artifacts
 
@@ -755,7 +967,7 @@ def _make_artifact(
             rule_name=plugin,
         )
 
-    elif p_lower in ("services", "svc", "servicedesc") or "\\currentcontrolset\\services\\" in kp_lower:
+    elif p_lower in ("services", "svc", "servicedesc") or "\\currentcontrolset\\services\\" in kp_lower or "\\controlset001\\services\\" in kp_lower or "\\controlset002\\services\\" in kp_lower or ("\\services\\" in kp_lower and not "component based servicing" in kp_lower):
         artifact_type = "windows_service"
         timestamp_type = "modified"
         norm = NormalizedFields(
@@ -766,6 +978,18 @@ def _make_artifact(
             registry_value=value_name,
             registry_value_data=value_data,
             rule_name=plugin,
+        )
+
+    elif "\\currentversion\\run" in kp_lower or "\\currentversion\\runonce" in kp_lower:
+        artifact_type = "registry_key"
+        timestamp_type = "modified"
+        norm = NormalizedFields(
+            file_path=display_path,
+            process_command_line=value_data,
+            registry_key=key_path,
+            registry_value=value_name,
+            registry_value_data=value_data,
+            rule_name="Registry_Run_Key",
         )
 
     else:

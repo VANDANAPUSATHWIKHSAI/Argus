@@ -348,7 +348,7 @@ class Agent3Validator:
 
         # Refine execution status based on findings & citation health
         current_st = output.execution_status
-        if current_st not in ("MODEL_UNAVAILABLE", "EXECUTION_FAILED", "VALIDATION_FAILED"):
+        if current_st not in ("FAILED", "MODEL_UNAVAILABLE", "EXECUTION_FAILED", "VALIDATION_FAILED"):
             has_steps = bool(output.attack_path or output.attack_timeline)
             all_verified = all_components and all(getattr(c, "citation_verified", False) for c in all_components if getattr(c, "evidence_ids", []))
             

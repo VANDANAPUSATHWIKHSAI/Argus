@@ -128,7 +128,9 @@ class StixTaxiiClient:
             if cached:
                 self.last_status = FeedStatus.CACHED
                 return cached
-            raise RuntimeError("TAXII server URL is not configured")
+            self.last_status = FeedStatus.UNAVAILABLE
+            logger.info("TAXII server URL is not configured. Marking feed as UNAVAILABLE.")
+            return []
 
         # Attempt remote live fetch
         try:
@@ -287,6 +289,10 @@ class StixTaxiiClient:
 
     def check_ioc(self, ioc: str, tenant_id: str = "default") -> dict[str, Any]:
         """Check if an IOC matches any configured STIX pattern, partitioned by tenant."""
+        if not self.server_url and not self._indicators and not self._indicators_by_tenant:
+            self.last_status = FeedStatus.UNAVAILABLE
+            return {}
+
         if tenant_id in self._indicators_by_tenant:
             indicators = self._indicators_by_tenant[tenant_id]
         else:

@@ -211,7 +211,11 @@ def run_pipeline(
     else:
         # Pre-loaded FIR findings: insert into repository for tenant & case isolation
         logger.info(f"\n[STAGE 4] Registering {len(fir_findings)} pre-loaded FIR findings into repository...")
+        existing_ids = set(fir_repo.findings.keys())
         for f in fir_findings:
+            f_id = getattr(f, "finding_id", None) or (f.get("finding_id") if isinstance(f, dict) else None)
+            if f_id and f_id in existing_ids:
+                continue
             if hasattr(f, "case_id"):
                 f.case_id = case_id
             if hasattr(f, "tenant_id"):

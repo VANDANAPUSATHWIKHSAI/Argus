@@ -217,49 +217,107 @@ def is_user_authorized_for_case_modification(
 
 def verify_case_access(case_id: str, current_user: dict, x_tenant_id: str = "default") -> None:
     """
-    Enforces strict case access control.
-    Non-admin, non-auditor users can ONLY access cases they are explicitly assigned to.
-    If not assigned, returns HTTP 404 (as if the case does not exist).
+    Enforces strict tenant isolation and case access control.
+    1. Tenant Isolation: Verifies that the case exists under x_tenant_id. If not, raises 404 immediately.
+    2. Role-based / Individual Access:
+       - Admins and Auditors can access any case within their authorized tenant.
+       - Assigned Analyst / Senior Analyst can access cases explicitly assigned to them by id, username, or email.
+       - Generic role assignments ('analyst' or 'senior_analyst') allow shared access to users holding that role.
+       - Individual assignments (e.g. '5' or 'sathwik') restrict access strictly to that individual user.
+       - Non-assigned users get HTTP 404 (preventing oracle probing).
     """
+    if not case_id or not case_id.strip():
+        raise HTTPException(status_code=400, detail="case_id cannot be empty.")
+
+    clean_case_id = str(case_id).strip()
+    user_tenant = current_user.get("tenant_id") or "default"
+    is_valid_tenant = (
+        x_tenant_id == user_tenant or
+        (x_tenant_id in ("default", "dev-team") and user_tenant in ("default", "dev-team"))
+    )
+    if not is_valid_tenant and (current_user.get("role") or "").lower() != "admin":
+        raise HTTPException(status_code=403, detail="Tenant access denied: user not authorized for requested tenant.")
+
+    # 1. Authoritative check: case MUST exist under x_tenant_id
+    case_row = None
+    try:
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT analyst_id, senior_analyst_id, tenant_id 
+                    FROM cases 
+                    WHERE (case_id = %s OR case_id = %s) 
+                      AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')))
+                    LIMIT 1;
+                    """,
+                    (clean_case_id, clean_case_id.replace('-', '_'), x_tenant_id, x_tenant_id)
+                )
+                case_row = cur.fetchone()
+    except Exception as e:
+        logger.debug(f"verify_case_access DB note: {e}")
+
+    if not case_row:
+        from infrastructure.repository.evidence_store import get_case_session
+        session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id)
+        if not session and '-' in clean_case_id:
+            session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id.replace('-', '_'))
+        
+        # Also check if case has registered findings under this tenant in fir_repo
+        if not session:
+            try:
+                has_findings = bool(_analyst_service.list_findings(case_id=clean_case_id, tenant_id=x_tenant_id))
+                if has_findings:
+                    a_id = "analyst"
+                    s_id = ""
+                    session = True
+            except Exception:
+                pass
+
+        if not session:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
+            )
+        if session is not True:
+            a_id = str(getattr(session, "analyst_id", None) or "").strip().lower()
+            s_id = str(getattr(session, "senior_analyst_id", None) or "").strip().lower()
+    else:
+        a_id = str(case_row[0] or "").strip().lower()
+        s_id = str(case_row[1] or "").strip().lower()
+
+    # 2. Once tenant isolation is confirmed, Admin and Auditor have access to any case in their tenant
     role = (current_user.get("role") or "").lower()
     if role in ("admin", "auditor"):
         return
 
-    uid = str(current_user.get("id", ""))
-    u_email = str(current_user.get("email", "")).lower()
+    # 3. Individual user identifiers
+    uid = str(current_user.get("id", "")).strip().lower()
+    uname = str(current_user.get("name", "")).strip().lower()
+    u_email = str(current_user.get("email", "")).strip().lower()
+    individual_identifiers = {i for i in (uid, uname, u_email) if i}
 
-    assigned = False
-    try:
-        from api.routes.auth import get_db_connection
-        with get_db_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT analyst_id, senior_analyst_id FROM cases WHERE case_id = %s AND (tenant_id = %s OR (%s IN ('default', 'dev-team') AND tenant_id IN ('default', 'dev-team')))",
-                    (case_id, x_tenant_id, x_tenant_id)
-                )
-                row = cur.fetchone()
-                if row:
-                    a_id = str(row[0] or "")
-                    s_id = str(row[1] or "")
-                    if a_id in (uid, u_email) or s_id in (uid, u_email):
-                        assigned = True
-    except Exception:
-        pass
+    # 4. Check Individual Assignment
+    if a_id and a_id in individual_identifiers:
+        return
+    if s_id and s_id in individual_identifiers:
+        return
 
-    if not assigned:
-        from infrastructure.repository.evidence_store import get_case_session
-        session = get_case_session(tenant_id=x_tenant_id, case_id=case_id)
-        if session:
-            a_id = str(getattr(session, "analyst_id", None) or "")
-            s_id = str(getattr(session, "senior_analyst_id", None) or "")
-            if a_id in (uid, u_email) or s_id in (uid, u_email):
-                assigned = True
+    # 5. Check Shared Generic Role Assignment (only if explicitly assigned to generic pool handle)
+    SHARED_ANALYST_HANDLES = {"analyst", "junior_analyst", "junior analyst", "unassigned"}
+    SHARED_SENIOR_HANDLES = {"senior_analyst", "senior", "senior analyst"}
 
-    if not assigned:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
-        )
+    if role in ("analyst", "junior_analyst") and a_id in SHARED_ANALYST_HANDLES:
+        return
+    if role in ("senior_analyst", "senior") and (s_id in SHARED_SENIOR_HANDLES or a_id in SHARED_ANALYST_HANDLES):
+        return
+
+    # 6. Not assigned to this individual or role
+    raise HTTPException(
+        status_code=404,
+        detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
+    )
 
 @router.post("/", response_model=Dict[str, Any])
 async def create_case(
@@ -523,12 +581,14 @@ def _resolve_pipeline_sources(
 
     checkpointer = Checkpointer()
     persisted_job = None
+    case_stages = checkpointer.get_case_state(clean_case_id, tenant_id=x_tenant_id)
+    if not case_stages and case_id != clean_case_id:
+        case_stages = checkpointer.get_case_state(case_id, tenant_id=x_tenant_id)
+
     if not live_job:
-        cp = checkpointer.get_stage_checkpoint(case_id=clean_case_id, stage="pipeline_job", tenant_id=x_tenant_id)
-        if not cp and case_id != clean_case_id:
-            cp = checkpointer.get_stage_checkpoint(case_id=case_id, stage="pipeline_job", tenant_id=x_tenant_id)
-        if cp:
-            persisted_job = cp.get("checkpoint") if isinstance(cp.get("checkpoint"), dict) else cp
+        stg_pj = case_stages.get("pipeline_job")
+        if stg_pj:
+            persisted_job = stg_pj.get("checkpoint") if isinstance(stg_pj.get("checkpoint"), dict) else stg_pj
 
     stored_pipeline_results = None
     for ev in (evidence_list or []):
@@ -545,9 +605,7 @@ def _resolve_pipeline_sources(
         for key in _REQUIRED_SWARM_STAGES:
             if stage_statuses.get(key):
                 continue
-            stg_cp = checkpointer.get_stage_checkpoint(case_id=clean_case_id, stage=key, tenant_id=x_tenant_id)
-            if not stg_cp and case_id != clean_case_id:
-                stg_cp = checkpointer.get_stage_checkpoint(case_id=case_id, stage=key, tenant_id=x_tenant_id)
+            stg_cp = case_stages.get(key)
             if isinstance(stg_cp, dict):
                 st = stg_cp.get("status")
                 if not st and isinstance(stg_cp.get("checkpoint"), dict):
@@ -787,20 +845,34 @@ async def get_all_cases(
         c_analyst_id = getattr(c, "analyst_id", None)
         c_senior_id = getattr(c, "senior_analyst_id", None)
         
-        analyst_id_str = str(c_analyst_id or "")
-        senior_id_str = str(c_senior_id or "")
-        assigned = (
-            is_admin or is_auditor or 
-            analyst_id_str in (user_id, user_email) or 
-            senior_id_str in (user_id, user_email)
+        analyst_id_str = str(c_analyst_id or "").strip().lower()
+        senior_id_str = str(c_senior_id or "").strip().lower()
+        user_id_clean = user_id.strip().lower()
+        user_name_clean = str(current_user.get("name", "")).strip().lower()
+        user_email_clean = user_email.strip().lower()
+        user_role_clean = user_role.strip().lower()
+        individual_identifiers = {i for i in (user_id_clean, user_name_clean, user_email_clean) if i}
+
+        is_individual_match = (
+            (analyst_id_str and analyst_id_str in individual_identifiers) or
+            (senior_id_str and senior_id_str in individual_identifiers)
         )
+        SHARED_ANALYST_HANDLES = {"analyst", "junior_analyst", "junior analyst", "unassigned"}
+        SHARED_SENIOR_HANDLES = {"senior_analyst", "senior", "senior analyst"}
+
+        is_shared_match = (
+            (user_role_clean in ("analyst", "junior_analyst") and analyst_id_str in SHARED_ANALYST_HANDLES) or
+            (user_role_clean in ("senior_analyst", "senior") and (senior_id_str in SHARED_SENIOR_HANDLES or analyst_id_str in SHARED_ANALYST_HANDLES))
+        )
+
+        assigned = is_admin or is_auditor or is_individual_match or is_shared_match
 
         # Non-assigned cases are completely invisible to regular users
         if not is_admin and not is_auditor and not assigned:
             continue
         
-        analyst_name = user_map.get(analyst_id_str, analyst_id_str)
-        senior_name = user_map.get(senior_id_str, senior_id_str)
+        analyst_name = user_map.get(str(c_analyst_id or ""), str(c_analyst_id or ""))
+        senior_name = user_map.get(str(c_senior_id or ""), str(c_senior_id or ""))
         
         is_open_case = str(getattr(c, "status", "open") or "open").lower() in ("open", "in_progress")
         lock = case_lock_manager.get_lock(c.case_id) if is_open_case else None
@@ -808,19 +880,16 @@ async def get_all_cases(
             case_lock_manager.release(c.case_id, user_id, is_admin=True)
         is_team_member = (
             is_admin or
-            analyst_id_str in (user_id, user_email) or
-            senior_id_str in (user_id, user_email)
+            is_individual_match or
+            is_shared_match
         )
         lock_info = lock.to_dict(user_id, is_assigned=is_team_member) if lock else None
 
-        sub_meta = _read_case_submission_meta(c.case_id, c)
         submitted_to_senior = bool(
-            sub_meta["submitted_to_senior"] or
             c.case_id in senior_note_cases or
             getattr(c, "submitted_to_senior", False)
         )
         submitted_to_auditor = bool(
-            sub_meta["submitted_to_auditor"] or
             c.case_id in auditor_note_cases or
             getattr(c, "submitted_to_auditor", False)
         )
@@ -830,16 +899,8 @@ async def get_all_cases(
         has_report = bool(
             submitted_to_senior or
             submitted_to_auditor or
-            sub_meta["has_report"] or
             getattr(c, "has_report", False)
         )
-        if not has_report:
-            try:
-                case_dir = repo_dir_path / c.case_id
-                if (case_dir / "report.json").is_file() or (case_dir / "report.html").is_file():
-                    has_report = True
-            except Exception:
-                pass
 
         closed_reason = getattr(c, "closed_reason", None)
         if not closed_reason and getattr(c, "status", "") == "closed":
@@ -861,8 +922,8 @@ async def get_all_cases(
             "has_report": has_report,
             "submitted_to_senior": submitted_to_senior,
             "submitted_to_auditor": submitted_to_auditor,
-            "submitted_to_senior_data": sub_meta["submitted_to_senior_data"],
-            "submitted_to_auditor_data": sub_meta["submitted_to_auditor_data"],
+            "submitted_to_senior_data": None,
+            "submitted_to_auditor_data": None,
             "closed_reason": closed_reason,
         })
 
@@ -935,7 +996,7 @@ async def get_recent_activity(
                 # 3. Analyst Findings
                 cur.execute(
                     """
-                    SELECT f.case_id, f.created_at, f.fact, f.source_engine, f.reviewed_by, f.review_status, f.timestamp
+                    SELECT f.case_id, COALESCE(f.timestamp, c.created_at) AS created_at, f.fact, f.source_engine, f.reviewed_by, f.review_status, f.timestamp
                     FROM fir_findings f
                     INNER JOIN cases c ON f.case_id = c.case_id
                     WHERE c.tenant_id = %s OR (%s IN ('default', 'dev-team') AND c.tenant_id IN ('default', 'dev-team'))
@@ -1184,80 +1245,75 @@ async def get_auditor_stats(
     previous_cases = []
 
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password, connect_timeout=3
-        )
-        cur = conn.cursor()
-        
-        cur.execute(
-            """
-            SELECT f.severity
-            FROM fir_findings f
-            INNER JOIN cases c ON f.case_id = c.case_id
-            WHERE c.tenant_id = %s
-            """,
-            (x_tenant_id,)
-        )
-        rows = cur.fetchall()
-        for row in rows:
-            sev_str = (row[0] or "medium").lower()
-            total_findings += 1
-            if sev_str in ("critical", "high"):
-                high_severity += 1
-            elif sev_str == "medium":
-                medium_severity += 1
-            else:
-                low_severity += 1
-
-        cur.execute(
-            """
-            SELECT c.case_id, c.name, c.closed_at, c.created_at,
-                   COUNT(f.finding_id) as finding_count,
-                   AVG(f.confidence) as avg_conf,
-                   MAX(CASE 
-                       WHEN LOWER(f.severity) = 'critical' THEN 4 
-                       WHEN LOWER(f.severity) = 'high' THEN 3 
-                       WHEN LOWER(f.severity) = 'medium' THEN 2 
-                       WHEN LOWER(f.severity) = 'low' THEN 1 
-                       ELSE 0 END) as max_sev_rank
-            FROM cases c
-            LEFT JOIN fir_findings f ON c.case_id = f.case_id
-            WHERE (c.tenant_id = %s OR (%s IN ('default', 'dev-team') AND c.tenant_id IN ('default', 'dev-team')))
-            GROUP BY c.case_id, c.name, c.closed_at, c.created_at, c.has_report, c.submitted_to_senior, c.submitted_to_auditor
-            HAVING COUNT(f.finding_id) > 0
-                OR COALESCE(c.has_report, FALSE) = TRUE
-                OR COALESCE(c.submitted_to_senior, FALSE) = TRUE
-                OR COALESCE(c.submitted_to_auditor, FALSE) = TRUE
-            ORDER BY COALESCE(c.closed_at, c.created_at) DESC
-            LIMIT %s
-            """,
-            (x_tenant_id, x_tenant_id, limit)
-        )
-        case_rows = list(reversed(cur.fetchall()))
-
-        sev_rank_map = {4: "Critical", 3: "High", 2: "Medium", 1: "Low", 0: "Low"}
-
-        for r in case_rows:
-            cid, name, closed_at, created_at, f_count, avg_conf, max_sev_rank = r
-            dt = closed_at or created_at
-            conf_pct = round(float(avg_conf) * 100, 1) if avg_conf is not None else 0.0
-            sev_label = sev_rank_map.get(max_sev_rank or 0, "Low")
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            cur = conn.cursor()
             
-            previous_cases.append({
-                "case_id": cid,
-                "name": name or cid,
-                "closed_at": dt.isoformat() if dt else None,
-                "month": dt.strftime("%b") if dt else "",
-                "date_formatted": dt.strftime("%b %d") if dt else "",
-                "full_date_formatted": dt.strftime("%b %d, %Y") if dt else "",
-                "severity": sev_label,
-                "confidence": conf_pct,
-                "total_findings": f_count
-            })
+            cur.execute(
+                """
+                SELECT f.severity
+                FROM fir_findings f
+                INNER JOIN cases c ON f.case_id = c.case_id
+                WHERE c.tenant_id = %s
+                """,
+                (x_tenant_id,)
+            )
+            rows = cur.fetchall()
+            for row in rows:
+                sev_str = (row[0] or "medium").lower()
+                total_findings += 1
+                if sev_str in ("critical", "high"):
+                    high_severity += 1
+                elif sev_str == "medium":
+                    medium_severity += 1
+                else:
+                    low_severity += 1
 
-        conn.close()
+            cur.execute(
+                """
+                SELECT c.case_id, c.name, c.closed_at, c.created_at,
+                       COUNT(f.finding_id) as finding_count,
+                       AVG(f.confidence) as avg_conf,
+                       MAX(CASE 
+                           WHEN LOWER(f.severity) = 'critical' THEN 4 
+                           WHEN LOWER(f.severity) = 'high' THEN 3 
+                           WHEN LOWER(f.severity) = 'medium' THEN 2 
+                           WHEN LOWER(f.severity) = 'low' THEN 1 
+                           ELSE 0 END) as max_sev_rank
+                FROM cases c
+                LEFT JOIN fir_findings f ON c.case_id = f.case_id
+                WHERE (c.tenant_id = %s OR (%s IN ('default', 'dev-team') AND c.tenant_id IN ('default', 'dev-team')))
+                GROUP BY c.case_id, c.name, c.closed_at, c.created_at, c.has_report, c.submitted_to_senior, c.submitted_to_auditor
+                HAVING COUNT(f.finding_id) > 0
+                    OR COALESCE(c.has_report, FALSE) = TRUE
+                    OR COALESCE(c.submitted_to_senior, FALSE) = TRUE
+                    OR COALESCE(c.submitted_to_auditor, FALSE) = TRUE
+                ORDER BY COALESCE(c.closed_at, c.created_at) DESC
+                LIMIT %s
+                """,
+                (x_tenant_id, x_tenant_id, limit)
+            )
+            case_rows = list(reversed(cur.fetchall()))
+
+            sev_rank_map = {4: "Critical", 3: "High", 2: "Medium", 1: "Low", 0: "Low"}
+
+            for r in case_rows:
+                cid, name, closed_at, created_at, f_count, avg_conf, max_sev_rank = r
+                dt = closed_at or created_at
+                conf_pct = round(float(avg_conf) * 100, 1) if avg_conf is not None else 0.0
+                sev_label = sev_rank_map.get(max_sev_rank or 0, "Low")
+                
+                previous_cases.append({
+                    "case_id": cid,
+                    "name": name or cid,
+                    "closed_at": dt.isoformat() if dt else None,
+                    "month": dt.strftime("%b") if dt else "",
+                    "date_formatted": dt.strftime("%b %d") if dt else "",
+                    "full_date_formatted": dt.strftime("%b %d, %Y") if dt else "",
+                    "severity": sev_label,
+                    "confidence": conf_pct,
+                    "total_findings": f_count
+                })
     except Exception as e:
         logger.warning(f"Could not fetch auditor stats from DB: {e}")
 
@@ -1375,39 +1431,33 @@ async def close_case_endpoint(
     effective_tenant = x_tenant_id
     db_updated = False
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password, connect_timeout=2
-        )
-        cur = conn.cursor()
-        # Resolve real tenant from DB
-        cur.execute("SELECT tenant_id FROM cases WHERE case_id = %s", (clean_case_id,))
-        row = cur.fetchone()
-        if not row and clean_case_id != case_id:
-            cur.execute("SELECT tenant_id FROM cases WHERE case_id = %s", (case_id,))
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            cur = conn.cursor()
+            # Resolve real tenant from DB
+            cur.execute("SELECT tenant_id FROM cases WHERE case_id = %s", (clean_case_id,))
             row = cur.fetchone()
-            if row:
-                clean_case_id = case_id
-        if row and row[0]:
-            effective_tenant = row[0]
+            if not row and clean_case_id != case_id:
+                cur.execute("SELECT tenant_id FROM cases WHERE case_id = %s", (case_id,))
+                row = cur.fetchone()
+                if row:
+                    clean_case_id = case_id
+            if row and row[0]:
+                effective_tenant = row[0]
 
-        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS has_report BOOLEAN DEFAULT FALSE;")
-        cur.execute("ALTER TABLE cases ADD COLUMN IF NOT EXISTS closed_reason TEXT;")
-        if reason:
-            cur.execute(
-                "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s, closed_reason = %s, description = COALESCE(%s, description) WHERE case_id = %s;",
-                (str(current_user.get("id", current_user.get("name", "admin"))), reason, reason, clean_case_id)
-            )
-        else:
-            cur.execute(
-                "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s WHERE case_id = %s;",
-                (str(current_user.get("id", current_user.get("name", "admin"))), clean_case_id)
-            )
-        if cur.rowcount > 0:
-            db_updated = True
-        conn.commit()
-        conn.close()
+            if reason:
+                cur.execute(
+                    "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s, closed_reason = %s, description = COALESCE(%s, description) WHERE case_id = %s;",
+                    (str(current_user.get("id", current_user.get("name", "admin"))), reason, reason, clean_case_id)
+                )
+            else:
+                cur.execute(
+                    "UPDATE cases SET status = 'closed', closed_at = NOW(), closed_by = %s WHERE case_id = %s;",
+                    (str(current_user.get("id", current_user.get("name", "admin"))), clean_case_id)
+                )
+            if cur.rowcount > 0:
+                db_updated = True
+            conn.commit()
     except Exception as e:
         print(f"[DB] Error closing case directly: {e}")
         
@@ -1476,39 +1526,32 @@ async def assign_senior_analyst(
 
     updated_db = False
     try:
-        from config.settings import settings
-        import psycopg2
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password, connect_timeout=2
-        )
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE cases SET senior_analyst_id = %s WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
-            (str(req.senior_analyst_id), case_id, x_tenant_id)
-        )
-        if cur.rowcount > 0:
-            updated_db = True
-        conn.commit()
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE cases SET senior_analyst_id = %s WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
+                (str(req.senior_analyst_id), case_id, x_tenant_id)
+            )
+            if cur.rowcount > 0:
+                updated_db = True
+            conn.commit()
 
-        # Send assignment email in background if configured
-        senior = get_user_by_id(req.senior_analyst_id)
-        if senior and senior.get("email"):
-            case_name = case_id
-            try:
-                cur.execute("SELECT name FROM cases WHERE case_id = %s", (case_id,))
-                row = cur.fetchone()
-                if row and row[0]:
-                    case_name = row[0]
-            except Exception:
-                pass
-            try:
-                send_assignment_email(senior["email"], case_id, case_name, "Senior Analyst")
-            except Exception as email_err:
-                logger.warning(f"Could not send assignment email: {email_err}")
-
-        conn.close()
+            # Send assignment email in background if configured
+            senior = get_user_by_id(req.senior_analyst_id)
+            if senior and senior.get("email"):
+                case_name = case_id
+                try:
+                    cur.execute("SELECT name FROM cases WHERE case_id = %s", (case_id,))
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        case_name = row[0]
+                except Exception:
+                    pass
+                try:
+                    send_assignment_email(senior["email"], case_id, case_name, "Senior Analyst")
+                except Exception as email_err:
+                    logger.warning(f"Could not send assignment email: {email_err}")
     except Exception as db_err:
         logger.warning(f"Database update for senior analyst assignment: {db_err}")
 
@@ -1548,38 +1591,31 @@ async def assign_analyst(
 
     updated_db = False
     try:
-        from config.settings import settings
-        import psycopg2
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password, connect_timeout=2
-        )
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE cases SET analyst_id = %s WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
-            (str(req.analyst_id), case_id, x_tenant_id)
-        )
-        if cur.rowcount > 0:
-            updated_db = True
-        conn.commit()
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE cases SET analyst_id = %s WHERE case_id = %s AND (tenant_id = %s OR tenant_id IN ('default', 'dev-team'))",
+                (str(req.analyst_id), case_id, x_tenant_id)
+            )
+            if cur.rowcount > 0:
+                updated_db = True
+            conn.commit()
 
-        analyst = get_user_by_id(req.analyst_id)
-        if analyst and analyst.get("email"):
-            case_name = case_id
-            try:
-                cur.execute("SELECT name FROM cases WHERE case_id = %s", (case_id,))
-                row = cur.fetchone()
-                if row and row[0]:
-                    case_name = row[0]
-            except Exception:
-                pass
-            try:
-                send_assignment_email(analyst["email"], case_id, case_name, "Analyst")
-            except Exception as email_err:
-                logger.warning(f"Could not send assignment email: {email_err}")
-
-        conn.close()
+            analyst = get_user_by_id(req.analyst_id)
+            if analyst and analyst.get("email"):
+                case_name = case_id
+                try:
+                    cur.execute("SELECT name FROM cases WHERE case_id = %s", (case_id,))
+                    row = cur.fetchone()
+                    if row and row[0]:
+                        case_name = row[0]
+                except Exception:
+                    pass
+                try:
+                    send_assignment_email(analyst["email"], case_id, case_name, "Analyst")
+                except Exception as email_err:
+                    logger.warning(f"Could not send assignment email: {email_err}")
     except Exception as db_err:
         logger.warning(f"Database update for analyst assignment: {db_err}")
 
@@ -1951,18 +1987,8 @@ async def get_case(
     case_desc = getattr(session, "description", None) or "No description provided."
     if case_name == "Unnamed Case":
         try:
-            from infrastructure.repository.evidence_store import _should_attempt_postgres
-            if _should_attempt_postgres():
-                from config.settings import settings
-                import psycopg2
-                conn = psycopg2.connect(
-                    host=settings.postgres_host,
-                    port=settings.postgres_port,
-                    database=settings.postgres_db,
-                    user=settings.postgres_user,
-                    password=settings.postgres_password,
-                    connect_timeout=1
-                )
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
                 cur = conn.cursor()
                 cur.execute("SELECT name, description FROM cases WHERE case_id = %s AND tenant_id = %s", (case_id, x_tenant_id))
                 row = cur.fetchone()
@@ -1971,7 +1997,6 @@ async def get_case(
                         case_name = row[0]
                     if len(row) > 1 and row[1]:
                         case_desc = row[1]
-                conn.close()
         except Exception as e:
             logger.warning(f"Could not fetch case name for summary: {e}")
 
@@ -2165,42 +2190,42 @@ async def get_case_notes(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
-    from config.settings import settings
+    verify_case_access(case_id, current_user, x_tenant_id)
+    from databases.postgres_pool import PostgresConnectionPool
     import psycopg2
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password
-        )
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT note_id, title, content, type, priority, created_by, created_at, updated_at, related_evidence_id, related_finding_id
-            FROM case_notes
-            WHERE case_id = %s AND tenant_id = %s
-            ORDER BY updated_at DESC
-            """,
-            (case_id, x_tenant_id)
-        )
-        notes = []
-        for row in cur.fetchall():
-            notes.append({
-                "noteId": row[0],
-                "caseId": case_id,
-                "title": row[1],
-                "content": row[2],
-                "type": row[3],
-                "priority": row[4],
-                "createdBy": row[5],
-                "createdAt": row[6].isoformat() if hasattr(row[6], "isoformat") else str(row[6]),
-                "updatedAt": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
-                "relatedEvidenceId": row[8],
-                "relatedFindingId": row[9]
-            })
-        conn.close()
-        return {"status": "SUCCESS", "data": notes}
+        with PostgresConnectionPool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT note_id, title, content, type, priority, created_by, created_at, updated_at, related_evidence_id, related_finding_id
+                    FROM case_notes
+                    WHERE case_id = %s AND tenant_id = %s
+                    ORDER BY updated_at DESC
+                    """,
+                    (case_id, x_tenant_id)
+                )
+                notes = []
+                for row in cur.fetchall():
+                    notes.append({
+                        "noteId": row[0],
+                        "caseId": case_id,
+                        "title": row[1],
+                        "content": row[2],
+                        "type": row[3],
+                        "priority": row[4],
+                        "createdBy": row[5],
+                        "createdAt": row[6].isoformat() if hasattr(row[6], "isoformat") else str(row[6]),
+                        "updatedAt": row[7].isoformat() if hasattr(row[7], "isoformat") else str(row[7]),
+                        "relatedEvidenceId": row[8],
+                        "relatedFindingId": row[9]
+                    })
+                return {"status": "SUCCESS", "data": notes}
+    except (psycopg2.OperationalError, psycopg2.DatabaseError) as db_err:
+        logger.error(f"PostgreSQL database error fetching notes for case {case_id}: {db_err}")
+        raise HTTPException(status_code=503, detail="PostgreSQL service temporarily unavailable")
     except Exception as e:
+        logger.error(f"Unexpected error fetching notes for case {case_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{case_id}/notes")
@@ -2210,6 +2235,7 @@ async def create_case_note(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
+    verify_case_access(case_id, current_user, x_tenant_id)
     user_id = str(current_user.get("id", ""))
     user_role = (current_user.get("role") or "").lower()
     note_title_lower = (note.title or "").lower()
@@ -2227,26 +2253,21 @@ async def create_case_note(
                 detail=f"Cannot add case note: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
             )
 
-    from config.settings import settings
+    from databases.postgres_pool import PostgresConnectionPool
     import psycopg2
     import uuid
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password
-        )
-        cur = conn.cursor()
         note_id = f"NOTE-{str(uuid.uuid4())[:8].upper()}"
-        cur.execute(
-            """
-            INSERT INTO case_notes (note_id, case_id, tenant_id, title, content, type, priority, created_by, related_evidence_id, related_finding_id)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (note_id, case_id, x_tenant_id, note.title, note.content, note.type, note.priority, current_user.get("name", "Analyst"), note.related_evidence_id, note.related_finding_id)
-        )
-        conn.commit()
-        conn.close()
+        with PostgresConnectionPool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO case_notes (note_id, case_id, tenant_id, title, content, type, priority, created_by, related_evidence_id, related_finding_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (note_id, case_id, x_tenant_id, note.title, note.content, note.type, note.priority, current_user.get("name", "Analyst"), note.related_evidence_id, note.related_finding_id)
+                )
+                conn.commit()
 
         if "escalation to auditor" in note_title_lower:
             _persist_case_report_stage(
@@ -2287,26 +2308,20 @@ async def update_case_note(
             detail=f"Cannot update case note: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
         )
 
-    from config.settings import settings
-    import psycopg2
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password
-        )
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE case_notes 
-            SET title = %s, content = %s, type = %s, priority = %s, updated_at = now(), related_evidence_id = %s, related_finding_id = %s
-            WHERE note_id = %s AND case_id = %s AND tenant_id = %s
-            """,
-            (note.title, note.content, note.type, note.priority, note.related_evidence_id, note.related_finding_id, note_id, case_id, x_tenant_id)
-        )
-        conn.commit()
-        conn.close()
-        return {"status": "SUCCESS"}
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE case_notes 
+                SET title = %s, content = %s, type = %s, priority = %s, updated_at = now(), related_evidence_id = %s, related_finding_id = %s
+                WHERE note_id = %s AND case_id = %s AND tenant_id = %s
+                """,
+                (note.title, note.content, note.type, note.priority, note.related_evidence_id, note.related_finding_id, note_id, case_id, x_tenant_id)
+            )
+            conn.commit()
+            return {"status": "SUCCESS"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2328,19 +2343,13 @@ async def delete_case_note(
             status_code=423,
             detail=f"Cannot delete case note: Case is currently locked by analyst '{lock.locked_by_user_name}'. You have Read-Only access."
         )
-    from config.settings import settings
-    import psycopg2
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password
-        )
-        cur = conn.cursor()
-        cur.execute("DELETE FROM case_notes WHERE note_id = %s AND case_id = %s AND tenant_id = %s", (note_id, case_id, x_tenant_id))
-        conn.commit()
-        conn.close()
-        return {"status": "SUCCESS"}
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM case_notes WHERE note_id = %s AND case_id = %s AND tenant_id = %s", (note_id, case_id, x_tenant_id))
+            conn.commit()
+            return {"status": "SUCCESS"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2351,60 +2360,42 @@ async def get_review_notes(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
-    from config.settings import settings
+    verify_case_access(case_id, current_user, x_tenant_id)
+    from databases.postgres_pool import PostgresConnectionPool
     import psycopg2
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password
-        )
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS review_notes (
-                note_id VARCHAR(50) PRIMARY KEY,
-                case_id VARCHAR(50),
-                tenant_id VARCHAR(50),
-                title VARCHAR(255),
-                content TEXT,
-                type VARCHAR(50),
-                status VARCHAR(50),
-                related_type VARCHAR(50),
-                related_id VARCHAR(50),
-                created_by VARCHAR(100),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        conn.commit()
-
-        cur.execute(
-            """
-            SELECT note_id, title, content, type, status, related_type, related_id, created_by, created_at, updated_at
-            FROM review_notes
-            WHERE case_id = %s AND tenant_id = %s
-            ORDER BY created_at DESC
-            """,
-            (case_id, x_tenant_id)
-        )
-        notes = []
-        for row in cur.fetchall():
-            notes.append({
-                "noteId": row[0],
-                "caseId": case_id,
-                "title": row[1],
-                "content": row[2],
-                "type": row[3],
-                "status": row[4],
-                "relatedType": row[5],
-                "relatedId": row[6],
-                "createdBy": row[7],
-                "createdAt": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8]),
-                "updatedAt": row[9].isoformat() if hasattr(row[9], "isoformat") else str(row[9])
-            })
-        conn.close()
-        return {"status": "SUCCESS", "data": notes}
+        with PostgresConnectionPool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT note_id, title, content, type, status, related_type, related_id, created_by, created_at, updated_at
+                    FROM review_notes
+                    WHERE case_id = %s AND tenant_id = %s
+                    ORDER BY created_at DESC
+                    """,
+                    (case_id, x_tenant_id)
+                )
+                notes = []
+                for row in cur.fetchall():
+                    notes.append({
+                        "noteId": row[0],
+                        "caseId": case_id,
+                        "title": row[1],
+                        "content": row[2],
+                        "type": row[3],
+                        "status": row[4],
+                        "relatedType": row[5],
+                        "relatedId": row[6],
+                        "createdBy": row[7],
+                        "createdAt": row[8].isoformat() if hasattr(row[8], "isoformat") else str(row[8]),
+                        "updatedAt": row[9].isoformat() if hasattr(row[9], "isoformat") else str(row[9])
+                    })
+                return {"status": "SUCCESS", "data": notes}
+    except (psycopg2.OperationalError, psycopg2.DatabaseError) as db_err:
+        logger.error(f"PostgreSQL database error fetching review notes for case {case_id}: {db_err}")
+        raise HTTPException(status_code=503, detail="PostgreSQL service temporarily unavailable")
     except Exception as e:
+        logger.error(f"Unexpected error fetching review notes for case {case_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/{case_id}/review-notes")
@@ -2414,51 +2405,30 @@ async def create_review_note(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
-    from config.settings import settings
-    import psycopg2
+    verify_case_access(case_id, current_user, x_tenant_id)
+    from databases.postgres_pool import PostgresConnectionPool
     import uuid
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password
-        )
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS review_notes (
-                note_id VARCHAR(50) PRIMARY KEY,
-                case_id VARCHAR(50),
-                tenant_id VARCHAR(50),
-                title VARCHAR(255),
-                content TEXT,
-                type VARCHAR(50),
-                status VARCHAR(50),
-                related_type VARCHAR(50),
-                related_id VARCHAR(50),
-                created_by VARCHAR(100),
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
         note_id = f"RN-{str(uuid.uuid4())[:8].upper()}"
-        cur.execute(
-            """
-            INSERT INTO review_notes (note_id, case_id, tenant_id, title, content, type, status, related_type, related_id, created_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """,
-            (note_id, case_id, x_tenant_id, note.title, note.content, note.type, note.status, note.related_type, note.related_id, current_user.get("name", "Senior Analyst"))
-        )
-        
-        # Log to audit log
-        cur.execute(
-            """
-            INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (x_tenant_id, case_id, current_user.get("user_id", "admin"), current_user.get("name", "analyst"), "Created Review Note", json.dumps({"note_id": note_id, "title": note.title}))
-        )
-        conn.commit()
-        conn.close()
+        with PostgresConnectionPool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO review_notes (note_id, case_id, tenant_id, title, content, type, status, related_type, related_id, created_by)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (note_id, case_id, x_tenant_id, note.title, note.content, note.type, note.status, note.related_type, note.related_id, current_user.get("name", "Senior Analyst"))
+                )
+                
+                # Log to audit log
+                cur.execute(
+                    """
+                    INSERT INTO audit_log (tenant_id, case_id, event, actor, detail, timestamp)
+                    VALUES (%s, %s, %s, %s, %s, NOW())
+                    """,
+                    (x_tenant_id, case_id, "Created Review Note", current_user.get("name", "analyst"), json.dumps({"user_id": current_user.get("user_id", "admin"), "note_id": note_id, "title": note.title}))
+                )
+                conn.commit()
         return {"status": "SUCCESS", "noteId": note_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -2471,36 +2441,30 @@ async def update_review_note(
     x_tenant_id: str = Header("default", alias="X-Tenant-ID"),
     current_user: Dict = Depends(get_current_user)
 ):
-    from config.settings import settings
-    import psycopg2
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password
-        )
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE review_notes 
-            SET title = %s, content = %s, type = %s, status = %s, related_type = %s, related_id = %s, updated_at = CURRENT_TIMESTAMP
-            WHERE note_id = %s AND case_id = %s AND tenant_id = %s
-            """,
-            (note.title, note.content, note.type, note.status, note.related_type, note.related_id, note_id, case_id, x_tenant_id)
-        )
-        
-        # Log to audit log
-        action_name = "Resolved Review Note" if note.status == "Resolved" else "Updated Review Note"
-        cur.execute(
-            """
-            INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (x_tenant_id, case_id, current_user.get("user_id", "admin"), current_user.get("name", "analyst"), action_name, json.dumps({"note_id": note_id, "title": note.title}))
-        )
-        conn.commit()
-        conn.close()
-        return {"status": "SUCCESS"}
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE review_notes 
+                SET title = %s, content = %s, type = %s, status = %s, related_type = %s, related_id = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE note_id = %s AND case_id = %s AND tenant_id = %s
+                """,
+                (note.title, note.content, note.type, note.status, note.related_type, note.related_id, note_id, case_id, x_tenant_id)
+            )
+            
+            # Log to audit log
+            action_name = "Resolved Review Note" if note.status == "Resolved" else "Updated Review Note"
+            cur.execute(
+                """
+                INSERT INTO audit_log (tenant_id, case_id, event, actor, detail, timestamp)
+                VALUES (%s, %s, %s, %s, %s, NOW())
+                """,
+                (x_tenant_id, case_id, action_name, current_user.get("name", "analyst"), json.dumps({"user_id": current_user.get("user_id", "admin"), "note_id": note_id, "title": note.title}))
+            )
+            conn.commit()
+            return {"status": "SUCCESS"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -2516,16 +2480,16 @@ async def get_case_agent_results(
     persisted claims, attack graph reconstruction, threat intelligence, and supervisor verdict.
     Strictly enforces case ownership and tenant isolation.
     """
+    verify_case_access(case_id, current_user, x_tenant_id)
     from api.routes.evidence import sanitize_uuid
     from infrastructure.repository.evidence_store import list_evidence_by_case, get_case_session
     from ism.checkpointer import Checkpointer
     from config.settings import settings
-    import psycopg2
     from pathlib import Path
 
     clean_case_id = sanitize_uuid(case_id)
 
-    # 1. Enforce Case Existence and Tenant Isolation
+    # 1. Enforce Case Evidence and Findings with Tenant Isolation
     evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=clean_case_id)
     if not evidence_list and case_id != clean_case_id:
         evidence_list = list_evidence_by_case(tenant_id=x_tenant_id, case_id=case_id)
@@ -2533,39 +2497,6 @@ async def get_case_agent_results(
     findings = _analyst_service.list_findings(case_id=clean_case_id, tenant_id=x_tenant_id)
     if not findings and case_id != clean_case_id:
         findings = _analyst_service.list_findings(case_id=case_id, tenant_id=x_tenant_id)
-
-    case_exists = bool(evidence_list or findings)
-    if not case_exists:
-        try:
-            session = get_case_session(tenant_id=x_tenant_id, case_id=clean_case_id) or get_case_session(tenant_id=x_tenant_id, case_id=case_id)
-            if session and getattr(session, "tenant_id", None) == x_tenant_id:
-                case_exists = True
-        except Exception:
-            pass
-
-    if not case_exists:
-        try:
-            conn = psycopg2.connect(
-                host=settings.postgres_host, port=settings.postgres_port,
-                database=settings.postgres_db, user=settings.postgres_user,
-                password=settings.postgres_password, connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT case_id FROM cases WHERE (case_id = %s OR case_id = %s) AND tenant_id = %s;",
-                (clean_case_id, case_id, x_tenant_id)
-            )
-            if cur.fetchone():
-                case_exists = True
-            conn.close()
-        except Exception as ce:
-            logger.debug(f"Cases table query note: {ce}")
-
-    if not case_exists:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Case '{case_id}' not found for tenant '{x_tenant_id}'."
-        )
 
     # 2. Check in-memory live job (tenant-checked)
     with _agent_jobs_lock:
@@ -2593,41 +2524,34 @@ async def get_case_agent_results(
     # 5. Query PostgreSQL agent_outputs table with strict tenant filter
     db_claims = []
     try:
+        from databases.postgres_pool import PostgresConnectionPool
         from agents.agent1_evidence_intelligence.agent import _ensure_agent_outputs_table_initialized
-        conn = psycopg2.connect(
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            database=settings.postgres_db,
-            user=settings.postgres_user,
-            password=settings.postgres_password,
-            connect_timeout=2
-        )
-        _ensure_agent_outputs_table_initialized(conn)
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT id, agent_id, claim, evidence_ids, confidence, verified, execution_status, flags, created_at, model_used
-            FROM agent_outputs
-            WHERE case_id IN (%s, %s) AND tenant_id = %s
-            ORDER BY id ASC;
-            """,
-            (clean_case_id, case_id, x_tenant_id)
-        )
-        rows = cur.fetchall()
-        for r in rows:
-            db_claims.append({
-                "id": r[0],
-                "agent_id": r[1],
-                "claim": r[2],
-                "evidence_ids": r[3] or [],
-                "confidence": r[4] or 0.0,
-                "verified": bool(r[5]),
-                "execution_status": r[6] or "COMPLETED",
-                "flags": r[7] if isinstance(r[7], list) else [],
-                "created_at": r[8].isoformat() if hasattr(r[8], "isoformat") and r[8] else str(r[8]),
-                "model_used": r[9] or "Qwen3-8B"
-            })
-        conn.close()
+        with PostgresConnectionPool.get_connection() as conn:
+            _ensure_agent_outputs_table_initialized(conn)
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT id, agent_id, claim, evidence_ids, confidence, verified, execution_status, flags, created_at, model_used
+                FROM agent_outputs
+                WHERE case_id IN (%s, %s) AND tenant_id = %s
+                ORDER BY id ASC;
+                """,
+                (clean_case_id, case_id, x_tenant_id)
+            )
+            rows = cur.fetchall()
+            for r in rows:
+                db_claims.append({
+                    "id": r[0],
+                    "agent_id": r[1],
+                    "claim": r[2],
+                    "evidence_ids": r[3] or [],
+                    "confidence": r[4] or 0.0,
+                    "verified": bool(r[5]),
+                    "execution_status": r[6] or "COMPLETED",
+                    "flags": r[7] if isinstance(r[7], list) else [],
+                    "created_at": r[8].isoformat() if hasattr(r[8], "isoformat") and r[8] else str(r[8]),
+                    "model_used": r[9] or "Qwen3-8B"
+                })
     except Exception as dbe:
         logger.warning(f"Could not query agent_outputs table: {dbe}")
 
@@ -2774,19 +2698,15 @@ def _dispatch_pipeline_job(
 
     if not case_exists:
         try:
-            conn = psycopg2.connect(
-                host=settings.postgres_host, port=settings.postgres_port,
-                database=settings.postgres_db, user=settings.postgres_user,
-                password=settings.postgres_password, connect_timeout=2
-            )
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT case_id FROM cases WHERE (case_id = %s OR case_id = %s) AND tenant_id = %s;",
-                (clean_case_id, case_id_raw, x_tenant_id)
-            )
-            if cur.fetchone():
-                case_exists = True
-            conn.close()
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT case_id FROM cases WHERE (case_id = %s OR case_id = %s) AND tenant_id = %s;",
+                    (clean_case_id, case_id_raw, x_tenant_id)
+                )
+                if cur.fetchone():
+                    case_exists = True
         except Exception as ce:
             logger.debug(f"Cases table query note: {ce}")
 
@@ -2859,36 +2779,13 @@ def _dispatch_pipeline_job(
 
     # 6. Log to audit log
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password, connect_timeout=2
-        )
-        cur = conn.cursor()
-        try:
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    x_tenant_id, clean_case_id,
-                    current_user.get("id") or current_user.get("user_id", "analyst"),
-                    current_user.get("name") or "analyst",
-                    "Restarted Multi-Agent Analysis" if is_restart else "Triggered Multi-Agent Analysis",
-                    json.dumps({
-                        "description": f"Multi-agent reasoning swarm {'restarted' if is_restart else 'launched'} capturing {len(evidence_list or [])} evidence files and {len(findings or [])} findings.",
-                        "evidence_count": len(evidence_list or []),
-                        "evidence_paths": evidence_paths
-                    })
-                )
-            )
-        except Exception:
-            conn.rollback()
-            cur.execute(
-                """
-                INSERT INTO audit_log (tenant_id, case_id, action, actor, details)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO audit_log (tenant_id, case_id, event, actor, detail, timestamp)
+                VALUES (%s, %s, %s, %s, %s, NOW())
                 """,
                 (
                     x_tenant_id, clean_case_id,
@@ -2902,8 +2799,7 @@ def _dispatch_pipeline_job(
                     })
                 )
             )
-        conn.commit()
-        conn.close()
+            conn.commit()
     except Exception as al_e:
         logger.warning(f"Could not write audit log for agent execution: {al_e}")
 
@@ -2955,22 +2851,18 @@ def _dispatch_pipeline_job(
             # Update evidence metadata for ALL evidence items in this case to ensure full retention
             if evidence_list:
                 try:
-                    conn = psycopg2.connect(
-                        host=settings.postgres_host, port=settings.postgres_port,
-                        database=settings.postgres_db, user=settings.postgres_user,
-                        password=settings.postgres_password, connect_timeout=2
-                    )
-                    cur = conn.cursor()
-                    for ev_item in evidence_list:
-                        ev_item.metadata = ev_item.metadata or {}
-                        ev_item.metadata["agent_results"] = results
-                        ev_item.metadata["workload_status"] = final_status
-                        cur.execute(
-                            "UPDATE evidence SET metadata = %s WHERE evidence_id = %s AND case_id = %s;",
-                            (json.dumps(ev_item.metadata, default=str), ev_item.evidence_id, clean_case_id)
-                        )
-                    conn.commit()
-                    conn.close()
+                    from databases.postgres_pool import PostgresConnectionPool
+                    with PostgresConnectionPool.get_connection() as conn:
+                        cur = conn.cursor()
+                        for ev_item in evidence_list:
+                            ev_item.metadata = ev_item.metadata or {}
+                            ev_item.metadata["agent_results"] = results
+                            ev_item.metadata["workload_status"] = final_status
+                            cur.execute(
+                                "UPDATE evidence SET metadata = %s WHERE evidence_id = %s AND case_id = %s;",
+                                (json.dumps(ev_item.metadata, default=str), ev_item.evidence_id, clean_case_id)
+                            )
+                        conn.commit()
                 except Exception as meta_e:
                     logger.warning(f"Could not persist agent_results to evidence table: {meta_e}")
 
@@ -3140,32 +3032,13 @@ async def stop_case_workload(
 
     # Write audit log
     try:
-        conn = psycopg2.connect(
-            host=settings.postgres_host, port=settings.postgres_port,
-            database=settings.postgres_db, user=settings.postgres_user,
-            password=settings.postgres_password, connect_timeout=2
-        )
-        cur = conn.cursor()
-        try:
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            cur = conn.cursor()
             cur.execute(
                 """
-                INSERT INTO audit_log (tenant_id, case_id, user_id, actor, event, detail)
-                VALUES (%s, %s, %s, %s, %s, %s)
-                """,
-                (
-                    x_tenant_id, clean_case_id,
-                    current_user.get("id") or current_user.get("user_id", "analyst"),
-                    current_user.get("name") or "analyst",
-                    "Stopped Multi-Agent Analysis",
-                    json.dumps({"description": "Workload stopped by analyst to review or capture additional evidence."})
-                )
-            )
-        except Exception:
-            conn.rollback()
-            cur.execute(
-                """
-                INSERT INTO audit_log (tenant_id, case_id, action, actor, details)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO audit_log (tenant_id, case_id, event, actor, detail, timestamp)
+                VALUES (%s, %s, %s, %s, %s, NOW())
                 """,
                 (
                     x_tenant_id, clean_case_id,
@@ -3177,8 +3050,7 @@ async def stop_case_workload(
                     })
                 )
             )
-        conn.commit()
-        conn.close()
+            conn.commit()
     except Exception as al_e:
         logger.warning(f"Could not write audit log for stop workload: {al_e}")
 
@@ -3399,25 +3271,14 @@ async def review_finding_endpoint(
         # Mark outbox record delivered in PostgreSQL
         if outbox_id:
             try:
-                from infrastructure.repository.evidence_store import _should_attempt_postgres
-                if _should_attempt_postgres():
-                    import psycopg2
-                    from config.settings import settings
-                    conn_ob = psycopg2.connect(
-                        host=settings.postgres_host,
-                        port=settings.postgres_port,
-                        database=settings.postgres_db,
-                        user=settings.postgres_user,
-                        password=settings.postgres_password,
-                        connect_timeout=2
-                    )
+                from databases.postgres_pool import PostgresConnectionPool
+                with PostgresConnectionPool.get_connection() as conn_ob:
                     cur_ob = conn_ob.cursor()
                     cur_ob.execute(
                         "UPDATE audit_log SET detail = detail || '{\"outbox_status\": \"delivered\"}'::jsonb WHERE detail->>'outbox_event_id' = %s;",
                         (outbox_id,)
                     )
                     conn_ob.commit()
-                    conn_ob.close()
             except Exception as e_ob:
                 logger.debug("Failed marking outbox delivered in DB: %s", e_ob)
     except Exception as audit_err:

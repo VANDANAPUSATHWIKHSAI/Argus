@@ -23,6 +23,7 @@ from typing import Dict, Any, List, Optional, Set, Tuple
 from agents.base_agent import BaseAgent
 from fir.repository import FIRRepository
 from sanitization.gateway import SanitizationGateway, SanitizedAgentContext
+from sanitization.json_sanitizer import robust_json_loads
 from models.llm import LLMLoader
 from config.settings import settings
 
@@ -377,8 +378,34 @@ class EvidenceIntelligenceAgent(BaseAgent):
             self._persist_agent_output(output)
             return output.model_dump()
 
-        # ── 4. Parse Structured JSON Response (Fail-Closed) ───────────────
+        # ── 4. Parse Structured JSON Response (Fail-Closed with Bounded Retry) ─
         parsed_dict, raw_claims_list, parse_err = self._parse_json_response(llm_response)
+        
+        # Bounded retry: if initial output fails JSON parsing, attempt ONE retry with strict formatting prompt
+        if parse_err or not parsed_dict:
+            logger.warning("Agent 1: Initial LLM output was malformed (%s). Performing bounded retry...", parse_err)
+            try:
+                retry_user_prompt = (
+                    f"{user_prompt}\n\n"
+                    f"CRITICAL FORMATTING INSTRUCTION: Your previous response produced invalid JSON ({parse_err}). "
+                    f"Return ONLY a single valid, well-formed JSON object matching the required schema. "
+                    f"Do NOT include markdown backticks (```), commentary, trailing commas, or unescaped quotes."
+                )
+                if hasattr(self.model, "generate"):
+                    retry_response = self.model.generate(retry_user_prompt, system_prompt=AGENT1_SYSTEM_PROMPT)
+                elif callable(self.model):
+                    retry_response = self.model(retry_user_prompt)
+                else:
+                    retry_response = None
+                
+                if retry_response:
+                    retry_dict, retry_claims, retry_err = self._parse_json_response(retry_response)
+                    if not retry_err and retry_dict:
+                        parsed_dict, raw_claims_list, parse_err = retry_dict, retry_claims, None
+                        llm_response = retry_response
+            except Exception as retry_exc:
+                logger.warning("Agent 1: Bounded retry failed: %s", retry_exc)
+
         if parse_err or not parsed_dict:
             logger.error("Agent 1: Fail-closed due to malformed JSON response: %s", parse_err)
             output = Agent1Output(
@@ -397,7 +424,7 @@ class EvidenceIntelligenceAgent(BaseAgent):
                 readiness_blockers=metrics["readiness_blockers"],
                 execution_status="FAILED",
                 failure_type="MALFORMED_OUTPUT",
-                error_message=f"Malformed LLM JSON output: {parse_err}"
+                error_message=f"Malformed LLM JSON output: {parse_err} (raw snippet: {str(llm_response)[:300]})"
             )
             self._persist_agent_output(output)
             return output.model_dump()
@@ -492,21 +519,16 @@ class EvidenceIntelligenceAgent(BaseAgent):
         return output.model_dump()
 
     def _parse_json_response(self, raw_text: str) -> Tuple[Optional[Dict[str, Any]], List[Agent1Claim], Optional[str]]:
-        """Extracts JSON dict & Agent1Claim objects from LLM response string."""
+        """Extracts JSON dict & Agent1Claim objects from LLM response string using robust parsing."""
         if not raw_text:
             return None, [], "Empty LLM output"
 
-        cleaned = raw_text.strip()
-        if "```json" in cleaned:
-            cleaned = cleaned.split("```json")[1].split("```")[0].strip()
-        elif "```" in cleaned:
-            cleaned = cleaned.split("```")[1].split("```")[0].strip()
+        data, parse_err = robust_json_loads(raw_text)
+        if parse_err or not isinstance(data, dict):
+            logger.warning("Failed to parse LLM response as JSON: %s. Raw text snippet: %s", parse_err, str(raw_text)[:200])
+            return None, [], f"JSON parse error: {parse_err or 'Parsed JSON is not a dictionary'}"
 
         try:
-            data = json.loads(cleaned)
-            if not isinstance(data, dict):
-                return None, [], "Parsed JSON is not a dictionary"
-
             parsed_claims: List[Agent1Claim] = []
             claims_list = data.get("claims", [])
             if isinstance(claims_list, list):

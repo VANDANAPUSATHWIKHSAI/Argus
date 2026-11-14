@@ -110,6 +110,10 @@ const Evidence = () => {
   const [casesList, setCasesList] = useState([]);
 
   const [activeCaseId, setActiveCaseId] = useState(getActiveCaseId());
+  const activeCaseIdRef = useRef(activeCaseId);
+  useEffect(() => {
+    activeCaseIdRef.current = activeCaseId;
+  }, [activeCaseId]);
 
   const [activeCaseName, setActiveCaseName] = useState(getActiveCaseName());
 
@@ -256,11 +260,14 @@ const Evidence = () => {
           }
           setActiveCaseId(foundSaved.case_id);
           setActiveCaseName(foundSaved.name || foundSaved.case_id);
+        } else {
+          if (isMounted) setLoading(false);
         }
 
       } catch (err) {
 
         console.error('Failed to load cases in Evidence:', err);
+        if (isMounted) setLoading(false);
 
       } finally {
 
@@ -272,7 +279,17 @@ const Evidence = () => {
 
     getCases();
 
-    return () => { isMounted = false; };
+    const safetyTimer = setTimeout(() => {
+      if (isMounted) {
+        setCasesLoading(false);
+        setLoading(false);
+      }
+    }, 1500);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(safetyTimer);
+    };
 
   }, []);
 
@@ -376,7 +393,10 @@ const Evidence = () => {
 
 
 
-      const rawData = await fetchEvidenceForCase(activeCaseId);
+      const targetCaseId = activeCaseId;
+      const rawData = await fetchEvidenceForCase(targetCaseId);
+      // Guard against race conditions: if active case switched while in-flight, discard stale response
+      if (activeCaseIdRef.current !== targetCaseId) return;
 
       const fetchedList = rawData.data || rawData || [];
 

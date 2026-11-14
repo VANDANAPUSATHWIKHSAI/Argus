@@ -13,7 +13,9 @@ event loop is never blocked, keeping login / all other endpoints responsive.
 from __future__ import annotations
 
 import os
+import json
 import hashlib
+import struct
 import tempfile
 import logging
 import asyncio
@@ -48,8 +50,10 @@ _parser_router = ParserRouter()
 _extractor = ArtifactExtractor()
 _fcr_engine = FCREngine()
 
-# Thread pool for CPU-bound forensic pipeline work
-_pipeline_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="argus_pipeline")
+# Thread pool for CPU-bound forensic pipeline work with bounded queue capacity
+_MAX_PENDING_UPLOADS = 100
+_UPLOAD_SEMAPHORE = threading.Semaphore(_MAX_PENDING_UPLOADS)
+_pipeline_executor = concurrent.futures.ThreadPoolExecutor(max_workers=8, thread_name_prefix="argus_pipeline")
 
 # In-memory registry for evidence job status tracking
 _evidence_jobs: dict[str, dict] = {}
@@ -63,11 +67,11 @@ class EvidenceUploadResponse(BaseModel):
     evidence_id: str
     filename: str
     sha256_hash: str
-    parsed_artifact_count: int
-    derived_observable_count: int
-    fcr_count: int
-    finding_count: int
-    timeline_event_count: int
+    parsed_artifact_count: int = 0
+    derived_observable_count: int = 0
+    fcr_count: int = 0
+    finding_count: int = 0
+    timeline_event_count: int = 0
     stage_statuses: Dict[str, str] = Field(default_factory=dict)
     agent_results: Optional[Dict[str, Any]] = None
     errors: List[str] = Field(default_factory=list)
@@ -223,6 +227,22 @@ def _run_forensic_pipeline(
                             if getattr(art, "normalized_fields", None):
                                 art.normalized_fields.host = host_id
                         parsed_artifacts.extend(arts)
+                    
+                    # Capture parser completeness telemetry and safeguards
+                    parser_stats = getattr(routing_res.parser_instance, "last_parse_stats", None)
+                    if isinstance(parser_stats, dict):
+                        evidence.metadata["parser_completeness"] = parser_stats.get("completeness_status", "FULL")
+                        evidence.metadata["parser_telemetry"] = {
+                            "discovered_keys": parser_stats.get("discovered_keys", 0),
+                            "traversed_keys": parser_stats.get("traversed_keys", 0),
+                            "skipped_subtrees_count": parser_stats.get("skipped_subtrees_count", 0),
+                            "cap_reached": parser_stats.get("cap_reached", False),
+                            "completeness_status": parser_stats.get("completeness_status", "FULL")
+                        }
+                        if parser_stats.get("cap_reached"):
+                            errors.append(f"Parser note: Traversal reached generic extraction limit ({parser_stats.get('generic_artifacts_extracted', 5000)} items). High-priority forensic subtrees were fully extracted.")
+                        if int(parser_stats.get("skipped_subtrees_count", 0) or 0) > 0:
+                            evidence.metadata["skipped_subtrees"] = parser_stats.get("skipped_subtrees", [])
                 except Exception as parse_e:
                     err_msg = f"Parser execution failed: {parse_e}"
                     logger.error(err_msg)
@@ -303,8 +323,10 @@ def _run_forensic_pipeline(
             "agent_reasoning": "PENDING",
             "agent7_supervisor": "PENDING",
         }
+        # Single-file intake boundary: only pass findings genuinely derived from THIS uploaded evidence file.
+        # Historical findings across previous case artifacts must not be re-triggered during upload intake.
         agent_pipeline_results = None
-        current_case_findings = findings or _fir_repo.get_by_case(tenant_id, target_case_id)
+        current_case_findings = findings if findings else []
         if current_case_findings:
             try:
                 from argus_pipeline import run_pipeline
@@ -358,28 +380,20 @@ def _run_forensic_pipeline(
                 "stage_statuses": stage_statuses,
                 "agent_results": agent_pipeline_results,
                 "status": pipeline_status,
+                "pipeline_completed": True,
                 "errors": errors
             })
             from infrastructure.repository.evidence_store import _should_attempt_postgres, REPOSITORY_DIR
             if _should_attempt_postgres():
                 import json
-                import psycopg2
-                from config.settings import settings
-                conn = psycopg2.connect(
-                    host=settings.postgres_host,
-                    port=settings.postgres_port,
-                    database=settings.postgres_db,
-                    user=settings.postgres_user,
-                    password=settings.postgres_password,
-                    connect_timeout=2
-                )
-                cur = conn.cursor()
-                cur.execute(
-                    "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
-                    (json.dumps(evidence.metadata, default=str), evidence.evidence_id)
-                )
-                conn.commit()
-                conn.close()
+                from databases.postgres_pool import PostgresConnectionPool
+                with PostgresConnectionPool.get_connection() as conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
+                        (json.dumps(evidence.metadata, default=str), evidence.evidence_id)
+                    )
+                    conn.commit()
             else:
                 repo_base = Path(REPOSITORY_DIR) / target_case_id / evidence.evidence_id
                 if repo_base.exists():
@@ -420,6 +434,17 @@ def _run_forensic_pipeline(
         with _jobs_lock:
             if evidence.evidence_id in _evidence_jobs:
                 _evidence_jobs[evidence.evidence_id].update(result_payload)
+        try:
+            from ism.checkpointer import checkpointer
+            checkpointer.save_stage_checkpoint(
+                case_id=target_case_id,
+                stage=f"evidence_job:{evidence.evidence_id}",
+                state=result_payload,
+                status=pipeline_status,
+                tenant_id=tenant_id
+            )
+        except Exception as ck_e:
+            logger.debug(f"Failed to persist stage checkpoint for evidence {evidence.evidence_id}: {ck_e}")
         return result_payload
     except Exception as e:
         logger.error(f"Forensic pipeline unhandled error: {e}")
@@ -436,6 +461,130 @@ def _run_forensic_pipeline(
             if evidence.evidence_id in _evidence_jobs:
                 _evidence_jobs[evidence.evidence_id].update(err_payload)
         return err_payload
+
+
+def recover_interrupted_evidence_jobs(target_tenant_id: Optional[str] = None) -> int:
+    """
+    Startup Recovery Sweep: Scans PostgreSQL ism_state for interrupted evidence jobs
+    that remain in PROCESSING state and safely re-dispatches them to the background executor.
+    Supports optional target_tenant_id filter to scope recovery sweeps to a specific tenant.
+    Guarantees that backend restarts do not abandon in-flight forensic processing.
+    """
+    try:
+        import json
+        from databases.postgres_pool import PostgresConnectionPool
+        from infrastructure.repository.evidence_store import get_evidence, get_case_session, REPOSITORY_DIR
+        
+        with PostgresConnectionPool.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("""
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'ism_state' AND column_name = 'tenant_id';
+                """)
+                has_tenant_col = cur.fetchone() is not None
+                if has_tenant_col:
+                    if target_tenant_id:
+                        cur.execute("""
+                            SELECT case_id, stage, status, checkpoint, tenant_id 
+                            FROM ism_state 
+                            WHERE stage LIKE 'evidence_job:%%' AND status = 'PROCESSING'
+                              AND tenant_id = %s;
+                        """, (target_tenant_id,))
+                    else:
+                        cur.execute("""
+                            SELECT case_id, stage, status, checkpoint, tenant_id 
+                            FROM ism_state 
+                            WHERE stage LIKE 'evidence_job:%%' AND status = 'PROCESSING';
+                        """)
+                else:
+                    cur.execute("""
+                        SELECT case_id, stage, status, checkpoint, 'default' AS tenant_id 
+                        FROM ism_state 
+                        WHERE stage LIKE 'evidence_job:%%' AND status = 'PROCESSING';
+                    """)
+                interrupted = cur.fetchall()
+        
+        if not interrupted:
+            return 0
+            
+        redispatched_count = 0
+        for case_id, stage, status, cp_data, row_tenant in interrupted:
+            if target_tenant_id and row_tenant and row_tenant != target_tenant_id:
+                continue
+            evidence_id = stage.split("evidence_job:", 1)[1] if "evidence_job:" in stage else None
+            if not evidence_id:
+                continue
+                
+            if isinstance(cp_data, str):
+                try:
+                    cp_data = json.loads(cp_data)
+                except Exception:
+                    cp_data = {}
+            if not isinstance(cp_data, dict):
+                cp_data = {}
+                
+            t_id = row_tenant or cp_data.get("tenant_id") or "default"
+            ev = get_evidence(tenant_id=t_id, evidence_id=evidence_id)
+            if not ev:
+                continue
+                
+            # Locate raw file
+            raw_path = None
+            if ev.file_path and os.path.exists(ev.file_path):
+                raw_path = Path(ev.file_path)
+            elif ev.original_repository_path and os.path.exists(ev.original_repository_path):
+                raw_path = Path(ev.original_repository_path)
+            else:
+                repo_p = Path(REPOSITORY_DIR) / case_id / evidence_id / "original" / ev.filename
+                if repo_p.exists():
+                    raw_path = repo_p
+                    
+            if not raw_path or not raw_path.exists():
+                logger.warning("Recovery skipped for %s: file not found on disk", evidence_id)
+                continue
+                
+            # Populate in-memory registry
+            with _jobs_lock:
+                _evidence_jobs[evidence_id] = {
+                    "status": "PROCESSING",
+                    "case_id": case_id,
+                    "tenant_id": t_id,
+                    "evidence_id": evidence_id,
+                    "filename": ev.filename,
+                    "sha256_hash": ev.sha256_hash or "",
+                    "parsed_artifact_count": 0,
+                    "stage_statuses": {"intake": "COMPLETED", "preprocessing": "PROCESSING"}
+                }
+                
+            try:
+                f_bytes = raw_path.read_bytes()
+            except Exception:
+                f_bytes = b""
+                
+            session = get_case_session(tenant_id=t_id, case_id=case_id)
+            if not session:
+                session = CaseSession(case_id=case_id, tenant_id=t_id, created_by="argus_recovery")
+                
+            # Re-dispatch to thread pool executor
+            _pipeline_executor.submit(
+                _run_forensic_pipeline,
+                ev,
+                session,
+                raw_path,
+                f_bytes,
+                case_id,
+                t_id,
+                "RECOVERY-HOST",
+                ev.uploaded_by or "system_recovery",
+                ev.filename
+            )
+            redispatched_count += 1
+            logger.info("Successfully re-dispatched interrupted evidence job: %s for case: %s", evidence_id, case_id)
+            
+        return redispatched_count
+    except Exception as e:
+        logger.warning("Startup recovery sweep failed: %s", e)
+        return 0
 
 
 @router.post("/upload", response_model=EvidenceUploadResponse)
@@ -548,17 +697,26 @@ async def upload_evidence(
 
     sha256_digest = hashlib.sha256(file_bytes).hexdigest()
 
-    # Idempotency / duplicate-work prevention: if identical file is already processing or completed for this tenant & case, return existing job
+    # Enforce bounded background queue to prevent unlimited pending upload tasks
+    if not _UPLOAD_SEMAPHORE.acquire(blocking=False):
+        raise HTTPException(
+            status_code=429,
+            detail=f"Upload processing capacity exceeded ({_MAX_PENDING_UPLOADS} concurrent tasks). Please retry shortly."
+        )
+
+    # Idempotency / duplicate-work prevention:
+    # Level 1: In-memory registry check (fast within-process convergence)
     with _jobs_lock:
         for j_id, j_rec in _evidence_jobs.items():
             if (j_rec.get("tenant_id") == tenant_id and
                 j_rec.get("case_id") == target_case_id and
                 j_rec.get("sha256_hash") == sha256_digest and
                 j_rec.get("status") in ("PROCESSING", "SUCCESS", "COMPLETED_PREPROCESSING_ONLY", "NEEDS_REVIEW", "PARTIAL_SUCCESS")):
+                _UPLOAD_SEMAPHORE.release()
                 logger.info(f"Duplicate upload detected: evidence '{j_id}' with hash '{sha256_digest}' already exists in registry.")
                 return EvidenceUploadResponse(**j_rec)
 
-    # Create evidence object
+    # Create evidence object with unique ID
     evidence = Evidence(
         case_id=target_case_id,
         filename=safe_name,
@@ -566,8 +724,156 @@ async def upload_evidence(
         raw_file_path=str(file_path),
         uploaded_by=uploader_name,
         sha256_hash=sha256_digest,
-        metadata={"size_bytes": len(file_bytes)}
+        metadata={"size_bytes": len(file_bytes), "tenant_id": tenant_id}
     )
+
+    # Level 2: Database-level cross-process atomic idempotency check & registration
+    # Uses a transaction-scoped advisory lock on (tenant_id, target_case_id, sha256_digest)
+    # ensuring concurrent uploads across separate processes serialize safely at the database layer.
+    is_duplicate = False
+    dup_response = None
+    lock_hash = hashlib.sha256(f"{tenant_id}:{target_case_id}:{sha256_digest}".encode("utf-8")).digest()
+    lock_key = struct.unpack(">q", lock_hash[:8])[0]
+
+    try:
+        from databases.postgres_pool import PostgresConnectionPool
+        with PostgresConnectionPool.get_connection() as conn:
+            with conn.cursor() as cur:
+                # 1. Acquire transaction advisory lock
+                cur.execute("SELECT pg_advisory_xact_lock(%s);", (lock_key,))
+
+                # Check if evidence table contains tenant_id column
+                cur.execute("""
+                    SELECT 1 FROM information_schema.columns 
+                    WHERE table_name = 'evidence' AND column_name = 'tenant_id';
+                """)
+                has_ev_tenant = cur.fetchone() is not None
+
+                # 2. Check evidence table for existing record in this case and tenant
+                if has_ev_tenant:
+                    cur.execute("""
+                        SELECT e.evidence_id, e.filename, e.status, e.metadata, e.repository_path
+                        FROM evidence e
+                        WHERE e.tenant_id = %s AND e.case_id = %s AND e.sha256_hash = %s
+                        ORDER BY e.upload_timestamp ASC LIMIT 1;
+                    """, (tenant_id, target_case_id, sha256_digest))
+                else:
+                    cur.execute("""
+                        SELECT e.evidence_id, e.filename, e.status, e.metadata, e.repository_path
+                        FROM evidence e
+                        INNER JOIN cases c ON e.case_id = c.case_id
+                        WHERE e.case_id = %s AND c.tenant_id = %s AND e.sha256_hash = %s
+                        ORDER BY e.upload_timestamp ASC LIMIT 1;
+                    """, (target_case_id, tenant_id, sha256_digest))
+                ex_ev_row = cur.fetchone()
+                if ex_ev_row:
+                    ex_id, ex_fn, ex_st, ex_meta, ex_repo = ex_ev_row
+                    is_duplicate = True
+                    meta_dict = ex_meta if isinstance(ex_meta, dict) else {}
+                    dup_response = EvidenceUploadResponse(
+                        status="SUCCESS" if ex_st not in ("processing", "intake") else "PROCESSING",
+                        case_id=target_case_id,
+                        tenant_id=tenant_id,
+                        evidence_id=str(ex_id),
+                        filename=ex_fn,
+                        sha256_hash=sha256_digest,
+                        parsed_artifact_count=meta_dict.get("parsed_artifact_count", 0),
+                        derived_observable_count=meta_dict.get("derived_observable_count", 0),
+                        fcr_count=meta_dict.get("fcr_count", 0),
+                        finding_count=meta_dict.get("finding_count", 0),
+                        timeline_event_count=meta_dict.get("timeline_event_count", 0),
+                        stage_statuses=meta_dict.get("stage_statuses", {
+                            "intake": "COMPLETED",
+                            "preprocessing": "COMPLETED" if ex_st not in ("processing", "intake") else "PROCESSING",
+                            "fcr_engine": "COMPLETED" if ex_st not in ("processing", "intake") else "PENDING",
+                            "analysis_fir": "COMPLETED" if ex_st not in ("processing", "intake") else "PENDING",
+                            "timeline": "COMPLETED" if ex_st not in ("processing", "intake") else "PENDING",
+                            "agent_reasoning": "COMPLETED" if ex_st not in ("processing", "intake") else "PENDING",
+                            "agent7_supervisor": "COMPLETED" if ex_st not in ("processing", "intake") else "PENDING",
+                        })
+                    )
+
+                # 3. Check ism_state for active in-flight job if not in evidence table
+                if not is_duplicate:
+                    cur.execute("""
+                        SELECT 1 FROM information_schema.columns 
+                        WHERE table_name = 'ism_state' AND column_name = 'tenant_id';
+                    """)
+                    has_ism_tenant = cur.fetchone() is not None
+                    if has_ism_tenant:
+                        cur.execute("""
+                            SELECT stage, status, checkpoint 
+                            FROM ism_state 
+                            WHERE tenant_id = %s AND case_id = %s AND stage LIKE 'evidence_job:%%'
+                              AND (checkpoint->>'sha256_hash' = %s)
+                            ORDER BY last_updated ASC LIMIT 1;
+                        """, (tenant_id, target_case_id, sha256_digest))
+                    else:
+                        cur.execute("""
+                            SELECT stage, status, checkpoint 
+                            FROM ism_state 
+                            WHERE case_id = %s AND stage LIKE 'evidence_job:%%'
+                              AND (checkpoint->>'sha256_hash' = %s)
+                              AND (checkpoint->>'tenant_id' = %s OR checkpoint->>'tenant_id' IS NULL)
+                            ORDER BY last_updated ASC LIMIT 1;
+                        """, (target_case_id, sha256_digest, tenant_id))
+                    ex_ism_row = cur.fetchone()
+                    if ex_ism_row:
+                        ex_stage, ex_status, ex_cp = ex_ism_row
+                        ex_id = ex_stage.replace("evidence_job:", "")
+                        cp_dict = json.loads(ex_cp) if isinstance(ex_cp, str) else (ex_cp or {})
+                        is_duplicate = True
+                        dup_response = EvidenceUploadResponse(
+                            status=ex_status,
+                            case_id=target_case_id,
+                            tenant_id=tenant_id,
+                            evidence_id=ex_id,
+                            filename=cp_dict.get("filename", safe_name),
+                            sha256_hash=sha256_digest
+                        )
+
+                # 4. If not duplicate, reserve the record in evidence table atomically under lock
+                if not is_duplicate:
+                    if has_ev_tenant:
+                        cur.execute("""
+                            INSERT INTO evidence 
+                              (evidence_id, tenant_id, case_id, filename, uploaded_by, status, sha256_hash, encrypted, metadata, repository_path)
+                            VALUES (%s, %s, %s, %s, %s, 'processing', %s, false, %s, '')
+                            ON CONFLICT (evidence_id) DO NOTHING;
+                        """, (
+                            evidence.evidence_id,
+                            tenant_id,
+                            target_case_id,
+                            safe_name,
+                            uploader_name,
+                            sha256_digest,
+                            json.dumps({"size_bytes": len(file_bytes), "tenant_id": tenant_id})
+                        ))
+                    else:
+                        cur.execute("""
+                            INSERT INTO evidence 
+                              (evidence_id, case_id, filename, uploaded_by, status, sha256_hash, encrypted, metadata, repository_path)
+                            VALUES (%s, %s, %s, %s, 'processing', %s, false, %s, '')
+                            ON CONFLICT (evidence_id) DO NOTHING;
+                        """, (
+                            evidence.evidence_id,
+                            target_case_id,
+                            safe_name,
+                            uploader_name,
+                            sha256_digest,
+                            json.dumps({"size_bytes": len(file_bytes), "tenant_id": tenant_id})
+                        ))
+            conn.commit()
+    except Exception as db_lock_e:
+        logger.warning("Database advisory lock / idempotency check note: %s", db_lock_e)
+
+    if is_duplicate and dup_response:
+        _UPLOAD_SEMAPHORE.release()
+        logger.info(
+            "Cross-process duplicate upload detected: converging to evidence '%s' with hash '%s' for case '%s'.",
+            dup_response.evidence_id, sha256_digest, target_case_id
+        )
+        return dup_response
 
     # Register initial job status
     task_id = None
@@ -630,6 +936,18 @@ async def upload_evidence(
     with _jobs_lock:
         _evidence_jobs[evidence.evidence_id] = job_record
 
+    try:
+        from ism.checkpointer import checkpointer
+        checkpointer.save_stage_checkpoint(
+            case_id=target_case_id,
+            stage=f"evidence_job:{evidence.evidence_id}",
+            state=job_record,
+            status="PROCESSING",
+            tenant_id=tenant_id
+        )
+    except Exception as ck_e:
+        logger.debug(f"Failed to persist initial job checkpoint for evidence {evidence.evidence_id}: {ck_e}")
+
     if task_id:
         return EvidenceUploadResponse(**job_record)
 
@@ -639,7 +957,30 @@ async def upload_evidence(
     if should_run_async:
         # Asynchronous contract: dispatch pipeline to background thread pool and return PROCESSING immediately
         def _bg_worker():
-            res = _run_forensic_pipeline(
+            try:
+                res = _run_forensic_pipeline(
+                    evidence,
+                    session,
+                    file_path,
+                    file_bytes,
+                    target_case_id,
+                    tenant_id,
+                    host_id,
+                    uploader_name,
+                    file.filename,
+                )
+                job_record.update(res)
+            finally:
+                _UPLOAD_SEMAPHORE.release()
+
+        loop.run_in_executor(_pipeline_executor, _bg_worker)
+        return EvidenceUploadResponse(**job_record)
+    else:
+        # Synchronous contract (default): await pipeline completion without blocking the event loop
+        try:
+            pipeline_res = await loop.run_in_executor(
+                _pipeline_executor,
+                _run_forensic_pipeline,
                 evidence,
                 session,
                 file_path,
@@ -650,27 +991,10 @@ async def upload_evidence(
                 uploader_name,
                 file.filename,
             )
-            job_record.update(res)
-
-        loop.run_in_executor(_pipeline_executor, _bg_worker)
-        return EvidenceUploadResponse(**job_record)
-    else:
-        # Synchronous contract (default): await pipeline completion without blocking the event loop
-        pipeline_res = await loop.run_in_executor(
-            _pipeline_executor,
-            _run_forensic_pipeline,
-            evidence,
-            session,
-            file_path,
-            file_bytes,
-            target_case_id,
-            tenant_id,
-            host_id,
-            uploader_name,
-            file.filename,
-        )
-        job_record.update(pipeline_res)
-        return EvidenceUploadResponse(**job_record)
+            job_record.update(pipeline_res)
+            return EvidenceUploadResponse(**job_record)
+        finally:
+            _UPLOAD_SEMAPHORE.release()
 
 
 @router.get("/status/{evidence_id}", response_model=EvidenceUploadResponse)
@@ -693,7 +1017,7 @@ async def get_evidence_status(
     with _jobs_lock:
         job = dict(_evidence_jobs[evidence_id]) if evidence_id in _evidence_jobs else None
     if job:
-        if job["tenant_id"] != tenant_id:
+        if job.get("tenant_id") and job["tenant_id"] != tenant_id:
             raise HTTPException(status_code=403, detail="Tenant access denied.")
         return EvidenceUploadResponse(**job)
 
@@ -702,12 +1026,34 @@ async def get_evidence_status(
     if not ev:
         raise HTTPException(status_code=404, detail=f"Evidence '{evidence_id}' not found.")
 
+    # Check durable checkpointer for restart resilience
+    try:
+        from ism.checkpointer import checkpointer
+        cp_rec = checkpointer.get_stage_checkpoint(
+            case_id=ev.case_id,
+            stage=f"evidence_job:{evidence_id}",
+            tenant_id=tenant_id
+        )
+        if cp_rec and isinstance(cp_rec.get("state"), dict):
+            cp_state = cp_rec["state"]
+            if cp_rec.get("status"):
+                cp_state["status"] = cp_rec["status"]
+            return EvidenceUploadResponse(**cp_state)
+    except Exception as cp_err:
+        logger.debug(f"Checkpoint check error for evidence {evidence_id}: {cp_err}")
+
     meta = ev.metadata or {}
     raw_st = meta.get("status") or (ev.status.value if hasattr(ev.status, "value") else str(ev.status).lower())
-    if raw_st in ("stored", "completed"):
-        status_val = "SUCCESS"
+    is_pipeline_done = bool(meta.get("pipeline_completed"))
+
+    if is_pipeline_done:
+        status_val = meta.get("status", "SUCCESS").upper()
     elif raw_st in ("failed", "validation_failed"):
         status_val = "FAILED"
+    elif raw_st == "stored":
+        status_val = "STORED"
+    elif raw_st in ("processing", "queued"):
+        status_val = raw_st.upper()
     else:
         status_val = raw_st.upper()
 
@@ -1223,24 +1569,15 @@ async def verify_evidence_endpoint(
             from infrastructure.repository.evidence_store import _should_attempt_postgres
             if _should_attempt_postgres():
                 try:
-                    import psycopg2
-                    from config.settings import settings
-                    conn = psycopg2.connect(
-                        host=settings.postgres_host,
-                        port=settings.postgres_port,
-                        database=settings.postgres_db,
-                        user=settings.postgres_user,
-                        password=settings.postgres_password,
-                        connect_timeout=1
-                    )
-                    cur = conn.cursor()
                     import json
-                    cur.execute(
-                        "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
-                        (json.dumps(ev.metadata, default=str), ev.evidence_id)
-                    )
-                    conn.commit()
-                    conn.close()
+                    from databases.postgres_pool import PostgresConnectionPool
+                    with PostgresConnectionPool.get_connection() as conn:
+                        cur = conn.cursor()
+                        cur.execute(
+                            "UPDATE evidence SET metadata = %s WHERE evidence_id = %s;",
+                            (json.dumps(ev.metadata, default=str), ev.evidence_id)
+                        )
+                        conn.commit()
                 except Exception as db_err:
                     logger.debug(f"Postgres verification metadata update skipped: {db_err}")
         except Exception as persist_err:

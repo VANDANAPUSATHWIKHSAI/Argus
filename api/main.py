@@ -5,11 +5,44 @@ os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["NUMEXPR_NUM_THREADS"] = "1"
 
 # Argus FastAPI entry point
+from contextlib import asynccontextmanager
+import threading
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from api.routes import evidence, cases, reports, query, auth
+from databases.postgres_pool import PostgresConnectionPool
 
-app = FastAPI(title='Argus', description='Multi-Agent Digital Forensic Investigation Platform')
+def _prewarm_heavy_modules():
+    """Pre-warm heavy grammar compilers (e.g. ioc_finder) in background to eliminate first-request latency."""
+    try:
+        import ioc_finder
+        _ = ioc_finder.find_iocs("127.0.0.1")
+    except Exception:
+        pass
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize bounded thread-safe PostgreSQL connection pool
+    PostgresConnectionPool.initialize(minconn=2, maxconn=20)
+    # Asynchronously pre-warm grammars without blocking startup
+    threading.Thread(target=_prewarm_heavy_modules, daemon=True).start()
+    # Startup recovery sweep for interrupted background evidence jobs
+    try:
+        from api.routes.evidence import recover_interrupted_evidence_jobs
+        recovered = recover_interrupted_evidence_jobs()
+        if recovered > 0:
+            print(f"  [RECOVERY] Safely re-dispatched {recovered} interrupted evidence jobs from PostgreSQL ism_state.")
+    except Exception as rec_err:
+        print(f"  [RECOVERY NOTICE] Startup recovery check: {rec_err}")
+    yield
+    # Cleanup pool on shutdown
+    PostgresConnectionPool.close_all()
+
+app = FastAPI(
+    title='Argus',
+    description='Multi-Agent Digital Forensic Investigation Platform',
+    lifespan=lifespan
+)
 
 _allowed_origins_env = os.environ.get("ARGUS_ALLOWED_ORIGINS", "")
 if _allowed_origins_env:

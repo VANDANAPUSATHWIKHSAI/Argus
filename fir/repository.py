@@ -124,64 +124,59 @@ class FIRRepository:
                 return finding
 
         try:
-            import psycopg2
-            from config.settings import settings
-            conn = psycopg2.connect(
-                host=settings.postgres_host,
-                port=settings.postgres_port,
-                database=settings.postgres_db,
-                user=settings.postgres_user,
-                password=settings.postgres_password,
-                connect_timeout=1
-            )
-            _ensure_fir_table_initialized(conn)
-            cur = conn.cursor()
-            review_st_str = finding.review_status.value if hasattr(finding.review_status, "value") else str(finding.review_status)
-            cur.execute(
-                """
-                INSERT INTO fir_findings 
-                    (finding_id, case_id, tenant_id, fact, sanitized_fact, confidence, severity, mitre_mapping,
-                     evidence_reference, source_artifact_id, finding_fingerprint, review_status, reviewed_by,
-                     injection_flagged, injection_score, layer, timestamp)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (finding_id) DO UPDATE SET
-                    fact = EXCLUDED.fact,
-                    sanitized_fact = EXCLUDED.sanitized_fact,
-                    confidence = EXCLUDED.confidence,
-                    severity = EXCLUDED.severity,
-                    mitre_mapping = EXCLUDED.mitre_mapping,
-                    evidence_reference = EXCLUDED.evidence_reference,
-                    source_artifact_id = EXCLUDED.source_artifact_id,
-                    finding_fingerprint = EXCLUDED.finding_fingerprint,
-                    review_status = EXCLUDED.review_status,
-                    reviewed_by = EXCLUDED.reviewed_by,
-                    injection_flagged = EXCLUDED.injection_flagged,
-                    injection_score = EXCLUDED.injection_score,
-                    layer = EXCLUDED.layer,
-                    timestamp = EXCLUDED.timestamp;
-                """,
-                (
-                    finding.finding_id,
-                    finding.case_id,
-                    finding.tenant_id,
-                    finding.fact,
-                    finding.sanitized_fact or finding.fact,
-                    finding.confidence,
-                    finding.severity,
-                    finding.mitre_mapping,
-                    finding.evidence_reference,
-                    finding.source_artifact_id,
-                    finding.finding_fingerprint,
-                    review_st_str,
-                    finding.reviewed_by,
-                    finding.injection_flagged,
-                    finding.injection_score,
-                    finding.layer,
-                    finding.timestamp,
+            from databases.postgres_pool import PostgresConnectionPool
+            with PostgresConnectionPool.get_connection() as conn:
+                if not FIRRepository._table_initialized:
+                    _ensure_fir_table_initialized(conn)
+                    FIRRepository._table_initialized = True
+                cur = conn.cursor()
+                review_st_str = finding.review_status.value if hasattr(finding.review_status, "value") else str(finding.review_status)
+                cur.execute(
+                    """
+                    INSERT INTO fir_findings 
+                        (finding_id, case_id, tenant_id, fact, sanitized_fact, confidence, severity, mitre_mapping,
+                         evidence_reference, source_artifact_id, finding_fingerprint, review_status, reviewed_by,
+                         injection_flagged, injection_score, layer, timestamp)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (finding_id) DO UPDATE SET
+                        case_id = EXCLUDED.case_id,
+                        tenant_id = EXCLUDED.tenant_id,
+                        fact = EXCLUDED.fact,
+                        sanitized_fact = EXCLUDED.sanitized_fact,
+                        confidence = EXCLUDED.confidence,
+                        severity = EXCLUDED.severity,
+                        mitre_mapping = EXCLUDED.mitre_mapping,
+                        evidence_reference = EXCLUDED.evidence_reference,
+                        source_artifact_id = EXCLUDED.source_artifact_id,
+                        finding_fingerprint = EXCLUDED.finding_fingerprint,
+                        review_status = EXCLUDED.review_status,
+                        reviewed_by = EXCLUDED.reviewed_by,
+                        injection_flagged = EXCLUDED.injection_flagged,
+                        injection_score = EXCLUDED.injection_score,
+                        layer = EXCLUDED.layer,
+                        timestamp = EXCLUDED.timestamp;
+                    """,
+                    (
+                        finding.finding_id,
+                        finding.case_id,
+                        finding.tenant_id,
+                        finding.fact,
+                        finding.sanitized_fact or finding.fact,
+                        finding.confidence,
+                        finding.severity,
+                        finding.mitre_mapping,
+                        finding.evidence_reference,
+                        finding.source_artifact_id,
+                        finding.finding_fingerprint,
+                        review_st_str,
+                        finding.reviewed_by,
+                        finding.injection_flagged,
+                        finding.injection_score,
+                        finding.layer,
+                        finding.timestamp,
+                    )
                 )
-            )
-            conn.commit()
-            conn.close()
+                conn.commit()
         except Exception as e:
             FIRRepository._db_unreachable = True
             logger.error("Postgres insert error in FIRRepository.insert: %s. Switching to in-memory repository fallback.", e)

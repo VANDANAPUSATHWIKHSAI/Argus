@@ -24,14 +24,16 @@ def test_attack_path_graph_writer_cypher_calls():
                 stage="Initial Access",
                 description="Malicious attachment opened",
                 evidence_ids=["FIR-001"],
-                confidence=0.95
+                confidence=0.95,
+                citation_verified=True
             ),
             AttackPathStep(
                 step_number=2,
                 stage="Execution",
                 description="PowerShell process spawned",
                 evidence_ids=["FIR-002"],
-                confidence=0.90
+                confidence=0.90,
+                citation_verified=True
             )
         ],
         lateral_movement=[

@@ -628,30 +628,38 @@ const Upload = () => {
     const collectorName = currentUser?.name || currentUser?.email || 'Analyst';
     const hostIdVal = sourceDevice.trim() || undefined;
 
-    // Parallel asynchronous upload for all selected evidence files
-    const uploadTasks = itemsToUpload.map(async (item) => {
-      try {
-        const res = await uploadEvidenceFile(item.file, caseId, {
-          asyncMode: true,
-          hostId: hostIdVal,
-          uploadedBy: collectorName,
-          relativePath: item.relativePath || undefined
-        });
-        if (res && (res.status === 'FAILED' || res.status === 'ERROR' || res.status === 'validation_failed' || res.error)) {
-          const errDetail = res.message || res.detail || res.error || 'Upload validation failed';
-          throw new Error(errDetail);
-        }
-        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', error: null, evidenceId: res?.evidence_id } : i));
-        return { success: true, item };
-      } catch (err) {
-        console.error(`Upload failed for ${item.name}:`, err);
-        const errDetail = err.message || 'Upload failed';
-        setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: errDetail } : i));
-        return { success: false, item, error: errDetail };
-      }
-    });
+    // Bounded concurrent upload pool (max 4 concurrent file uploads) to handle 100+ files smoothly without network starvation
+    const CONCURRENCY = 4;
+    const settled = [];
+    let poolIndex = 0;
 
-    const settled = await Promise.allSettled(uploadTasks);
+    const worker = async () => {
+      while (poolIndex < itemsToUpload.length) {
+        const item = itemsToUpload[poolIndex++];
+        try {
+          const res = await uploadEvidenceFile(item.file, caseId, {
+            asyncMode: true,
+            hostId: hostIdVal,
+            uploadedBy: collectorName,
+            relativePath: item.relativePath || undefined
+          });
+          if (res && (res.status === 'FAILED' || res.status === 'ERROR' || res.status === 'validation_failed' || res.error)) {
+            const errDetail = res.message || res.detail || res.error || 'Upload validation failed';
+            throw new Error(errDetail);
+          }
+          setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'done', error: null, evidenceId: res?.evidence_id } : i));
+          settled.push({ status: 'fulfilled', value: { success: true, item } });
+        } catch (err) {
+          console.error(`Upload failed for ${item.name}:`, err);
+          const errDetail = err.message || 'Upload failed';
+          setQueue(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error', error: errDetail } : i));
+          settled.push({ status: 'fulfilled', value: { success: false, item, error: errDetail } });
+        }
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(CONCURRENCY, itemsToUpload.length) }, () => worker());
+    await Promise.all(workers);
     settled.forEach(r => {
       if (r.status === 'fulfilled' && r.value.success) {
         successCount++;

@@ -302,10 +302,10 @@ def test_item1_sanitization_result_integrity_and_single_detector_invocation(sani
     detector_call_count = 0
     orig_is_injection = sanitization_gateway.detector.is_injection
 
-    def spy_is_injection(text, is_unstructured=True):
+    def spy_is_injection(text, is_unstructured=True, **kwargs):
         nonlocal detector_call_count
         detector_call_count += 1
-        return orig_is_injection(text, is_unstructured=is_unstructured)
+        return orig_is_injection(text, is_unstructured=is_unstructured, **kwargs)
 
     sanitization_gateway.detector.is_injection = spy_is_injection
     _ = sanitization_gateway.sanitize_finding(raw_finding)
@@ -388,7 +388,9 @@ def test_item4_persistence_failure_semantics_offline_postgres(fir_repo, sanitiza
     )
 
     # Force offline DB simulation
+    import time
     EvidenceIntelligenceAgent._db_unreachable = True
+    EvidenceIntelligenceAgent._last_db_check = time.time()
 
     result = agent.run("CASE-2026-001")
     assert result["execution_status"] == "SUCCESS"

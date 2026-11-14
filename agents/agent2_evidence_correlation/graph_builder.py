@@ -148,6 +148,8 @@ class GraphBuilder:
                 sync_counts = self._sync_to_neo4j(case_id, tenant_id, finding_entities, entity_to_findings, deterministic_rels)
                 communities, wcc_success, algorithm_executed, is_degraded, degraded_reason = self._run_neo4j_gds_wcc(case_id, tenant_id, finding_entities)
             except Exception as exc:
+                if not getattr(self, "allow_pure_cypher_fallback", False):
+                    raise
                 logger.warning("Neo4j graph sync/GDS error (%s). Falling back to deterministic in-memory graph clustering.", exc)
                 sync_counts = None
                 communities = None

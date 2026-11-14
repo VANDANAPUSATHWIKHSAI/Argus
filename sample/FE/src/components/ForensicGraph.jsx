@@ -97,8 +97,10 @@ export default function ForensicGraph({ caseId }) {
         let rawFindings = [];
         let partialFlag = false;
 
-        // Fetch findings: prioritize agent-correlated findings if available; otherwise fetch case findings
-        if (relevantFindingIds.size > 0) {
+        // If agents have not correlated findings, skip finding query to prevent lag but keep evidence nodes
+        if (!isAgentCorrelated) {
+          rawFindings = [];
+        } else if (relevantFindingIds.size > 0) {
           // Explicit graph query targeting the exact findings correlated by the agents (bounded to 50)
           const targetIds = Array.from(relevantFindingIds).slice(0, 50);
           if (relevantFindingIds.size > 50) partialFlag = true;
@@ -109,7 +111,7 @@ export default function ForensicGraph({ caseId }) {
             rawFindings = Array.isArray(data) ? data : (data.data || []);
           }
         } else {
-          // Always query initial bounded case findings so the investigation map visualizes extracted forensic evidence
+          // Correlated swarm completed with no specific cross-finding claims: fetch initial bounded findings
           const findingsRes = await fetch(`${baseUrl}/cases/${targetCaseId}/findings?limit=25`, { headers }).catch(() => null);
           if (findingsRes && findingsRes.ok) {
             const data = await findingsRes.json();
@@ -343,6 +345,9 @@ export default function ForensicGraph({ caseId }) {
               const edgeId = `edge-${edge.source}-${edge.target}-${idx}`;
               const isHighlighted = activeEdgeIds.has(`edge-${edge.source}-${edge.target}`);
               const isDimmed = selectedNodeId && !isHighlighted;
+              const isHypothesisEdge = edge.isHypothesis ||
+                (srcNode.details?.badge === 'HYPOTHESIS') ||
+                (tgtNode.details?.badge === 'HYPOTHESIS');
 
               let markerName = 'arrow';
               if (edge.color === 'var(--blue)') markerName = 'arrow-blue';
@@ -357,6 +362,7 @@ export default function ForensicGraph({ caseId }) {
                     d={pathData}
                     stroke={edge.color || 'var(--border-strong)'}
                     strokeWidth={isHighlighted ? '4' : '2.5'}
+                    strokeDasharray={isHypothesisEdge ? '6,4' : 'none'}
                     fill="none"
                     opacity={isDimmed ? '0.2' : (isHighlighted ? '1' : '0.6')}
                     markerEnd={`url(#${markerName})`}
@@ -482,6 +488,35 @@ export default function ForensicGraph({ caseId }) {
               </div>
               <div className="risk-bar-bg">
                 <div className="risk-bar-fill" style={{ width: `${selectedNode.details.risk}%`, backgroundColor: selectedNode.details.badgeColor }}></div>
+              </div>
+            </div>
+
+            {/* Connected entities section */}
+            <div style={{ marginTop: '16px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '8px' }}>
+                Connected Entities ({Array.from(activeNodeIds).filter(id => id !== selectedNode.id).length})
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                {Array.from(activeNodeIds).filter(id => id !== selectedNode.id).map(cId => {
+                  const cNode = nodeMap.get(cId);
+                  return (
+                    <button
+                      key={cId}
+                      onClick={() => setSelectedNodeId(cId)}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid var(--border-light, #e2e8f0)',
+                        background: 'var(--bg-subtle, #f8fafc)',
+                        fontSize: '11px',
+                        cursor: 'pointer',
+                        color: 'var(--blue)'
+                      }}
+                    >
+                      {cNode ? cNode.label : cId}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 

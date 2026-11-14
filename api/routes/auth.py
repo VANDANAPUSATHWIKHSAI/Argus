@@ -26,6 +26,8 @@ EMAIL_REGEX = re.compile(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*\.
 router = APIRouter()
 
 import secrets
+import logging
+logger = logging.getLogger(__name__)
 SECRET_KEY = os.environ.get("ARGUS_SECRET_KEY", secrets.token_urlsafe(32))
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
@@ -114,6 +116,8 @@ for u in _BASE_FALLBACK_USERS:
     }
     FALLBACK_USERS[u["id"].lower()] = user_rec
     FALLBACK_USERS[u["email"].lower()] = user_rec
+    if u.get("name"):
+        FALLBACK_USERS[u["name"].lower()] = user_rec
 
 FALLBACK_USERS["senior"] = FALLBACK_USERS.get("senior_analyst")
 
@@ -125,7 +129,12 @@ def get_user_by_id(userid: str):
             init_users_table()
             with get_db_connection() as conn:
                 with conn.cursor() as cur:
-                    cur.execute("SELECT id, email, password_hash, role, name, phone, doj FROM users WHERE LOWER(id) = %s OR LOWER(email) = %s", (clean_id, clean_id))
+                    # 1. Exact match on canonical primary key User ID
+                    cur.execute(
+                        "SELECT id, email, password_hash, role, name, phone, doj "
+                        "FROM users WHERE LOWER(id) = %s",
+                        (clean_id,)
+                    )
                     row = cur.fetchone()
                     if row:
                         return {
@@ -137,8 +146,103 @@ def get_user_by_id(userid: str):
                             "phone": row[5] if len(row) > 5 and row[5] else "+1-555-0100",
                             "doj": row[6] if len(row) > 6 and row[6] else "2025-01-15"
                         }
+
+                    # 2. Exact match on unique Email address
+                    cur.execute(
+                        "SELECT id, email, password_hash, role, name, phone, doj "
+                        "FROM users WHERE LOWER(email) = %s",
+                        (clean_id,)
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        return {
+                            "id": row[0],
+                            "email": row[1],
+                            "password": row[2],
+                            "role": row[3],
+                            "name": row[4],
+                            "phone": row[5] if len(row) > 5 and row[5] else "+1-555-0100",
+                            "doj": row[6] if len(row) > 6 and row[6] else "2025-01-15"
+                        }
+
+                    # 3. Match on display name (username)
+                    cur.execute(
+                        "SELECT id, email, password_hash, role, name, phone, doj "
+                        "FROM users WHERE LOWER(name) = %s",
+                        (clean_id,)
+                    )
+                    rows = cur.fetchall()
+                    if len(rows) == 1:
+                        row = rows[0]
+                        return {
+                            "id": row[0],
+                            "email": row[1],
+                            "password": row[2],
+                            "role": row[3],
+                            "name": row[4],
+                            "phone": row[5] if len(row) > 5 and row[5] else "+1-555-0100",
+                            "doj": row[6] if len(row) > 6 and row[6] else "2025-01-15"
+                        }
+                    elif len(rows) > 1:
+                        logger.warning(
+                            "Ambiguous authentication identifier '%s': matches %d distinct user records (%s)",
+                            clean_id, len(rows), [r[0] for r in rows]
+                        )
+                        return {
+                            "ambiguous": True,
+                            "identifier": clean_id,
+                            "match_count": len(rows),
+                            "matching_ids": [r[0] for r in rows]
+                        }
     except Exception as e:
         print(f"DB Error: {e}")
+
+    # Fallback in-memory resolution with ambiguity detection
+    for u in _BASE_FALLBACK_USERS:
+        if u["id"].lower() == clean_id:
+            rec = FALLBACK_USERS.get(clean_id) or u
+            return {
+                "id": rec["id"],
+                "email": rec["email"],
+                "password": rec.get("password") or rec.get("password_hash") or get_password_hash("password123"),
+                "role": rec["role"],
+                "name": rec["name"],
+                "phone": rec.get("phone", "+1-555-0100"),
+                "doj": rec.get("doj", "2025-01-15")
+            }
+
+    for u in _BASE_FALLBACK_USERS:
+        if u["email"].lower() == clean_id:
+            rec = FALLBACK_USERS.get(clean_id) or u
+            return {
+                "id": rec["id"],
+                "email": rec["email"],
+                "password": rec.get("password") or rec.get("password_hash") or get_password_hash("password123"),
+                "role": rec["role"],
+                "name": rec["name"],
+                "phone": rec.get("phone", "+1-555-0100"),
+                "doj": rec.get("doj", "2025-01-15")
+            }
+
+    name_matches = [u for u in _BASE_FALLBACK_USERS if u.get("name", "").strip().lower() == clean_id]
+    if len(name_matches) == 1:
+        rec = FALLBACK_USERS.get(name_matches[0]["id"].lower()) or name_matches[0]
+        return {
+            "id": rec["id"],
+            "email": rec["email"],
+            "password": rec.get("password") or rec.get("password_hash") or get_password_hash("password123"),
+            "role": rec["role"],
+            "name": rec["name"],
+            "phone": rec.get("phone", "+1-555-0100"),
+            "doj": rec.get("doj", "2025-01-15")
+        }
+    elif len(name_matches) > 1:
+        return {
+            "ambiguous": True,
+            "identifier": clean_id,
+            "match_count": len(name_matches),
+            "matching_ids": [u["id"] for u in name_matches]
+        }
 
     return FALLBACK_USERS.get(clean_id)
 
@@ -248,6 +352,15 @@ def login(credentials: LoginRequest):
     password = credentials.password
 
     user = get_user_by_id(userid)
+    if user and user.get("ambiguous"):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Ambiguous username: Multiple accounts ({user['match_count']}) share the display name '{credentials.userid}'. "
+                "To maintain forensic integrity, please log in using your unique User ID or registered Email address."
+            )
+        )
+
     if user and (password == "password123" or verify_password(password, user["password"])):
         access_token = create_access_token(
             data={"sub": user["id"], "role": user["role"], "name": user["name"]}
@@ -272,6 +385,11 @@ async def forgot_password(req: ForgotPasswordRequest, background_tasks: Backgrou
     userid = req.userid.strip().lower()
     
     user = get_user_by_id(userid)
+    if user and user.get("ambiguous"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Ambiguous username: Multiple accounts ({user['match_count']}) share the display name '{req.userid}'. Please enter your specific User ID or registered Email address."
+        )
     if not user:
         raise HTTPException(status_code=404, detail="This User ID is not registered.")
 
@@ -444,6 +562,10 @@ async def update_my_profile(profile_data: ProfileUpdateRequest, current_user: di
                     cur.execute("SELECT id FROM users WHERE LOWER(email) = %s AND id != %s", (clean_email, user_id))
                     if cur.fetchone():
                         raise HTTPException(status_code=400, detail="Email is already in use by another user")
+                    if clean_name:
+                        cur.execute("SELECT id FROM users WHERE LOWER(name) = %s AND id != %s", (clean_name.lower(), user_id))
+                        if cur.fetchone():
+                            raise HTTPException(status_code=400, detail=f"Display name '{clean_name}' is already in use by another account.")
                     cur.execute(
                         "UPDATE users SET name = %s, email = %s, phone = %s WHERE id = %s",
                         (clean_name, clean_email, clean_phone, user_id)
@@ -453,6 +575,12 @@ async def update_my_profile(profile_data: ProfileUpdateRequest, current_user: di
         raise
     except Exception as e:
         print(f"DB update error: {e}")
+
+    # Fallback uniqueness check
+    if clean_name:
+        for u in _BASE_FALLBACK_USERS:
+            if u["id"].lower() != user_id.lower() and u.get("name", "").strip().lower() == clean_name.lower():
+                raise HTTPException(status_code=400, detail=f"Display name '{clean_name}' is already in use by another account.")
 
     # Update in-memory fallback
     for u in _BASE_FALLBACK_USERS:
@@ -563,9 +691,14 @@ async def create_employee(emp: EmployeeCreate, current_user: dict = Depends(get_
                         else:
                             raise HTTPException(status_code=400, detail=f"Email '{clean_email}' is already registered to another employee.")
 
+                    clean_name = emp.name.strip()
+                    cur.execute("SELECT id FROM users WHERE LOWER(name) = %s", (clean_name.lower(),))
+                    if cur.fetchone():
+                        raise HTTPException(status_code=400, detail=f"Display name '{clean_name}' is already in use by another account.")
+
                     cur.execute(
                         "INSERT INTO users (id, email, password_hash, role, name, phone, doj) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                        (clean_userid, clean_email, default_password, emp.role, emp.name.strip(), emp.phone, emp.doj)
+                        (clean_userid, clean_email, default_password, emp.role, clean_name, emp.phone, emp.doj)
                     )
                 conn.commit()
             return {"message": "Employee created successfully"}
@@ -573,6 +706,12 @@ async def create_employee(emp: EmployeeCreate, current_user: dict = Depends(get_
         raise
     except Exception as e:
         print(f"DB Error creating employee in DB, applying to fallback: {e}")
+
+    # Fallback uniqueness check
+    clean_name = emp.name.strip()
+    for u in _BASE_FALLBACK_USERS:
+        if u.get("name", "").strip().lower() == clean_name.lower():
+            raise HTTPException(status_code=400, detail=f"Display name '{clean_name}' is already in use by another account.")
 
     # Fallback storage
     new_user_rec = {
@@ -616,9 +755,14 @@ async def update_employee(userid: str, emp: EmployeeUpdate, current_user: dict =
                     if cur.fetchone():
                         raise HTTPException(status_code=400, detail=f"Email '{clean_email}' is already registered to another employee.")
 
+                    clean_name = emp.name.strip()
+                    cur.execute("SELECT id FROM users WHERE LOWER(name) = %s AND id != %s", (clean_name.lower(), userid))
+                    if cur.fetchone():
+                        raise HTTPException(status_code=400, detail=f"Display name '{clean_name}' is already in use by another account.")
+
                     cur.execute(
                         "UPDATE users SET name = %s, email = %s, role = %s, phone = %s, doj = %s WHERE id = %s",
-                        (emp.name.strip(), clean_email, target_role, emp.phone, emp.doj, userid)
+                        (clean_name, clean_email, target_role, emp.phone, emp.doj, userid)
                     )
                     if emp.password:
                         new_hash = get_password_hash(emp.password)
@@ -629,6 +773,12 @@ async def update_employee(userid: str, emp: EmployeeUpdate, current_user: dict =
         raise
     except Exception as e:
         print(f"DB Error updating employee in DB, applying to fallback: {e}")
+
+    # Fallback uniqueness check
+    clean_name = emp.name.strip()
+    for u in _BASE_FALLBACK_USERS:
+        if u["id"].lower() != userid.lower() and u.get("name", "").strip().lower() == clean_name.lower():
+            raise HTTPException(status_code=400, detail=f"Display name '{clean_name}' is already in use by another account.")
 
     # Fallback update
     for u in _BASE_FALLBACK_USERS:

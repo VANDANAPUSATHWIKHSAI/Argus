@@ -196,18 +196,25 @@ const Dashboard = () => {
 
 
   async function loadDashboard(silent = false) {
-    if (!silent) setLoading(true);
+    if (!silent && !activeSummary) setLoading(true);
 
     try {
-      const res = await fetchCases();
-      const caseList = res.data || [];
+      const storedActiveId = localStorage.getItem('active_case_id');
+
+      // Fetch cases list and prefetch active case summary concurrently to eliminate waterfall latency
+      const [casesRes, preSummary, preAgent] = await Promise.all([
+        fetchCases().catch(() => ({ data: [] })),
+        storedActiveId ? fetchCaseSummary(storedActiveId).catch(() => null) : Promise.resolve(null),
+        storedActiveId ? fetchAgentResults(storedActiveId).catch(() => null) : Promise.resolve(null)
+      ]);
+
+      const caseList = casesRes?.data || [];
       setCases(caseList);
 
       // Single assigned case enforcement: only OPEN or IN_PROGRESS cases can be active
       let currentActiveId = null;
       const openCases = caseList.filter(c => c.status === 'open' || c.status === 'in_progress');
       if (openCases.length > 0) {
-        const storedActiveId = localStorage.getItem('active_case_id');
         const matched = storedActiveId ? openCases.find(c => c.case_id === storedActiveId) : null;
         const targetCase = matched || openCases[0];
         if (targetCase) {
@@ -223,12 +230,18 @@ const Dashboard = () => {
         currentActiveId = null;
       }
 
-      const activeCaseId = localStorage.getItem('active_case_id');
-      if (activeCaseId) {
-        const [summaryData, agentData] = await Promise.all([
-          fetchCaseSummary(activeCaseId).catch(() => null),
-          fetchAgentResults(activeCaseId).catch(() => null)
-        ]);
+      if (currentActiveId) {
+        let summaryData = (storedActiveId === currentActiveId && preSummary) ? preSummary : null;
+        let agentData = (storedActiveId === currentActiveId && preAgent) ? preAgent : null;
+        if (!summaryData) {
+          [summaryData, agentData] = await Promise.all([
+            fetchCaseSummary(currentActiveId).catch(() => null),
+            fetchAgentResults(currentActiveId).catch(() => null)
+          ]);
+        }
+
+        // Discard stale in-flight results if user switched active case
+        if (localStorage.getItem('active_case_id') !== currentActiveId) return;
 
         if (summaryData) {
           setActiveSummary(summaryData);
@@ -261,13 +274,21 @@ const Dashboard = () => {
 
     loadDashboard();
 
+    // Safety fallback: ensure loading spinner is cleared promptly (1500ms max)
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 1500);
+
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         loadDashboard(true);
       }
     }, 12000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(safetyTimer);
+      clearInterval(interval);
+    };
   }, [isAdmin, isSeniorAnalyst, isAuditor]);
 
 

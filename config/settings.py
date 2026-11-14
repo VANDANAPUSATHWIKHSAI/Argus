@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # ── MinIO (raw evidence object storage) ──────
     # Original evidence files, memory dumps,
     # PCAP files, disk images — large binary blobs
-    minio_endpoint: str = "localhost:9000"
+    minio_endpoint: str = "127.0.0.1:9000"
     minio_access_key: str = "argus_minio"
     minio_secret_key: str = "argus_minio_dev"
     minio_secure: bool = False
@@ -33,23 +33,23 @@ class Settings(BaseSettings):
     # ── Neo4j (graph database) ───────────────────
     # Agent 2 (evidence correlation via GDS)
     # Agent 3 (MITRE ATT&CK kill-chain traversal)
-    neo4j_uri: str = "bolt://localhost:7687"
+    neo4j_uri: str = "bolt://127.0.0.1:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "argus_dev"
 
     # ── Qdrant (vector database) ─────────────────
     # Agent 5b — RAG against Validated Case Repository
-    qdrant_url: str = "http://localhost:6333"
+    qdrant_url: str = "http://127.0.0.1:6333"
     qdrant_api_key: Optional[str] = None
     qdrant_verify_tls: bool = True
     qdrant_tls_cert_path: Optional[str] = None
 
     # ── Redis (live state / queues / checkpoints) ──
-    redis_host: str = "localhost"
+    redis_host: str = "127.0.0.1"
     redis_port: int = 6379
     redis_db: int = 0
     redis_password: Optional[str] = None
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://127.0.0.1:6379/0"
 
     # ── Threat Intel ─────────────────────────────
     taxii_server_url: Optional[str] = None
